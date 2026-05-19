@@ -1,0 +1,12 @@
+{
+  "trace_id": "trace_delegation_example",
+  "timestamp": "2026-05-19T00:00:00Z",
+  "actor": "orchestrator",
+  "event": "delegation_decision",
+  "decision": "delegate",
+  "target": "qa",
+  "reason": "task involves failing test reproduction",
+  "skills_considered": ["rust-testing"],
+  "skills_loaded": ["rust-testing"],
+  "policy_version": "permissions@0.1.0"
+}

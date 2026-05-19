@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alfred Eval Case",
+  "type": "object",
+  "required": ["id", "target", "input", "expected"],
+  "properties": {
+    "id": { "type": "string" },
+    "target": { "type": "string" },
+    "fixture": { "type": "string" },
+    "input": { "type": "string" },
+    "expected": { "type": "object" },
+    "scoring": { "type": "object" },
+    "reproducibility": { "type": "object" }
+  }
+}

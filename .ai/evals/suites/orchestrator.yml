@@ -1,0 +1,19 @@
+cases:
+  - id: orchestrator-simple-task-no-delegation
+    target: orchestrator
+    input: "Fix a typo in one file"
+    expected:
+      delegation: false
+      temporary_agent_created: false
+      skills_loaded: []
+      trace_events:
+        - task_classified
+        - delegation_decision
+
+  - id: orchestrator-missing-specialist-proposes-temporary-agent
+    target: orchestrator
+    input: "Create a Terraform module and enforce provider-specific conventions"
+    expected:
+      delegation: false
+      temporary_agent_proposed: true
+      human_approval_required: true

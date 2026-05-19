@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alfred Permission Policy",
+  "type": "object",
+  "required": ["default", "agents"],
+  "properties": {
+    "default": { "enum": ["deny", "ask", "allow"] },
+    "agents": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": { "enum": ["deny", "ask", "allow"] }
+      }
+    },
+    "protectedPaths": { "type": "array", "items": { "type": "string" } }
+  }
+}

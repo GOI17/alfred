@@ -1,0 +1,11 @@
+{
+  "name": "alfred",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Alfred handles the operational burden so humans focus on decisions.",
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "check": "pnpm -r check",
+    "test": "pnpm -r test"
+  }
+}

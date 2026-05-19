@@ -1,0 +1,13 @@
+{
+  "name": "@alfred-labs/evals",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "check": "node -e \"console.log('evals check: no implementation yet')\"",
+    "test": "node -e \"console.log('evals test: no implementation yet')\""
+  },
+  "dependencies": {
+    "@alfred-labs/core": "workspace:*"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "default": "deny",
+  "protectedPaths": ["**/.env*", "**/secrets/**", "**/.ssh/**"],
+  "agents": {
+    "orchestrator": {
+      "read_files": "allow",
+      "delegate": "allow",
+      "create_agent": "ask",
+      "provider_request": "ask"
+    },
+    "librarian": {
+      "read_files": "allow",
+      "write_files": "deny",
+      "run_tests": "deny",
+      "provider_request": "ask"
+    },
+    "qa": {
+      "read_files": "allow",
+      "write_tests": "allow",
+      "write_production_code": "ask",
+      "run_tests": "allow",
+      "provider_request": "ask"
+    }
+  }
+}

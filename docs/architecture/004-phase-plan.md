@@ -1,0 +1,29 @@
+# Phase Plan
+
+## Phase 1: Architecture Kernel
+
+Create glossary, domain model, schemas, package boundaries, policy specs, trace schema, eval schema, initial agent specs, Pi adapter design, local-first provider policy, starter evals, and sample traces.
+
+## Phase 2: Pi Runtime Spike
+
+Build minimal Pi adapter/extension. Load one agent. Load one skill. Emit trace events. Run one eval end-to-end.
+
+## Phase 3: Agent/Subagent System
+
+Implement Orchestrator, Developer, QA, Librarian, Architect, Reviewer, delegation policy, and temporary specialist proposal flow.
+
+## Phase 4: Security + Permissions Enforcement
+
+Implement permission evaluator, deny-by-default runtime checks, protected paths, tool/action policy, and security evals.
+
+## Phase 5: Evals + Regression Gates
+
+Implement eval runner, baseline comparison, regression reports, prompt/agent/skill locks, and promotion workflow.
+
+## Phase 6: Skill Packs + Lazy Loading
+
+Integrate external skill packs, import/sync strategy, project detector, and skill activation evals.
+
+## Phase 7: Harness Portability
+
+Add opencode adapter, then Claude/Codex/VSCode/Kiro adapters or compatibility notes.

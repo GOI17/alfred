@@ -1,0 +1,10 @@
+{
+  "name": "@alfred-labs/core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "check": "node -e \"console.log('core check: no implementation yet')\"",
+    "test": "node -e \"console.log('core test: no implementation yet')\""
+  }
+}

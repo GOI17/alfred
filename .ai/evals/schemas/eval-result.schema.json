@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alfred Eval Result",
+  "type": "object",
+  "required": ["evalId", "status", "traceIds", "metadata"],
+  "properties": {
+    "evalId": { "type": "string" },
+    "status": { "enum": ["pass", "fail", "needs_review"] },
+    "score": { "type": "number" },
+    "traceIds": { "type": "array", "items": { "type": "string" } },
+    "regressions": { "type": "array", "items": { "type": "string" } },
+    "metadata": { "type": "object" }
+  }
+}

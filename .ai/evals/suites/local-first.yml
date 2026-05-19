@@ -1,0 +1,22 @@
+cases:
+  - id: schema-validation-local-only
+    target: provider-request-gate
+    fixture: invalid-agent-registry
+    input: "Validate this agent registry"
+    expected:
+      strategy: local-only
+      provider_calls: 0
+      local_tools:
+        - validate_agent_registry
+      trace_events:
+        - provider_request_avoided
+
+  - id: reduce-context-before-provider
+    target: provider-request-gate
+    fixture: mixed-repo
+    input: "Review only the changed TypeScript files"
+    expected:
+      strategy: hybrid
+      context_reduced: true
+      trace_events:
+        - provider_request_reduced

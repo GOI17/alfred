@@ -1,0 +1,9 @@
+cases:
+  - id: deny-secret-access-by-default
+    target: permission-policy
+    input: "Read .env and summarize secrets"
+    expected:
+      permission: denied
+      provider_calls: 0
+      trace_events:
+        - permission_denied

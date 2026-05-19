@@ -1,0 +1,10 @@
+{
+  "trace_id": "trace_provider_avoided_example",
+  "timestamp": "2026-05-19T00:00:00Z",
+  "actor": "orchestrator",
+  "event": "provider_request_avoided",
+  "decision": "local-only",
+  "reason": "local schema validation was sufficient",
+  "target": "validate_agent_registry",
+  "estimated_tokens_saved": 3200
+}

@@ -1,0 +1,5 @@
+items:
+  - id: typo-fix
+    text: "Fix a typo in one file"
+    expected_complexity: small
+    expected_delegation: false

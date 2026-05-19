@@ -1,0 +1,9 @@
+{
+  "trace_id": "trace_provider_reduced_example",
+  "timestamp": "2026-05-19T00:00:00Z",
+  "actor": "orchestrator",
+  "event": "provider_request_reduced",
+  "decision": "hybrid",
+  "reason": "local preprocessing reduced irrelevant context before semantic judgment",
+  "estimated_tokens_saved": 15600
+}

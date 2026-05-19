@@ -1,0 +1,13 @@
+{
+  "name": "@alfred-labs/pi-adapter",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "check": "node -e \"console.log('pi-adapter check: no implementation yet')\"",
+    "test": "node -e \"console.log('pi-adapter test: no implementation yet')\""
+  },
+  "dependencies": {
+    "@alfred-labs/core": "workspace:*"
+  }
+}

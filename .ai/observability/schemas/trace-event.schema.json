@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alfred Trace Event",
+  "type": "object",
+  "required": ["trace_id", "timestamp", "event", "actor"],
+  "properties": {
+    "trace_id": { "type": "string" },
+    "timestamp": { "type": "string" },
+    "session_id": { "type": "string" },
+    "task_id": { "type": "string" },
+    "actor": { "type": "string" },
+    "event": { "type": "string" },
+    "decision": { "type": "string" },
+    "reason": { "type": "string" },
+    "target": { "type": "string" },
+    "prompt_version": { "type": "string" },
+    "policy_version": { "type": "string" },
+    "skills_considered": { "type": "array", "items": { "type": "string" } },
+    "skills_loaded": { "type": "array", "items": { "type": "string" } },
+    "estimated_tokens_saved": { "type": "integer" }
+  }
+}

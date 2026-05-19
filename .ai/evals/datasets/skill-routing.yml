@@ -1,0 +1,6 @@
+items:
+  - id: rust-cargo
+    files:
+      - Cargo.toml
+    expected_skills:
+      - rust-testing
