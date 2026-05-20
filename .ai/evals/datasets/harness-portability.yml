@@ -1,0 +1,24 @@
+items:
+  - id: required-harnesses
+    harnesses:
+      - pi
+      - opencode
+      - claude
+      - codex
+      - vscode
+      - kiro
+    required_capabilities:
+      - primary_control
+      - specialist_routing
+      - lazy_skills
+      - permission_enforcement
+      - trace_emission
+      - eval_execution
+      - model_assignment
+      - local_first
+  - id: opencode-preview
+    adapter: opencode
+    expected_artifacts:
+      agents: 6
+      skills: 2
+      permissions: mapped-from-alfred-permission-policy

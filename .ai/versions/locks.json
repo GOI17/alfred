@@ -9,7 +9,9 @@
     "model_assignment_policy": "model-assignment-policy@0.1.0",
     "routing_policy": "routing-policy@0.1.0",
     "regression_gates": "regression-gates@0.1.0",
-    "pi_adapter_runtime": "pi-adapter-runtime@0.1.0"
+    "pi_adapter_runtime": "pi-adapter-runtime@0.1.0",
+    "harness_compatibility": "harness-compatibility@0.1.0",
+    "opencode_adapter_runtime": "opencode-adapter-runtime@0.1.0"
   },
   "baseline_update_policy": {
     "allowed_by_agent": false,

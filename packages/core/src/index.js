@@ -22,6 +22,47 @@ export function loadArchitectureKernel(root) {
   };
 }
 
+export function loadHarnessCompatibility(root) {
+  return readJson(root, ".ai/harnesses/compatibility-matrix.json");
+}
+
+export function evaluateHarnessCapability({ harness, capability }) {
+  const supportedStrategies = ["native", "adapter", "generated", "external-script"];
+  const strategy = harness.capabilities?.[capability];
+  return {
+    harness_id: harness.id,
+    capability,
+    strategy,
+    portable: supportedStrategies.includes(strategy),
+    reason: supportedStrategies.includes(strategy)
+      ? `Capability ${capability} is preserved through ${strategy}`
+      : `Capability ${capability} is not portable for ${harness.id}`
+  };
+}
+
+export function evaluateHarnessPortability({ matrix }) {
+  const capabilities = matrix.required_capabilities;
+  const harnesses = matrix.harnesses.map((harness) => {
+    const capability_results = capabilities.map((capability) => evaluateHarnessCapability({ harness, capability }));
+    return {
+      harness_id: harness.id,
+      priority: harness.priority,
+      adapter_status: harness.adapter_status,
+      capability_results,
+      portable: capability_results.every((result) => result.portable)
+    };
+  });
+
+  return {
+    matrix_version: matrix.version,
+    harnesses,
+    portable_harnesses: harnesses.filter((harness) => harness.portable).length,
+    required_harnesses: harnesses.length,
+    provider_calls: 0,
+    status: harnesses.every((harness) => harness.portable) ? "pass" : "fail"
+  };
+}
+
 export function classifyTask({ routingPolicy, input }) {
   const normalized = input.toLowerCase();
   const simpleMatch = routingPolicy.simple_task_indicators.find((indicator) => normalized.includes(indicator));

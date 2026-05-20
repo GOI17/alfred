@@ -21,6 +21,13 @@ const phase2Task = {
   local_reason: "Agent registry validation is deterministic and does not require semantic provider judgment"
 };
 
+function writeJsonAtomic(filePath, value) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const temporaryPath = `${filePath}.${process.pid}.tmp`;
+  fs.writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`);
+  fs.renameSync(temporaryPath, filePath);
+}
+
 export function runPiRuntimeSpike({ root, traceOutputPath }) {
   const kernel = loadArchitectureKernel(root);
   const orchestrator = loadAgent(kernel, "orchestrator");
@@ -59,8 +66,7 @@ export function runPiRuntimeSpike({ root, traceOutputPath }) {
     }
   });
 
-  fs.mkdirSync(path.dirname(traceOutputPath), { recursive: true });
-  fs.writeFileSync(traceOutputPath, `${JSON.stringify(trace, null, 2)}\n`);
+  writeJsonAtomic(traceOutputPath, trace);
 
   return {
     manifest_phase: kernel.manifest.phase,
@@ -111,8 +117,7 @@ export function runPiAgentSystemSpike({ root, traceOutputPath }) {
     }
   });
 
-  fs.mkdirSync(path.dirname(traceOutputPath), { recursive: true });
-  fs.writeFileSync(traceOutputPath, `${JSON.stringify(trace, null, 2)}\n`);
+  writeJsonAtomic(traceOutputPath, trace);
 
   return {
     manifest_phase: kernel.manifest.phase,
@@ -185,8 +190,7 @@ export function runPiSecuritySpike({ root, traceOutputPath }) {
     }
   });
 
-  fs.mkdirSync(path.dirname(traceOutputPath), { recursive: true });
-  fs.writeFileSync(traceOutputPath, `${JSON.stringify(trace, null, 2)}\n`);
+  writeJsonAtomic(traceOutputPath, trace);
 
   return {
     manifest_phase: kernel.manifest.phase,
@@ -281,8 +285,7 @@ export function runPiEvalGateSpike({ root, traceOutputPath }) {
     }
   });
 
-  fs.mkdirSync(path.dirname(traceOutputPath), { recursive: true });
-  fs.writeFileSync(traceOutputPath, `${JSON.stringify(trace, null, 2)}\n`);
+  writeJsonAtomic(traceOutputPath, trace);
 
   return {
     orchestrator: phase2.orchestrator,
@@ -327,8 +330,7 @@ export function runPiSkillLoadingSpike({ root, traceOutputPath }) {
     }
   });
 
-  fs.mkdirSync(path.dirname(traceOutputPath), { recursive: true });
-  fs.writeFileSync(traceOutputPath, `${JSON.stringify(trace, null, 2)}\n`);
+  writeJsonAtomic(traceOutputPath, trace);
 
   return {
     manifest_phase: kernel.manifest.phase,
