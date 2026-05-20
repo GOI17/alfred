@@ -1,11 +1,19 @@
 import path from "node:path";
-import { runPiAgentSystemSpike, runPiEvalGateSpike, runPiRuntimeSpike, runPiSecuritySpike } from "./runtime.js";
+import {
+  runPiAgentSystemSpike,
+  runPiEvalGateSpike,
+  runPiRuntimeSpike,
+  runPiSecuritySpike,
+  runPiSkillLoadingSpike
+} from "./runtime.js";
 
 const root = process.cwd();
 const phase = process.argv[2] ?? "phase-2";
 const traceOutputPath = path.join(
   root,
-  phase === "phase-5"
+  phase === "phase-6"
+    ? ".ai/observability/generated/phase-6-skill-activation.json"
+    : phase === "phase-5"
     ? ".ai/observability/generated/phase-5-regression-gate.json"
     : phase === "phase-4"
     ? ".ai/observability/generated/phase-4-permission-enforcement.json"
@@ -14,7 +22,9 @@ const traceOutputPath = path.join(
     : ".ai/observability/generated/phase-2-provider-request-avoided.json"
 );
 const result =
-  phase === "phase-5"
+  phase === "phase-6"
+    ? runPiSkillLoadingSpike({ root, traceOutputPath })
+    : phase === "phase-5"
     ? runPiEvalGateSpike({ root, traceOutputPath })
     : phase === "phase-4"
     ? runPiSecuritySpike({ root, traceOutputPath })

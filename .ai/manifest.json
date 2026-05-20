@@ -13,6 +13,8 @@
     "phase_3_runtime": ".ai/execution/phase-3-agent-system.md",
     "phase_4_security": ".ai/execution/phase-4-security-enforcement.md",
     "phase_5_evals": ".ai/execution/phase-5-evals-regression-gates.md",
+    "phase_6_skills": ".ai/execution/phase-6-skill-packs-lazy-loading.md",
+    "skill_registry": ".ai/skills/registry.json",
     "regression_gates": ".ai/evals/regression-gates.json",
     "version_locks": ".ai/versions/locks.json"
   },
@@ -29,5 +31,6 @@
   "phase_2_entrypoint": ".ai/execution/phase-2-handoff.md",
   "phase_3_entrypoint": ".ai/execution/phase-3-agent-system.md",
   "phase_4_entrypoint": ".ai/execution/phase-4-security-enforcement.md",
-  "phase_5_entrypoint": ".ai/execution/phase-5-evals-regression-gates.md"
+  "phase_5_entrypoint": ".ai/execution/phase-5-evals-regression-gates.md",
+  "phase_6_entrypoint": ".ai/execution/phase-6-skill-packs-lazy-loading.md"
 }

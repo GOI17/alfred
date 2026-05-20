@@ -4,11 +4,23 @@
   "type": "object",
   "required": ["skills"],
   "properties": {
+    "version": { "type": "string" },
+    "policy": {
+      "type": "object",
+      "required": ["loading", "default", "scope", "activation", "load_bodies_globally"],
+      "properties": {
+        "loading": { "const": "lazy" },
+        "default": { "const": "do-not-load" },
+        "scope": { "type": "string" },
+        "activation": { "type": "string" },
+        "load_bodies_globally": { "const": false }
+      }
+    },
     "skills": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "name", "description", "triggers", "source"],
+        "required": ["id", "name", "description", "triggers", "projectSignals", "source", "scope", "bodyPath", "allowedAgents", "loadsBodyByDefault"],
         "properties": {
           "id": { "type": "string" },
           "name": { "type": "string" },
@@ -16,7 +28,10 @@
           "triggers": { "type": "array", "items": { "type": "string" } },
           "projectSignals": { "type": "array", "items": { "type": "string" } },
           "source": { "type": "string" },
-          "allowedAgents": { "type": "array", "items": { "type": "string" } }
+          "scope": { "const": "project" },
+          "bodyPath": { "type": "string" },
+          "allowedAgents": { "type": "array", "items": { "type": "string" } },
+          "loadsBodyByDefault": { "const": false }
         }
       }
     }

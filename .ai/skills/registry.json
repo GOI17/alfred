@@ -1,8 +1,36 @@
 {
-  "skills": [],
+  "version": "skills-registry@0.2.0",
+  "skills": [
+    {
+      "id": "typescript-project",
+      "name": "typescript-project",
+      "description": "Use only when TypeScript project files, package scripts, or ts/js source changes require TypeScript-specific guidance.",
+      "triggers": ["typescript", "tsconfig", "package.json", ".ts", ".tsx"],
+      "projectSignals": ["package.json", "tsconfig.json", "pnpm-workspace.yaml"],
+      "source": "project",
+      "scope": "project",
+      "bodyPath": ".ai/skills/project/typescript-project/SKILL.md",
+      "allowedAgents": ["orchestrator", "developer", "qa", "reviewer"],
+      "loadsBodyByDefault": false
+    },
+    {
+      "id": "architecture-docs",
+      "name": "architecture-docs",
+      "description": "Use only when architecture documents, DDD language, phase handoffs, or model-readable project policy files are edited.",
+      "triggers": ["architecture", "ddd", "phase", "policy", "manifest", ".ai/"],
+      "projectSignals": ["AGENTS.md", "docs/architecture", ".ai/manifest.json"],
+      "source": "project",
+      "scope": "project",
+      "bodyPath": ".ai/skills/project/architecture-docs/SKILL.md",
+      "allowedAgents": ["orchestrator", "architect", "librarian", "reviewer"],
+      "loadsBodyByDefault": false
+    }
+  ],
   "policy": {
     "loading": "lazy",
     "default": "do-not-load",
-    "phase_1_note": "Phase 1 defines the registry contract only. Phase 6 imports concrete skill packs."
+    "scope": "project-only-unless-human-approved-global",
+    "activation": "project-signals-or-explicit-task-need",
+    "load_bodies_globally": false
   }
 }

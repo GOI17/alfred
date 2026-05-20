@@ -3,7 +3,7 @@
   "baseline_update_requires_human_approval": true,
   "locks": {
     "agents": "agents-registry@0.1.0",
-    "skills": "skills-registry@0.1.0",
+    "skills": "skills-registry@0.2.0",
     "permissions": "permissions-policy@0.1.0",
     "provider_request_policy": "provider-request-policy@0.1.0",
     "model_assignment_policy": "model-assignment-policy@0.1.0",

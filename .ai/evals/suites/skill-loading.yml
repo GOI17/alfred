@@ -1,0 +1,9 @@
+id: skill-loading
+phase: phase-6-skill-packs-lazy-loading
+cases:
+  - id: project-signal-detection
+    expectation: detect project-scoped skill signals locally
+  - id: lazy-skill-selection
+    expectation: select matching skills without loading bodies globally
+  - id: project-scope-only
+    expectation: reject global skill promotion without human approval

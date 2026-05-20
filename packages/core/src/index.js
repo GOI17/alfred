@@ -114,6 +114,58 @@ export function loadLazySkill(registry, skillId) {
   return skill;
 }
 
+export function normalizeSkillMetadata(skill) {
+  return {
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    triggers: skill.triggers ?? [],
+    project_signals: skill.projectSignals ?? [],
+    source: skill.source,
+    scope: skill.scope,
+    body_path: skill.bodyPath,
+    allowed_agents: skill.allowedAgents ?? [],
+    loads_body_by_default: skill.loadsBodyByDefault === true
+  };
+}
+
+export function detectProjectSignals({ root, registry }) {
+  return registry.skills.map((skill) => {
+    const matchedSignals = (skill.projectSignals ?? []).filter((signal) => fs.existsSync(path.join(root, signal)));
+    return {
+      skill_id: skill.id,
+      matched_signals: matchedSignals,
+      detected: matchedSignals.length > 0
+    };
+  });
+}
+
+export function selectLazySkills({ registry, input, projectSignals, agentId }) {
+  const normalizedInput = input.toLowerCase();
+  return registry.skills
+    .map((skill) => {
+      const metadata = normalizeSkillMetadata(skill);
+      const signalMatch = projectSignals.find((signal) => signal.skill_id === skill.id && signal.detected);
+      const triggerMatches = metadata.triggers.filter((trigger) => normalizedInput.includes(trigger.toLowerCase()));
+      const agentAllowed = metadata.allowed_agents.includes(agentId);
+      const selected = agentAllowed && (triggerMatches.length > 0 || Boolean(signalMatch));
+
+      return {
+        skill_id: metadata.id,
+        selected,
+        load_body: false,
+        reason: selected
+          ? "Matched project signals or explicit task trigger while preserving lazy body loading"
+          : "No activation signal for this agent and task",
+        matched_triggers: triggerMatches,
+        matched_project_signals: signalMatch?.matched_signals ?? [],
+        allowed_agent: agentAllowed,
+        scope: metadata.scope
+      };
+    })
+    .filter((decision) => decision.selected);
+}
+
 export function enforcePermission({ permissions, agentId, intent }) {
   const evaluation = evaluatePermission({ permissions, agentId, intent });
   if (evaluation.decision !== "allow") {

@@ -27,6 +27,9 @@
 - RegressionGatePolicy
 - RegressionComparison
 - VersionLockSet
+- SkillPack
+- SkillActivationDecision
+- ProjectSignal
 
 ## Value Objects
 
@@ -51,6 +54,9 @@
 - MetricRule
 - RegressionFinding
 - BaselineUpdateDecision
+- SkillTrigger
+- SkillScope
+- LazyLoadDecision
 
 ## Use Cases
 
@@ -84,6 +90,10 @@
 - EvaluateRegressionGate
 - EmitRegressionGateTrace
 - RequireHumanApprovalForBaselineUpdate
+- DetectProjectSignals
+- NormalizeSkillMetadata
+- SelectLazySkills
+- EmitSkillActivationTrace
 
 ## Ports
 
@@ -103,3 +113,4 @@
 - SecurityPolicyStore
 - VersionLockStore
 - RegressionReportSink
+- SkillPackStore
