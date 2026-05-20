@@ -115,15 +115,64 @@ export function loadLazySkill(registry, skillId) {
 }
 
 export function enforcePermission({ permissions, agentId, intent }) {
-  const decision = permissions.agents?.[agentId]?.[intent] ?? permissions.default;
-  if (decision !== "allow") {
+  const evaluation = evaluatePermission({ permissions, agentId, intent });
+  if (evaluation.decision !== "allow") {
     throw new Error(`Permission denied for ${agentId}:${intent}`);
   }
 
+  return evaluation;
+}
+
+export function isProtectedPath({ permissions, targetPath }) {
+  if (!targetPath) return false;
+  return (permissions.protectedPaths ?? []).some((pattern) => {
+    if (pattern === "**/.env*") return targetPath.split("/").some((part) => part.startsWith(".env"));
+    if (pattern === "**/secrets/**") return targetPath.includes("/secrets/") || targetPath.startsWith("secrets/");
+    if (pattern === "**/.ssh/**") return targetPath.includes("/.ssh/") || targetPath.startsWith(".ssh/");
+    return targetPath.includes(pattern.replaceAll("*", ""));
+  });
+}
+
+export function isDestructiveCommand(command) {
+  if (!command) return false;
+  const normalized = command.trim().toLowerCase();
+  return ["rm ", "rm -", "git reset --hard", "git clean", "chmod 777", "dd "].some((prefix) =>
+    normalized.startsWith(prefix)
+  );
+}
+
+export function evaluatePermission({ permissions, agentId, intent, targetPath = null, command = null }) {
+  if (isProtectedPath({ permissions, targetPath })) {
+    return {
+      agent_id: agentId,
+      intent,
+      decision: "deny",
+      reason: "target_path_matches_protected_paths",
+      target_path: targetPath,
+      policy_source: "protectedPaths"
+    };
+  }
+
+  if (isDestructiveCommand(command)) {
+    return {
+      agent_id: agentId,
+      intent,
+      decision: "deny",
+      reason: "command_matches_destructive_defaults",
+      command,
+      policy_source: "destructive_command_defaults"
+    };
+  }
+
+  const decision = permissions.agents?.[agentId]?.[intent] ?? permissions.default;
   return {
     agent_id: agentId,
     intent,
-    decision
+    decision,
+    reason: permissions.agents?.[agentId]?.[intent]
+      ? "matched_agent_permission"
+      : "default_deny_policy",
+    policy_source: permissions.agents?.[agentId]?.[intent] ? `agents.${agentId}.${intent}` : "default"
   };
 }
 

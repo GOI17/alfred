@@ -1,0 +1,65 @@
+{
+  "trace_id": "phase-4-security-permission-enforcement",
+  "timestamp": "2026-05-19T00:00:00.000Z",
+  "event": "permission_enforcement",
+  "actor": "pi-adapter",
+  "data": {
+    "trace_id": "phase-4-security-permission-enforcement",
+    "timestamp": "2026-05-19T00:00:00.000Z",
+    "orchestrator_id": "orchestrator",
+    "permission_checks": [
+      {
+        "scenario_id": "allowed-read-files",
+        "agent_id": "orchestrator",
+        "intent": "read_files",
+        "decision": "allow",
+        "reason": "matched_agent_permission",
+        "policy_source": "agents.orchestrator.read_files"
+      },
+      {
+        "scenario_id": "denied-secret-path",
+        "agent_id": "orchestrator",
+        "intent": "read_files",
+        "decision": "deny",
+        "reason": "target_path_matches_protected_paths",
+        "target_path": ".env",
+        "policy_source": "protectedPaths"
+      },
+      {
+        "scenario_id": "denied-destructive-command",
+        "agent_id": "developer",
+        "intent": "delete_files",
+        "decision": "deny",
+        "reason": "command_matches_destructive_defaults",
+        "command": "rm -rf packages/core",
+        "policy_source": "destructive_command_defaults"
+      },
+      {
+        "scenario_id": "denied-permission-broadening",
+        "agent_id": "orchestrator",
+        "intent": "modify_permissions",
+        "decision": "deny",
+        "reason": "matched_agent_permission",
+        "policy_source": "agents.orchestrator.modify_permissions"
+      },
+      {
+        "scenario_id": "denied-unknown-intent",
+        "agent_id": "librarian",
+        "intent": "install_dependencies",
+        "decision": "deny",
+        "reason": "default_deny_policy",
+        "policy_source": "default"
+      }
+    ],
+    "trace_events": [
+      "permission_allowed",
+      "permission_denied",
+      "permission_denied",
+      "permission_denied",
+      "permission_denied"
+    ],
+    "provider_calls": 0,
+    "security_policy": ".ai/policies/security.md",
+    "permissions_policy": ".ai/policies/permissions.example.json"
+  }
+}
