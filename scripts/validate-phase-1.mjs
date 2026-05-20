@@ -25,6 +25,9 @@ const requiredPaths = [
   ".ai/skills/registry.schema.json",
   ".ai/policies/permissions.schema.json",
   ".ai/policies/permissions.example.json",
+  ".ai/policies/model-assignment.schema.json",
+  ".ai/policies/model-assignment.example.json",
+  ".ai/policies/model-assignment.md",
   ".ai/policies/provider-request-policy.schema.json",
   ".ai/policies/provider-request-policy.example.json",
   ".ai/policies/provider-request-policy.md",
@@ -34,11 +37,13 @@ const requiredPaths = [
   ".ai/observability/examples/provider-request-avoided.json",
   ".ai/observability/examples/provider-request-reduced.json",
   ".ai/observability/examples/delegation-decision.json",
+  ".ai/observability/examples/model-fallback-exhausted.json",
   ".ai/evals/schemas/eval-case.schema.json",
   ".ai/evals/schemas/eval-result.schema.json",
   ".ai/evals/suites/orchestrator.yml",
   ".ai/evals/suites/security.yml",
   ".ai/evals/suites/local-first.yml",
+  ".ai/evals/suites/model-fallback.yml",
   ".ai/evals/datasets/simple-tasks.yml",
   ".ai/evals/datasets/unsafe-requests.yml",
   ".ai/evals/datasets/skill-routing.yml",
@@ -51,6 +56,7 @@ const requiredPaths = [
 ];
 
 const agentIds = ["orchestrator", "developer", "qa", "librarian", "architect", "reviewer"];
+const forbiddenAgentModelKeys = ["model", "primary_model", "fallback_model", "fallback_models", "provider"];
 
 function fail(message) {
   throw new Error(message);
@@ -105,8 +111,21 @@ for (const id of agentIds) {
   if (metadata.id !== id) fail(`${specPath} has incorrect id frontmatter`);
   if (!metadata.role) fail(`${specPath} must declare role`);
   if (!metadata.permissions) fail(`${specPath} must declare permissions`);
+  for (const key of forbiddenAgentModelKeys) {
+    if (metadata[key]) fail(`${specPath} must not pin model/provider frontmatter key: ${key}`);
+  }
+  const body = read(specPath).toLowerCase();
+  if (/must use\s+\S+/.test(body) && /(model|claude|openai|gemini|opus|sonnet|gpt)/.test(body)) {
+    fail(`${specPath} appears to require a specific model in prompt text`);
+  }
   if (!agentRegistry.agents.some((agent) => agent.id === id && agent.spec === specPath)) {
     fail(`Agent registry does not point to ${specPath}`);
+  }
+}
+
+for (const agent of agentRegistry.agents) {
+  for (const key of forbiddenAgentModelKeys) {
+    if (agent[key]) fail(`Agent registry entry ${agent.id} must not pin model/provider key: ${key}`);
   }
 }
 
@@ -119,10 +138,22 @@ if (providerPolicy.default_strategy !== "local-first") fail("Provider policy mus
 if (!providerPolicy.required_trace_events.includes("provider_request_avoided")) fail("Provider policy must trace avoided provider calls");
 if (!providerPolicy.required_trace_events.includes("provider_request_reduced")) fail("Provider policy must trace reduced provider calls");
 
+const modelPolicy = parseJson(".ai/policies/model-assignment.example.json");
+if (modelPolicy.ownership.agent_specs_may_pin_models !== false) fail("Agent specs must not pin models");
+if (modelPolicy.ownership.assignment_owner !== "user") fail("Model assignment owner must be user");
+if (modelPolicy.fallback.retries_before_switch !== 3) fail("Model fallback must retry 3 times before switching");
+if (modelPolicy.fallback.on_all_models_failed !== "explain_failure_to_user") fail("All model failures must be explained to the user");
+for (const id of agentIds) {
+  if (!modelPolicy.agents[id]) fail(`Model assignment example must include ${id}`);
+  if (!modelPolicy.agents[id].primary) fail(`Model assignment example for ${id} must include primary placeholder`);
+  if (!Array.isArray(modelPolicy.agents[id].fallbacks)) fail(`Model assignment example for ${id} must include fallbacks array`);
+}
+
 const traceEvents = [
   [".ai/observability/examples/provider-request-avoided.json", "provider_request_avoided"],
   [".ai/observability/examples/provider-request-reduced.json", "provider_request_reduced"],
-  [".ai/observability/examples/delegation-decision.json", "delegation_decision"]
+  [".ai/observability/examples/delegation-decision.json", "delegation_decision"],
+  [".ai/observability/examples/model-fallback-exhausted.json", "model_fallback_exhausted"]
 ];
 for (const [file, event] of traceEvents) {
   const trace = parseJson(file);

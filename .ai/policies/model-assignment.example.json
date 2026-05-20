@@ -1,0 +1,43 @@
+{
+  "ownership": {
+    "agent_specs_may_pin_models": false,
+    "assignment_owner": "user"
+  },
+  "agents": {
+    "orchestrator": {
+      "primary": "user-selected-orchestrator-model",
+      "fallbacks": ["user-selected-orchestrator-fallback-1", "user-selected-orchestrator-fallback-2"]
+    },
+    "developer": {
+      "primary": "user-selected-developer-model",
+      "fallbacks": ["user-selected-developer-fallback-1"]
+    },
+    "qa": {
+      "primary": "user-selected-qa-model",
+      "fallbacks": ["user-selected-qa-fallback-1"]
+    },
+    "librarian": {
+      "primary": "user-selected-librarian-model",
+      "fallbacks": []
+    },
+    "architect": {
+      "primary": "user-selected-architect-model",
+      "fallbacks": ["user-selected-architect-fallback-1"]
+    },
+    "reviewer": {
+      "primary": "user-selected-reviewer-model",
+      "fallbacks": ["user-selected-reviewer-fallback-1"]
+    }
+  },
+  "fallback": {
+    "retries_before_switch": 3,
+    "switch_on": [
+      "provider_timeout",
+      "provider_rate_limit",
+      "provider_unavailable",
+      "model_context_limit_exceeded",
+      "recoverable_provider_error"
+    ],
+    "on_all_models_failed": "explain_failure_to_user"
+  }
+}

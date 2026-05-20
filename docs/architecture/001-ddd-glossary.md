@@ -15,3 +15,5 @@
 - TemporaryAgent: ephemeral specialist created to cover a missing capability.
 - ProviderRequestGate: policy gate deciding local-only, hybrid, or provider execution.
 - LocalCapability: deterministic local script/tool that can solve or reduce work before provider calls.
+- ModelAssignmentPolicy: user-owned configuration mapping agents to primary and fallback models without changing agent identity.
+- ModelFallbackChain: ordered runtime sequence of user-configured models tried after retry exhaustion.

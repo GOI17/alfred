@@ -6,6 +6,7 @@
   "source_of_truth": {
     "architecture": "docs/architecture",
     "agent_system": ".ai",
+    "model_assignment_policy": ".ai/policies/model-assignment.md",
     "phase_1_completion": ".ai/execution/phase-1-architecture-kernel.md",
     "phase_2_handoff": ".ai/execution/phase-2-handoff.md"
   },

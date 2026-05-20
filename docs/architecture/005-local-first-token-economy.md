@@ -17,3 +17,5 @@ Use local computation for file discovery, stack detection, AST extraction, schem
 ## Provider Request Gate
 
 Every provider request must pass through a gate that checks local capabilities, preprocesses context, estimates cost, chooses strategy, and emits trace events.
+
+Model selection happens after this gate. Agents do not own model IDs; the user assigns primary and fallback models through model assignment policy. Recoverable provider/model failures retry three times before switching to the next configured fallback model.

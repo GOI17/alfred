@@ -19,3 +19,4 @@ Core concepts are neutral. Harness concepts are adapter-specific.
 - Specialist maps to subagent, prompt template, command, extension, or runtime worker depending on harness capability.
 - Skill maps to harness-supported skill package or prompt module.
 - PermissionPolicy maps to runtime enforcement where available or adapter-side gate where unavailable.
+- Model IDs map to user-owned harness/provider runtime configuration, never to agent identity.

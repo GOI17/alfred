@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alfred Model Assignment Policy",
+  "type": "object",
+  "required": ["ownership", "agents", "fallback"],
+  "properties": {
+    "ownership": {
+      "type": "object",
+      "required": ["agent_specs_may_pin_models", "assignment_owner"],
+      "properties": {
+        "agent_specs_may_pin_models": { "const": false },
+        "assignment_owner": { "const": "user" }
+      },
+      "additionalProperties": false
+    },
+    "agents": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["primary", "fallbacks"],
+        "properties": {
+          "primary": { "type": "string" },
+          "fallbacks": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "required": ["retries_before_switch", "on_all_models_failed"],
+      "properties": {
+        "retries_before_switch": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "switch_on": { "type": "array", "items": { "type": "string" } },
+        "on_all_models_failed": { "const": "explain_failure_to_user" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
