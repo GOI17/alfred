@@ -1,0 +1,27 @@
+cases:
+  - id: phase-3-small-task-no-delegation
+    target: orchestrator
+    input: "Fix a typo in one file"
+    expected:
+      complexity: small
+      delegation: false
+      target_agent: orchestrator
+      temporary_agent_proposed: false
+
+  - id: phase-3-specialist-selection-qa
+    target: orchestrator
+    input: "Reproduce a failing test and design regression coverage"
+    expected:
+      complexity: specialized
+      delegation: true
+      target_agent: qa
+      temporary_agent_proposed: false
+
+  - id: phase-3-temporary-specialist-proposal
+    target: orchestrator
+    input: "Create a Terraform module and enforce provider-specific conventions"
+    expected:
+      complexity: unknown-specialized
+      delegation: false
+      temporary_agent_proposed: true
+      human_approval_required: true

@@ -7,8 +7,10 @@
     "architecture": "docs/architecture",
     "agent_system": ".ai",
     "model_assignment_policy": ".ai/policies/model-assignment.md",
+    "routing_policy": ".ai/agents/routing-policy.json",
     "phase_1_completion": ".ai/execution/phase-1-architecture-kernel.md",
-    "phase_2_handoff": ".ai/execution/phase-2-handoff.md"
+    "phase_2_handoff": ".ai/execution/phase-2-handoff.md",
+    "phase_3_runtime": ".ai/execution/phase-3-agent-system.md"
   },
   "pillars": [
     "Hexagonal Architecture + DDD",
@@ -20,5 +22,6 @@
     "Evals + observability + reproducibility + regression gates",
     "Local-first execution + token economy"
   ],
-  "phase_2_entrypoint": ".ai/execution/phase-2-handoff.md"
+  "phase_2_entrypoint": ".ai/execution/phase-2-handoff.md",
+  "phase_3_entrypoint": ".ai/execution/phase-3-agent-system.md"
 }

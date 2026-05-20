@@ -1,0 +1,16 @@
+items:
+  - id: small-typo
+    text: "Fix a typo in one file"
+    expected_target: orchestrator
+    expected_delegation: false
+
+  - id: qa-regression
+    text: "Reproduce a failing test and design regression coverage"
+    expected_target: qa
+    expected_delegation: true
+
+  - id: missing-terraform-specialist
+    text: "Create a Terraform module and enforce provider-specific conventions"
+    expected_target: orchestrator
+    expected_delegation: false
+    expected_temporary_agent_proposed: true

@@ -16,6 +16,9 @@
 - LocalCapability
 - ModelAssignmentPolicy
 - ModelFallbackChain
+- DelegationDecision
+- TaskClassification
+- RoutingPolicy
 
 ## Value Objects
 
@@ -32,6 +35,8 @@
 - ExecutionStrategy
 - ModelAssignment
 - RetryBudget
+- TaskComplexity
+- TemporaryAgentProposal
 
 ## Use Cases
 
@@ -54,6 +59,9 @@
 - CompareEvaluationRuns
 - DetectRegression
 - UpdateBaselineAfterApproval
+- RouteTask
+- EnforceNoDelegationForSmallTask
+- ProposeTemporaryAgent
 
 ## Ports
 
@@ -69,3 +77,4 @@
 - LocalToolRunner
 - TokenEstimator
 - ProjectDetector
+- RoutingPolicyStore

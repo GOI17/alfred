@@ -1,0 +1,38 @@
+{
+  "version": "routing-policy@0.1.0",
+  "owner": "core",
+  "simple_task_indicators": [
+    "typo",
+    "one file",
+    "rename",
+    "formatting"
+  ],
+  "specialists": [
+    {
+      "id": "developer",
+      "triggers": ["implement", "code change", "refactor", "bug fix"]
+    },
+    {
+      "id": "qa",
+      "triggers": ["test", "failing", "regression", "reproduce"]
+    },
+    {
+      "id": "librarian",
+      "triggers": ["search", "summarize", "index", "find docs"]
+    },
+    {
+      "id": "architect",
+      "triggers": ["architecture", "ddd", "hexagonal", "boundary"]
+    },
+    {
+      "id": "reviewer",
+      "triggers": ["review", "risk", "security issue", "missing tests"]
+    }
+  ],
+  "temporary_agent": {
+    "proposal_id": "temporary-specialist-proposal",
+    "default_role": "temporary-specialist",
+    "permissions": ["read_files"],
+    "promotion_requires_human_approval": true
+  }
+}

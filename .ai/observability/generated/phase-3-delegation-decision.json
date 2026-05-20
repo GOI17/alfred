@@ -1,0 +1,63 @@
+{
+  "trace_id": "phase-3-agent-system-delegation-decision",
+  "timestamp": "2026-05-19T00:00:00.000Z",
+  "event": "delegation_decision",
+  "actor": "pi-adapter",
+  "data": {
+    "trace_id": "phase-3-agent-system-delegation-decision",
+    "timestamp": "2026-05-19T00:00:00.000Z",
+    "orchestrator_id": "orchestrator",
+    "decisions": [
+      {
+        "scenario_id": "small-task-no-delegation",
+        "input": "Fix a typo in one file",
+        "task_classification": {
+          "complexity": "small",
+          "reason": "Matched simple task indicator: typo"
+        },
+        "delegation": false,
+        "target_agent": "orchestrator",
+        "temporary_agent_proposal": null,
+        "reason": "Small/simple tasks stay with the Orchestrator"
+      },
+      {
+        "scenario_id": "qa-specialist-delegation",
+        "input": "Reproduce a failing test and design regression coverage",
+        "task_classification": {
+          "complexity": "specialized",
+          "reason": "Matched specialist trigger: test"
+        },
+        "delegation": true,
+        "target_agent": "qa",
+        "temporary_agent_proposal": null,
+        "reason": "Specialist qa matched task triggers"
+      },
+      {
+        "scenario_id": "temporary-agent-proposal",
+        "input": "Create a Terraform module and enforce provider-specific conventions",
+        "task_classification": {
+          "complexity": "unknown-specialized",
+          "reason": "No existing specialist trigger matched the task"
+        },
+        "delegation": false,
+        "target_agent": "orchestrator",
+        "temporary_agent_proposal": {
+          "temporary_agent_proposed": true,
+          "human_approval_required": true,
+          "proposal_id": "temporary-specialist-proposal",
+          "proposed_role": "temporary-specialist",
+          "source_task": "Create a Terraform module and enforce provider-specific conventions",
+          "reason": "No existing specialist trigger matched the task",
+          "permissions": [
+            "read_files"
+          ],
+          "promotion_requires_human_approval": true
+        },
+        "reason": "No existing specialist fits; human approval is required before creating a temporary specialist"
+      }
+    ],
+    "provider_calls": 0,
+    "routing_policy": ".ai/agents/routing-policy.json",
+    "model_assignment_source": "user-owned-runtime-configuration"
+  }
+}

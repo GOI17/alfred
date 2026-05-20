@@ -5,9 +5,10 @@
   "description": "Alfred handles the operational burden so humans focus on decisions.",
   "packageManager": "pnpm@10.0.0",
   "scripts": {
-    "check": "node scripts/validate-phase-1.mjs && node scripts/validate-phase-2.mjs && pnpm -r check",
-    "test": "node scripts/validate-phase-1.mjs && node scripts/validate-phase-2.mjs && pnpm -r test",
+    "check": "node scripts/validate-phase-1.mjs && node scripts/validate-phase-2.mjs && node scripts/validate-phase-3.mjs && pnpm -r check",
+    "test": "node scripts/validate-phase-1.mjs && node scripts/validate-phase-2.mjs && node scripts/validate-phase-3.mjs && pnpm -r test",
     "validate:phase1": "node scripts/validate-phase-1.mjs",
-    "validate:phase2": "node scripts/validate-phase-2.mjs"
+    "validate:phase2": "node scripts/validate-phase-2.mjs",
+    "validate:phase3": "node scripts/validate-phase-3.mjs"
   }
 }
