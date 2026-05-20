@@ -31,3 +31,7 @@ Add opencode adapter, then Claude/Codex/VSCode/Kiro adapters or compatibility no
 ## Post-Phase-7: Roadmap + Release Readiness
 
 Consolidate completed phases into a model-readable roadmap, preserve issue-driven governance, and make the next release candidate discoverable through deterministic local validation.
+
+## Milestone: Eval Runner Package
+
+Move deterministic eval discovery, current-result computation, and regression gate execution into `packages/evals` while preserving all phase validators and zero-provider-call regression gates.

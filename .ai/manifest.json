@@ -19,7 +19,8 @@
     "version_locks": ".ai/versions/locks.json",
     "phase_7_portability": ".ai/execution/phase-7-harness-portability.md",
     "harness_compatibility": ".ai/harnesses/compatibility-matrix.json",
-    "post_phase_7_roadmap": ".ai/execution/post-phase-7-roadmap.json"
+    "post_phase_7_roadmap": ".ai/execution/post-phase-7-roadmap.json",
+    "eval_runner_package": ".ai/execution/eval-runner-package.json"
   },
   "pillars": [
     "Hexagonal Architecture + DDD",
@@ -37,5 +38,6 @@
   "phase_5_entrypoint": ".ai/execution/phase-5-evals-regression-gates.md",
   "phase_6_entrypoint": ".ai/execution/phase-6-skill-packs-lazy-loading.md",
   "phase_7_entrypoint": ".ai/execution/phase-7-harness-portability.md",
-  "post_phase_7_entrypoint": ".ai/execution/post-phase-7-roadmap.md"
+  "post_phase_7_entrypoint": ".ai/execution/post-phase-7-roadmap.md",
+  "eval_runner_entrypoint": ".ai/execution/eval-runner-package.md"
 }

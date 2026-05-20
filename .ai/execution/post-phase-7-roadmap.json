@@ -22,7 +22,8 @@
       "validate:phase5",
       "validate:phase6",
       "validate:phase7",
-      "validate:roadmap"
+      "validate:roadmap",
+      "validate:eval-runner"
     ],
     "validators": [
       "validate:phase1",
@@ -32,7 +33,8 @@
       "validate:phase5",
       "validate:phase6",
       "validate:phase7",
-      "validate:roadmap"
+      "validate:roadmap",
+      "validate:eval-runner"
     ],
     "provider_calls_allowed": 0,
     "baseline_update_requires_human_approval": true
@@ -60,7 +62,8 @@
       "id": "eval-runner-package",
       "owner": "qa",
       "goal": "Move deterministic validation into package-level eval runner APIs while preserving existing regression gates.",
-      "validation": "pnpm check"
+      "validation": "validate:eval-runner",
+      "status": "complete"
     }
   ]
 }

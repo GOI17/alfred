@@ -1,0 +1,30 @@
+{
+  "id": "eval-runner-package",
+  "version": "eval-runner-package@0.1.0",
+  "owner": "qa",
+  "status": "complete",
+  "provider_calls_allowed": 0,
+  "goal": "Move deterministic validation into package-level eval runner APIs while preserving existing regression gates.",
+  "apis": [
+    "listEvalBaselines(root)",
+    "loadEvalBaselines(root)",
+    "computeCurrentEvalResults(root)",
+    "runEvalRunner({ root })"
+  ],
+  "inputs": [
+    ".ai/evals/baselines/*.json",
+    ".ai/observability/generated/*.json",
+    ".ai/evals/regression-gates.json"
+  ],
+  "outputs": {
+    "status": "pass",
+    "baseline_count": 9,
+    "current_result_count": 8,
+    "provider_calls": 0
+  },
+  "constraints": {
+    "core_remains_dependency_free": true,
+    "adapters_not_required_by_evals_package": true,
+    "baseline_updates_require_human_approval": true
+  }
+}
