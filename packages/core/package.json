@@ -3,8 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "exports": "./src/index.js",
   "scripts": {
-    "check": "node -e \"console.log('core check: no implementation yet')\"",
-    "test": "node -e \"console.log('core test: no implementation yet')\""
+    "check": "node --check src/index.js",
+    "test": "node -e \"import('./src/index.js').then(() => console.log('core test: exports load'))\""
   }
 }

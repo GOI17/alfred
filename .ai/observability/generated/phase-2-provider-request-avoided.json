@@ -1,0 +1,23 @@
+{
+  "trace_id": "phase-2-pi-runtime-spike-provider-request-avoided",
+  "timestamp": "2026-05-19T00:00:00.000Z",
+  "event": "provider_request_avoided",
+  "actor": "pi-adapter",
+  "data": {
+    "trace_id": "phase-2-pi-runtime-spike-provider-request-avoided",
+    "timestamp": "2026-05-19T00:00:00.000Z",
+    "task_id": "schema-validation-local-only",
+    "agent_id": "orchestrator",
+    "skill_id": null,
+    "strategy": "local-only",
+    "provider_calls": 0,
+    "local_capability": "validate_agent_registry",
+    "permission_check": {
+      "agent_id": "orchestrator",
+      "intent": "read_files",
+      "decision": "allow"
+    },
+    "reason": "Agent registry validation is deterministic and does not require semantic provider judgment",
+    "model_assignment_source": "user-owned-runtime-configuration"
+  }
+}
