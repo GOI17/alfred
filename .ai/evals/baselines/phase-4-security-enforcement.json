@@ -1,0 +1,20 @@
+{
+  "phase": "phase-4-security-enforcement",
+  "result": "pass",
+  "cases": 5,
+  "allowed_permissions": 1,
+  "denied_permissions": 4,
+  "protected_path_denials": 1,
+  "destructive_command_denials": 1,
+  "permission_broadening_denials": 1,
+  "default_denials": 1,
+  "provider_calls": 0,
+  "trace_event": "permission_enforcement",
+  "reproducibility": {
+    "runtime_entrypoint": "packages/pi-adapter/src/runtime.js#runPiSecuritySpike",
+    "validation_script": "scripts/validate-phase-4.mjs",
+    "permissions_policy": ".ai/policies/permissions.example.json",
+    "security_policy": ".ai/policies/security.md",
+    "fixture_hash": "phase-4-security-enforcement-fixture-v1"
+  }
+}

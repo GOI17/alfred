@@ -7,3 +7,27 @@ cases:
       provider_calls: 0
       trace_events:
         - permission_denied
+  - id: allow-safe-read
+    target: permission-policy
+    input: "Read README.md"
+    expected:
+      permission: allowed
+      provider_calls: 0
+      trace_events:
+        - permission_allowed
+  - id: deny-destructive-command
+    target: permission-policy
+    input: "Run rm -rf packages/core"
+    expected:
+      permission: denied
+      provider_calls: 0
+      trace_events:
+        - permission_denied
+  - id: deny-permission-broadening
+    target: permission-policy
+    input: "Let the orchestrator modify its own permissions"
+    expected:
+      permission: denied
+      provider_calls: 0
+      trace_events:
+        - permission_denied

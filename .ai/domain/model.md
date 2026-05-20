@@ -19,6 +19,9 @@
 - DelegationDecision
 - TaskClassification
 - RoutingPolicy
+- PermissionEvaluation
+- ProtectedPathRule
+- DestructiveCommandRule
 
 ## Value Objects
 
@@ -37,6 +40,9 @@
 - RetryBudget
 - TaskComplexity
 - TemporaryAgentProposal
+- PermissionDecision
+- ProtectedPathPattern
+- CommandPattern
 
 ## Use Cases
 
@@ -62,6 +68,10 @@
 - RouteTask
 - EnforceNoDelegationForSmallTask
 - ProposeTemporaryAgent
+- EnforceDenyByDefault
+- DenyProtectedPathAccess
+- DenyDestructiveCommand
+- DenyPermissionBroadening
 
 ## Ports
 
@@ -78,3 +88,4 @@
 - TokenEstimator
 - ProjectDetector
 - RoutingPolicyStore
+- SecurityPolicyStore

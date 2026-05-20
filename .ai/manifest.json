@@ -10,7 +10,8 @@
     "routing_policy": ".ai/agents/routing-policy.json",
     "phase_1_completion": ".ai/execution/phase-1-architecture-kernel.md",
     "phase_2_handoff": ".ai/execution/phase-2-handoff.md",
-    "phase_3_runtime": ".ai/execution/phase-3-agent-system.md"
+    "phase_3_runtime": ".ai/execution/phase-3-agent-system.md",
+    "phase_4_security": ".ai/execution/phase-4-security-enforcement.md"
   },
   "pillars": [
     "Hexagonal Architecture + DDD",
@@ -23,5 +24,6 @@
     "Local-first execution + token economy"
   ],
   "phase_2_entrypoint": ".ai/execution/phase-2-handoff.md",
-  "phase_3_entrypoint": ".ai/execution/phase-3-agent-system.md"
+  "phase_3_entrypoint": ".ai/execution/phase-3-agent-system.md",
+  "phase_4_entrypoint": ".ai/execution/phase-4-security-enforcement.md"
 }

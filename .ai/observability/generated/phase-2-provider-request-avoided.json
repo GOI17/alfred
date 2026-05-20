@@ -15,7 +15,9 @@
     "permission_check": {
       "agent_id": "orchestrator",
       "intent": "read_files",
-      "decision": "allow"
+      "decision": "allow",
+      "reason": "matched_agent_permission",
+      "policy_source": "agents.orchestrator.read_files"
     },
     "reason": "Agent registry validation is deterministic and does not require semantic provider judgment",
     "model_assignment_source": "user-owned-runtime-configuration"

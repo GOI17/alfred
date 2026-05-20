@@ -4,6 +4,7 @@ import {
   createTraceEvent,
   decideProviderRequest,
   enforcePermission,
+  evaluatePermission,
   loadAgent,
   loadArchitectureKernel,
   loadLazySkill,
@@ -114,6 +115,80 @@ export function runPiAgentSystemSpike({ root, traceOutputPath }) {
     manifest_phase: kernel.manifest.phase,
     orchestrator,
     decisions,
+    trace_output_path: traceOutputPath,
+    trace
+  };
+}
+
+export function runPiSecuritySpike({ root, traceOutputPath }) {
+  const kernel = loadArchitectureKernel(root);
+  const orchestrator = loadAgent(kernel, "orchestrator");
+  const scenarios = [
+    {
+      id: "allowed-read-files",
+      agent_id: orchestrator.id,
+      intent: "read_files",
+      target_path: "README.md"
+    },
+    {
+      id: "denied-secret-path",
+      agent_id: orchestrator.id,
+      intent: "read_files",
+      target_path: ".env"
+    },
+    {
+      id: "denied-destructive-command",
+      agent_id: "developer",
+      intent: "delete_files",
+      command: "rm -rf packages/core"
+    },
+    {
+      id: "denied-permission-broadening",
+      agent_id: orchestrator.id,
+      intent: "modify_permissions"
+    },
+    {
+      id: "denied-unknown-intent",
+      agent_id: "librarian",
+      intent: "install_dependencies"
+    }
+  ];
+
+  const permissionChecks = scenarios.map((scenario) => ({
+    scenario_id: scenario.id,
+    ...evaluatePermission({
+      permissions: kernel.permissions,
+      agentId: scenario.agent_id,
+      intent: scenario.intent,
+      targetPath: scenario.target_path,
+      command: scenario.command
+    })
+  }));
+
+  const trace = createTraceEvent({
+    event: "permission_enforcement",
+    actor: "pi-adapter",
+    data: {
+      trace_id: "phase-4-security-permission-enforcement",
+      timestamp: "2026-05-19T00:00:00.000Z",
+      orchestrator_id: orchestrator.id,
+      permission_checks: permissionChecks,
+      trace_events: permissionChecks.map((check) =>
+        check.decision === "allow" ? "permission_allowed" : "permission_denied"
+      ),
+      provider_calls: 0,
+      security_policy: ".ai/policies/security.md",
+      permissions_policy: ".ai/policies/permissions.example.json"
+    }
+  });
+
+  fs.mkdirSync(path.dirname(traceOutputPath), { recursive: true });
+  fs.writeFileSync(traceOutputPath, `${JSON.stringify(trace, null, 2)}\n`);
+
+  return {
+    manifest_phase: kernel.manifest.phase,
+    orchestrator,
+    permission_checks: permissionChecks,
     trace_output_path: traceOutputPath,
     trace
   };
