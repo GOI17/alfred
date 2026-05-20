@@ -1,0 +1,66 @@
+{
+  "id": "post-phase-7-roadmap",
+  "version": "post-phase-7-roadmap@0.1.0",
+  "owner": "core",
+  "status": "active",
+  "completed_phases": [
+    "phase-1-architecture-kernel",
+    "phase-2-pi-runtime-spike",
+    "phase-3-agent-system",
+    "phase-4-security-enforcement",
+    "phase-5-evals-regression-gates",
+    "phase-6-skill-packs-lazy-loading",
+    "phase-7-harness-portability"
+  ],
+  "release_readiness": {
+    "current_candidate": "architecture-kernel-0.1.0",
+    "required_validators": [
+      "validate:phase1",
+      "validate:phase2",
+      "validate:phase3",
+      "validate:phase4",
+      "validate:phase5",
+      "validate:phase6",
+      "validate:phase7",
+      "validate:roadmap"
+    ],
+    "validators": [
+      "validate:phase1",
+      "validate:phase2",
+      "validate:phase3",
+      "validate:phase4",
+      "validate:phase5",
+      "validate:phase6",
+      "validate:phase7",
+      "validate:roadmap"
+    ],
+    "provider_calls_allowed": 0,
+    "baseline_update_requires_human_approval": true
+  },
+  "governance": {
+    "issue_branch_pr_required": true,
+    "direct_main_commits_allowed": false,
+    "merge_closes_issue": true,
+    "baseline_updates_require_human_approval": true
+  },
+  "next_milestones": [
+    {
+      "id": "release-0.1.0",
+      "owner": "orchestrator",
+      "goal": "Package the completed architecture kernel as a reproducible local release candidate.",
+      "validation": "validate:roadmap"
+    },
+    {
+      "id": "adapter-hardening",
+      "owner": "architect",
+      "goal": "Turn executable adapter previews into hardened adapter contracts without leaking harness concepts into core.",
+      "validation": "validate:phase7"
+    },
+    {
+      "id": "eval-runner-package",
+      "owner": "qa",
+      "goal": "Move deterministic validation into package-level eval runner APIs while preserving existing regression gates.",
+      "validation": "pnpm check"
+    }
+  ]
+}

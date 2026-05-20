@@ -1,0 +1,17 @@
+{
+  "phase": "post-phase-7-roadmap-readiness",
+  "result": "pass",
+  "completed_phase_count": 7,
+  "next_milestone_count": 3,
+  "governance_ready": true,
+  "validation_ready": true,
+  "next_work_ready": true,
+  "provider_calls": 0,
+  "trace_event": "roadmap_readiness_evaluated",
+  "reproducibility": {
+    "runtime_entrypoint": "packages/pi-adapter/src/runtime.js#runPiRoadmapReadinessSpike",
+    "validation_script": "scripts/validate-roadmap.mjs",
+    "roadmap": ".ai/execution/post-phase-7-roadmap.json",
+    "fixture_hash": "post-phase-7-roadmap-readiness-fixture-v1"
+  }
+}

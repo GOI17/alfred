@@ -30,6 +30,8 @@
 - SkillPack
 - SkillActivationDecision
 - ProjectSignal
+- Roadmap
+- ReleaseReadinessEvaluation
 
 ## Value Objects
 
@@ -57,6 +59,8 @@
 - SkillTrigger
 - SkillScope
 - LazyLoadDecision
+- RoadmapMilestone
+- ReleaseCandidate
 
 ## Use Cases
 
@@ -94,6 +98,9 @@
 - NormalizeSkillMetadata
 - SelectLazySkills
 - EmitSkillActivationTrace
+- LoadPostPhase7Roadmap
+- EvaluateReleaseReadiness
+- EmitRoadmapReadinessTrace
 
 ## Ports
 
@@ -114,6 +121,7 @@
 - VersionLockStore
 - RegressionReportSink
 - SkillPackStore
+- RoadmapStore
 
 ## Phase 7: Harness Portability
 
@@ -140,3 +148,25 @@ Ports:
 
 - `HarnessCompatibilityStore`: loads the compatibility matrix.
 - `AdapterArtifactSink`: writes generated adapter previews or traces.
+
+## Post-Phase-7: Roadmap + Release Readiness
+
+Entities:
+
+- `Roadmap`: model-readable source of truth for completed phases and next milestones.
+- `ReleaseReadinessEvaluation`: deterministic result proving whether the current architecture kernel is ready for a release candidate.
+
+Value objects:
+
+- `RoadmapMilestone`: concrete next work item with owner, goal, and validation.
+- `ReleaseCandidate`: named candidate, currently `architecture-kernel-0.1.0`.
+
+Use cases:
+
+- `LoadPostPhase7Roadmap`: read `.ai/execution/post-phase-7-roadmap.json`.
+- `EvaluateReleaseReadiness`: verify completed phases, governance, validation, and next work.
+- `EmitRoadmapReadinessTrace`: record zero-provider-call roadmap readiness evaluation.
+
+Ports:
+
+- `RoadmapStore`: loads roadmap and release-readiness source-of-truth artifacts.

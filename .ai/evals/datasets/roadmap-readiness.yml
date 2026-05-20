@@ -1,0 +1,16 @@
+id: roadmap-readiness-dataset
+version: roadmap-readiness-dataset@0.1.0
+items:
+  - id: architecture-kernel-release-candidate
+    completed_phases:
+      - phase-1-architecture-kernel
+      - phase-2-pi-runtime-spike
+      - phase-3-agent-system
+      - phase-4-security-enforcement
+      - phase-5-evals-regression-gates
+      - phase-6-skill-packs-lazy-loading
+      - phase-7-harness-portability
+    expected:
+      status: pass
+      provider_calls: 0
+      next_milestones: 3
