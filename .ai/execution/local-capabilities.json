@@ -1,0 +1,14 @@
+{
+  "capabilities": [
+    { "id": "file_discovery", "strategy": "local-only", "tools": ["glob"] },
+    { "id": "content_search", "strategy": "local-only", "tools": ["grep"] },
+    { "id": "json_parse", "strategy": "local-only", "tools": ["node"] },
+    { "id": "yaml_parse", "strategy": "local-only", "tools": ["ruby"] },
+    { "id": "schema_presence_validation", "strategy": "local-only", "tools": ["node"] },
+    { "id": "agent_frontmatter_validation", "strategy": "local-only", "tools": ["node"] },
+    { "id": "prompt_hashing", "strategy": "local-only", "tools": ["node"] },
+    { "id": "changed_files_detection", "strategy": "local-only", "tools": ["git"] },
+    { "id": "eval_baseline_comparison", "strategy": "local-only", "tools": ["node"] },
+    { "id": "token_estimation", "strategy": "local-only", "tools": ["node"] }
+  ]
+}

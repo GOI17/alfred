@@ -1,0 +1,23 @@
+{
+  "name": "alfred",
+  "phase": "phase-1-architecture-kernel",
+  "status": "complete",
+  "mission": "Alfred handles the operational burden so humans focus on decisions.",
+  "source_of_truth": {
+    "architecture": "docs/architecture",
+    "agent_system": ".ai",
+    "phase_1_completion": ".ai/execution/phase-1-architecture-kernel.md",
+    "phase_2_handoff": ".ai/execution/phase-2-handoff.md"
+  },
+  "pillars": [
+    "Hexagonal Architecture + DDD",
+    "Pi-first harness adapter",
+    "TDD for agents, subagents, and skills",
+    "Granular permissions + agent security",
+    "Lazy-loaded skills",
+    "Temporary specialist lifecycle",
+    "Evals + observability + reproducibility + regression gates",
+    "Local-first execution + token economy"
+  ],
+  "phase_2_entrypoint": ".ai/execution/phase-2-handoff.md"
+}

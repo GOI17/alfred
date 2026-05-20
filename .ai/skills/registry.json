@@ -1,0 +1,8 @@
+{
+  "skills": [],
+  "policy": {
+    "loading": "lazy",
+    "default": "do-not-load",
+    "phase_1_note": "Phase 1 defines the registry contract only. Phase 6 imports concrete skill packs."
+  }
+}
