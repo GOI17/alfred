@@ -1,0 +1,11 @@
+id: regression-gates-dataset
+items:
+  - id: phase-2-provider-calls
+    metric: provider_calls
+    expected: no increase over baseline
+  - id: phase-3-small-task-delegation
+    metric: small_task_delegations
+    expected: no increase over baseline
+  - id: phase-4-denials
+    metric: denied_permissions
+    expected: no decrease below baseline

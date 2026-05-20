@@ -1,0 +1,9 @@
+id: regression-gates
+phase: phase-5-evals-regression-gates
+cases:
+  - id: compare-existing-baselines
+    expected: all phase baselines compare without regressions
+  - id: deny-baseline-update-without-human-approval
+    expected: baseline updates require explicit human approval
+  - id: local-first-gate-execution
+    expected: provider_calls is 0

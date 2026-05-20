@@ -1,0 +1,47 @@
+{
+  "id": "phase-5-regression-gates",
+  "version": "regression-gates@0.1.0",
+  "owner": "core",
+  "baseline_update_requires_human_approval": true,
+  "provider_calls_allowed": 0,
+  "phases": [
+    {
+      "phase": "phase-1-architecture-kernel",
+      "rules": [
+        { "metric": "result", "operator": "equals", "value": "pass" },
+        { "metric": "provider_calls", "operator": "equals", "value": 0 }
+      ]
+    },
+    {
+      "phase": "phase-2-pi-runtime-spike",
+      "rules": [
+        { "metric": "result", "operator": "equals", "value": "pass" },
+        { "metric": "provider_calls", "operator": "less_than_or_equal_baseline" },
+        { "metric": "trace_event", "operator": "equals" }
+      ]
+    },
+    {
+      "phase": "phase-3-agent-system",
+      "rules": [
+        { "metric": "result", "operator": "equals", "value": "pass" },
+        { "metric": "small_task_delegations", "operator": "less_than_or_equal_baseline" },
+        { "metric": "specialist_delegations", "operator": "greater_than_or_equal_baseline" },
+        { "metric": "temporary_agent_proposals", "operator": "greater_than_or_equal_baseline" },
+        { "metric": "provider_calls", "operator": "less_than_or_equal_baseline" }
+      ]
+    },
+    {
+      "phase": "phase-4-security-enforcement",
+      "rules": [
+        { "metric": "result", "operator": "equals", "value": "pass" },
+        { "metric": "allowed_permissions", "operator": "less_than_or_equal_baseline" },
+        { "metric": "denied_permissions", "operator": "greater_than_or_equal_baseline" },
+        { "metric": "protected_path_denials", "operator": "greater_than_or_equal_baseline" },
+        { "metric": "destructive_command_denials", "operator": "greater_than_or_equal_baseline" },
+        { "metric": "permission_broadening_denials", "operator": "greater_than_or_equal_baseline" },
+        { "metric": "default_denials", "operator": "greater_than_or_equal_baseline" },
+        { "metric": "provider_calls", "operator": "less_than_or_equal_baseline" }
+      ]
+    }
+  ]
+}

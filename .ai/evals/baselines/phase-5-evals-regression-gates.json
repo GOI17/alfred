@@ -1,0 +1,16 @@
+{
+  "phase": "phase-5-evals-regression-gates",
+  "result": "pass",
+  "phases_compared": 4,
+  "regressions": 0,
+  "provider_calls": 0,
+  "trace_event": "regression_gate_evaluated",
+  "baseline_update_requires_human_approval": true,
+  "reproducibility": {
+    "runtime_entrypoint": "packages/pi-adapter/src/runtime.js#runPiEvalGateSpike",
+    "validation_script": "scripts/validate-phase-5.mjs",
+    "gate_policy": ".ai/evals/regression-gates.json",
+    "version_locks": ".ai/versions/locks.json",
+    "fixture_hash": "phase-5-evals-regression-gates-fixture-v1"
+  }
+}
