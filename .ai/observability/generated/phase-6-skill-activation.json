@@ -1,0 +1,78 @@
+{
+  "trace_id": "phase-6-skill-packs-lazy-loading",
+  "timestamp": "2026-05-19T00:00:00.000Z",
+  "event": "skill_activation_decision",
+  "actor": "pi-adapter",
+  "data": {
+    "trace_id": "phase-6-skill-packs-lazy-loading",
+    "timestamp": "2026-05-19T00:00:00.000Z",
+    "orchestrator_id": "orchestrator",
+    "registry": ".ai/skills/registry.json",
+    "detected_project_signals": [
+      {
+        "skill_id": "typescript-project",
+        "matched_signals": [
+          "package.json",
+          "pnpm-workspace.yaml"
+        ],
+        "detected": true
+      },
+      {
+        "skill_id": "architecture-docs",
+        "matched_signals": [
+          "AGENTS.md",
+          "docs/architecture",
+          ".ai/manifest.json"
+        ],
+        "detected": true
+      }
+    ],
+    "activation_decisions": [
+      {
+        "skill_id": "typescript-project",
+        "selected": true,
+        "load_body": false,
+        "reason": "Matched project signals or explicit task trigger while preserving lazy body loading",
+        "matched_triggers": [
+          "package.json"
+        ],
+        "matched_project_signals": [
+          "package.json",
+          "pnpm-workspace.yaml"
+        ],
+        "allowed_agent": true,
+        "scope": "project"
+      },
+      {
+        "skill_id": "architecture-docs",
+        "selected": true,
+        "load_body": false,
+        "reason": "Matched project signals or explicit task trigger while preserving lazy body loading",
+        "matched_triggers": [
+          "architecture",
+          "phase",
+          "policy"
+        ],
+        "matched_project_signals": [
+          "AGENTS.md",
+          "docs/architecture",
+          ".ai/manifest.json"
+        ],
+        "allowed_agent": true,
+        "scope": "project"
+      }
+    ],
+    "selected_skill_ids": [
+      "typescript-project",
+      "architecture-docs"
+    ],
+    "loaded_skill_bodies": 0,
+    "provider_calls": 0,
+    "policy": {
+      "loading": "lazy",
+      "default": "do-not-load",
+      "scope": "project-only-unless-human-approved-global",
+      "load_bodies_globally": false
+    }
+  }
+}

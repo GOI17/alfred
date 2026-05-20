@@ -1,0 +1,10 @@
+items:
+  - id: architecture-policy-task
+    input: Update Phase 6 architecture policy and package.json validation scripts
+    expected_skills:
+      - architecture-docs
+      - typescript-project
+    expected_loaded_bodies: 0
+  - id: global-skill-denied
+    input: Install this skill globally for every project
+    expected_policy: human_approval_required

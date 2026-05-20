@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   createTraceEvent,
   decideProviderRequest,
+  detectProjectSignals,
   enforcePermission,
   evaluateRegressionGate,
   evaluatePermission,
@@ -10,7 +11,8 @@ import {
   loadArchitectureKernel,
   loadLazySkill,
   orchestrateTask,
-  readJson
+  readJson,
+  selectLazySkills
 } from "../../core/src/index.js";
 
 const phase2Task = {
@@ -286,6 +288,54 @@ export function runPiEvalGateSpike({ root, traceOutputPath }) {
     orchestrator: phase2.orchestrator,
     current_results: currentResults,
     gate,
+    trace_output_path: traceOutputPath,
+    trace
+  };
+}
+
+export function runPiSkillLoadingSpike({ root, traceOutputPath }) {
+  const kernel = loadArchitectureKernel(root);
+  const orchestrator = loadAgent(kernel, "orchestrator");
+  const projectSignals = detectProjectSignals({ root, registry: kernel.skills });
+  const activationDecisions = selectLazySkills({
+    registry: kernel.skills,
+    input: "Update the Phase 6 architecture policy and package.json validation scripts",
+    projectSignals,
+    agentId: orchestrator.id
+  });
+  const loadedSkillBodies = activationDecisions.filter((decision) => decision.load_body === true).length;
+
+  const trace = createTraceEvent({
+    event: "skill_activation_decision",
+    actor: "pi-adapter",
+    data: {
+      trace_id: "phase-6-skill-packs-lazy-loading",
+      timestamp: "2026-05-19T00:00:00.000Z",
+      orchestrator_id: orchestrator.id,
+      registry: ".ai/skills/registry.json",
+      detected_project_signals: projectSignals,
+      activation_decisions: activationDecisions,
+      selected_skill_ids: activationDecisions.map((decision) => decision.skill_id),
+      loaded_skill_bodies: loadedSkillBodies,
+      provider_calls: 0,
+      policy: {
+        loading: kernel.skills.policy.loading,
+        default: kernel.skills.policy.default,
+        scope: kernel.skills.policy.scope,
+        load_bodies_globally: kernel.skills.policy.load_bodies_globally
+      }
+    }
+  });
+
+  fs.mkdirSync(path.dirname(traceOutputPath), { recursive: true });
+  fs.writeFileSync(traceOutputPath, `${JSON.stringify(trace, null, 2)}\n`);
+
+  return {
+    manifest_phase: kernel.manifest.phase,
+    orchestrator,
+    project_signals: projectSignals,
+    activation_decisions: activationDecisions,
+    loaded_skill_bodies: loadedSkillBodies,
     trace_output_path: traceOutputPath,
     trace
   };

@@ -1,0 +1,16 @@
+{
+  "phase": "phase-6-skill-packs-lazy-loading",
+  "result": "pass",
+  "registered_skills": 2,
+  "project_scoped_skills": 2,
+  "selected_skills": 2,
+  "loaded_skill_bodies": 0,
+  "provider_calls": 0,
+  "trace_event": "skill_activation_decision",
+  "reproducibility": {
+    "runtime_entrypoint": "packages/pi-adapter/src/runtime.js#runPiSkillLoadingSpike",
+    "validation_script": "scripts/validate-phase-6.mjs",
+    "skill_registry": ".ai/skills/registry.json",
+    "fixture_hash": "phase-6-skill-packs-lazy-loading-fixture-v1"
+  }
+}
