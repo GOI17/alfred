@@ -1,0 +1,14 @@
+{
+  "phase": "eval-runner-package",
+  "result": "pass",
+  "baseline_count": 9,
+  "current_result_count": 8,
+  "regression_gate_status": "pass",
+  "regressions": 0,
+  "provider_calls": 0,
+  "reproducibility": {
+    "runtime_entrypoint": "packages/evals/src/index.js#runEvalRunner",
+    "validation_script": "scripts/validate-eval-runner.mjs",
+    "fixture_hash": "eval-runner-package-fixture-v1"
+  }
+}

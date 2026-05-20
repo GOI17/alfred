@@ -32,6 +32,8 @@
 - ProjectSignal
 - Roadmap
 - ReleaseReadinessEvaluation
+- EvalRunner
+- CurrentEvalResultSet
 
 ## Value Objects
 
@@ -61,6 +63,8 @@
 - LazyLoadDecision
 - RoadmapMilestone
 - ReleaseCandidate
+- EvalBaselinePath
+- EvalResultSummary
 
 ## Use Cases
 
@@ -101,6 +105,10 @@
 - LoadPostPhase7Roadmap
 - EvaluateReleaseReadiness
 - EmitRoadmapReadinessTrace
+- ListEvalBaselines
+- LoadEvalBaselines
+- ComputeCurrentEvalResults
+- RunEvalRunner
 
 ## Ports
 
@@ -122,6 +130,7 @@
 - RegressionReportSink
 - SkillPackStore
 - RoadmapStore
+- EvalRunnerStore
 
 ## Phase 7: Harness Portability
 
@@ -170,3 +179,26 @@ Use cases:
 Ports:
 
 - `RoadmapStore`: loads roadmap and release-readiness source-of-truth artifacts.
+
+## Milestone: Eval Runner Package
+
+Entities:
+
+- `EvalRunner`: package-level API that discovers baselines, computes current results, and runs regression gates.
+- `CurrentEvalResultSet`: deterministic current results derived from generated traces and model-readable artifacts.
+
+Value objects:
+
+- `EvalBaselinePath`: local baseline path under `.ai/evals/baselines`.
+- `EvalResultSummary`: normalized result metrics for a phase or milestone.
+
+Use cases:
+
+- `ListEvalBaselines`: discover local baseline files.
+- `LoadEvalBaselines`: load baseline records by phase.
+- `ComputeCurrentEvalResults`: compute current results from generated traces without provider calls.
+- `RunEvalRunner`: execute current-result computation and preserve existing regression gates.
+
+Ports:
+
+- `EvalRunnerStore`: reads local eval artifacts and generated trace files.

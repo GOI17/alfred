@@ -3,9 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "exports": "./src/index.js",
   "scripts": {
-    "check": "node -e \"console.log('evals check: no implementation yet')\"",
-    "test": "node -e \"console.log('evals test: no implementation yet')\""
+    "check": "node --check src/index.js",
+    "test": "node -e \"import('./src/index.js').then((m) => console.log('evals test: '+m.evalRunnerPhases.length+' phases load'))\""
   },
   "dependencies": {
     "@alfred-labs/core": "workspace:*"
