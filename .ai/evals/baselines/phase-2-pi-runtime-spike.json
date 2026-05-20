@@ -1,0 +1,13 @@
+{
+  "phase": "phase-2-pi-runtime-spike",
+  "result": "pass",
+  "case_id": "schema-validation-local-only",
+  "adapter": "pi",
+  "provider_calls": 0,
+  "trace_event": "provider_request_avoided",
+  "reproducibility": {
+    "fixture_hash": "phase-2-local-first-schema-validation",
+    "runtime_entrypoint": "packages/pi-adapter/src/runtime.js",
+    "validation_script": "scripts/validate-phase-2.mjs"
+  }
+}
