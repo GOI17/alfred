@@ -1,0 +1,19 @@
+id: harness-portability
+phase: phase-7-harness-portability
+cases:
+  - id: compatibility-matrix-covers-targets
+    input: Validate all target harnesses have portability mappings.
+    expected:
+      harnesses: [pi, opencode, claude, codex, vscode, kiro]
+      provider_calls: 0
+  - id: opencode-adapter-translation
+    input: Translate Alfred registry metadata into opencode-compatible artifacts.
+    expected:
+      generated_agents: 6
+      generated_skills: 2
+      model_assignment_source: user-owned-runtime-configuration
+  - id: core-remains-harness-agnostic
+    input: Ensure core evaluates portability without importing harness adapters.
+    expected:
+      core_dependencies: 0
+      adapter_package: packages/opencode-adapter

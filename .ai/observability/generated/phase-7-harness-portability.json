@@ -1,0 +1,151 @@
+{
+  "trace_id": "phase-7-harness-portability",
+  "timestamp": "2026-05-19T00:00:00.000Z",
+  "event": "harness_portability_evaluated",
+  "actor": "opencode-adapter",
+  "data": {
+    "trace_id": "phase-7-harness-portability",
+    "timestamp": "2026-05-19T00:00:00.000Z",
+    "matrix": ".ai/harnesses/compatibility-matrix.json",
+    "portability_status": "pass",
+    "required_harnesses": 6,
+    "portable_harnesses": 6,
+    "opencode_adapter_status": "executable-translation-spike",
+    "opencode_capabilities": [
+      {
+        "harness_id": "opencode",
+        "capability": "primary_control",
+        "strategy": "native",
+        "portable": true,
+        "reason": "Capability primary_control is preserved through native"
+      },
+      {
+        "harness_id": "opencode",
+        "capability": "specialist_routing",
+        "strategy": "native",
+        "portable": true,
+        "reason": "Capability specialist_routing is preserved through native"
+      },
+      {
+        "harness_id": "opencode",
+        "capability": "lazy_skills",
+        "strategy": "native",
+        "portable": true,
+        "reason": "Capability lazy_skills is preserved through native"
+      },
+      {
+        "harness_id": "opencode",
+        "capability": "permission_enforcement",
+        "strategy": "native",
+        "portable": true,
+        "reason": "Capability permission_enforcement is preserved through native"
+      },
+      {
+        "harness_id": "opencode",
+        "capability": "trace_emission",
+        "strategy": "adapter",
+        "portable": true,
+        "reason": "Capability trace_emission is preserved through adapter"
+      },
+      {
+        "harness_id": "opencode",
+        "capability": "eval_execution",
+        "strategy": "external-script",
+        "portable": true,
+        "reason": "Capability eval_execution is preserved through external-script"
+      },
+      {
+        "harness_id": "opencode",
+        "capability": "model_assignment",
+        "strategy": "native",
+        "portable": true,
+        "reason": "Capability model_assignment is preserved through native"
+      },
+      {
+        "harness_id": "opencode",
+        "capability": "local_first",
+        "strategy": "adapter",
+        "portable": true,
+        "reason": "Capability local_first is preserved through adapter"
+      }
+    ],
+    "generated_artifacts": {
+      "agents": [
+        {
+          "path": ".opencode/agent/orchestrator.md",
+          "mode": "primary",
+          "permission": "mapped-from-alfred-permission-policy",
+          "model": "user-owned-runtime-configuration"
+        },
+        {
+          "path": ".opencode/agent/developer.md",
+          "mode": "subagent",
+          "permission": "mapped-from-alfred-permission-policy",
+          "model": "user-owned-runtime-configuration"
+        },
+        {
+          "path": ".opencode/agent/qa.md",
+          "mode": "subagent",
+          "permission": "mapped-from-alfred-permission-policy",
+          "model": "user-owned-runtime-configuration"
+        },
+        {
+          "path": ".opencode/agent/librarian.md",
+          "mode": "subagent",
+          "permission": "mapped-from-alfred-permission-policy",
+          "model": "user-owned-runtime-configuration"
+        },
+        {
+          "path": ".opencode/agent/architect.md",
+          "mode": "subagent",
+          "permission": "mapped-from-alfred-permission-policy",
+          "model": "user-owned-runtime-configuration"
+        },
+        {
+          "path": ".opencode/agent/reviewer.md",
+          "mode": "subagent",
+          "permission": "mapped-from-alfred-permission-policy",
+          "model": "user-owned-runtime-configuration"
+        }
+      ],
+      "skills": [
+        {
+          "path": ".opencode/skills/typescript-project/SKILL.md",
+          "source_body_path": ".ai/skills/project/typescript-project/SKILL.md",
+          "load_body_by_default": false,
+          "scope": "project"
+        },
+        {
+          "path": ".opencode/skills/architecture-docs/SKILL.md",
+          "source_body_path": ".ai/skills/project/architecture-docs/SKILL.md",
+          "load_body_by_default": false,
+          "scope": "project"
+        }
+      ],
+      "permissions": {
+        "default": "deny",
+        "edit": "ask",
+        "bash": {
+          "*": "ask",
+          "rm *": "deny",
+          "git reset --hard*": "deny",
+          "git clean*": "deny"
+        },
+        "external_directory": {
+          "*": "ask",
+          "**/.env*": "deny",
+          "**/secrets/**": "deny",
+          "**/.ssh/**": "deny"
+        }
+      }
+    },
+    "invariants": {
+      "core_imports_opencode": false,
+      "model_assignment_source": "user-owned-runtime-configuration",
+      "skill_bodies_loaded_by_default": false,
+      "permission_policy_source": ".ai/policies/permissions.example.json",
+      "local_first_policy_source": ".ai/policies/provider-request-policy.example.json"
+    },
+    "provider_calls": 0
+  }
+}

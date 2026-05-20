@@ -114,3 +114,29 @@
 - VersionLockStore
 - RegressionReportSink
 - SkillPackStore
+
+## Phase 7: Harness Portability
+
+Entities:
+
+- `HarnessCompatibilityMatrix`: source-of-truth mapping from Alfred capabilities to harness preservation strategies.
+- `HarnessPortabilityEvaluation`: deterministic result proving whether a harness preserves all required capabilities.
+- `AdapterArtifactPreview`: generated harness-specific artifact preview derived from Alfred core metadata.
+
+Value objects:
+
+- `HarnessCapability`: required semantic capability such as `primary_control`, `lazy_skills`, or `permission_enforcement`.
+- `PortabilityStrategy`: one of `native`, `adapter`, `generated`, or `external-script`.
+- `AdapterStatus`: executable spike, executable translation spike, or compatibility contract.
+
+Use cases:
+
+- `LoadHarnessCompatibility`: read the matrix from `.ai/harnesses/compatibility-matrix.json`.
+- `EvaluateHarnessPortability`: verify every target harness preserves all required capabilities.
+- `BuildOpencodeAdapterPreview`: translate Alfred metadata into opencode-compatible artifact previews.
+- `EmitHarnessPortabilityTrace`: record zero-provider-call portability evaluation.
+
+Ports:
+
+- `HarnessCompatibilityStore`: loads the compatibility matrix.
+- `AdapterArtifactSink`: writes generated adapter previews or traces.

@@ -1,0 +1,18 @@
+{
+  "phase": "phase-7-harness-portability",
+  "result": "pass",
+  "required_harnesses": 6,
+  "portable_harnesses": 6,
+  "executable_adapters": 2,
+  "compatibility_contracts": 4,
+  "opencode_generated_agents": 6,
+  "opencode_generated_skills": 2,
+  "provider_calls": 0,
+  "trace_event": "harness_portability_evaluated",
+  "reproducibility": {
+    "runtime_entrypoint": "packages/opencode-adapter/src/runtime.js#runOpencodePortabilitySpike",
+    "validation_script": "scripts/validate-phase-7.mjs",
+    "compatibility_matrix": ".ai/harnesses/compatibility-matrix.json",
+    "fixture_hash": "phase-7-harness-portability-fixture-v1"
+  }
+}
