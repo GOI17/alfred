@@ -11,7 +11,8 @@
     "regression_gates": "regression-gates@0.1.0",
     "pi_adapter_runtime": "pi-adapter-runtime@0.1.0",
     "harness_compatibility": "harness-compatibility@0.1.0",
-    "opencode_adapter_runtime": "opencode-adapter-runtime@0.1.0"
+    "opencode_adapter_runtime": "opencode-adapter-runtime@0.1.0",
+    "post_phase_7_roadmap": "post-phase-7-roadmap@0.1.0"
   },
   "baseline_update_policy": {
     "allowed_by_agent": false,

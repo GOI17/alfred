@@ -3,6 +3,7 @@ import {
   runPiAgentSystemSpike,
   runPiEvalGateSpike,
   runPiRuntimeSpike,
+  runPiRoadmapReadinessSpike,
   runPiSecuritySpike,
   runPiSkillLoadingSpike
 } from "./runtime.js";
@@ -13,6 +14,8 @@ const traceOutputPath = path.join(
   root,
   phase === "phase-6"
     ? ".ai/observability/generated/phase-6-skill-activation.json"
+    : phase === "post-phase-7"
+    ? ".ai/observability/generated/post-phase-7-roadmap-readiness.json"
     : phase === "phase-5"
     ? ".ai/observability/generated/phase-5-regression-gate.json"
     : phase === "phase-4"
@@ -24,6 +27,8 @@ const traceOutputPath = path.join(
 const result =
   phase === "phase-6"
     ? runPiSkillLoadingSpike({ root, traceOutputPath })
+    : phase === "post-phase-7"
+    ? runPiRoadmapReadinessSpike({ root, traceOutputPath })
     : phase === "phase-5"
     ? runPiEvalGateSpike({ root, traceOutputPath })
     : phase === "phase-4"

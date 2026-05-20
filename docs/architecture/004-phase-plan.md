@@ -27,3 +27,7 @@ Integrate external skill packs, import/sync strategy, project detector, and skil
 ## Phase 7: Harness Portability
 
 Add opencode adapter, then Claude/Codex/VSCode/Kiro adapters or compatibility notes.
+
+## Post-Phase-7: Roadmap + Release Readiness
+
+Consolidate completed phases into a model-readable roadmap, preserve issue-driven governance, and make the next release candidate discoverable through deterministic local validation.

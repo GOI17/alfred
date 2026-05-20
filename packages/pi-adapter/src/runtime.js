@@ -10,9 +10,11 @@ import {
   loadAgent,
   loadArchitectureKernel,
   loadLazySkill,
+  loadPostPhase7Roadmap,
   orchestrateTask,
   readJson,
-  selectLazySkills
+  selectLazySkills,
+  evaluateReleaseReadiness
 } from "../../core/src/index.js";
 
 const phase2Task = {
@@ -338,6 +340,53 @@ export function runPiSkillLoadingSpike({ root, traceOutputPath }) {
     project_signals: projectSignals,
     activation_decisions: activationDecisions,
     loaded_skill_bodies: loadedSkillBodies,
+    trace_output_path: traceOutputPath,
+    trace
+  };
+}
+
+export function runPiRoadmapReadinessSpike({ root, traceOutputPath }) {
+  const kernel = loadArchitectureKernel(root);
+  const orchestrator = loadAgent(kernel, "orchestrator");
+  const roadmap = loadPostPhase7Roadmap(root);
+  const readiness = evaluateReleaseReadiness({
+    roadmap,
+    completedPhases: [
+      "phase-1-architecture-kernel",
+      "phase-2-pi-runtime-spike",
+      "phase-3-agent-system",
+      "phase-4-security-enforcement",
+      "phase-5-evals-regression-gates",
+      "phase-6-skill-packs-lazy-loading",
+      "phase-7-harness-portability"
+    ]
+  });
+
+  const trace = createTraceEvent({
+    event: "roadmap_readiness_evaluated",
+    actor: "pi-adapter",
+    data: {
+      trace_id: "post-phase-7-roadmap-readiness",
+      timestamp: "2026-05-19T00:00:00.000Z",
+      orchestrator_id: orchestrator.id,
+      roadmap: ".ai/execution/post-phase-7-roadmap.json",
+      status: readiness.status,
+      completed_phase_count: readiness.completed_phase_count,
+      next_milestone_count: readiness.next_milestone_count,
+      governance_ready: readiness.governance_ready,
+      validation_ready: readiness.validation_ready,
+      next_work_ready: readiness.next_work_ready,
+      provider_calls: readiness.provider_calls
+    }
+  });
+
+  writeJsonAtomic(traceOutputPath, trace);
+
+  return {
+    manifest_phase: kernel.manifest.phase,
+    orchestrator,
+    roadmap,
+    readiness,
     trace_output_path: traceOutputPath,
     trace
   };

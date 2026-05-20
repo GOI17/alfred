@@ -1,0 +1,18 @@
+id: roadmap-readiness
+version: roadmap-readiness@0.1.0
+owner: core
+cases:
+  - id: completed-phases-discoverable
+    input: post-phase-7-roadmap
+    expected:
+      completed_phase_count: 7
+      provider_calls: 0
+  - id: governance-preserved
+    input: post-phase-7-governance
+    expected:
+      issue_branch_pr_required: true
+      direct_main_commits_allowed: false
+  - id: next-work-declared
+    input: post-phase-7-next-milestones
+    expected:
+      next_milestone_count: 3

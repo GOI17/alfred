@@ -26,6 +26,32 @@ export function loadHarnessCompatibility(root) {
   return readJson(root, ".ai/harnesses/compatibility-matrix.json");
 }
 
+export function loadPostPhase7Roadmap(root) {
+  return readJson(root, ".ai/execution/post-phase-7-roadmap.json");
+}
+
+export function evaluateReleaseReadiness({ roadmap, completedPhases }) {
+  const completed = new Set(completedPhases);
+  const missingCompletedPhases = roadmap.completed_phases.filter((phase) => !completed.has(phase));
+  const governanceReady = roadmap.governance.issue_branch_pr_required === true;
+  const validationReady = roadmap.release_readiness.required_validators.every((validator) =>
+    roadmap.release_readiness.validators.includes(validator)
+  );
+  const nextWorkReady = roadmap.next_milestones.length > 0 && roadmap.next_milestones.every((milestone) => milestone.id && milestone.owner);
+
+  return {
+    status: missingCompletedPhases.length === 0 && governanceReady && validationReady && nextWorkReady ? "pass" : "fail",
+    completed_phase_count: completedPhases.length,
+    roadmap_completed_phase_count: roadmap.completed_phases.length,
+    missing_completed_phases: missingCompletedPhases,
+    next_milestone_count: roadmap.next_milestones.length,
+    governance_ready: governanceReady,
+    validation_ready: validationReady,
+    next_work_ready: nextWorkReady,
+    provider_calls: 0
+  };
+}
+
 export function evaluateHarnessCapability({ harness, capability }) {
   const supportedStrategies = ["native", "adapter", "generated", "external-script"];
   const strategy = harness.capabilities?.[capability];
