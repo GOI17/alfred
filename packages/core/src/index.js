@@ -209,3 +209,67 @@ export function createTraceEvent({ event, actor, data }) {
     data
   };
 }
+
+export function evaluateMetricRule({ rule, baseline, current }) {
+  const currentValue = current[rule.metric];
+  const baselineValue = baseline[rule.metric];
+  const expectedValue = rule.value ?? baselineValue;
+
+  if (rule.operator === "equals") {
+    return currentValue === expectedValue;
+  }
+
+  if (rule.operator === "less_than_or_equal_baseline") {
+    return typeof currentValue === "number" && typeof baselineValue === "number" && currentValue <= baselineValue;
+  }
+
+  if (rule.operator === "greater_than_or_equal_baseline") {
+    return typeof currentValue === "number" && typeof baselineValue === "number" && currentValue >= baselineValue;
+  }
+
+  throw new Error(`Unsupported regression gate operator: ${rule.operator}`);
+}
+
+export function compareEvalBaseline({ phase, baseline, current, rules }) {
+  const regressions = rules
+    .filter((rule) => !evaluateMetricRule({ rule, baseline, current }))
+    .map((rule) => ({
+      phase,
+      metric: rule.metric,
+      operator: rule.operator,
+      baseline: baseline[rule.metric],
+      current: current[rule.metric],
+      expected: rule.value ?? baseline[rule.metric]
+    }));
+
+  return {
+    phase,
+    status: regressions.length === 0 ? "pass" : "fail",
+    regressions
+  };
+}
+
+export function evaluateRegressionGate({ gatePolicy, baselines, currentResults }) {
+  const comparisons = gatePolicy.phases.map((phaseGate) => {
+    const baseline = baselines[phaseGate.phase];
+    const current = currentResults[phaseGate.phase];
+    if (!baseline) throw new Error(`Missing baseline for ${phaseGate.phase}`);
+    if (!current) throw new Error(`Missing current result for ${phaseGate.phase}`);
+
+    return compareEvalBaseline({
+      phase: phaseGate.phase,
+      baseline,
+      current,
+      rules: phaseGate.rules
+    });
+  });
+
+  const regressions = comparisons.flatMap((comparison) => comparison.regressions);
+  return {
+    status: regressions.length === 0 ? "pass" : "fail",
+    comparisons,
+    regressions,
+    baseline_update_requires_human_approval: gatePolicy.baseline_update_requires_human_approval === true,
+    provider_calls: 0
+  };
+}

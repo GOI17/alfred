@@ -22,6 +22,11 @@
 - PermissionEvaluation
 - ProtectedPathRule
 - DestructiveCommandRule
+- EvalBaseline
+- EvalCurrentResult
+- RegressionGatePolicy
+- RegressionComparison
+- VersionLockSet
 
 ## Value Objects
 
@@ -43,6 +48,9 @@
 - PermissionDecision
 - ProtectedPathPattern
 - CommandPattern
+- MetricRule
+- RegressionFinding
+- BaselineUpdateDecision
 
 ## Use Cases
 
@@ -72,6 +80,10 @@
 - DenyProtectedPathAccess
 - DenyDestructiveCommand
 - DenyPermissionBroadening
+- CompareEvalBaseline
+- EvaluateRegressionGate
+- EmitRegressionGateTrace
+- RequireHumanApprovalForBaselineUpdate
 
 ## Ports
 
@@ -89,3 +101,5 @@
 - ProjectDetector
 - RoutingPolicyStore
 - SecurityPolicyStore
+- VersionLockStore
+- RegressionReportSink

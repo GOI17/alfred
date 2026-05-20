@@ -1,0 +1,38 @@
+{
+  "trace_id": "phase-5-evals-regression-gate",
+  "timestamp": "2026-05-19T00:00:00.000Z",
+  "event": "regression_gate_evaluated",
+  "actor": "pi-adapter",
+  "data": {
+    "trace_id": "phase-5-evals-regression-gate",
+    "timestamp": "2026-05-19T00:00:00.000Z",
+    "status": "pass",
+    "comparisons": [
+      {
+        "phase": "phase-1-architecture-kernel",
+        "status": "pass",
+        "regressions": []
+      },
+      {
+        "phase": "phase-2-pi-runtime-spike",
+        "status": "pass",
+        "regressions": []
+      },
+      {
+        "phase": "phase-3-agent-system",
+        "status": "pass",
+        "regressions": []
+      },
+      {
+        "phase": "phase-4-security-enforcement",
+        "status": "pass",
+        "regressions": []
+      }
+    ],
+    "regressions": [],
+    "baseline_update_requires_human_approval": true,
+    "provider_calls": 0,
+    "gate_policy": ".ai/evals/regression-gates.json",
+    "version_locks": ".ai/versions/locks.json"
+  }
+}

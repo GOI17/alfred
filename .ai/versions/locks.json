@@ -1,0 +1,20 @@
+{
+  "id": "alfred-phase-5-version-locks",
+  "baseline_update_requires_human_approval": true,
+  "locks": {
+    "agents": "agents-registry@0.1.0",
+    "skills": "skills-registry@0.1.0",
+    "permissions": "permissions-policy@0.1.0",
+    "provider_request_policy": "provider-request-policy@0.1.0",
+    "model_assignment_policy": "model-assignment-policy@0.1.0",
+    "routing_policy": "routing-policy@0.1.0",
+    "regression_gates": "regression-gates@0.1.0",
+    "pi_adapter_runtime": "pi-adapter-runtime@0.1.0"
+  },
+  "baseline_update_policy": {
+    "allowed_by_agent": false,
+    "requires_human_decision": true,
+    "requires_regression_report": true,
+    "requires_reproducibility_metadata": true
+  }
+}
