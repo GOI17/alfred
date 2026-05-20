@@ -1,0 +1,23 @@
+{
+  "default_strategy": "local-first",
+  "allowed_strategies": ["local-only", "hybrid", "provider"],
+  "required_steps": [
+    "check_local_capabilities",
+    "run_local_preprocessing_when_useful",
+    "reduce_context_payload",
+    "estimate_token_and_cost_impact",
+    "choose_execution_strategy",
+    "emit_trace_event"
+  ],
+  "required_trace_events": [
+    "provider_request_avoided",
+    "provider_request_reduced"
+  ],
+  "provider_allowed_for": [
+    "semantic_judgment",
+    "ambiguous_classification",
+    "prompt_or_agent_behavior_generation",
+    "natural_language_synthesis",
+    "complex_tradeoff_analysis"
+  ]
+}

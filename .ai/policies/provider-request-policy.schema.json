@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alfred Provider Request Policy",
+  "type": "object",
+  "required": ["default_strategy", "required_steps", "required_trace_events", "allowed_strategies"],
+  "properties": {
+    "default_strategy": { "const": "local-first" },
+    "allowed_strategies": {
+      "type": "array",
+      "items": { "enum": ["local-only", "hybrid", "provider"] },
+      "minItems": 3
+    },
+    "required_steps": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 5
+    },
+    "required_trace_events": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 2
+    },
+    "provider_allowed_for": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}

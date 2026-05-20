@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alfred Agent Registry Entry",
+  "type": "object",
+  "required": ["id", "role", "spec", "permission_profile", "status"],
+  "properties": {
+    "id": { "type": "string" },
+    "role": { "enum": ["primary", "specialist"] },
+    "spec": { "type": "string" },
+    "permission_profile": { "type": "string" },
+    "status": { "enum": ["active", "proposed", "retired"] },
+    "phase": { "type": "string" }
+  },
+  "additionalProperties": false
+}

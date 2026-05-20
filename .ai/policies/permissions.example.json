@@ -6,12 +6,27 @@
       "read_files": "allow",
       "delegate": "allow",
       "create_agent": "ask",
+      "modify_permissions": "deny",
+      "access_secrets": "deny",
+      "delete_files": "deny",
+      "provider_request": "ask"
+    },
+    "developer": {
+      "read_files": "allow",
+      "write_files": "allow",
+      "write_tests": "allow",
+      "write_production_code": "allow",
+      "modify_permissions": "deny",
+      "access_secrets": "deny",
+      "delete_files": "ask",
       "provider_request": "ask"
     },
     "librarian": {
       "read_files": "allow",
       "write_files": "deny",
       "run_tests": "deny",
+      "modify_permissions": "deny",
+      "access_secrets": "deny",
       "provider_request": "ask"
     },
     "qa": {
@@ -19,6 +34,26 @@
       "write_tests": "allow",
       "write_production_code": "ask",
       "run_tests": "allow",
+      "modify_permissions": "deny",
+      "access_secrets": "deny",
+      "delete_files": "deny",
+      "provider_request": "ask"
+    },
+    "architect": {
+      "read_files": "allow",
+      "write_files": "ask",
+      "modify_permissions": "deny",
+      "access_secrets": "deny",
+      "delete_files": "deny",
+      "provider_request": "ask"
+    },
+    "reviewer": {
+      "read_files": "allow",
+      "write_files": "deny",
+      "run_tests": "ask",
+      "modify_permissions": "deny",
+      "access_secrets": "deny",
+      "delete_files": "deny",
       "provider_request": "ask"
     }
   }

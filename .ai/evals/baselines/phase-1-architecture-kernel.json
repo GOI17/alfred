@@ -1,0 +1,19 @@
+{
+  "id": "phase-1-architecture-kernel-baseline",
+  "suite": "architecture-kernel",
+  "result": "pass",
+  "captured_at": "2026-05-19T00:00:00Z",
+  "checks": {
+    "required_outputs_present": true,
+    "json_parseable": true,
+    "agent_registry_complete": true,
+    "permission_policy_deny_by_default": true,
+    "provider_policy_local_first": true,
+    "phase_2_handoff_present": true
+  },
+  "reproducibility": {
+    "fixture_hash": "phase-1-local-files",
+    "runner": "scripts/validate-phase-1.mjs",
+    "provider_calls": 0
+  }
+}
