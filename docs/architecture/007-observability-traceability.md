@@ -16,6 +16,9 @@ Traceability records what happened. Observability explains why, how often, and w
 - provider_request_avoided
 - provider_request_reduced
 - provider_request_sent
+- model_request_retry
+- model_fallback_selected
+- model_fallback_exhausted
 - temporary_agent_created
 - temporary_agent_promoted
 - temporary_agent_discarded

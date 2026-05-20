@@ -25,6 +25,7 @@ Completion condition: another model can implement Phase 2 without reading prior 
 - [x] Package boundaries: `docs/architecture/003-monorepo-boundaries.md` and package manifests.
 - [x] Permission policy schema: `.ai/policies/permissions.schema.json`.
 - [x] Provider request policy schema and example: `.ai/policies/provider-request-policy.schema.json` and `.ai/policies/provider-request-policy.example.json`.
+- [x] User-owned model assignment and fallback policy: `.ai/policies/model-assignment.md`, `.ai/policies/model-assignment.schema.json`, and `.ai/policies/model-assignment.example.json`.
 - [x] Trace event schema: `.ai/observability/schemas/trace-event.schema.json`.
 - [x] Eval case/result schemas: `.ai/evals/schemas`.
 - [x] Initial agent specs: `.ai/agents/*.md` plus `.ai/agents/registry.json`.

@@ -1,0 +1,21 @@
+cases:
+  - id: retry-before-model-switch
+    target: model-assignment-policy
+    fixture: recoverable-provider-timeout
+    input: "Provider times out for the configured primary model"
+    expected:
+      retries_before_switch: 3
+      fallback_used: true
+      trace_events:
+        - model_request_retry
+        - model_fallback_selected
+
+  - id: explain-all-models-failed
+    target: model-assignment-policy
+    fixture: all-configured-models-fail
+    input: "Primary and fallback models all fail with recoverable provider errors"
+    expected:
+      user_facing_failure: true
+      includes_failure_reason: true
+      trace_events:
+        - model_fallback_exhausted

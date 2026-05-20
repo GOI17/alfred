@@ -14,6 +14,8 @@
 - TemporaryAgent
 - ProviderRequestPolicy
 - LocalCapability
+- ModelAssignmentPolicy
+- ModelFallbackChain
 
 ## Value Objects
 
@@ -28,6 +30,8 @@
 - PromptHash
 - PermissionAction
 - ExecutionStrategy
+- ModelAssignment
+- RetryBudget
 
 ## Use Cases
 
@@ -42,6 +46,10 @@
 - DecideExecutionStrategy
 - RunLocalPreprocessor
 - ReduceProviderPayload
+- ResolveModelAssignment
+- RetryProviderRequest
+- SwitchFallbackModel
+- ExplainProviderFailure
 - RunEvaluationSuite
 - CompareEvaluationRuns
 - DetectRegression
@@ -57,6 +65,7 @@
 - EvalDatasetStore
 - BaselineStore
 - ProviderGateway
+- ModelAssignmentStore
 - LocalToolRunner
 - TokenEstimator
 - ProjectDetector

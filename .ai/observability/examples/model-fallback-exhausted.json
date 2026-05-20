@@ -1,0 +1,9 @@
+{
+  "trace_id": "trace_model_fallback_exhausted_example",
+  "timestamp": "2026-05-19T00:00:00Z",
+  "event": "model_fallback_exhausted",
+  "actor": "orchestrator",
+  "decision": "fail_with_explanation",
+  "reason": "Primary and fallback models failed after configured retries.",
+  "target": "user-facing-failure"
+}
