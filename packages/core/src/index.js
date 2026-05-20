@@ -14,10 +14,89 @@ export function loadArchitectureKernel(root) {
   return {
     manifest,
     agents: readJson(root, ".ai/agents/registry.json"),
+    routingPolicy: readJson(root, ".ai/agents/routing-policy.json"),
     skills: readJson(root, ".ai/skills/registry.json"),
     permissions: readJson(root, ".ai/policies/permissions.example.json"),
     providerPolicy: readJson(root, ".ai/policies/provider-request-policy.example.json"),
     modelAssignment: readJson(root, ".ai/policies/model-assignment.example.json")
+  };
+}
+
+export function classifyTask({ routingPolicy, input }) {
+  const normalized = input.toLowerCase();
+  const simpleMatch = routingPolicy.simple_task_indicators.find((indicator) => normalized.includes(indicator));
+  if (simpleMatch) {
+    return {
+      complexity: "small",
+      reason: `Matched simple task indicator: ${simpleMatch}`
+    };
+  }
+
+  const specialistMatch = routingPolicy.specialists
+    .flatMap((specialist) => specialist.triggers.map((trigger) => ({ specialist, trigger })))
+    .find(({ trigger }) => normalized.includes(trigger));
+
+  return {
+    complexity: specialistMatch ? "specialized" : "unknown-specialized",
+    reason: specialistMatch
+      ? `Matched specialist trigger: ${specialistMatch.trigger}`
+      : "No existing specialist trigger matched the task"
+  };
+}
+
+export function selectSpecialist({ routingPolicy, input }) {
+  const normalized = input.toLowerCase();
+  return (
+    routingPolicy.specialists.find((specialist) => specialist.triggers.some((trigger) => normalized.includes(trigger))) ?? null
+  );
+}
+
+export function proposeTemporaryAgent({ routingPolicy, input, reason }) {
+  return {
+    temporary_agent_proposed: true,
+    human_approval_required: true,
+    proposal_id: routingPolicy.temporary_agent.proposal_id,
+    proposed_role: routingPolicy.temporary_agent.default_role,
+    source_task: input,
+    reason,
+    permissions: routingPolicy.temporary_agent.permissions,
+    promotion_requires_human_approval: routingPolicy.temporary_agent.promotion_requires_human_approval
+  };
+}
+
+export function orchestrateTask({ kernel, input }) {
+  const classification = classifyTask({ routingPolicy: kernel.routingPolicy, input });
+  if (classification.complexity === "small") {
+    return {
+      task_classification: classification,
+      delegation: false,
+      target_agent: "orchestrator",
+      temporary_agent_proposal: null,
+      reason: "Small/simple tasks stay with the Orchestrator"
+    };
+  }
+
+  const specialist = selectSpecialist({ routingPolicy: kernel.routingPolicy, input });
+  if (specialist) {
+    return {
+      task_classification: classification,
+      delegation: true,
+      target_agent: specialist.id,
+      temporary_agent_proposal: null,
+      reason: `Specialist ${specialist.id} matched task triggers`
+    };
+  }
+
+  return {
+    task_classification: classification,
+    delegation: false,
+    target_agent: "orchestrator",
+    temporary_agent_proposal: proposeTemporaryAgent({
+      routingPolicy: kernel.routingPolicy,
+      input,
+      reason: classification.reason
+    }),
+    reason: "No existing specialist fits; human approval is required before creating a temporary specialist"
   };
 }
 

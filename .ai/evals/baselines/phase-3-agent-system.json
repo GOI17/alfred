@@ -1,0 +1,16 @@
+{
+  "phase": "phase-3-agent-system",
+  "result": "pass",
+  "cases": 3,
+  "small_task_delegations": 0,
+  "specialist_delegations": 1,
+  "temporary_agent_proposals": 1,
+  "provider_calls": 0,
+  "trace_event": "delegation_decision",
+  "reproducibility": {
+    "runtime_entrypoint": "packages/pi-adapter/src/runtime.js#runPiAgentSystemSpike",
+    "validation_script": "scripts/validate-phase-3.mjs",
+    "routing_policy": ".ai/agents/routing-policy.json",
+    "fixture_hash": "phase-3-agent-system-fixture-v1"
+  }
+}

@@ -7,6 +7,7 @@ import {
   loadAgent,
   loadArchitectureKernel,
   loadLazySkill,
+  orchestrateTask,
   readJson
 } from "../../core/src/index.js";
 
@@ -63,6 +64,56 @@ export function runPiRuntimeSpike({ root, traceOutputPath }) {
     selected_skill: selectedSkill,
     permission_check: permissionCheck,
     provider_decision: decision,
+    trace_output_path: traceOutputPath,
+    trace
+  };
+}
+
+export function runPiAgentSystemSpike({ root, traceOutputPath }) {
+  const kernel = loadArchitectureKernel(root);
+  const orchestrator = loadAgent(kernel, "orchestrator");
+  const scenarios = [
+    {
+      id: "small-task-no-delegation",
+      input: "Fix a typo in one file"
+    },
+    {
+      id: "qa-specialist-delegation",
+      input: "Reproduce a failing test and design regression coverage"
+    },
+    {
+      id: "temporary-agent-proposal",
+      input: "Create a Terraform module and enforce provider-specific conventions"
+    }
+  ];
+
+  const decisions = scenarios.map((scenario) => ({
+    scenario_id: scenario.id,
+    input: scenario.input,
+    ...orchestrateTask({ kernel, input: scenario.input })
+  }));
+
+  const trace = createTraceEvent({
+    event: "delegation_decision",
+    actor: "pi-adapter",
+    data: {
+      trace_id: "phase-3-agent-system-delegation-decision",
+      timestamp: "2026-05-19T00:00:00.000Z",
+      orchestrator_id: orchestrator.id,
+      decisions,
+      provider_calls: 0,
+      routing_policy: ".ai/agents/routing-policy.json",
+      model_assignment_source: "user-owned-runtime-configuration"
+    }
+  });
+
+  fs.mkdirSync(path.dirname(traceOutputPath), { recursive: true });
+  fs.writeFileSync(traceOutputPath, `${JSON.stringify(trace, null, 2)}\n`);
+
+  return {
+    manifest_phase: kernel.manifest.phase,
+    orchestrator,
+    decisions,
     trace_output_path: traceOutputPath,
     trace
   };
