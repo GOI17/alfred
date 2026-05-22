@@ -331,6 +331,8 @@ Entities:
 
 - `MvpReleasePlan`: model-readable plan for release `0.2.0` as the Alfred MVP.
 - `MvpReleaseGate`: explicit condition required before calling the MVP releasable.
+- `MvpRequiredHarness`: VSCode, opencode, or Pi harness that must be usable for MVP release.
+- `MvpPreviewHarness`: portability target that can generate previews but is not required for MVP usability.
 
 Value objects:
 
@@ -340,7 +342,7 @@ Value objects:
 Use cases:
 
 - `LoadMvpReleasePlan`: read `.ai/roadmaps/mvp-release.json`.
-- `EvaluateMvpReleasePlan`: verify scope, phase alignment, non-goals, gates, and local-only execution.
+- `EvaluateMvpReleasePlan`: verify required harnesses, phase alignment, non-goals, gates, and local-only execution.
 - `EmitMvpReleasePlanTrace`: record deterministic validation of the MVP plan.
 
 Ports:

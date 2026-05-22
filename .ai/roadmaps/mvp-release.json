@@ -1,23 +1,27 @@
 {
   "id": "mvp-release-plan",
-  "version": "mvp-release-plan@0.1.0",
+  "version": "mvp-release-plan@0.1.1",
   "owner": "orchestrator",
   "status": "active",
   "target_release": "0.2.0",
   "release_name": "Alfred MVP",
-  "definition": "A local-first agent operations runtime that can generate harness artifact previews, run deterministic eval reports, and package a reproducible release candidate without provider calls.",
+  "definition": "A local-first agent operations runtime that is usable from VSCode, opencode, and Pi, with deterministic eval reports and a reproducible release candidate without provider calls.",
+  "required_harnesses": ["vscode", "opencode", "pi"],
+  "preview_harnesses": ["claude", "codex", "kiro"],
   "user_outcomes": [
+    "A user can use Alfred from VSCode, opencode, and Pi through MVP-grade adapters or generated integration artifacts.",
     "A user can inspect generated harness artifacts before writing them to disk.",
     "A user can run local eval and regression reports from the CLI.",
     "A user can verify release readiness through deterministic validation commands.",
-    "A user can keep core domain code harness-agnostic while adapters handle harness-specific translation."
+    "A user can keep core domain code harness-agnostic while VSCode, opencode, and Pi adapters handle harness-specific translation."
   ],
   "non_goals": [
-    "No automatic writes to opencode, Claude, Codex, VSCode, or Kiro config directories.",
+    "No automatic writes to VSCode, opencode, Pi, Claude, Codex, or Kiro config directories.",
     "No provider calls for roadmap, generation, eval, or release validation.",
     "No production-grade package publishing workflow before release 0.2.0.",
     "No runtime permission escalation without explicit human approval.",
-    "No adapter behavior embedded in packages/core."
+    "No adapter behavior embedded in packages/core.",
+    "No requirement that Claude, Codex, or Kiro are usable MVP harnesses; they remain preview and portability targets."
   ],
   "entry_criteria": [
     "release-0.1.0 is complete",
@@ -29,15 +33,17 @@
       "id": "phase-9-adapter-generation",
       "order": 1,
       "owner": "developer",
-      "goal": "Generate harness artifact previews for opencode, Claude, Codex, VSCode, and Kiro while requiring human approval before real file writes.",
+      "goal": "Generate MVP-grade integration artifacts for VSCode, opencode, and Pi, while keeping Claude, Codex, and Kiro as preview-only portability targets unless promoted later.",
       "deliverables": [
-        "model-readable adapter generation contract",
-        "preview builders for all target harnesses",
+        "model-readable adapter generation contract with VSCode, opencode, and Pi marked as required MVP harnesses",
+        "preview builders for VSCode, opencode, and Pi required harnesses",
+        "preview builders for Claude, Codex, and Kiro portability targets",
         "human approval gate metadata for config writes",
         "generated preview trace and baseline"
       ],
       "acceptance_criteria": [
-        "All harness previews are generated locally.",
+        "VSCode, opencode, and Pi integration artifacts are generated locally.",
+        "Claude, Codex, and Kiro artifacts are preview-only portability outputs.",
         "Preview generation records zero provider calls.",
         "Generated artifacts are previews by default and do not write harness config.",
         "packages/core does not import adapter packages."
@@ -78,6 +84,7 @@
       ],
       "acceptance_criteria": [
         "Release validates Phase 8 through Phase 10 deliverables.",
+        "Release validates that VSCode, opencode, and Pi are the required usable MVP harnesses.",
         "Release validation records zero provider calls.",
         "Baseline updates still require human approval.",
         "The MVP can be reproduced from local files and deterministic scripts."
@@ -91,6 +98,7 @@
     "pnpm check passes.",
     "pnpm test passes.",
     "Eval runner includes all MVP plan targets.",
+    "VSCode, opencode, and Pi are validated as required MVP harnesses.",
     "Generated traces include provider_calls: 0.",
     "Harness config writes remain disabled by default.",
     "Human approval is required for permission escalation, baseline updates, and harness config writes."

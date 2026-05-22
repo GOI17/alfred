@@ -51,6 +51,7 @@ export function loadMvpReleasePlan(root) {
 }
 
 export function evaluateMvpReleasePlan({ plan, roadmap }) {
+  const requiredMvpHarnesses = ["vscode", "opencode", "pi"];
   const roadmapPhaseIds = new Set(roadmap.phases.map((phase) => phase.id));
   const planPhaseIds = plan.phases.map((phase) => phase.id);
   const missingRoadmapPhases = planPhaseIds.filter((phaseId) => !roadmapPhaseIds.has(phaseId));
@@ -59,6 +60,15 @@ export function evaluateMvpReleasePlan({ plan, roadmap }) {
   const phasesWithoutAcceptance = plan.phases.filter((phase) => !phase.acceptance_criteria?.length).map((phase) => phase.id);
   const phasesWithoutValidation = plan.phases.filter((phase) => !phase.validation?.length).map((phase) => phase.id);
   const nonLocalPhases = plan.phases.filter((phase) => phase.provider_calls_allowed !== 0).map((phase) => phase.id);
+  const requiredHarnesses = plan.required_harnesses ?? [];
+  const previewHarnesses = plan.preview_harnesses ?? [];
+  const missingRequiredHarnesses = requiredMvpHarnesses.filter((harness) => !requiredHarnesses.includes(harness));
+  const previewHarnessConflicts = previewHarnesses.filter((harness) => requiredHarnesses.includes(harness));
+  const phase9 = plan.phases.find((phase) => phase.id === "phase-9-adapter-generation");
+  const phase9Text = `${phase9?.goal ?? ""} ${(phase9?.deliverables ?? []).join(" ")} ${(
+    phase9?.acceptance_criteria ?? []
+  ).join(" ")}`.toLowerCase();
+  const phase9MissingRequiredHarnesses = requiredMvpHarnesses.filter((harness) => !phase9Text.includes(harness));
 
   return {
     status:
@@ -68,12 +78,19 @@ export function evaluateMvpReleasePlan({ plan, roadmap }) {
       phasesWithoutAcceptance.length === 0 &&
       phasesWithoutValidation.length === 0 &&
       nonLocalPhases.length === 0 &&
+      missingRequiredHarnesses.length === 0 &&
+      previewHarnessConflicts.length === 0 &&
+      phase9MissingRequiredHarnesses.length === 0 &&
       plan.provider_calls_allowed === 0
         ? "pass"
         : "fail",
     plan_id: plan.id,
     target_release: plan.target_release,
     phase_count: plan.phases.length,
+    required_harnesses: requiredHarnesses,
+    preview_harnesses: previewHarnesses,
+    required_harness_count: requiredHarnesses.length,
+    preview_harness_count: previewHarnesses.length,
     release_gate_count: plan.release_gates.length,
     non_goal_count: plan.non_goals.length,
     missing_roadmap_phases: missingRoadmapPhases,
@@ -82,6 +99,9 @@ export function evaluateMvpReleasePlan({ plan, roadmap }) {
     phases_without_acceptance: phasesWithoutAcceptance,
     phases_without_validation: phasesWithoutValidation,
     non_local_phases: nonLocalPhases,
+    missing_required_harnesses: missingRequiredHarnesses,
+    preview_harness_conflicts: previewHarnessConflicts,
+    phase9_missing_required_harnesses: phase9MissingRequiredHarnesses,
     provider_calls: 0
   };
 }

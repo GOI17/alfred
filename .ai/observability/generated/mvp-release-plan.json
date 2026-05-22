@@ -10,8 +10,20 @@
     "plan_id": "mvp-release-plan",
     "target_release": "0.2.0",
     "phase_count": 3,
-    "release_gate_count": 7,
-    "non_goal_count": 5,
+    "required_harnesses": [
+      "vscode",
+      "opencode",
+      "pi"
+    ],
+    "preview_harnesses": [
+      "claude",
+      "codex",
+      "kiro"
+    ],
+    "required_harness_count": 3,
+    "preview_harness_count": 3,
+    "release_gate_count": 8,
+    "non_goal_count": 6,
     "provider_calls": 0,
     "plan": ".ai/roadmaps/mvp-release.json"
   }
