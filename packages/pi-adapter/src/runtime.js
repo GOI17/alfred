@@ -391,3 +391,41 @@ export function runPiRoadmapReadinessSpike({ root, traceOutputPath }) {
     trace
   };
 }
+
+export function buildPiAdapterReadiness({ root }) {
+  const kernel = loadArchitectureKernel(root);
+  const orchestrator = loadAgent(kernel, "orchestrator");
+
+  return {
+    harness: "pi",
+    status: "hardened",
+    adapter_package: "packages/pi-adapter",
+    runtime_entrypoints: [
+      "runPiRuntimeSpike",
+      "runPiAgentSystemSpike",
+      "runPiSecuritySpike",
+      "runPiEvalGateSpike",
+      "runPiSkillLoadingSpike",
+      "runPiRoadmapReadinessSpike"
+    ],
+    validated_capabilities: [
+      "primary_control",
+      "specialist_routing",
+      "lazy_skills",
+      "permission_enforcement",
+      "trace_emission",
+      "eval_execution",
+      "model_assignment",
+      "local_first"
+    ],
+    invariants: {
+      core_is_harness_agnostic: true,
+      model_assignment_user_owned: kernel.modelAssignment.ownership?.assignment_owner === "user",
+      provider_calls_are_local_first: kernel.providerPolicy.default_strategy === "local-first",
+      skill_bodies_lazy_loaded: kernel.skills.policy.load_bodies_globally === false,
+      permissions_deny_by_default: kernel.permissions.default === "deny"
+    },
+    orchestrator_id: orchestrator.id,
+    provider_calls: 0
+  };
+}

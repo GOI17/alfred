@@ -23,6 +23,7 @@
       "validate:phase6",
       "validate:phase7",
       "validate:roadmap",
+      "validate:adapter-hardening",
       "validate:eval-runner"
     ],
     "validators": [
@@ -34,6 +35,7 @@
       "validate:phase6",
       "validate:phase7",
       "validate:roadmap",
+      "validate:adapter-hardening",
       "validate:eval-runner"
     ],
     "provider_calls_allowed": 0,
@@ -56,7 +58,8 @@
       "id": "adapter-hardening",
       "owner": "architect",
       "goal": "Turn executable adapter previews into hardened adapter contracts without leaking harness concepts into core.",
-      "validation": "validate:phase7"
+      "validation": "validate:adapter-hardening",
+      "status": "complete"
     },
     {
       "id": "eval-runner-package",

@@ -30,6 +30,31 @@ export function loadPostPhase7Roadmap(root) {
   return readJson(root, ".ai/execution/post-phase-7-roadmap.json");
 }
 
+export function loadAdapterHardeningContract(root) {
+  return readJson(root, ".ai/harnesses/adapter-hardening.json");
+}
+
+export function evaluateAdapterHardening({ contract, readiness }) {
+  const readinessByHarness = Object.fromEntries(readiness.map((adapter) => [adapter.harness, adapter]));
+  const missingAdapters = contract.executable_adapters.filter((harness) => !readinessByHarness[harness]);
+  const failedAdapters = contract.executable_adapters.filter((harness) => readinessByHarness[harness]?.status !== "hardened");
+  const invariantFailures = readiness.flatMap((adapter) =>
+    contract.required_invariants
+      .filter((invariant) => adapter.invariants?.[invariant] !== true)
+      .map((invariant) => ({ harness: adapter.harness, invariant }))
+  );
+
+  return {
+    status: missingAdapters.length === 0 && failedAdapters.length === 0 && invariantFailures.length === 0 ? "pass" : "fail",
+    executable_adapter_count: contract.executable_adapters.length,
+    hardened_adapter_count: readiness.filter((adapter) => adapter.status === "hardened").length,
+    missing_adapters: missingAdapters,
+    failed_adapters: failedAdapters,
+    invariant_failures: invariantFailures,
+    provider_calls: 0
+  };
+}
+
 export function evaluateReleaseReadiness({ roadmap, completedPhases }) {
   const completed = new Set(completedPhases);
   const missingCompletedPhases = roadmap.completed_phases.filter((phase) => !completed.has(phase));

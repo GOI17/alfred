@@ -6,7 +6,7 @@
   "exports": "./src/index.js",
   "scripts": {
     "check": "node --check src/index.js",
-    "test": "node -e \"import('./src/index.js').then((m) => console.log('evals test: '+m.evalRunnerPhases.length+' phases load'))\""
+    "test": "node -e \"import('./src/index.js').then((m) => console.log('evals test: '+m.evalRunnerPhases.length+' targets load'))\""
   },
   "dependencies": {
     "@alfred-labs/core": "workspace:*"

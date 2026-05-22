@@ -34,6 +34,8 @@
 - ReleaseReadinessEvaluation
 - EvalRunner
 - CurrentEvalResultSet
+- AdapterHardeningContract
+- AdapterReadiness
 
 ## Value Objects
 
@@ -65,6 +67,8 @@
 - ReleaseCandidate
 - EvalBaselinePath
 - EvalResultSummary
+- AdapterInvariant
+- HardenedAdapterStatus
 
 ## Use Cases
 
@@ -109,6 +113,9 @@
 - LoadEvalBaselines
 - ComputeCurrentEvalResults
 - RunEvalRunner
+- LoadAdapterHardeningContract
+- EvaluateAdapterHardening
+- BuildAdapterReadiness
 
 ## Ports
 
@@ -131,6 +138,7 @@
 - SkillPackStore
 - RoadmapStore
 - EvalRunnerStore
+- AdapterHardeningStore
 
 ## Phase 7: Harness Portability
 
@@ -202,3 +210,25 @@ Use cases:
 Ports:
 
 - `EvalRunnerStore`: reads local eval artifacts and generated trace files.
+
+## Milestone: Adapter Hardening
+
+Entities:
+
+- `AdapterHardeningContract`: model-readable contract for executable adapter readiness.
+- `AdapterReadiness`: deterministic readiness result emitted by an executable adapter.
+
+Value objects:
+
+- `AdapterInvariant`: required invariant such as core agnosticism, user-owned model assignment, lazy skills, or deny-by-default permissions.
+- `HardenedAdapterStatus`: `hardened` when all adapter invariants pass.
+
+Use cases:
+
+- `LoadAdapterHardeningContract`: read `.ai/harnesses/adapter-hardening.json`.
+- `EvaluateAdapterHardening`: compare Pi and opencode readiness against the hardening contract.
+- `BuildAdapterReadiness`: expose adapter readiness without writing harness-specific config.
+
+Ports:
+
+- `AdapterHardeningStore`: reads adapter hardening contracts and readiness traces.

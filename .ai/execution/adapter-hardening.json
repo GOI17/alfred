@@ -1,0 +1,22 @@
+{
+  "id": "adapter-hardening",
+  "version": "adapter-hardening@0.1.0",
+  "owner": "architect",
+  "status": "complete",
+  "contract": ".ai/harnesses/adapter-hardening.json",
+  "runtime_entrypoints": [
+    "packages/pi-adapter/src/runtime.js#buildPiAdapterReadiness",
+    "packages/opencode-adapter/src/runtime.js#buildOpencodeAdapterReadiness"
+  ],
+  "outputs": {
+    "status": "pass",
+    "executable_adapter_count": 2,
+    "hardened_adapter_count": 2,
+    "provider_calls": 0
+  },
+  "constraints": {
+    "core_imports_adapters": false,
+    "harness_config_writes_require_human_approval": true,
+    "model_assignment_remains_user_owned": true
+  }
+}

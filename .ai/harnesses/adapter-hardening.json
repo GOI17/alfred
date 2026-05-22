@@ -1,0 +1,30 @@
+{
+  "id": "adapter-hardening-contract",
+  "version": "adapter-hardening@0.1.0",
+  "owner": "architect",
+  "status": "complete",
+  "executable_adapters": ["pi", "opencode"],
+  "required_capabilities": [
+    "primary_control",
+    "specialist_routing",
+    "lazy_skills",
+    "permission_enforcement",
+    "trace_emission",
+    "eval_execution",
+    "model_assignment",
+    "local_first"
+  ],
+  "required_invariants": [
+    "core_is_harness_agnostic",
+    "model_assignment_user_owned",
+    "provider_calls_are_local_first",
+    "skill_bodies_lazy_loaded",
+    "permissions_deny_by_default"
+  ],
+  "artifact_policy": {
+    "generated_previews_allowed": true,
+    "writes_harness_config_by_default": false,
+    "human_approval_required_before_config_write": true
+  },
+  "provider_calls_allowed": 0
+}

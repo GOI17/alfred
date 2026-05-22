@@ -1,0 +1,11 @@
+id: adapter-hardening-dataset
+version: adapter-hardening-dataset@0.1.0
+items:
+  - id: executable-adapters
+    adapters:
+      - pi
+      - opencode
+    expected:
+      status: pass
+      provider_calls: 0
+      hardened_adapter_count: 2
