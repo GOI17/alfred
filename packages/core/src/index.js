@@ -46,6 +46,46 @@ export function loadRuntimeHardeningContract(root) {
   return readJson(root, ".ai/runtime/phase-8-runtime-hardening.json");
 }
 
+export function loadMvpReleasePlan(root) {
+  return readJson(root, ".ai/roadmaps/mvp-release.json");
+}
+
+export function evaluateMvpReleasePlan({ plan, roadmap }) {
+  const roadmapPhaseIds = new Set(roadmap.phases.map((phase) => phase.id));
+  const planPhaseIds = plan.phases.map((phase) => phase.id);
+  const missingRoadmapPhases = planPhaseIds.filter((phaseId) => !roadmapPhaseIds.has(phaseId));
+  const duplicatePlanPhases = planPhaseIds.filter((phaseId, index) => planPhaseIds.indexOf(phaseId) !== index);
+  const unorderedPlanPhases = plan.phases.filter((phase, index) => phase.order !== index + 1).map((phase) => phase.id);
+  const phasesWithoutAcceptance = plan.phases.filter((phase) => !phase.acceptance_criteria?.length).map((phase) => phase.id);
+  const phasesWithoutValidation = plan.phases.filter((phase) => !phase.validation?.length).map((phase) => phase.id);
+  const nonLocalPhases = plan.phases.filter((phase) => phase.provider_calls_allowed !== 0).map((phase) => phase.id);
+
+  return {
+    status:
+      missingRoadmapPhases.length === 0 &&
+      duplicatePlanPhases.length === 0 &&
+      unorderedPlanPhases.length === 0 &&
+      phasesWithoutAcceptance.length === 0 &&
+      phasesWithoutValidation.length === 0 &&
+      nonLocalPhases.length === 0 &&
+      plan.provider_calls_allowed === 0
+        ? "pass"
+        : "fail",
+    plan_id: plan.id,
+    target_release: plan.target_release,
+    phase_count: plan.phases.length,
+    release_gate_count: plan.release_gates.length,
+    non_goal_count: plan.non_goals.length,
+    missing_roadmap_phases: missingRoadmapPhases,
+    duplicate_plan_phases: duplicatePlanPhases,
+    unordered_plan_phases: unorderedPlanPhases,
+    phases_without_acceptance: phasesWithoutAcceptance,
+    phases_without_validation: phasesWithoutValidation,
+    non_local_phases: nonLocalPhases,
+    provider_calls: 0
+  };
+}
+
 export function evaluateRuntimeHardening({ contract, adapters }) {
   const adapterByHarness = Object.fromEntries(adapters.map((adapter) => [adapter.harness, adapter]));
   const missingAdapters = contract.executable_adapters.filter((harness) => !adapterByHarness[harness]);

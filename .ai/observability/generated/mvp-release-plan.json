@@ -1,0 +1,18 @@
+{
+  "trace_id": "mvp-release-plan",
+  "timestamp": "2026-05-19T00:00:00.000Z",
+  "event": "mvp_release_plan_validated",
+  "actor": "orchestrator",
+  "data": {
+    "trace_id": "mvp-release-plan",
+    "timestamp": "2026-05-19T00:00:00.000Z",
+    "status": "pass",
+    "plan_id": "mvp-release-plan",
+    "target_release": "0.2.0",
+    "phase_count": 3,
+    "release_gate_count": 7,
+    "non_goal_count": 5,
+    "provider_calls": 0,
+    "plan": ".ai/roadmaps/mvp-release.json"
+  }
+}

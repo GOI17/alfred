@@ -1,0 +1,18 @@
+id: mvp-release-plan
+version: mvp-release-plan@0.1.0
+owner: orchestrator
+cases:
+  - id: mvp-scope
+    input: .ai/roadmaps/mvp-release.json
+    expected:
+      target_release: 0.2.0
+      phase_count: 3
+  - id: release-gates
+    input: .ai/roadmaps/mvp-release.json
+    expected:
+      provider_calls: 0
+      release_gate_count: 7
+  - id: roadmap-alignment
+    input: .ai/roadmaps/0.2.0.json
+    expected:
+      missing_roadmap_phases: 0
