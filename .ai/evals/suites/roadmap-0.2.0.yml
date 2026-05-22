@@ -1,0 +1,20 @@
+id: roadmap-0.2.0
+version: roadmap-0.2.0@0.1.0
+owner: orchestrator
+cases:
+  - id: ordered-phases
+    input: .ai/roadmaps/0.2.0.json
+    expected:
+      phase_count: 4
+      first_phase: phase-8-runtime-hardening
+      final_phase: phase-11-release-0.2.0
+  - id: local-first-roadmap
+    input: .ai/roadmaps/0.2.0.json
+    expected:
+      provider_calls: 0
+      non_local_phases: 0
+  - id: human-approval-preserved
+    input: .ai/roadmaps/0.2.0.json
+    expected:
+      permission_escalation_requires_human_approval: true
+      harness_config_writes_require_human_approval: true

@@ -1,0 +1,15 @@
+{
+  "phase": "roadmap-0.2.0",
+  "result": "pass",
+  "roadmap_id": "roadmap-0.2.0",
+  "version": "roadmap-0.2.0@0.1.0",
+  "phase_count": 4,
+  "provider_calls": 0,
+  "trace_event": "roadmap_0_2_0_validated",
+  "reproducibility": {
+    "runtime_entrypoint": "scripts/validate-roadmap-0.2.0.mjs",
+    "validation_script": "scripts/validate-roadmap-0.2.0.mjs",
+    "roadmap": ".ai/roadmaps/0.2.0.json",
+    "fixture_hash": "roadmap-0.2.0-fixture-v1"
+  }
+}
