@@ -1,0 +1,44 @@
+{
+  "id": "release-0.1.0",
+  "version": "0.1.0",
+  "candidate": "architecture-kernel-0.1.0",
+  "owner": "orchestrator",
+  "status": "complete",
+  "scope": "architecture-kernel",
+  "includes": [
+    "phase-1-architecture-kernel",
+    "phase-2-pi-runtime-spike",
+    "phase-3-agent-system",
+    "phase-4-security-enforcement",
+    "phase-5-evals-regression-gates",
+    "phase-6-skill-packs-lazy-loading",
+    "phase-7-harness-portability",
+    "post-phase-7-roadmap-readiness",
+    "adapter-hardening",
+    "eval-runner-package"
+  ],
+  "required_validators": [
+    "validate:phase1",
+    "validate:phase2",
+    "validate:phase3",
+    "validate:phase4",
+    "validate:phase5",
+    "validate:phase6",
+    "validate:phase7",
+    "validate:roadmap",
+    "validate:adapter-hardening",
+    "validate:eval-runner"
+  ],
+  "provider_calls_allowed": 0,
+  "baseline_update_requires_human_approval": true,
+  "commit_policy": {
+    "validated_commit_source": "current-git-head-at-validation-time",
+    "commit_source_recorded_in_trace": true,
+    "static_baseline_pins_commit": false
+  },
+  "artifact_manifest": {
+    "release_notes": ".ai/releases/release-0.1.0.md",
+    "baseline": ".ai/evals/baselines/release-0.1.0.json",
+    "trace": ".ai/observability/generated/release-0.1.0.json"
+  }
+}

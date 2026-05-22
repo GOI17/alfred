@@ -24,6 +24,7 @@
       "validate:phase7",
       "validate:roadmap",
       "validate:adapter-hardening",
+      "validate:release",
       "validate:eval-runner"
     ],
     "validators": [
@@ -36,6 +37,7 @@
       "validate:phase7",
       "validate:roadmap",
       "validate:adapter-hardening",
+      "validate:release",
       "validate:eval-runner"
     ],
     "provider_calls_allowed": 0,
@@ -52,7 +54,8 @@
       "id": "release-0.1.0",
       "owner": "orchestrator",
       "goal": "Package the completed architecture kernel as a reproducible local release candidate.",
-      "validation": "validate:roadmap"
+      "validation": "validate:release",
+      "status": "complete"
     },
     {
       "id": "adapter-hardening",

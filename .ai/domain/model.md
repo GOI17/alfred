@@ -36,6 +36,8 @@
 - CurrentEvalResultSet
 - AdapterHardeningContract
 - AdapterReadiness
+- ReleaseCandidateArtifact
+- ReleaseValidation
 
 ## Value Objects
 
@@ -69,6 +71,8 @@
 - EvalResultSummary
 - AdapterInvariant
 - HardenedAdapterStatus
+- ReleaseVersion
+- ValidatedCommit
 
 ## Use Cases
 
@@ -116,6 +120,9 @@
 - LoadAdapterHardeningContract
 - EvaluateAdapterHardening
 - BuildAdapterReadiness
+- LoadReleaseCandidate
+- EvaluateReleaseCandidate
+- EmitReleaseCandidateTrace
 
 ## Ports
 
@@ -139,6 +146,7 @@
 - RoadmapStore
 - EvalRunnerStore
 - AdapterHardeningStore
+- ReleaseCandidateStore
 
 ## Phase 7: Harness Portability
 
@@ -232,3 +240,25 @@ Use cases:
 Ports:
 
 - `AdapterHardeningStore`: reads adapter hardening contracts and readiness traces.
+
+## Milestone: Release 0.1.0
+
+Entities:
+
+- `ReleaseCandidateArtifact`: model-readable release candidate under `.ai/releases`.
+- `ReleaseValidation`: deterministic proof that all required local validators pass.
+
+Value objects:
+
+- `ReleaseVersion`: semantic version for the release candidate.
+- `ValidatedCommit`: validated commit source recorded in the generated trace without pinning a squash-merge-sensitive hash.
+
+Use cases:
+
+- `LoadReleaseCandidate`: read `.ai/releases/release-0.1.0.json`.
+- `EvaluateReleaseCandidate`: verify required validators, local-only execution, and release metadata.
+- `EmitReleaseCandidateTrace`: record the validated commit source and zero-provider-call release status.
+
+Ports:
+
+- `ReleaseCandidateStore`: reads local release candidate artifacts and generated release traces.

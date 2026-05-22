@@ -1,8 +1,8 @@
 {
   "phase": "eval-runner-package",
   "result": "pass",
-  "baseline_count": 10,
-  "current_result_count": 9,
+  "baseline_count": 11,
+  "current_result_count": 10,
   "regression_gate_status": "pass",
   "regressions": 0,
   "provider_calls": 0,

@@ -1,0 +1,18 @@
+{
+  "trace_id": "release-0.1.0",
+  "timestamp": "2026-05-19T00:00:00.000Z",
+  "event": "release_candidate_validated",
+  "actor": "orchestrator",
+  "data": {
+    "trace_id": "release-0.1.0",
+    "timestamp": "2026-05-19T00:00:00.000Z",
+    "status": "pass",
+    "release_id": "release-0.1.0",
+    "version": "0.1.0",
+    "validated_commit_source": "current-git-head-at-validation-time",
+    "required_validator_count": 10,
+    "passed_validator_count": 10,
+    "provider_calls": 0,
+    "release_candidate": ".ai/releases/release-0.1.0.json"
+  }
+}

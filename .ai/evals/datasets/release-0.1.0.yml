@@ -1,0 +1,10 @@
+id: release-0.1.0-dataset
+version: release-0.1.0-dataset@0.1.0
+items:
+  - id: architecture-kernel-release-candidate
+    release: release-0.1.0
+    candidate: architecture-kernel-0.1.0
+    expected:
+      status: pass
+      provider_calls: 0
+      validators: 10

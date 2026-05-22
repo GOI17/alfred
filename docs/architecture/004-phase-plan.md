@@ -39,3 +39,7 @@ Move deterministic eval discovery, current-result computation, and regression ga
 ## Milestone: Adapter Hardening
 
 Turn executable Pi and opencode adapter previews into hardened readiness contracts while keeping core harness-agnostic and requiring human approval before writing harness-specific config.
+
+## Milestone: Release 0.1.0
+
+Package the completed architecture kernel as a reproducible local release candidate with all validators, release metadata, generated trace, and zero provider calls.

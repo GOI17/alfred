@@ -14,7 +14,8 @@
     "opencode_adapter_runtime": "opencode-adapter-runtime@0.1.0",
     "post_phase_7_roadmap": "post-phase-7-roadmap@0.1.0",
     "eval_runner_package": "eval-runner-package@0.1.0",
-    "adapter_hardening": "adapter-hardening@0.1.0"
+    "adapter_hardening": "adapter-hardening@0.1.0",
+    "release_0_1_0": "release-0.1.0"
   },
   "baseline_update_policy": {
     "allowed_by_agent": false,
