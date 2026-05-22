@@ -1,0 +1,13 @@
+id: roadmap-0.2.0-dataset
+version: roadmap-0.2.0-dataset@0.1.0
+items:
+  - id: next-runtime-roadmap
+    roadmap: roadmap-0.2.0
+    expected_phases:
+      - phase-8-runtime-hardening
+      - phase-9-adapter-generation
+      - phase-10-eval-runner-cli
+      - phase-11-release-0.2.0
+    expected:
+      status: pass
+      provider_calls: 0

@@ -38,6 +38,33 @@ export function loadReleaseCandidate(root) {
   return readJson(root, ".ai/releases/release-0.1.0.json");
 }
 
+export function loadRoadmap020(root) {
+  return readJson(root, ".ai/roadmaps/0.2.0.json");
+}
+
+export function evaluateRoadmap020({ roadmap }) {
+  const phaseIds = roadmap.phases.map((phase) => phase.id);
+  const duplicatePhases = phaseIds.filter((phaseId, index) => phaseIds.indexOf(phaseId) !== index);
+  const missingValidators = roadmap.phases.filter((phase) => !phase.validation || phase.validation.length === 0).map((phase) => phase.id);
+  const nonLocalPhases = roadmap.phases.filter((phase) => phase.provider_calls_allowed !== 0).map((phase) => phase.id);
+  const unorderedPhases = roadmap.phases.filter((phase, index) => phase.order !== index + 1).map((phase) => phase.id);
+
+  return {
+    status:
+      duplicatePhases.length === 0 && missingValidators.length === 0 && nonLocalPhases.length === 0 && unorderedPhases.length === 0
+        ? "pass"
+        : "fail",
+    roadmap_id: roadmap.id,
+    version: roadmap.version,
+    phase_count: roadmap.phases.length,
+    duplicate_phases: duplicatePhases,
+    missing_validators: missingValidators,
+    non_local_phases: nonLocalPhases,
+    unordered_phases: unorderedPhases,
+    provider_calls: 0
+  };
+}
+
 export function evaluateReleaseCandidate({ releaseCandidate, validatorResults }) {
   const resultByValidator = Object.fromEntries(validatorResults.map((result) => [result.validator, result]));
   const missingValidators = releaseCandidate.required_validators.filter((validator) => !resultByValidator[validator]);

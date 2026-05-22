@@ -38,6 +38,7 @@
 - AdapterReadiness
 - ReleaseCandidateArtifact
 - ReleaseValidation
+- RuntimeRoadmap
 
 ## Value Objects
 
@@ -73,6 +74,7 @@
 - HardenedAdapterStatus
 - ReleaseVersion
 - ValidatedCommit
+- RoadmapPhaseOrder
 
 ## Use Cases
 
@@ -123,6 +125,8 @@
 - LoadReleaseCandidate
 - EvaluateReleaseCandidate
 - EmitReleaseCandidateTrace
+- LoadRoadmap020
+- EvaluateRoadmap020
 
 ## Ports
 
@@ -147,6 +151,7 @@
 - EvalRunnerStore
 - AdapterHardeningStore
 - ReleaseCandidateStore
+- RuntimeRoadmapStore
 
 ## Phase 7: Harness Portability
 
@@ -262,3 +267,22 @@ Use cases:
 Ports:
 
 - `ReleaseCandidateStore`: reads local release candidate artifacts and generated release traces.
+
+## Roadmap 0.2.0
+
+Entities:
+
+- `RuntimeRoadmap`: model-readable roadmap that moves Alfred from architecture kernel to usable local runtime.
+
+Value objects:
+
+- `RoadmapPhaseOrder`: explicit ordering for runtime hardening, adapter generation, eval CLI, and release phases.
+
+Use cases:
+
+- `LoadRoadmap020`: read `.ai/roadmaps/0.2.0.json`.
+- `EvaluateRoadmap020`: verify the roadmap is ordered, local-only, and fully validated.
+
+Ports:
+
+- `RuntimeRoadmapStore`: reads runtime roadmap artifacts and generated roadmap traces.

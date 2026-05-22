@@ -1,0 +1,66 @@
+{
+  "id": "roadmap-0.2.0",
+  "version": "roadmap-0.2.0@0.1.0",
+  "owner": "orchestrator",
+  "status": "active",
+  "release_target": "0.2.0",
+  "previous_release": "release-0.1.0",
+  "goal": "Turn the released architecture kernel into a usable local runtime with hardened adapters, executable eval reporting, and generated harness artifacts.",
+  "constraints": {
+    "local_first": true,
+    "provider_calls_allowed": 0,
+    "core_harness_agnostic": true,
+    "permission_escalation_requires_human_approval": true,
+    "harness_config_writes_require_human_approval": true,
+    "baseline_updates_require_human_approval": true
+  },
+  "phases": [
+    {
+      "id": "phase-8-runtime-hardening",
+      "order": 1,
+      "owner": "architect",
+      "goal": "Turn Pi and opencode spikes into stable runtime APIs with explicit contracts and no harness leakage into core.",
+      "scope": ["runtime-api", "adapter-boundaries", "trace-contracts"],
+      "validation": ["validate:phase8"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-9-adapter-generation",
+      "order": 2,
+      "owner": "developer",
+      "goal": "Generate harness artifact previews for opencode, Claude, Codex, VSCode, and Kiro while requiring human approval before file writes.",
+      "scope": ["artifact-generation", "human-approval-gates", "portability-contracts"],
+      "validation": ["validate:phase9"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-10-eval-runner-cli",
+      "order": 3,
+      "owner": "qa",
+      "goal": "Expose package-level eval runner APIs through a deterministic CLI with local reports and regression summaries.",
+      "scope": ["eval-cli", "report-generation", "regression-summaries"],
+      "validation": ["validate:phase10"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-11-release-0.2.0",
+      "order": 4,
+      "owner": "orchestrator",
+      "goal": "Package the first usable local runtime release candidate with hardened adapters and executable eval reporting.",
+      "scope": ["release-candidate", "runtime-readiness", "reproducibility"],
+      "validation": ["validate:release-0.2.0"],
+      "provider_calls_allowed": 0
+    }
+  ],
+  "entry_criteria": [
+    "release-0.1.0 is complete",
+    "adapter-hardening is complete",
+    "eval-runner-package is complete"
+  ],
+  "exit_criteria": [
+    "runtime APIs are stable enough for local use",
+    "harness artifacts are generated as previews by default",
+    "eval runner CLI produces deterministic local reports",
+    "release-0.2.0 is reproducible and fully gated"
+  ]
+}

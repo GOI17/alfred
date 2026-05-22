@@ -43,3 +43,7 @@ Turn executable Pi and opencode adapter previews into hardened readiness contrac
 ## Milestone: Release 0.1.0
 
 Package the completed architecture kernel as a reproducible local release candidate with all validators, release metadata, generated trace, and zero provider calls.
+
+## Roadmap 0.2.0
+
+Move from architecture-kernel release to usable local runtime through Phase 8 runtime hardening, Phase 9 adapter generation, Phase 10 eval runner CLI, and Phase 11 release 0.2.0.

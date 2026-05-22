@@ -1,0 +1,18 @@
+{
+  "trace_id": "roadmap-0.2.0",
+  "timestamp": "2026-05-19T00:00:00.000Z",
+  "event": "roadmap_0_2_0_validated",
+  "actor": "orchestrator",
+  "data": {
+    "trace_id": "roadmap-0.2.0",
+    "timestamp": "2026-05-19T00:00:00.000Z",
+    "status": "pass",
+    "roadmap_id": "roadmap-0.2.0",
+    "version": "roadmap-0.2.0@0.1.0",
+    "phase_count": 4,
+    "first_phase": "phase-8-runtime-hardening",
+    "final_phase": "phase-11-release-0.2.0",
+    "provider_calls": 0,
+    "roadmap": ".ai/roadmaps/0.2.0.json"
+  }
+}

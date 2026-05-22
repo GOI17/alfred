@@ -22,7 +22,8 @@
     "post_phase_7_roadmap": ".ai/execution/post-phase-7-roadmap.json",
     "eval_runner_package": ".ai/execution/eval-runner-package.json",
     "adapter_hardening": ".ai/execution/adapter-hardening.json",
-    "release_0_1_0": ".ai/releases/release-0.1.0.json"
+    "release_0_1_0": ".ai/releases/release-0.1.0.json",
+    "roadmap_0_2_0": ".ai/roadmaps/0.2.0.json"
   },
   "pillars": [
     "Hexagonal Architecture + DDD",
@@ -43,5 +44,6 @@
   "post_phase_7_entrypoint": ".ai/execution/post-phase-7-roadmap.md",
   "eval_runner_entrypoint": ".ai/execution/eval-runner-package.md",
   "adapter_hardening_entrypoint": ".ai/execution/adapter-hardening.md",
-  "release_0_1_0_entrypoint": ".ai/releases/release-0.1.0.md"
+  "release_0_1_0_entrypoint": ".ai/releases/release-0.1.0.md",
+  "roadmap_0_2_0_entrypoint": ".ai/roadmaps/0.2.0.md"
 }
