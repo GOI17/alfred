@@ -11,7 +11,8 @@ export const evalRunnerPhases = [
   "phase-6-skill-packs-lazy-loading",
   "phase-7-harness-portability",
   "post-phase-7-roadmap-readiness",
-  "adapter-hardening"
+  "adapter-hardening",
+  "release-0.1.0"
 ];
 
 export function listEvalBaselines(root) {
@@ -46,6 +47,7 @@ export function computeCurrentEvalResults(root) {
   const phase7Trace = readGeneratedTrace(root, ".ai/observability/generated/phase-7-harness-portability.json");
   const roadmapTrace = readGeneratedTrace(root, ".ai/observability/generated/post-phase-7-roadmap-readiness.json");
   const adapterHardeningTrace = readGeneratedTrace(root, ".ai/observability/generated/adapter-hardening.json");
+  const releaseTrace = readGeneratedTrace(root, ".ai/observability/generated/release-0.1.0.json");
   const phase1Baseline = readJson(root, ".ai/evals/baselines/phase-1-architecture-kernel.json");
   const compatibilityMatrix = readJson(root, ".ai/harnesses/compatibility-matrix.json");
 
@@ -111,6 +113,15 @@ export function computeCurrentEvalResults(root) {
       invariant_failures: adapterHardeningTrace.data.invariant_failures.length,
       provider_calls: adapterHardeningTrace.data.provider_calls,
       trace_event: adapterHardeningTrace.event
+    },
+    "release-0.1.0": {
+      result: releaseTrace.data.status,
+      release_id: releaseTrace.data.release_id,
+      version: releaseTrace.data.version,
+      required_validator_count: releaseTrace.data.required_validator_count,
+      passed_validator_count: releaseTrace.data.passed_validator_count,
+      provider_calls: releaseTrace.data.provider_calls,
+      trace_event: releaseTrace.event
     }
   };
 }

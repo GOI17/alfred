@@ -1,0 +1,18 @@
+id: release-0.1.0
+version: release-0.1.0@0.1.0
+owner: orchestrator
+cases:
+  - id: release-candidate-local-only
+    input: .ai/releases/release-0.1.0.json
+    expected:
+      provider_calls: 0
+      result: pass
+  - id: required-validators-preserved
+    input: package.json
+    expected:
+      required_validator_count: 10
+      passed_validator_count: 10
+  - id: commit-source-recorded-in-trace
+    input: .ai/observability/generated/release-0.1.0.json
+    expected:
+      commit_source_recorded_in_trace: true

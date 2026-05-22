@@ -1,0 +1,16 @@
+{
+  "phase": "release-0.1.0",
+  "result": "pass",
+  "release_id": "release-0.1.0",
+  "version": "0.1.0",
+  "required_validator_count": 10,
+  "passed_validator_count": 10,
+  "provider_calls": 0,
+  "trace_event": "release_candidate_validated",
+  "reproducibility": {
+    "runtime_entrypoint": "scripts/validate-release.mjs",
+    "validation_script": "scripts/validate-release.mjs",
+    "release_candidate": ".ai/releases/release-0.1.0.json",
+    "fixture_hash": "release-0.1.0-fixture-v1"
+  }
+}

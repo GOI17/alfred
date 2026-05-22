@@ -34,6 +34,31 @@ export function loadAdapterHardeningContract(root) {
   return readJson(root, ".ai/harnesses/adapter-hardening.json");
 }
 
+export function loadReleaseCandidate(root) {
+  return readJson(root, ".ai/releases/release-0.1.0.json");
+}
+
+export function evaluateReleaseCandidate({ releaseCandidate, validatorResults }) {
+  const resultByValidator = Object.fromEntries(validatorResults.map((result) => [result.validator, result]));
+  const missingValidators = releaseCandidate.required_validators.filter((validator) => !resultByValidator[validator]);
+  const failedValidators = validatorResults.filter((result) => result.status !== "pass").map((result) => result.validator);
+  const providerCalls = validatorResults.reduce((total, result) => total + (result.provider_calls ?? 0), 0);
+
+  return {
+    status:
+      missingValidators.length === 0 && failedValidators.length === 0 && providerCalls <= releaseCandidate.provider_calls_allowed
+        ? "pass"
+        : "fail",
+    release_id: releaseCandidate.id,
+    version: releaseCandidate.version,
+    required_validator_count: releaseCandidate.required_validators.length,
+    passed_validator_count: validatorResults.filter((result) => result.status === "pass").length,
+    missing_validators: missingValidators,
+    failed_validators: failedValidators,
+    provider_calls: providerCalls
+  };
+}
+
 export function evaluateAdapterHardening({ contract, readiness }) {
   const readinessByHarness = Object.fromEntries(readiness.map((adapter) => [adapter.harness, adapter]));
   const missingAdapters = contract.executable_adapters.filter((harness) => !readinessByHarness[harness]);
