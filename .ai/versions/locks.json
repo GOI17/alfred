@@ -17,7 +17,8 @@
     "adapter_hardening": "adapter-hardening@0.1.0",
     "release_0_1_0": "release-0.1.0",
     "roadmap_0_2_0": "roadmap-0.2.0@0.1.0",
-    "phase_8_runtime_hardening": "phase-8-runtime-hardening@0.1.0"
+    "phase_8_runtime_hardening": "phase-8-runtime-hardening@0.1.0",
+    "mvp_release_plan": "mvp-release-plan@0.1.0"
   },
   "baseline_update_policy": {
     "allowed_by_agent": false,

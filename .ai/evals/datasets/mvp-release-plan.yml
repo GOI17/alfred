@@ -1,0 +1,12 @@
+id: mvp-release-plan-dataset
+version: mvp-release-plan-dataset@0.1.0
+items:
+  - id: mvp-release-0-2-0
+    target_release: 0.2.0
+    phases:
+      - phase-9-adapter-generation
+      - phase-10-eval-runner-cli
+      - phase-11-release-0.2.0
+    expected:
+      status: pass
+      provider_calls: 0

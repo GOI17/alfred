@@ -14,7 +14,8 @@ export const evalRunnerPhases = [
   "adapter-hardening",
   "release-0.1.0",
   "roadmap-0.2.0",
-  "phase-8-runtime-hardening"
+  "phase-8-runtime-hardening",
+  "mvp-release-plan"
 ];
 
 export function listEvalBaselines(root) {
@@ -52,6 +53,7 @@ export function computeCurrentEvalResults(root) {
   const releaseTrace = readGeneratedTrace(root, ".ai/observability/generated/release-0.1.0.json");
   const roadmap020Trace = readGeneratedTrace(root, ".ai/observability/generated/roadmap-0.2.0.json");
   const phase8Trace = readGeneratedTrace(root, ".ai/observability/generated/phase-8-runtime-hardening.json");
+  const mvpReleasePlanTrace = readGeneratedTrace(root, ".ai/observability/generated/mvp-release-plan.json");
   const phase1Baseline = readJson(root, ".ai/evals/baselines/phase-1-architecture-kernel.json");
   const compatibilityMatrix = readJson(root, ".ai/harnesses/compatibility-matrix.json");
 
@@ -147,6 +149,16 @@ export function computeCurrentEvalResults(root) {
       boundary_failures: phase8Trace.data.boundary_failures.length,
       provider_calls: phase8Trace.data.provider_calls,
       trace_event: phase8Trace.event
+    },
+    "mvp-release-plan": {
+      result: mvpReleasePlanTrace.data.status,
+      plan_id: mvpReleasePlanTrace.data.plan_id,
+      target_release: mvpReleasePlanTrace.data.target_release,
+      phase_count: mvpReleasePlanTrace.data.phase_count,
+      release_gate_count: mvpReleasePlanTrace.data.release_gate_count,
+      non_goal_count: mvpReleasePlanTrace.data.non_goal_count,
+      provider_calls: mvpReleasePlanTrace.data.provider_calls,
+      trace_event: mvpReleasePlanTrace.event
     }
   };
 }

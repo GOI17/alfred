@@ -1,0 +1,16 @@
+{
+  "phase": "mvp-release-plan",
+  "result": "pass",
+  "target_release": "0.2.0",
+  "phase_count": 3,
+  "release_gate_count": 7,
+  "non_goal_count": 5,
+  "provider_calls": 0,
+  "trace_event": "mvp_release_plan_validated",
+  "reproducibility": {
+    "runtime_entrypoint": "packages/core/src/index.js#evaluateMvpReleasePlan",
+    "validation_script": "scripts/validate-mvp-release-plan.mjs",
+    "plan": ".ai/roadmaps/mvp-release.json",
+    "fixture_hash": "mvp-release-plan-fixture-v1"
+  }
+}

@@ -18,8 +18,8 @@
   ],
   "outputs": {
     "status": "pass",
-    "baseline_count": 13,
-    "current_result_count": 12,
+    "baseline_count": 14,
+    "current_result_count": 13,
     "provider_calls": 0
   },
   "constraints": {

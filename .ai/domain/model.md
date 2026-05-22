@@ -41,6 +41,8 @@
 - RuntimeRoadmap
 - RuntimeHardeningContract
 - StableRuntimeAdapter
+- MvpReleasePlan
+- MvpReleaseGate
 
 ## Value Objects
 
@@ -79,6 +81,8 @@
 - RoadmapPhaseOrder
 - RuntimeTraceContract
 - AdapterBoundaryInvariant
+- MvpOutcome
+- MvpNonGoal
 
 ## Use Cases
 
@@ -134,6 +138,9 @@
 - LoadRuntimeHardeningContract
 - EvaluateRuntimeHardening
 - BuildStableRuntimeAdapter
+- LoadMvpReleasePlan
+- EvaluateMvpReleasePlan
+- EmitMvpReleasePlanTrace
 
 ## Ports
 
@@ -160,6 +167,7 @@
 - ReleaseCandidateStore
 - RuntimeRoadmapStore
 - RuntimeHardeningStore
+- MvpReleasePlanStore
 
 ## Phase 7: Harness Portability
 
@@ -316,3 +324,25 @@ Use cases:
 Ports:
 
 - `RuntimeHardeningStore`: reads runtime hardening contracts and generated runtime hardening traces.
+
+## MVP Release Plan
+
+Entities:
+
+- `MvpReleasePlan`: model-readable plan for release `0.2.0` as the Alfred MVP.
+- `MvpReleaseGate`: explicit condition required before calling the MVP releasable.
+
+Value objects:
+
+- `MvpOutcome`: user-visible outcome expected from the MVP.
+- `MvpNonGoal`: explicit boundary that prevents scope creep.
+
+Use cases:
+
+- `LoadMvpReleasePlan`: read `.ai/roadmaps/mvp-release.json`.
+- `EvaluateMvpReleasePlan`: verify scope, phase alignment, non-goals, gates, and local-only execution.
+- `EmitMvpReleasePlanTrace`: record deterministic validation of the MVP plan.
+
+Ports:
+
+- `MvpReleasePlanStore`: reads MVP plan artifacts and generated MVP plan traces.

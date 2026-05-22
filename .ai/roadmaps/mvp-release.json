@@ -1,0 +1,101 @@
+{
+  "id": "mvp-release-plan",
+  "version": "mvp-release-plan@0.1.0",
+  "owner": "orchestrator",
+  "status": "active",
+  "target_release": "0.2.0",
+  "release_name": "Alfred MVP",
+  "definition": "A local-first agent operations runtime that can generate harness artifact previews, run deterministic eval reports, and package a reproducible release candidate without provider calls.",
+  "user_outcomes": [
+    "A user can inspect generated harness artifacts before writing them to disk.",
+    "A user can run local eval and regression reports from the CLI.",
+    "A user can verify release readiness through deterministic validation commands.",
+    "A user can keep core domain code harness-agnostic while adapters handle harness-specific translation."
+  ],
+  "non_goals": [
+    "No automatic writes to opencode, Claude, Codex, VSCode, or Kiro config directories.",
+    "No provider calls for roadmap, generation, eval, or release validation.",
+    "No production-grade package publishing workflow before release 0.2.0.",
+    "No runtime permission escalation without explicit human approval.",
+    "No adapter behavior embedded in packages/core."
+  ],
+  "entry_criteria": [
+    "release-0.1.0 is complete",
+    "roadmap-0.2.0 is active",
+    "phase-8-runtime-hardening is complete"
+  ],
+  "phases": [
+    {
+      "id": "phase-9-adapter-generation",
+      "order": 1,
+      "owner": "developer",
+      "goal": "Generate harness artifact previews for opencode, Claude, Codex, VSCode, and Kiro while requiring human approval before real file writes.",
+      "deliverables": [
+        "model-readable adapter generation contract",
+        "preview builders for all target harnesses",
+        "human approval gate metadata for config writes",
+        "generated preview trace and baseline"
+      ],
+      "acceptance_criteria": [
+        "All harness previews are generated locally.",
+        "Preview generation records zero provider calls.",
+        "Generated artifacts are previews by default and do not write harness config.",
+        "packages/core does not import adapter packages."
+      ],
+      "validation": ["validate:phase9"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-10-eval-runner-cli",
+      "order": 2,
+      "owner": "qa",
+      "goal": "Expose eval runner APIs through a deterministic CLI with local reports and regression summaries.",
+      "deliverables": [
+        "eval runner CLI entrypoint",
+        "local report generation",
+        "regression summary output",
+        "CLI validation baseline and trace"
+      ],
+      "acceptance_criteria": [
+        "CLI runs without provider calls.",
+        "CLI reports missing baselines and current results clearly.",
+        "CLI preserves existing regression gate semantics.",
+        "CLI output is deterministic enough for validation."
+      ],
+      "validation": ["validate:phase10"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-11-release-0.2.0",
+      "order": 3,
+      "owner": "orchestrator",
+      "goal": "Package Alfred MVP as a reproducible local runtime release candidate.",
+      "deliverables": [
+        "release-0.2.0 metadata",
+        "release notes",
+        "release baseline and generated trace",
+        "all MVP validators wired into check and test"
+      ],
+      "acceptance_criteria": [
+        "Release validates Phase 8 through Phase 10 deliverables.",
+        "Release validation records zero provider calls.",
+        "Baseline updates still require human approval.",
+        "The MVP can be reproduced from local files and deterministic scripts."
+      ],
+      "validation": ["validate:release-0.2.0"],
+      "provider_calls_allowed": 0
+    }
+  ],
+  "release_gates": [
+    "Phase 9, Phase 10, and Phase 11 validators pass.",
+    "pnpm check passes.",
+    "pnpm test passes.",
+    "Eval runner includes all MVP plan targets.",
+    "Generated traces include provider_calls: 0.",
+    "Harness config writes remain disabled by default.",
+    "Human approval is required for permission escalation, baseline updates, and harness config writes."
+  ],
+  "provider_calls_allowed": 0,
+  "baseline_update_requires_human_approval": true,
+  "harness_config_writes_require_human_approval": true
+}

@@ -51,3 +51,7 @@ Move from architecture-kernel release to usable local runtime through Phase 8 ru
 ## Phase 8: Runtime Hardening
 
 Stabilize Pi and opencode runtime APIs with explicit contracts, adapter boundaries, trace contracts, and zero provider calls.
+
+## MVP Release Plan
+
+Release `0.2.0` is the Alfred MVP: local-first harness artifact previews, deterministic eval CLI/reporting, and a reproducible runtime release candidate with zero provider calls and human approval before writes or escalations.
