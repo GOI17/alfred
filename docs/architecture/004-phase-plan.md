@@ -35,3 +35,7 @@ Consolidate completed phases into a model-readable roadmap, preserve issue-drive
 ## Milestone: Eval Runner Package
 
 Move deterministic eval discovery, current-result computation, and regression gate execution into `packages/evals` while preserving all phase validators and zero-provider-call regression gates.
+
+## Milestone: Adapter Hardening
+
+Turn executable Pi and opencode adapter previews into hardened readiness contracts while keeping core harness-agnostic and requiring human approval before writing harness-specific config.

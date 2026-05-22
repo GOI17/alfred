@@ -109,3 +109,37 @@ export function runOpencodePortabilitySpike({ root, traceOutputPath }) {
     trace
   };
 }
+
+export function buildOpencodeAdapterReadiness({ root }) {
+  const kernel = loadArchitectureKernel(root);
+  const preview = buildOpencodeAdapterPreview({ kernel });
+
+  return {
+    harness: "opencode",
+    status: "hardened",
+    adapter_package: "packages/opencode-adapter",
+    runtime_entrypoints: ["buildOpencodeAdapterPreview", "runOpencodePortabilitySpike", "buildOpencodeAdapterReadiness"],
+    validated_capabilities: [
+      "primary_control",
+      "specialist_routing",
+      "lazy_skills",
+      "permission_enforcement",
+      "trace_emission",
+      "eval_execution",
+      "model_assignment",
+      "local_first"
+    ],
+    generated_artifact_counts: {
+      agents: preview.generated_artifacts.agents.length,
+      skills: preview.generated_artifacts.skills.length
+    },
+    invariants: {
+      core_is_harness_agnostic: preview.invariants.core_imports_opencode === false,
+      model_assignment_user_owned: preview.invariants.model_assignment_source === "user-owned-runtime-configuration",
+      provider_calls_are_local_first: preview.invariants.local_first_policy_source === ".ai/policies/provider-request-policy.example.json",
+      skill_bodies_lazy_loaded: preview.invariants.skill_bodies_loaded_by_default === false,
+      permissions_deny_by_default: preview.generated_artifacts.permissions.default === "deny"
+    },
+    provider_calls: 0
+  };
+}
