@@ -39,6 +39,8 @@
 - ReleaseCandidateArtifact
 - ReleaseValidation
 - RuntimeRoadmap
+- RuntimeHardeningContract
+- StableRuntimeAdapter
 
 ## Value Objects
 
@@ -75,6 +77,8 @@
 - ReleaseVersion
 - ValidatedCommit
 - RoadmapPhaseOrder
+- RuntimeTraceContract
+- AdapterBoundaryInvariant
 
 ## Use Cases
 
@@ -127,6 +131,9 @@
 - EmitReleaseCandidateTrace
 - LoadRoadmap020
 - EvaluateRoadmap020
+- LoadRuntimeHardeningContract
+- EvaluateRuntimeHardening
+- BuildStableRuntimeAdapter
 
 ## Ports
 
@@ -152,6 +159,7 @@
 - AdapterHardeningStore
 - ReleaseCandidateStore
 - RuntimeRoadmapStore
+- RuntimeHardeningStore
 
 ## Phase 7: Harness Portability
 
@@ -286,3 +294,25 @@ Use cases:
 Ports:
 
 - `RuntimeRoadmapStore`: reads runtime roadmap artifacts and generated roadmap traces.
+
+## Phase 8: Runtime Hardening
+
+Entities:
+
+- `RuntimeHardeningContract`: source-of-truth contract for stable adapter runtime APIs.
+- `StableRuntimeAdapter`: adapter runtime result that exposes capabilities, trace events, and boundary invariants.
+
+Value objects:
+
+- `RuntimeTraceContract`: required trace events emitted or preserved by the stable runtime.
+- `AdapterBoundaryInvariant`: boundary proof such as core agnosticism, local-first execution, and no default harness config writes.
+
+Use cases:
+
+- `LoadRuntimeHardeningContract`: read `.ai/runtime/phase-8-runtime-hardening.json`.
+- `EvaluateRuntimeHardening`: verify stable runtime APIs, trace contracts, adapter boundaries, and provider call limits.
+- `BuildStableRuntimeAdapter`: expose stable adapter runtime metadata without writing harness config.
+
+Ports:
+
+- `RuntimeHardeningStore`: reads runtime hardening contracts and generated runtime hardening traces.

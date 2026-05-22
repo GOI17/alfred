@@ -1,0 +1,22 @@
+{
+  "id": "phase-8-runtime-hardening",
+  "version": "phase-8-runtime-hardening@0.1.0",
+  "owner": "architect",
+  "status": "complete",
+  "contract": ".ai/runtime/phase-8-runtime-hardening.json",
+  "runtime_entrypoints": [
+    "packages/pi-adapter/src/runtime.js#buildPiStableRuntime",
+    "packages/opencode-adapter/src/runtime.js#buildOpencodeStableRuntime"
+  ],
+  "outputs": {
+    "status": "pass",
+    "stable_adapter_count": 2,
+    "executable_adapter_count": 2,
+    "provider_calls": 0
+  },
+  "constraints": {
+    "core_harness_agnostic": true,
+    "harness_config_writes_require_human_approval": true,
+    "local_first": true
+  }
+}

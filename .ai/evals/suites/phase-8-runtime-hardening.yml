@@ -1,0 +1,19 @@
+id: phase-8-runtime-hardening
+version: phase-8-runtime-hardening@0.1.0
+owner: architect
+cases:
+  - id: stable-runtime-apis
+    input: pi-and-opencode
+    expected:
+      stable_adapter_count: 2
+      provider_calls: 0
+  - id: adapter-boundaries
+    input: packages/core
+    expected:
+      core_imports_adapter: false
+      harness_config_writes_disabled_by_default: true
+  - id: trace-contracts
+    input: runtime-traces
+    expected:
+      trace_event: runtime_hardening_evaluated
+      trace_failures: 0

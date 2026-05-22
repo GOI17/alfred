@@ -1,0 +1,17 @@
+{
+  "phase": "phase-8-runtime-hardening",
+  "result": "pass",
+  "stable_adapter_count": 2,
+  "executable_adapter_count": 2,
+  "capability_failures": 0,
+  "trace_failures": 0,
+  "boundary_failures": 0,
+  "provider_calls": 0,
+  "trace_event": "runtime_hardening_evaluated",
+  "reproducibility": {
+    "runtime_entrypoint": "packages/pi-adapter/src/runtime.js#buildPiStableRuntime + packages/opencode-adapter/src/runtime.js#buildOpencodeStableRuntime",
+    "validation_script": "scripts/validate-phase-8.mjs",
+    "contract": ".ai/runtime/phase-8-runtime-hardening.json",
+    "fixture_hash": "phase-8-runtime-hardening-fixture-v1"
+  }
+}

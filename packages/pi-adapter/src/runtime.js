@@ -429,3 +429,31 @@ export function buildPiAdapterReadiness({ root }) {
     provider_calls: 0
   };
 }
+
+export function buildPiStableRuntime({ root }) {
+  const readiness = buildPiAdapterReadiness({ root });
+
+  return {
+    harness: "pi",
+    status: "stable",
+    adapter_package: readiness.adapter_package,
+    runtime_api: "packages/pi-adapter/src/runtime.js#buildPiStableRuntime",
+    capabilities: readiness.validated_capabilities,
+    trace_events: [
+      "provider_request_avoided",
+      "delegation_decision",
+      "permission_enforcement",
+      "regression_gate_evaluated",
+      "skill_activation_decision",
+      "roadmap_readiness_evaluated"
+    ],
+    boundaries: {
+      core_is_harness_agnostic: true,
+      harness_config_writes_disabled_by_default: true,
+      model_assignment_user_owned: readiness.invariants.model_assignment_user_owned,
+      local_first_execution: readiness.invariants.provider_calls_are_local_first,
+      permission_policy_externalized: readiness.invariants.permissions_deny_by_default
+    },
+    provider_calls: 0
+  };
+}
