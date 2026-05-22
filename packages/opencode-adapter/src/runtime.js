@@ -143,3 +143,25 @@ export function buildOpencodeAdapterReadiness({ root }) {
     provider_calls: 0
   };
 }
+
+export function buildOpencodeStableRuntime({ root }) {
+  const readiness = buildOpencodeAdapterReadiness({ root });
+
+  return {
+    harness: "opencode",
+    status: "stable",
+    adapter_package: readiness.adapter_package,
+    runtime_api: "packages/opencode-adapter/src/runtime.js#buildOpencodeStableRuntime",
+    capabilities: readiness.validated_capabilities,
+    trace_events: ["provider_request_avoided", "harness_portability_evaluated", "adapter_artifact_previewed"],
+    boundaries: {
+      core_is_harness_agnostic: true,
+      harness_config_writes_disabled_by_default: true,
+      model_assignment_user_owned: readiness.invariants.model_assignment_user_owned,
+      local_first_execution: readiness.invariants.provider_calls_are_local_first,
+      permission_policy_externalized: readiness.invariants.permissions_deny_by_default
+    },
+    generated_artifact_counts: readiness.generated_artifact_counts,
+    provider_calls: 0
+  };
+}

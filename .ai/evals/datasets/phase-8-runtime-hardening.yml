@@ -1,0 +1,11 @@
+id: phase-8-runtime-hardening-dataset
+version: phase-8-runtime-hardening-dataset@0.1.0
+items:
+  - id: executable-runtime-adapters
+    adapters:
+      - pi
+      - opencode
+    expected:
+      status: pass
+      stable_adapter_count: 2
+      provider_calls: 0

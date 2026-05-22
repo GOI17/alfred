@@ -19,6 +19,7 @@
       "id": "phase-8-runtime-hardening",
       "order": 1,
       "owner": "architect",
+      "status": "complete",
       "goal": "Turn Pi and opencode spikes into stable runtime APIs with explicit contracts and no harness leakage into core.",
       "scope": ["runtime-api", "adapter-boundaries", "trace-contracts"],
       "validation": ["validate:phase8"],

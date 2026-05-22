@@ -1,0 +1,28 @@
+{
+  "id": "phase-8-runtime-hardening",
+  "version": "phase-8-runtime-hardening@0.1.0",
+  "owner": "architect",
+  "status": "complete",
+  "goal": "Turn Pi and opencode spikes into stable runtime APIs with explicit contracts and no harness leakage into core.",
+  "executable_adapters": ["pi", "opencode"],
+  "required_capabilities": [
+    "primary_control",
+    "specialist_routing",
+    "lazy_skills",
+    "permission_enforcement",
+    "trace_emission",
+    "eval_execution",
+    "model_assignment",
+    "local_first"
+  ],
+  "required_trace_events": ["provider_request_avoided"],
+  "required_boundaries": [
+    "core_is_harness_agnostic",
+    "harness_config_writes_disabled_by_default",
+    "model_assignment_user_owned",
+    "local_first_execution",
+    "permission_policy_externalized"
+  ],
+  "provider_calls_allowed": 0,
+  "human_approval_required_before_harness_config_write": true
+}

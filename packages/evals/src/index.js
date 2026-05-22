@@ -13,7 +13,8 @@ export const evalRunnerPhases = [
   "post-phase-7-roadmap-readiness",
   "adapter-hardening",
   "release-0.1.0",
-  "roadmap-0.2.0"
+  "roadmap-0.2.0",
+  "phase-8-runtime-hardening"
 ];
 
 export function listEvalBaselines(root) {
@@ -50,6 +51,7 @@ export function computeCurrentEvalResults(root) {
   const adapterHardeningTrace = readGeneratedTrace(root, ".ai/observability/generated/adapter-hardening.json");
   const releaseTrace = readGeneratedTrace(root, ".ai/observability/generated/release-0.1.0.json");
   const roadmap020Trace = readGeneratedTrace(root, ".ai/observability/generated/roadmap-0.2.0.json");
+  const phase8Trace = readGeneratedTrace(root, ".ai/observability/generated/phase-8-runtime-hardening.json");
   const phase1Baseline = readJson(root, ".ai/evals/baselines/phase-1-architecture-kernel.json");
   const compatibilityMatrix = readJson(root, ".ai/harnesses/compatibility-matrix.json");
 
@@ -134,6 +136,17 @@ export function computeCurrentEvalResults(root) {
       final_phase: roadmap020Trace.data.final_phase,
       provider_calls: roadmap020Trace.data.provider_calls,
       trace_event: roadmap020Trace.event
+    },
+    "phase-8-runtime-hardening": {
+      result: phase8Trace.data.status,
+      runtime_contract: phase8Trace.data.runtime_contract,
+      stable_adapter_count: phase8Trace.data.stable_adapter_count,
+      executable_adapter_count: phase8Trace.data.executable_adapter_count,
+      capability_failures: phase8Trace.data.capability_failures.length,
+      trace_failures: phase8Trace.data.trace_failures.length,
+      boundary_failures: phase8Trace.data.boundary_failures.length,
+      provider_calls: phase8Trace.data.provider_calls,
+      trace_event: phase8Trace.event
     }
   };
 }

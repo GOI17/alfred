@@ -42,6 +42,53 @@ export function loadRoadmap020(root) {
   return readJson(root, ".ai/roadmaps/0.2.0.json");
 }
 
+export function loadRuntimeHardeningContract(root) {
+  return readJson(root, ".ai/runtime/phase-8-runtime-hardening.json");
+}
+
+export function evaluateRuntimeHardening({ contract, adapters }) {
+  const adapterByHarness = Object.fromEntries(adapters.map((adapter) => [adapter.harness, adapter]));
+  const missingAdapters = contract.executable_adapters.filter((harness) => !adapterByHarness[harness]);
+  const unstableAdapters = contract.executable_adapters.filter((harness) => adapterByHarness[harness]?.status !== "stable");
+  const capabilityFailures = adapters.flatMap((adapter) =>
+    contract.required_capabilities
+      .filter((capability) => !adapter.capabilities?.includes(capability))
+      .map((capability) => ({ harness: adapter.harness, capability }))
+  );
+  const traceFailures = adapters.flatMap((adapter) =>
+    contract.required_trace_events
+      .filter((event) => !adapter.trace_events?.includes(event))
+      .map((event) => ({ harness: adapter.harness, event }))
+  );
+  const boundaryFailures = adapters.flatMap((adapter) =>
+    contract.required_boundaries
+      .filter((boundary) => adapter.boundaries?.[boundary] !== true)
+      .map((boundary) => ({ harness: adapter.harness, boundary }))
+  );
+  const providerCalls = adapters.reduce((total, adapter) => total + (adapter.provider_calls ?? 0), 0);
+
+  return {
+    status:
+      missingAdapters.length === 0 &&
+      unstableAdapters.length === 0 &&
+      capabilityFailures.length === 0 &&
+      traceFailures.length === 0 &&
+      boundaryFailures.length === 0 &&
+      providerCalls <= contract.provider_calls_allowed
+        ? "pass"
+        : "fail",
+    runtime_contract: contract.id,
+    stable_adapter_count: adapters.filter((adapter) => adapter.status === "stable").length,
+    executable_adapter_count: contract.executable_adapters.length,
+    missing_adapters: missingAdapters,
+    unstable_adapters: unstableAdapters,
+    capability_failures: capabilityFailures,
+    trace_failures: traceFailures,
+    boundary_failures: boundaryFailures,
+    provider_calls: providerCalls
+  };
+}
+
 export function evaluateRoadmap020({ roadmap }) {
   const phaseIds = roadmap.phases.map((phase) => phase.id);
   const duplicatePhases = phaseIds.filter((phaseId, index) => phaseIds.indexOf(phaseId) !== index);
