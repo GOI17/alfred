@@ -4,11 +4,19 @@ The MVP is release `0.2.0`.
 
 ## Definition
 
-A local-first agent operations runtime that can generate harness artifact previews, run deterministic eval reports, and package a reproducible release candidate without provider calls.
+A local-first agent operations runtime that is usable from VSCode, opencode, and Pi, can run deterministic eval reports, and can package a reproducible release candidate without provider calls.
+
+## Required MVP Harnesses
+
+- VSCode
+- opencode
+- Pi
+
+Claude, Codex, and Kiro remain preview and portability targets unless they are promoted in a later release.
 
 ## Scope
 
-- Phase 9: Adapter Generation
+- Phase 9: Adapter Generation for VSCode, opencode, and Pi
 - Phase 10: Eval Runner CLI
 - Phase 11: Release 0.2.0
 
@@ -28,4 +36,5 @@ A local-first agent operations runtime that can generate harness artifact previe
 - `pnpm check` passes.
 - `pnpm test` passes.
 - Eval runner includes all MVP plan targets.
+- VSCode, opencode, and Pi are validated as required MVP harnesses.
 - Generated traces record `provider_calls: 0`.

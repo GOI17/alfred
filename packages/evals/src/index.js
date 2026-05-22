@@ -155,6 +155,8 @@ export function computeCurrentEvalResults(root) {
       plan_id: mvpReleasePlanTrace.data.plan_id,
       target_release: mvpReleasePlanTrace.data.target_release,
       phase_count: mvpReleasePlanTrace.data.phase_count,
+      required_harness_count: mvpReleasePlanTrace.data.required_harness_count,
+      preview_harness_count: mvpReleasePlanTrace.data.preview_harness_count,
       release_gate_count: mvpReleasePlanTrace.data.release_gate_count,
       non_goal_count: mvpReleasePlanTrace.data.non_goal_count,
       provider_calls: mvpReleasePlanTrace.data.provider_calls,

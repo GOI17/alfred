@@ -54,4 +54,4 @@ Stabilize Pi and opencode runtime APIs with explicit contracts, adapter boundari
 
 ## MVP Release Plan
 
-Release `0.2.0` is the Alfred MVP: local-first harness artifact previews, deterministic eval CLI/reporting, and a reproducible runtime release candidate with zero provider calls and human approval before writes or escalations.
+Release `0.2.0` is the Alfred MVP: Alfred must be usable from VSCode, opencode, and Pi, with deterministic eval CLI/reporting and a reproducible runtime release candidate. Claude, Codex, and Kiro remain preview-only portability targets. Validation stays local-first with zero provider calls and human approval before writes or escalations.

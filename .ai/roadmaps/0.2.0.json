@@ -29,8 +29,8 @@
       "id": "phase-9-adapter-generation",
       "order": 2,
       "owner": "developer",
-      "goal": "Generate harness artifact previews for opencode, Claude, Codex, VSCode, and Kiro while requiring human approval before file writes.",
-      "scope": ["artifact-generation", "human-approval-gates", "portability-contracts"],
+      "goal": "Generate MVP-grade integration artifact previews for VSCode, opencode, and Pi, while keeping Claude, Codex, and Kiro as preview-only portability targets unless promoted later.",
+      "scope": ["artifact-generation", "required-harness-usability", "human-approval-gates", "portability-contracts"],
       "validation": ["validate:phase9"],
       "provider_calls_allowed": 0
     },

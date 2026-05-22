@@ -7,12 +7,28 @@ cases:
     expected:
       target_release: 0.2.0
       phase_count: 3
+      required_harness_count: 3
+      required_harnesses:
+        - vscode
+        - opencode
+        - pi
   - id: release-gates
     input: .ai/roadmaps/mvp-release.json
     expected:
       provider_calls: 0
-      release_gate_count: 7
+      release_gate_count: 8
   - id: roadmap-alignment
     input: .ai/roadmaps/0.2.0.json
     expected:
       missing_roadmap_phases: 0
+  - id: required-harness-usability
+    input: .ai/roadmaps/mvp-release.json
+    expected:
+      required_harnesses:
+        - vscode
+        - opencode
+        - pi
+      preview_harnesses:
+        - claude
+        - codex
+        - kiro

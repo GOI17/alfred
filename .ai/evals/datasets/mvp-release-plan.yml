@@ -10,3 +10,11 @@ items:
     expected:
       status: pass
       provider_calls: 0
+      required_harnesses:
+        - vscode
+        - opencode
+        - pi
+      preview_harnesses:
+        - claude
+        - codex
+        - kiro
