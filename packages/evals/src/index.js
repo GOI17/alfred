@@ -16,6 +16,7 @@ export const evalRunnerPhases = [
   "roadmap-0.2.0",
   "phase-8-runtime-hardening",
   "phase-9-adapter-generation",
+  "phase-10-eval-runner-cli",
   "mvp-release-plan"
 ];
 
@@ -55,6 +56,7 @@ export function computeCurrentEvalResults(root) {
   const roadmap020Trace = readGeneratedTrace(root, ".ai/observability/generated/roadmap-0.2.0.json");
   const phase8Trace = readGeneratedTrace(root, ".ai/observability/generated/phase-8-runtime-hardening.json");
   const phase9Trace = readGeneratedTrace(root, ".ai/observability/generated/phase-9-adapter-generation.json");
+  const phase10Trace = readGeneratedTrace(root, ".ai/observability/generated/phase-10-eval-runner-cli.json");
   const mvpReleasePlanTrace = readGeneratedTrace(root, ".ai/observability/generated/mvp-release-plan.json");
   const phase1Baseline = readJson(root, ".ai/evals/baselines/phase-1-architecture-kernel.json");
   const compatibilityMatrix = readJson(root, ".ai/harnesses/compatibility-matrix.json");
@@ -163,6 +165,18 @@ export function computeCurrentEvalResults(root) {
       provider_calls: phase9Trace.data.provider_calls,
       trace_event: phase9Trace.event
     },
+    "phase-10-eval-runner-cli": {
+      result: phase10Trace.data.status,
+      report_format_count: phase10Trace.data.report_format_count,
+      summary_section_count: phase10Trace.data.summary_section_count,
+      baseline_count: phase10Trace.data.baseline_count,
+      current_result_count: phase10Trace.data.current_result_count,
+      missing_current_results: phase10Trace.data.missing_current_results.length,
+      missing_baselines: phase10Trace.data.missing_baselines.length,
+      regressions: phase10Trace.data.regressions,
+      provider_calls: phase10Trace.data.provider_calls,
+      trace_event: phase10Trace.event
+    },
     "mvp-release-plan": {
       result: mvpReleasePlanTrace.data.status,
       plan_id: mvpReleasePlanTrace.data.plan_id,
@@ -202,6 +216,46 @@ export function runEvalRunner({ root }) {
     regression_gate: regressionGate,
     provider_calls: 0
   };
+}
+
+export function buildEvalRunnerReport({ root }) {
+  const result = runEvalRunner({ root });
+  return {
+    id: "phase-10-eval-runner-cli-report",
+    status: result.status,
+    summary: {
+      baseline_count: result.baseline_count,
+      current_result_count: result.current_result_count,
+      phase_count: result.phases.length,
+      missing_current_results: result.missing_current_results,
+      missing_baselines: result.missing_baselines,
+      regression_gate_status: result.regression_gate.status,
+      regressions: result.regression_gate.regressions.length,
+      provider_calls: result.provider_calls
+    },
+    phases: result.phases,
+    regression_gate: result.regression_gate,
+    generated_at: "2026-05-19T00:00:00.000Z"
+  };
+}
+
+export function formatEvalRunnerTextReport(report) {
+  return [
+    "Alfred Eval Runner Report",
+    `Status: ${report.status}`,
+    `Baselines: ${report.summary.baseline_count}`,
+    `Current Results: ${report.summary.current_result_count}`,
+    `Targets: ${report.summary.phase_count}`,
+    `Regression Gate: ${report.summary.regression_gate_status}`,
+    `Regressions: ${report.summary.regressions}`,
+    `Missing Current Results: ${report.summary.missing_current_results.length}`,
+    `Missing Baselines: ${report.summary.missing_baselines.length}`,
+    `Provider Calls: ${report.summary.provider_calls}`,
+    "",
+    "Targets:",
+    ...report.phases.map((phase) => `- ${phase}`),
+    ""
+  ].join("\n");
 }
 
 function summarizeDelegationTrace(trace) {

@@ -1,0 +1,23 @@
+{
+  "id": "phase-10-eval-runner-cli",
+  "version": "phase-10-eval-runner-cli@0.1.0",
+  "owner": "qa",
+  "status": "complete",
+  "goal": "Expose package-level eval runner APIs through a deterministic CLI with local reports and regression summaries.",
+  "cli_entrypoint": "packages/evals/src/cli.js",
+  "package_bin": "alfred-evals",
+  "required_report_formats": ["json", "text"],
+  "required_outputs": ["json_report", "text_report"],
+  "required_summary_sections": ["status", "baselines", "current_results", "regression_gate", "regressions", "missing_results", "provider_calls"],
+  "provider_calls_allowed": 0,
+  "writes": {
+    "json_report": ".ai/reports/eval-runner/phase-10-report.json",
+    "text_report": ".ai/reports/eval-runner/phase-10-report.txt"
+  },
+  "constraints": {
+    "deterministic_output": true,
+    "local_only": true,
+    "preserve_regression_gate_semantics": true,
+    "adapters_not_required_by_evals_package": true
+  }
+}

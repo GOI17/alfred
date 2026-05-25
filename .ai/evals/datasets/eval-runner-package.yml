@@ -11,6 +11,13 @@ items:
       - phase-6-skill-packs-lazy-loading
       - phase-7-harness-portability
       - post-phase-7-roadmap-readiness
+      - adapter-hardening
+      - release-0.1.0
+      - roadmap-0.2.0
+      - phase-8-runtime-hardening
+      - phase-9-adapter-generation
+      - phase-10-eval-runner-cli
+      - mvp-release-plan
     expected:
       status: pass
       provider_calls: 0

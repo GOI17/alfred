@@ -1,0 +1,23 @@
+id: phase-10-eval-runner-cli
+version: phase-10-eval-runner-cli@0.1.0
+owner: qa
+cases:
+  - id: cli-report-formats
+    input: packages/evals/src/cli.js
+    expected:
+      report_formats:
+        - json
+        - text
+      provider_calls: 0
+  - id: regression-summary
+    input: .ai/reports/eval-runner/phase-10-report.json
+    expected:
+      regressions: 0
+      missing_current_results: 0
+      missing_baselines: 0
+  - id: deterministic-text-report
+    input: .ai/reports/eval-runner/phase-10-report.txt
+    expected:
+      includes:
+        - Alfred Eval Runner Report
+        - Provider Calls: 0

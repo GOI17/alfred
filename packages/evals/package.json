@@ -4,9 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "exports": "./src/index.js",
+  "bin": {
+    "alfred-evals": "./src/cli.js"
+  },
   "scripts": {
-    "check": "node --check src/index.js",
-    "test": "node -e \"import('./src/index.js').then((m) => console.log('evals test: '+m.evalRunnerPhases.length+' targets load'))\""
+    "check": "node --check src/index.js && node --check src/cli.js",
+    "test": "node --input-type=module -e \"import { buildEvalRunnerReport, evalRunnerPhases } from './src/index.js'; const report = buildEvalRunnerReport({ root: '../..' }); if (report.summary.provider_calls !== 0) process.exit(1); console.log('evals test: '+evalRunnerPhases.length+' targets load')\""
   },
   "dependencies": {
     "@alfred-labs/core": "workspace:*"

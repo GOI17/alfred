@@ -1,0 +1,13 @@
+id: phase-10-eval-runner-cli-dataset
+version: phase-10-eval-runner-cli-dataset@0.1.0
+items:
+  - id: local-report-generation
+    cli: packages/evals/src/cli.js
+    expected:
+      status: pass
+      report_format_count: 2
+      summary_section_count: 7
+      provider_calls: 0
+      regressions: 0
+      missing_current_results: 0
+      missing_baselines: 0

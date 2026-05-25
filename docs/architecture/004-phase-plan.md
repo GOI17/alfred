@@ -59,3 +59,7 @@ Release `0.2.0` is the Alfred MVP: Alfred must be usable from VSCode, opencode, 
 ## Phase 9: Adapter Generation
 
 Phase 9 generates MVP-grade integration previews for VSCode, opencode, and Pi. Claude, Codex, and Kiro remain preview-only portability targets. Generated artifacts never write harness config by default and require explicit human approval before real writes.
+
+## Phase 10: Eval Runner CLI
+
+Phase 10 exposes `packages/evals` through the `alfred-evals` CLI. It generates deterministic local JSON and text reports, preserves regression gate semantics, reports missing baselines/current results clearly, and keeps provider calls at `0`.

@@ -54,6 +54,41 @@ export function loadAdapterGenerationContract(root) {
   return readJson(root, ".ai/adapters/phase-9-adapter-generation.json");
 }
 
+export function loadEvalRunnerCliContract(root) {
+  return readJson(root, ".ai/evals/cli/phase-10-eval-runner-cli.json");
+}
+
+export function evaluateEvalRunnerCli({ contract, cliResult }) {
+  const missingFormats = contract.required_report_formats.filter((format) => !cliResult.report_formats?.includes(format));
+  const missingOutputs = contract.required_outputs.filter((output) => !cliResult.outputs?.[output]);
+  const missingSections = contract.required_summary_sections.filter((section) => !cliResult.summary_sections?.includes(section));
+
+  return {
+    status:
+      missingFormats.length === 0 &&
+      missingOutputs.length === 0 &&
+      missingSections.length === 0 &&
+      cliResult.regressions === 0 &&
+      cliResult.provider_calls <= contract.provider_calls_allowed
+        ? "pass"
+        : "fail",
+    contract: contract.id,
+    report_formats: cliResult.report_formats,
+    report_format_count: cliResult.report_formats.length,
+    summary_sections: cliResult.summary_sections,
+    summary_section_count: cliResult.summary_sections.length,
+    baseline_count: cliResult.baseline_count,
+    current_result_count: cliResult.current_result_count,
+    missing_current_results: cliResult.missing_current_results,
+    missing_baselines: cliResult.missing_baselines,
+    regressions: cliResult.regressions,
+    missing_formats: missingFormats,
+    missing_outputs: missingOutputs,
+    missing_sections: missingSections,
+    provider_calls: cliResult.provider_calls
+  };
+}
+
 export function evaluateAdapterGeneration({ contract, previews }) {
   const previewByHarness = Object.fromEntries(previews.map((preview) => [preview.harness, preview]));
   const missingRequiredHarnesses = contract.required_harnesses.filter((harness) => !previewByHarness[harness]);
