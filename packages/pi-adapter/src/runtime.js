@@ -457,3 +457,24 @@ export function buildPiStableRuntime({ root }) {
     provider_calls: 0
   };
 }
+
+export function buildPiIntegrationPreview({ root }) {
+  const stableRuntime = buildPiStableRuntime({ root });
+
+  return {
+    harness: "pi",
+    mvp_required: true,
+    preview_only: false,
+    adapter_package: "packages/pi-adapter",
+    generated_artifacts: {
+      runtime_module: "packages/pi-adapter/src/runtime.js",
+      cli_entrypoint: "packages/pi-adapter/src/cli.js",
+      stable_runtime_api: stableRuntime.runtime_api,
+      trace_events: stableRuntime.trace_events,
+      capabilities: stableRuntime.capabilities
+    },
+    writes_harness_config_by_default: false,
+    human_approval_required_before_write: true,
+    provider_calls: 0
+  };
+}

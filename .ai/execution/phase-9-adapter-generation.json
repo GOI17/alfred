@@ -1,0 +1,22 @@
+{
+  "id": "phase-9-adapter-generation",
+  "version": "phase-9-adapter-generation@0.1.0",
+  "owner": "developer",
+  "status": "complete",
+  "contract": ".ai/adapters/phase-9-adapter-generation.json",
+  "required_harnesses": ["vscode", "opencode", "pi"],
+  "preview_harnesses": ["claude", "codex", "kiro"],
+  "outputs": {
+    "status": "pass",
+    "generated_harness_count": 6,
+    "required_harness_count": 3,
+    "preview_harness_count": 3,
+    "provider_calls": 0
+  },
+  "constraints": {
+    "core_harness_agnostic": true,
+    "writes_harness_config_by_default": false,
+    "human_approval_required_before_write": true,
+    "provider_calls_allowed": 0
+  }
+}

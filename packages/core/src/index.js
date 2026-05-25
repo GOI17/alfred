@@ -50,6 +50,57 @@ export function loadMvpReleasePlan(root) {
   return readJson(root, ".ai/roadmaps/mvp-release.json");
 }
 
+export function loadAdapterGenerationContract(root) {
+  return readJson(root, ".ai/adapters/phase-9-adapter-generation.json");
+}
+
+export function evaluateAdapterGeneration({ contract, previews }) {
+  const previewByHarness = Object.fromEntries(previews.map((preview) => [preview.harness, preview]));
+  const missingRequiredHarnesses = contract.required_harnesses.filter((harness) => !previewByHarness[harness]);
+  const missingPreviewHarnesses = contract.preview_harnesses.filter((harness) => !previewByHarness[harness]);
+  const requiredHarnessFailures = contract.required_harnesses.filter(
+    (harness) => previewByHarness[harness]?.mvp_required !== true
+  );
+  const previewHarnessFailures = contract.preview_harnesses.filter(
+    (harness) => previewByHarness[harness]?.mvp_required !== false || previewByHarness[harness]?.preview_only !== true
+  );
+  const writeGateFailures = previews.filter((preview) => preview.writes_harness_config_by_default !== false).map((preview) => preview.harness);
+  const approvalFailures = previews.filter((preview) => preview.human_approval_required_before_write !== true).map((preview) => preview.harness);
+  const artifactFailures = previews
+    .filter((preview) => !preview.generated_artifacts || Object.keys(preview.generated_artifacts).length === 0)
+    .map((preview) => preview.harness);
+  const providerCalls = previews.reduce((total, preview) => total + (preview.provider_calls ?? 0), 0);
+
+  return {
+    status:
+      missingRequiredHarnesses.length === 0 &&
+      missingPreviewHarnesses.length === 0 &&
+      requiredHarnessFailures.length === 0 &&
+      previewHarnessFailures.length === 0 &&
+      writeGateFailures.length === 0 &&
+      approvalFailures.length === 0 &&
+      artifactFailures.length === 0 &&
+      providerCalls <= contract.provider_calls_allowed
+        ? "pass"
+        : "fail",
+    contract: contract.id,
+    required_harnesses: contract.required_harnesses,
+    preview_harnesses: contract.preview_harnesses,
+    generated_harnesses: previews.map((preview) => preview.harness),
+    required_harness_count: contract.required_harnesses.length,
+    preview_harness_count: contract.preview_harnesses.length,
+    generated_harness_count: previews.length,
+    missing_required_harnesses: missingRequiredHarnesses,
+    missing_preview_harnesses: missingPreviewHarnesses,
+    required_harness_failures: requiredHarnessFailures,
+    preview_harness_failures: previewHarnessFailures,
+    write_gate_failures: writeGateFailures,
+    approval_failures: approvalFailures,
+    artifact_failures: artifactFailures,
+    provider_calls: providerCalls
+  };
+}
+
 export function evaluateMvpReleasePlan({ plan, roadmap }) {
   const requiredMvpHarnesses = ["vscode", "opencode", "pi"];
   const roadmapPhaseIds = new Set(roadmap.phases.map((phase) => phase.id));

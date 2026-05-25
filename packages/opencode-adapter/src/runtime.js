@@ -165,3 +165,25 @@ export function buildOpencodeStableRuntime({ root }) {
     provider_calls: 0
   };
 }
+
+export function buildOpencodeIntegrationPreview({ root }) {
+  const kernel = loadArchitectureKernel(root);
+  const preview = buildOpencodeAdapterPreview({ kernel });
+  const stableRuntime = buildOpencodeStableRuntime({ root });
+
+  return {
+    harness: "opencode",
+    mvp_required: true,
+    preview_only: false,
+    adapter_package: "packages/opencode-adapter",
+    generated_artifacts: {
+      agents: preview.generated_artifacts.agents,
+      skills: preview.generated_artifacts.skills,
+      permissions: preview.generated_artifacts.permissions,
+      stable_runtime_api: stableRuntime.runtime_api
+    },
+    writes_harness_config_by_default: false,
+    human_approval_required_before_write: true,
+    provider_calls: 0
+  };
+}

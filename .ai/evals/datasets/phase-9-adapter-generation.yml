@@ -1,0 +1,17 @@
+id: phase-9-adapter-generation-dataset
+version: phase-9-adapter-generation-dataset@0.1.0
+items:
+  - id: mvp-required-harness-previews
+    required_harnesses:
+      - vscode
+      - opencode
+      - pi
+    preview_harnesses:
+      - claude
+      - codex
+      - kiro
+    expected:
+      status: pass
+      generated_harness_count: 6
+      provider_calls: 0
+      writes_harness_config_by_default: false

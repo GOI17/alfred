@@ -1,0 +1,17 @@
+{
+  "name": "@alfred-labs/vscode-adapter",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": "./src/runtime.js",
+  "bin": {
+    "alfred-vscode-preview": "./src/cli.js"
+  },
+  "scripts": {
+    "check": "node --check src/runtime.js && node --check src/cli.js",
+    "test": "node -e \"import('./src/runtime.js').then(() => console.log('vscode-adapter test: runtime exports load'))\""
+  },
+  "dependencies": {
+    "@alfred-labs/core": "workspace:*"
+  }
+}

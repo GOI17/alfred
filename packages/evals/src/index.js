@@ -15,6 +15,7 @@ export const evalRunnerPhases = [
   "release-0.1.0",
   "roadmap-0.2.0",
   "phase-8-runtime-hardening",
+  "phase-9-adapter-generation",
   "mvp-release-plan"
 ];
 
@@ -53,6 +54,7 @@ export function computeCurrentEvalResults(root) {
   const releaseTrace = readGeneratedTrace(root, ".ai/observability/generated/release-0.1.0.json");
   const roadmap020Trace = readGeneratedTrace(root, ".ai/observability/generated/roadmap-0.2.0.json");
   const phase8Trace = readGeneratedTrace(root, ".ai/observability/generated/phase-8-runtime-hardening.json");
+  const phase9Trace = readGeneratedTrace(root, ".ai/observability/generated/phase-9-adapter-generation.json");
   const mvpReleasePlanTrace = readGeneratedTrace(root, ".ai/observability/generated/mvp-release-plan.json");
   const phase1Baseline = readJson(root, ".ai/evals/baselines/phase-1-architecture-kernel.json");
   const compatibilityMatrix = readJson(root, ".ai/harnesses/compatibility-matrix.json");
@@ -149,6 +151,17 @@ export function computeCurrentEvalResults(root) {
       boundary_failures: phase8Trace.data.boundary_failures.length,
       provider_calls: phase8Trace.data.provider_calls,
       trace_event: phase8Trace.event
+    },
+    "phase-9-adapter-generation": {
+      result: phase9Trace.data.status,
+      required_harness_count: phase9Trace.data.required_harness_count,
+      preview_harness_count: phase9Trace.data.preview_harness_count,
+      generated_harness_count: phase9Trace.data.generated_harness_count,
+      write_gate_failures: phase9Trace.data.write_gate_failures.length,
+      approval_failures: phase9Trace.data.approval_failures.length,
+      artifact_failures: phase9Trace.data.artifact_failures.length,
+      provider_calls: phase9Trace.data.provider_calls,
+      trace_event: phase9Trace.event
     },
     "mvp-release-plan": {
       result: mvpReleasePlanTrace.data.status,
