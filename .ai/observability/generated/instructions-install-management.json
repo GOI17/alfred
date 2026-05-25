@@ -1,6 +1,6 @@
 {
   "trace_id": "instructions-install-management",
-  "timestamp": "2026-05-25T18:10:55.772Z",
+  "timestamp": "2026-05-25T19:14:04.432Z",
   "event": "instructions_validated",
   "actor": "orchestrator",
   "data": {

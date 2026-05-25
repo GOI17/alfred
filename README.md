@@ -4,23 +4,57 @@ Alfred handles the operational burden so humans focus on decisions.
 
 Alfred is a model-readable, harness-agnostic agent operations system for creating, testing, evaluating, securing, and porting agents, subagents, and skills.
 
-## Architecture
+## Agent Entry Point
 
-- DDD + Hexagonal Architecture.
-- Pi.dev first adapter.
-- Lightweight multipackage monorepo.
-- Core remains harness-agnostic.
-- Adapters translate core concepts into harness-specific runtime behavior.
+You are an AI agent working in an Alfred workspace. Start here to find your next step.
 
-## Packages
+### Your First Action
 
-- `packages/core`: domain, application use cases, ports, policies, trace/eval models.
-- `packages/pi-adapter`: Pi.dev adapter/runtime integration.
-- `packages/evals`: eval runner, baselines, reports, replay support.
-- `packages/cli`: local commands, validators, and project operations.
+1. **Read `AGENTS.md`** — contains your mission, architecture rules, security policy, and evaluation requirements.
+2. **Check `docs/architecture/`** — understand project structure and decisions.
+3. **Follow execution phases** in `.ai/execution/` — work through tasks in established order.
 
-## Model Entry Points
+### Navigation by Task
 
-- Start with `AGENTS.md`.
-- Read `docs/architecture/000-project-charter.md`.
-- Execute phases from `.ai/execution/` in order.
+| Task | Entry Point |
+|------|-------------|
+| Create new agent | `.ai/instructions/agent-creation.md` |
+| Install / update artifacts | `.ai/instructions/install-management.md` |
+| Run tests or evals | `packages/evals/README.md` |
+| Understand architecture | `docs/architecture/000-project-charter.md` |
+| Add a skill | `.ai/instructions/skill-creation.md` |
+| Port to new harness | `.ai/harnesses/` + adapter package |
+
+### Key Rules
+
+- **Local-first**: do not call LLM providers when local computation can solve the task.
+- **Trace everything**: emit trace events for all operations.
+- **Deny by default**: protected paths require explicit human approval.
+- **Test before commit**: every change must pass evals and compare against baseline.
+
+### Architecture
+
+```
+packages/
+├── core/        # Domain, use cases, ports, policies (harness-agnostic)
+├── pi-adapter/  # Pi.dev runtime integration
+├── evals/       # Eval runner, baselines, reports
+└── cli/         # Local commands and validators
+
+.ai/
+├── instructions/   # Agent-readable task instructions
+├── harnesses/      # Harness specs and compatibility matrix
+├── execution/      # Phase-based task execution order
+└── evals/          # Baselines and regression gates
+```
+
+### Protected Paths
+
+Do not read or modify without explicit human approval:
+- `.opencode/` — harness config
+- `.ai/harnesses/` — harness specs
+- `packages/core/` — core domain (adapters may depend, core must not)
+
+---
+
+For human operators: see `AGENTS.md` for operational details.
