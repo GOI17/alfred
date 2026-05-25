@@ -393,3 +393,25 @@ Use cases:
 Ports:
 
 - `EvalRunnerCliReportSink`: writes local JSON and text reports without provider calls.
+
+## Phase 11: Release 0.2.0
+
+Entities:
+
+- `MvpReleaseCandidate`: release candidate for Alfred MVP `0.2.0`.
+- `OpencodeInstallPreview`: generated opencode install bundle that does not write live config by default.
+
+Value objects:
+
+- `RequiredHarnessSet`: VSCode, opencode, and Pi.
+- `InstallApprovalGate`: explicit human approval required before writing harness config.
+
+Use cases:
+
+- `LoadRelease020Candidate`: read `.ai/releases/release-0.2.0.json`.
+- `EvaluateMvpReleaseCandidate`: validate release gates, required harnesses, validator results, and opencode install readiness.
+- `BuildOpencodeInstallPreview`: generate opencode files into `.ai/generated/opencode-install`.
+
+Ports:
+
+- `ReleaseCandidateStore`: reads release candidate artifacts and generated release traces.

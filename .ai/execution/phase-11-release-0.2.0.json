@@ -1,0 +1,20 @@
+{
+  "id": "phase-11-release-0.2.0",
+  "owner": "orchestrator",
+  "status": "complete",
+  "release_candidate": ".ai/releases/release-0.2.0.json",
+  "runtime_entrypoint": "packages/core/src/index.js#evaluateMvpReleaseCandidate",
+  "outputs": {
+    "status": "pass",
+    "version": "0.2.0",
+    "required_harness_count": 3,
+    "required_validator_count": 16,
+    "provider_calls": 0,
+    "opencode_install_ready": true
+  },
+  "constraints": {
+    "local_first": true,
+    "core_harness_agnostic": true,
+    "harness_config_writes_require_human_approval": true
+  }
+}

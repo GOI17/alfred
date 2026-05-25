@@ -63,3 +63,7 @@ Phase 9 generates MVP-grade integration previews for VSCode, opencode, and Pi. C
 ## Phase 10: Eval Runner CLI
 
 Phase 10 exposes `packages/evals` through the `alfred-evals` CLI. It generates deterministic local JSON and text reports, preserves regression gate semantics, reports missing baselines/current results clearly, and keeps provider calls at `0`.
+
+## Phase 11: Release 0.2.0
+
+Phase 11 packages the Alfred MVP. Release `0.2.0` validates VSCode, opencode, and Pi as required harnesses, preserves local-only execution, and generates an approval-gated opencode install preview under `.ai/generated/opencode-install`.

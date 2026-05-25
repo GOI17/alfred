@@ -1,0 +1,24 @@
+id: release-0.2.0
+version: release-0.2.0@0.1.0
+owner: orchestrator
+cases:
+  - id: mvp-required-harnesses
+    input: .ai/releases/release-0.2.0.json
+    expected:
+      required_harnesses:
+        - vscode
+        - opencode
+        - pi
+      required_harness_count: 3
+  - id: opencode-install-preview
+    input: .ai/generated/opencode-install
+    expected:
+      mode: preview
+      writes_harness_config_by_default: false
+      human_approval_required_before_write: true
+      restart_required_after_install: true
+  - id: local-release-validation
+    input: scripts/validate-release-0.2.0.mjs
+    expected:
+      provider_calls: 0
+      result: pass

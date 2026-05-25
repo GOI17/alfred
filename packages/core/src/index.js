@@ -38,6 +38,10 @@ export function loadReleaseCandidate(root) {
   return readJson(root, ".ai/releases/release-0.1.0.json");
 }
 
+export function loadRelease020Candidate(root) {
+  return readJson(root, ".ai/releases/release-0.2.0.json");
+}
+
 export function loadRoadmap020(root) {
   return readJson(root, ".ai/roadmaps/0.2.0.json");
 }
@@ -276,6 +280,40 @@ export function evaluateReleaseCandidate({ releaseCandidate, validatorResults })
     missing_validators: missingValidators,
     failed_validators: failedValidators,
     provider_calls: providerCalls
+  };
+}
+
+export function evaluateMvpReleaseCandidate({ releaseCandidate, validatorResults, opencodeInstall }) {
+  const releaseEvaluation = evaluateReleaseCandidate({ releaseCandidate, validatorResults });
+  const requiredHarnesses = ["vscode", "opencode", "pi"];
+  const missingRequiredHarnesses = requiredHarnesses.filter((harness) => !releaseCandidate.required_harnesses?.includes(harness));
+  const missingIncludedPhases = ["phase-8-runtime-hardening", "phase-9-adapter-generation", "phase-10-eval-runner-cli"].filter(
+    (phase) => !releaseCandidate.includes?.includes(phase)
+  );
+  const opencodeInstallReady =
+    opencodeInstall?.harness === "opencode" &&
+    opencodeInstall?.install_mode === "preview" &&
+    opencodeInstall?.writes_harness_config_by_default === false &&
+    opencodeInstall?.human_approval_required_before_write === true &&
+    opencodeInstall?.restart_required_after_install === true &&
+    opencodeInstall?.provider_calls === 0 &&
+    opencodeInstall?.files?.length > 0;
+
+  return {
+    ...releaseEvaluation,
+    status:
+      releaseEvaluation.status === "pass" &&
+      missingRequiredHarnesses.length === 0 &&
+      missingIncludedPhases.length === 0 &&
+      opencodeInstallReady
+        ? "pass"
+        : "fail",
+    required_harnesses: releaseCandidate.required_harnesses ?? [],
+    required_harness_count: releaseCandidate.required_harnesses?.length ?? 0,
+    missing_required_harnesses: missingRequiredHarnesses,
+    missing_included_phases: missingIncludedPhases,
+    opencode_install_ready: opencodeInstallReady,
+    opencode_install_file_count: opencodeInstall?.files?.length ?? 0
   };
 }
 
