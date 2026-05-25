@@ -1,7 +1,7 @@
 ---
 id: instructions/install-management
 model_assigned: false
-description: Model-readable instructions for Alfred artifact install, update, and uninstall operations.
+description: Agent-driven instructions for installing, updating, and uninstalling Alfred artifacts into a user workspace. No manual installation, no TUI.
 phase: phase-13-install-management
 author: core
 ---
@@ -10,25 +10,39 @@ author: core
 
 ## Purpose
 
-Provide deterministic, reproducible instructions for installing, updating, and uninstalling Alfred artifacts (agents, skills, adapters) into a user workspace.
+Provide deterministic, reproducible instructions for **agent-driven** installation, update, and uninstall of Alfred artifacts (agents, skills, adapters) into a user workspace. All operations are executed by an AI agent, never by manual user action.
+
+## Critical Rule
+
+**When the user provides a URL to install Alfred (e.g., "install this https://github.com/GOI17/alfred"), the agent MUST follow the installation process described below. The agent MUST NOT simply git clone the repository. The agent MUST:**
+
+1. Detect the active harness from the runtime environment.
+2. Check the harness compatibility matrix for the adapter status.
+3. Generate installation previews using the adapter package.
+4. Apply the preview files to the harness config directory.
+5. Emit trace events for every operation.
 
 ## Modes
 
-### Mode 1: Initial Install (user does NOT have Alfred locally)
+### Mode 1: Agent-Driven Initial Install (Only Mode)
 
-When the user wants to use Alfred from a harness (opencode, VSCode, Pi) but has not cloned the Alfred repository, the install process is harness-aware and preview-based.
+The ONLY supported installation mode. Used when:
+- User provides a URL to an Alfred artifact
+- User requests installation via natural language
+- No manual git clone is permitted
 
+Process:
 1. Detect the active harness from the runtime environment.
-2. Check the harness compatibility matrix for the adapter status:
+2. Check the harness compatibility matrix (`.ai/harnesses/compatibility-matrix.json`) for adapter status:
    - **Executable adapter** (`executable-spike` or `executable-translation-spike`): proceed to generate preview.
-   - **Contract-only** (`compatibility-contract` or `external-script`): STOP and show message to user.
+   - **Contract-only** (`compatibility-contract` or `external-script`): STOP and show message to user: `[Agent] is not supported by Alfred currently`.
 3. For executable adapters, generate previews ONLY. Do NOT write harness config by default.
 4. If the user approves, copy preview files to the live harness config directory.
 5. After installing or changing agents/skills, restart the harness because config is loaded at startup.
 
-### Mode 2: Artifact Management (user already has Alfred)
+### Mode 2: DISABLED
 
-When Alfred is already present in the workspace, use the core install APIs for individual artifact operations.
+The "user already has Alfred" mode has been removed. Users are not expected to clone Alfred manually. All installation is agent-driven via Mode 1.
 
 ## Rules
 
@@ -39,17 +53,18 @@ When Alfred is already present in the workspace, use the core install APIs for i
 5. **Dry-run first**: when uncertain, run `--dry-run` first to preview the operation without side effects.
 6. **Atomic writes**: all file writes must use a temporary file + `fs.renameSync` pattern.
 7. **Harness-aware previews**: initial install must detect the harness and generate the correct preview using the adapter package, not install the full Alfred repo.
+8. **No manual installation**: installation via TUI, CLI manual commands, or user git clone is not supported. All installation is agent-driven.
 
 ## Install Operations
 
-### Initial Install (Mode 1)
+### Agent-Driven Install (Mode 1 - Only Mode)
 
 When to use:
-- The user does not have Alfred cloned locally.
-- The user is running inside opencode, VSCode, or Pi and wants to set up Alfred.
+- User provides a URL like "install this https://github.com/GOI17/alfred"
+- User requests installation via natural language command
 
 Process:
-1. Detect the active harness.
+1. Detect the active harness (opencode, VSCode, Pi).
 2. Look up the harness in the compatibility matrix (`.ai/harnesses/compatibility-matrix.json`).
 3. Check `adapter_status`:
    - `executable-spike` (Pi) or `executable-translation-spike` (opencode): proceed to generate preview.
@@ -61,30 +76,6 @@ Process:
 6. If the user approves, copy preview files into the harness's live config directory (e.g. `.opencode/`).
 7. Emit an install trace event recording harness, mode, and approval.
 8. Advise the user to restart the harness.
-
-### Artifact Install (Mode 2)
-
-When to use:
-- The user already has Alfred in the workspace.
-- A new artifact (agent, skill, adapter) needs to be added.
-
-Process:
-1. Parse arguments: `--source`, `--target`, `--type`, optional `--dry-run`, optional `--force`.
-2. Validate the target path with `validateInstallPath({ permissions, targetPath, force })`.
-3. If validation is `denied` and `human_approval_required` is true, request human approval.
-4. If validation fails for any other reason, stop and return the error.
-5. If the target already exists and `--force` is not set, stop with reason `target_already_exists`.
-6. If `--dry-run` is true, compute and return the plan without writing.
-7. Create the target directory if it does not exist.
-8. Read the source file content.
-9. Write to a temporary path next to the target.
-10. Rename the temporary file to the target path atomically.
-11. Emit an install trace event.
-
-CLI:
-```
-alfred-install install --source <path> --target <path> [--type agent|skill|adapter] [--dry-run] [--force]
-```
 
 ### Update
 
@@ -167,3 +158,5 @@ Before marking an install/update/uninstall operation as complete:
 - [ ] Trace event was written to `.ai/observability/generated/phase-13-install-management.json`.
 - [ ] Provider calls remained zero.
 - [ ] `--dry-run` preview was offered if the user was uncertain.
+
+(End of file - total 193 lines)
