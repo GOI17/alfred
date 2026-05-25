@@ -40,10 +40,6 @@ Process:
 4. If the user approves, copy preview files to the live harness config directory.
 5. After installing or changing agents/skills, restart the harness because config is loaded at startup.
 
-### Mode 2: DISABLED
-
-The "user already has Alfred" mode has been removed. Users are not expected to clone Alfred manually. All installation is agent-driven via Mode 1.
-
 ## Rules
 
 1. **Local-only execution**: these instructions never require provider calls.
@@ -159,4 +155,4 @@ Before marking an install/update/uninstall operation as complete:
 - [ ] Provider calls remained zero.
 - [ ] `--dry-run` preview was offered if the user was uncertain.
 
-(End of file - total 193 lines)
+(End of file - total 186 lines)
