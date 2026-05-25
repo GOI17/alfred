@@ -1,0 +1,26 @@
+id: phase-9-adapter-generation
+version: phase-9-adapter-generation@0.1.0
+owner: developer
+cases:
+  - id: required-mvp-harnesses
+    input: .ai/adapters/phase-9-adapter-generation.json
+    expected:
+      required_harnesses:
+        - vscode
+        - opencode
+        - pi
+      required_harness_count: 3
+  - id: preview-only-portability-targets
+    input: .ai/adapters/phase-9-adapter-generation.json
+    expected:
+      preview_harnesses:
+        - claude
+        - codex
+        - kiro
+      preview_harness_count: 3
+  - id: local-preview-generation
+    input: .ai/observability/generated/phase-9-adapter-generation.json
+    expected:
+      generated_harness_count: 6
+      provider_calls: 0
+      write_gate_failures: 0

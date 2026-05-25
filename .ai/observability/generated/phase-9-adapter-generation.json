@@ -1,0 +1,273 @@
+{
+  "trace_id": "phase-9-adapter-generation",
+  "timestamp": "2026-05-19T00:00:00.000Z",
+  "event": "adapter_generation_evaluated",
+  "actor": "developer",
+  "data": {
+    "trace_id": "phase-9-adapter-generation",
+    "timestamp": "2026-05-19T00:00:00.000Z",
+    "status": "pass",
+    "contract": "phase-9-adapter-generation",
+    "required_harnesses": [
+      "vscode",
+      "opencode",
+      "pi"
+    ],
+    "preview_harnesses": [
+      "claude",
+      "codex",
+      "kiro"
+    ],
+    "generated_harnesses": [
+      "vscode",
+      "opencode",
+      "pi",
+      "claude",
+      "codex",
+      "kiro"
+    ],
+    "required_harness_count": 3,
+    "preview_harness_count": 3,
+    "generated_harness_count": 6,
+    "write_gate_failures": [],
+    "approval_failures": [],
+    "artifact_failures": [],
+    "provider_calls": 0,
+    "previews": [
+      {
+        "harness": "vscode",
+        "mvp_required": true,
+        "preview_only": false,
+        "adapter_package": "packages/vscode-adapter",
+        "generated_artifacts": {
+          "extension_manifest": {
+            "path": ".vscode/extensions/alfred/package.json.preview",
+            "contributes": [
+              "commands",
+              "configuration",
+              "taskDefinitions"
+            ],
+            "activation_events": [
+              "onCommand:alfred.run",
+              "workspaceContains:.ai/manifest.json"
+            ]
+          },
+          "commands": [
+            {
+              "command": "alfred.run",
+              "title": "Alfred: Run Orchestrator"
+            },
+            {
+              "command": "alfred.eval",
+              "title": "Alfred: Run Local Evals"
+            },
+            {
+              "command": "alfred.previewHarnessArtifacts",
+              "title": "Alfred: Preview Harness Artifacts"
+            }
+          ],
+          "settings": {
+            "alfred.root": ".",
+            "alfred.providerCallsAllowed": 0,
+            "alfred.requireApprovalBeforeConfigWrite": true
+          },
+          "agents": [
+            {
+              "id": "orchestrator",
+              "role": "primary"
+            },
+            {
+              "id": "developer",
+              "role": "specialist"
+            },
+            {
+              "id": "qa",
+              "role": "specialist"
+            },
+            {
+              "id": "librarian",
+              "role": "specialist"
+            },
+            {
+              "id": "architect",
+              "role": "specialist"
+            },
+            {
+              "id": "reviewer",
+              "role": "specialist"
+            }
+          ],
+          "skills": [
+            {
+              "id": "typescript-project",
+              "scope": "project",
+              "load_body_by_default": false
+            },
+            {
+              "id": "architecture-docs",
+              "scope": "project",
+              "load_body_by_default": false
+            }
+          ]
+        },
+        "writes_harness_config_by_default": false,
+        "human_approval_required_before_write": true,
+        "provider_calls": 0
+      },
+      {
+        "harness": "opencode",
+        "mvp_required": true,
+        "preview_only": false,
+        "adapter_package": "packages/opencode-adapter",
+        "generated_artifacts": {
+          "agents": [
+            {
+              "path": ".opencode/agent/orchestrator.md",
+              "mode": "primary",
+              "permission": "mapped-from-alfred-permission-policy",
+              "model": "user-owned-runtime-configuration"
+            },
+            {
+              "path": ".opencode/agent/developer.md",
+              "mode": "subagent",
+              "permission": "mapped-from-alfred-permission-policy",
+              "model": "user-owned-runtime-configuration"
+            },
+            {
+              "path": ".opencode/agent/qa.md",
+              "mode": "subagent",
+              "permission": "mapped-from-alfred-permission-policy",
+              "model": "user-owned-runtime-configuration"
+            },
+            {
+              "path": ".opencode/agent/librarian.md",
+              "mode": "subagent",
+              "permission": "mapped-from-alfred-permission-policy",
+              "model": "user-owned-runtime-configuration"
+            },
+            {
+              "path": ".opencode/agent/architect.md",
+              "mode": "subagent",
+              "permission": "mapped-from-alfred-permission-policy",
+              "model": "user-owned-runtime-configuration"
+            },
+            {
+              "path": ".opencode/agent/reviewer.md",
+              "mode": "subagent",
+              "permission": "mapped-from-alfred-permission-policy",
+              "model": "user-owned-runtime-configuration"
+            }
+          ],
+          "skills": [
+            {
+              "path": ".opencode/skills/typescript-project/SKILL.md",
+              "source_body_path": ".ai/skills/project/typescript-project/SKILL.md",
+              "load_body_by_default": false,
+              "scope": "project"
+            },
+            {
+              "path": ".opencode/skills/architecture-docs/SKILL.md",
+              "source_body_path": ".ai/skills/project/architecture-docs/SKILL.md",
+              "load_body_by_default": false,
+              "scope": "project"
+            }
+          ],
+          "permissions": {
+            "default": "deny",
+            "edit": "ask",
+            "bash": {
+              "*": "ask",
+              "rm *": "deny",
+              "git reset --hard*": "deny",
+              "git clean*": "deny"
+            },
+            "external_directory": {
+              "*": "ask",
+              "**/.env*": "deny",
+              "**/secrets/**": "deny",
+              "**/.ssh/**": "deny"
+            }
+          },
+          "stable_runtime_api": "packages/opencode-adapter/src/runtime.js#buildOpencodeStableRuntime"
+        },
+        "writes_harness_config_by_default": false,
+        "human_approval_required_before_write": true,
+        "provider_calls": 0
+      },
+      {
+        "harness": "pi",
+        "mvp_required": true,
+        "preview_only": false,
+        "adapter_package": "packages/pi-adapter",
+        "generated_artifacts": {
+          "runtime_module": "packages/pi-adapter/src/runtime.js",
+          "cli_entrypoint": "packages/pi-adapter/src/cli.js",
+          "stable_runtime_api": "packages/pi-adapter/src/runtime.js#buildPiStableRuntime",
+          "trace_events": [
+            "provider_request_avoided",
+            "delegation_decision",
+            "permission_enforcement",
+            "regression_gate_evaluated",
+            "skill_activation_decision",
+            "roadmap_readiness_evaluated"
+          ],
+          "capabilities": [
+            "primary_control",
+            "specialist_routing",
+            "lazy_skills",
+            "permission_enforcement",
+            "trace_emission",
+            "eval_execution",
+            "model_assignment",
+            "local_first"
+          ]
+        },
+        "writes_harness_config_by_default": false,
+        "human_approval_required_before_write": true,
+        "provider_calls": 0
+      },
+      {
+        "harness": "claude",
+        "mvp_required": false,
+        "preview_only": true,
+        "adapter_package": null,
+        "generated_artifacts": {
+          "compatibility_contract": ".ai/harnesses/claude/adapter-design.md",
+          "artifact_mode": "preview-only",
+          "promotion_requires_human_approval": true
+        },
+        "writes_harness_config_by_default": false,
+        "human_approval_required_before_write": true,
+        "provider_calls": 0
+      },
+      {
+        "harness": "codex",
+        "mvp_required": false,
+        "preview_only": true,
+        "adapter_package": null,
+        "generated_artifacts": {
+          "compatibility_contract": ".ai/harnesses/codex/adapter-design.md",
+          "artifact_mode": "preview-only",
+          "promotion_requires_human_approval": true
+        },
+        "writes_harness_config_by_default": false,
+        "human_approval_required_before_write": true,
+        "provider_calls": 0
+      },
+      {
+        "harness": "kiro",
+        "mvp_required": false,
+        "preview_only": true,
+        "adapter_package": null,
+        "generated_artifacts": {
+          "compatibility_contract": ".ai/harnesses/kiro/adapter-design.md",
+          "artifact_mode": "preview-only",
+          "promotion_requires_human_approval": true
+        },
+        "writes_harness_config_by_default": false,
+        "human_approval_required_before_write": true,
+        "provider_calls": 0
+      }
+    ]
+  }
+}

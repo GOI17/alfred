@@ -348,3 +348,26 @@ Use cases:
 Ports:
 
 - `MvpReleasePlanStore`: reads MVP plan artifacts and generated MVP plan traces.
+
+## Phase 9: Adapter Generation
+
+Entities:
+
+- `AdapterGenerationContract`: model-readable contract for required MVP harness previews and preview-only portability targets.
+- `HarnessArtifactPreview`: generated artifact set for a harness that is safe to inspect before writing.
+
+Value objects:
+
+- `RequiredMvpHarness`: VSCode, opencode, or Pi.
+- `PreviewOnlyHarness`: Claude, Codex, or Kiro.
+- `HarnessWriteGate`: explicit approval requirement before writing harness config.
+
+Use cases:
+
+- `LoadAdapterGenerationContract`: read `.ai/adapters/phase-9-adapter-generation.json`.
+- `EvaluateAdapterGeneration`: verify required harnesses, preview-only targets, artifact presence, write gates, and provider call limits.
+- `BuildHarnessArtifactPreview`: generate local preview artifacts without writing harness config.
+
+Ports:
+
+- `AdapterGenerationStore`: reads adapter generation contracts and generated Phase 9 traces.

@@ -25,6 +25,7 @@
     "release_0_1_0": ".ai/releases/release-0.1.0.json",
     "roadmap_0_2_0": ".ai/roadmaps/0.2.0.json",
     "phase_8_runtime_hardening": ".ai/execution/phase-8-runtime-hardening.json",
+    "phase_9_adapter_generation": ".ai/adapters/phase-9-adapter-generation.json",
     "mvp_release_plan": ".ai/roadmaps/mvp-release.json"
   },
   "pillars": [
@@ -49,5 +50,6 @@
   "release_0_1_0_entrypoint": ".ai/releases/release-0.1.0.md",
   "roadmap_0_2_0_entrypoint": ".ai/roadmaps/0.2.0.md",
   "phase_8_entrypoint": ".ai/execution/phase-8-runtime-hardening.md",
+  "phase_9_entrypoint": ".ai/execution/phase-9-adapter-generation.md",
   "mvp_release_plan_entrypoint": ".ai/roadmaps/mvp-release.md"
 }
