@@ -21,7 +21,8 @@
     "phase_9_adapter_generation": "phase-9-adapter-generation@0.1.0",
     "phase_10_eval_runner_cli": "phase-10-eval-runner-cli@0.1.0",
     "release_0_2_0": "release-0.2.0",
-    "mvp_release_plan": "mvp-release-plan@0.1.1"
+    "mvp_release_plan": "mvp-release-plan@0.1.1",
+    "instructions_install_management": "instructions-install-management@0.1.0"
   },
   "baseline_update_policy": {
     "allowed_by_agent": false,

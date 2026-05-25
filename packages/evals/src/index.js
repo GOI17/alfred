@@ -18,7 +18,8 @@ export const evalRunnerPhases = [
   "phase-9-adapter-generation",
   "phase-10-eval-runner-cli",
   "release-0.2.0",
-  "mvp-release-plan"
+  "mvp-release-plan",
+  "instructions-install-management"
 ];
 
 export function listEvalBaselines(root) {
@@ -60,6 +61,7 @@ export function computeCurrentEvalResults(root) {
   const phase10Trace = readGeneratedTrace(root, ".ai/observability/generated/phase-10-eval-runner-cli.json");
   const release020Trace = readGeneratedTrace(root, ".ai/observability/generated/release-0.2.0.json");
   const mvpReleasePlanTrace = readGeneratedTrace(root, ".ai/observability/generated/mvp-release-plan.json");
+  const installManagementTrace = readGeneratedTrace(root, ".ai/observability/generated/instructions-install-management.json");
   const phase1Baseline = readJson(root, ".ai/evals/baselines/phase-1-architecture-kernel.json");
   const compatibilityMatrix = readJson(root, ".ai/harnesses/compatibility-matrix.json");
 
@@ -202,6 +204,13 @@ export function computeCurrentEvalResults(root) {
       non_goal_count: mvpReleasePlanTrace.data.non_goal_count,
       provider_calls: mvpReleasePlanTrace.data.provider_calls,
       trace_event: mvpReleasePlanTrace.event
+    },
+    "instructions-install-management": {
+      result: installManagementTrace.data.evaluation_status,
+      checks_passed: installManagementTrace.data.checks_passed,
+      total_checks: installManagementTrace.data.total_checks,
+      provider_calls: installManagementTrace.data.provider_calls,
+      trace_event: installManagementTrace.event
     }
   };
 }

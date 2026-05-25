@@ -43,6 +43,7 @@
 - StableRuntimeAdapter
 - MvpReleasePlan
 - MvpReleaseGate
+- InstallManagementInstructions
 
 ## Value Objects
 
@@ -83,6 +84,10 @@
 - AdapterBoundaryInvariant
 - MvpOutcome
 - MvpNonGoal
+- InstallMode
+- InstallTrace
+- ArtifactType
+- InstallValidationResult
 
 ## Use Cases
 
@@ -141,6 +146,9 @@
 - LoadMvpReleasePlan
 - EvaluateMvpReleasePlan
 - EmitMvpReleasePlanTrace
+- EvaluateInstallOperation
+- EmitInstallTrace
+- ValidateInstallPath
 
 ## Ports
 
@@ -168,6 +176,7 @@
 - RuntimeRoadmapStore
 - RuntimeHardeningStore
 - MvpReleasePlanStore
+- InstallManagementStore
 
 ## Phase 7: Harness Portability
 
@@ -415,3 +424,26 @@ Use cases:
 Ports:
 
 - `ReleaseCandidateStore`: reads release candidate artifacts and generated release traces.
+
+## Phase 13: Install Management
+
+Entities:
+
+- `InstallManagementInstructions`: model-readable source-of-truth for installing, updating, and uninstalling Alfred artifacts.
+- `InstallTraceEvent`: generated trace event that records the result of any install/update/uninstall operation.
+
+Value objects:
+
+- `InstallMode`: one of `initial_install` (user does not have Alfred) or `artifact_management` (user already has Alfred).
+- `ArtifactType`: one of `agent`, `skill`, or `adapter`.
+- `InstallValidationResult`: result from `validateInstallPath` including `valid`, `denied`, and `human_approval_required`.
+
+Use cases:
+
+- `EvaluateInstallOperation`: verify local-only execution, deny-by-default policy, human-approval requirement, and zero-provider-call guarantee for an install/update/uninstall operation.
+- `EmitInstallTrace`: record a trace event after any install/update/uninstall to `.ai/observability/generated/phase-13-install-management.json`.
+- `ValidateInstallPath`: enforce protected paths (`.opencode/`, `.ai/`, `harnesses/`) and `--force` + human-approval gating before writing.
+
+Ports:
+
+- `InstallManagementStore`: reads install management instructions and generated install trace events.

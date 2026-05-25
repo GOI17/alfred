@@ -1,0 +1,13 @@
+{
+  "trace_id": "instructions-install-management",
+  "timestamp": "2026-05-25T18:10:55.772Z",
+  "event": "instructions_validated",
+  "actor": "orchestrator",
+  "data": {
+    "instruction_file": ".ai/instructions/install-management.md",
+    "evaluation_status": "pass",
+    "checks_passed": 12,
+    "total_checks": 12,
+    "provider_calls": 0
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "phase": "instructions-install-management",
+  "result": "pass",
+  "provider_calls": 0,
+  "document_exists": true,
+  "model_readable": true,
+  "has_operations": true,
+  "has_trace_format": true,
+  "has_error_reference": true,
+  "has_validation_checklist": true,
+  "local_only": true,
+  "deny_by_default": true,
+  "human_approval_required": true,
+  "reproducibility": {
+    "entrypoint": ".ai/instructions/install-management.md",
+    "fixture_hash": "instructions-install-management-v1"
+  }
+}

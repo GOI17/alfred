@@ -700,3 +700,17 @@ export function evaluateRegressionGate({ gatePolicy, baselines, currentResults }
     provider_calls: 0
   };
 }
+
+export function evaluateInstallManagementInstructions({ root }) {
+  const baseline = readJson(root, ".ai/evals/baselines/instructions-install-management.json");
+  return {
+    status: baseline.result === "pass" && baseline.provider_calls === 0 && baseline.local_only === true ? "pass" : "fail",
+    result: baseline.result,
+    provider_calls: baseline.provider_calls,
+    local_only: baseline.local_only,
+    deny_by_default: baseline.deny_by_default,
+    human_approval_required: baseline.human_approval_required,
+    document_exists: baseline.document_exists,
+    model_readable: baseline.model_readable
+  };
+}
