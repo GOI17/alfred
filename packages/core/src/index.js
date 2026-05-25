@@ -563,9 +563,19 @@ export function isProtectedPath({ permissions, targetPath }) {
 export function isDestructiveCommand(command) {
   if (!command) return false;
   const normalized = command.trim().toLowerCase();
-  return ["rm ", "rm -", "git reset --hard", "git clean", "chmod 777", "dd "].some((prefix) =>
-    normalized.startsWith(prefix)
-  );
+  return [
+    "rm ",
+    "rm -",
+    "git reset --hard",
+    "git clean",
+    "chmod 777",
+    "dd ",
+    "git clone ",
+    "pnpm install",
+    "npm install",
+    "yarn install",
+    "bun install"
+  ].some((prefix) => normalized.startsWith(prefix));
 }
 
 export function evaluatePermission({ permissions, agentId, intent, targetPath = null, command = null }) {

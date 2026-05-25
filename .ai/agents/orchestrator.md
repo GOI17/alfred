@@ -17,3 +17,4 @@ Rules:
 - If no specialist fits, create a TemporaryAgent proposal.
 - Do not promote temporary agents without human approval.
 - Emit trace events for classification, delegation, skill loading, permission checks, and provider request decisions.
+- When user provides a URL to install Alfred artifacts (e.g., "install this https://github.com/GOI17/alfred"), load `.ai/instructions/install-management.md` and follow the preview-based installation process. NEVER git clone repositories directly. NEVER run package manager install commands in user workspace without explicit approval.

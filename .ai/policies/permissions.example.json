@@ -1,6 +1,7 @@
 {
   "default": "deny",
   "protectedPaths": ["**/.env*", "**/secrets/**", "**/.ssh/**"],
+  "destructiveCommands": ["rm ", "rm -", "git reset --hard", "git clean", "chmod 777", "dd "],
   "agents": {
     "orchestrator": {
       "read_files": "allow",
@@ -9,7 +10,9 @@
       "modify_permissions": "deny",
       "access_secrets": "deny",
       "delete_files": "deny",
-      "provider_request": "ask"
+      "provider_request": "ask",
+      "install_dependencies": "deny",
+      "git_clone": "deny"
     },
     "developer": {
       "read_files": "allow",
@@ -19,7 +22,9 @@
       "modify_permissions": "deny",
       "access_secrets": "deny",
       "delete_files": "ask",
-      "provider_request": "ask"
+      "provider_request": "ask",
+      "install_dependencies": "ask",
+      "git_clone": "deny"
     },
     "librarian": {
       "read_files": "allow",
@@ -27,7 +32,9 @@
       "run_tests": "deny",
       "modify_permissions": "deny",
       "access_secrets": "deny",
-      "provider_request": "ask"
+      "provider_request": "ask",
+      "install_dependencies": "deny",
+      "git_clone": "deny"
     },
     "qa": {
       "read_files": "allow",
@@ -37,7 +44,9 @@
       "modify_permissions": "deny",
       "access_secrets": "deny",
       "delete_files": "deny",
-      "provider_request": "ask"
+      "provider_request": "ask",
+      "install_dependencies": "deny",
+      "git_clone": "deny"
     },
     "architect": {
       "read_files": "allow",
@@ -45,7 +54,9 @@
       "modify_permissions": "deny",
       "access_secrets": "deny",
       "delete_files": "deny",
-      "provider_request": "ask"
+      "provider_request": "ask",
+      "install_dependencies": "deny",
+      "git_clone": "deny"
     },
     "reviewer": {
       "read_files": "allow",
@@ -54,7 +65,9 @@
       "modify_permissions": "deny",
       "access_secrets": "deny",
       "delete_files": "deny",
-      "provider_request": "ask"
+      "provider_request": "ask",
+      "install_dependencies": "deny",
+      "git_clone": "deny"
     }
   }
 }
