@@ -5,7 +5,8 @@
   "type": "module",
   "exports": "./src/runtime.js",
   "bin": {
-    "alfred-opencode-spike": "./src/cli.js"
+    "alfred-opencode-spike": "./src/cli.js",
+    "alfred-opencode-install-preview": "./src/cli.js"
   },
   "scripts": {
     "check": "node --check src/runtime.js && node --check src/cli.js",

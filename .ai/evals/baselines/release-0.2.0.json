@@ -1,0 +1,18 @@
+{
+  "phase": "release-0.2.0",
+  "result": "pass",
+  "version": "0.2.0",
+  "required_harness_count": 3,
+  "required_validator_count": 16,
+  "passed_validator_count": 16,
+  "opencode_install_ready": true,
+  "opencode_install_file_count": 9,
+  "provider_calls": 0,
+  "trace_event": "release_candidate_validated",
+  "reproducibility": {
+    "runtime_entrypoint": "packages/core/src/index.js#evaluateMvpReleaseCandidate",
+    "validation_script": "scripts/validate-release-0.2.0.mjs",
+    "release_candidate": ".ai/releases/release-0.2.0.json",
+    "fixture_hash": "release-0.2.0-fixture-v1"
+  }
+}

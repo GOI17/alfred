@@ -17,6 +17,7 @@ items:
       - phase-8-runtime-hardening
       - phase-9-adapter-generation
       - phase-10-eval-runner-cli
+      - release-0.2.0
       - mvp-release-plan
     expected:
       status: pass

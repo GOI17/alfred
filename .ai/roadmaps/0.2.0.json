@@ -49,6 +49,7 @@
       "id": "phase-11-release-0.2.0",
       "order": 4,
       "owner": "orchestrator",
+      "status": "complete",
       "goal": "Package the first usable local runtime release candidate with hardened adapters and executable eval reporting.",
       "scope": ["release-candidate", "runtime-readiness", "reproducibility"],
       "validation": ["validate:release-0.2.0"],

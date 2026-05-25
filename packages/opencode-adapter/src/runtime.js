@@ -25,6 +25,89 @@ function toOpencodeAgent(agent) {
   };
 }
 
+function toTitle(value) {
+  return value
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function buildAgentFileContent(agent) {
+  const mode = agent.id === "orchestrator" ? "primary" : "subagent";
+  return `---
+description: Alfred ${toTitle(agent.id)} agent generated from .ai source of truth.
+mode: ${mode}
+permission:
+  edit: ask
+  bash: ask
+---
+
+You are Alfred's ${toTitle(agent.id)} agent.
+
+Load project instructions from AGENTS.md and Alfred source-of-truth files under .ai/.
+
+Rules:
+- Preserve Alfred's local-first provider policy.
+- Do not broaden permissions.
+- Do not write harness config without explicit human approval.
+- Keep model assignment user-owned at runtime.
+`;
+}
+
+function buildSkillFileContent(skill) {
+  const name = skill.id;
+  const description = skill.description ?? `Use when Alfred needs ${name} project context.`;
+  return `---
+name: ${name}
+description: ${description}
+---
+
+# ${toTitle(name)}
+
+This opencode skill is generated from Alfred metadata.
+
+Source body: ${skill.bodyPath}
+
+Rules:
+- Load only when the task matches the skill triggers.
+- Do not override Alfred security or provider request policy.
+- Keep provider calls local-first and observable.
+`;
+}
+
+function buildOpencodeJsonPreview() {
+  return {
+    $schema: "https://opencode.ai/config.json",
+    default_agent: "orchestrator",
+    instructions: ["AGENTS.md"],
+    skills: {
+      paths: [".opencode/skills"]
+    },
+    permission: {
+      edit: "ask",
+      bash: {
+        "*": "ask",
+        "rm *": "deny",
+        "git reset --hard*": "deny",
+        "git clean*": "deny"
+      },
+      external_directory: {
+        "*": "ask",
+        "**/.env*": "deny",
+        "**/secrets/**": "deny",
+        "**/.ssh/**": "deny"
+      }
+    }
+  };
+}
+
+function writeTextAtomic(filePath, value) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const temporaryPath = `${filePath}.${process.pid}.tmp`;
+  fs.writeFileSync(temporaryPath, value);
+  fs.renameSync(temporaryPath, filePath);
+}
+
 function toOpencodeSkill(skill) {
   return {
     path: `.opencode/skills/${skill.id}/SKILL.md`,
@@ -186,4 +269,50 @@ export function buildOpencodeIntegrationPreview({ root }) {
     human_approval_required_before_write: true,
     provider_calls: 0
   };
+}
+
+export function buildOpencodeInstallPreview({ root, outputDir = ".ai/generated/opencode-install" }) {
+  const kernel = loadArchitectureKernel(root);
+  const integration = buildOpencodeIntegrationPreview({ root });
+  const relativeOutputDir = outputDir;
+
+  return {
+    harness: "opencode",
+    install_mode: "preview",
+    output_dir: relativeOutputDir,
+    target_dir: ".opencode",
+    writes_harness_config_by_default: false,
+    human_approval_required_before_write: true,
+    restart_required_after_install: true,
+    provider_calls: 0,
+    files: [
+      {
+        path: `${relativeOutputDir}/opencode.json.preview`,
+        install_path: "opencode.json",
+        kind: "config",
+        content: `${JSON.stringify(buildOpencodeJsonPreview(), null, 2)}\n`
+      },
+      ...kernel.agents.agents.map((agent) => ({
+        path: `${relativeOutputDir}/.opencode/agent/${agent.id}.md`,
+        install_path: `.opencode/agent/${agent.id}.md`,
+        kind: "agent",
+        content: buildAgentFileContent(agent)
+      })),
+      ...kernel.skills.skills.map((skill) => ({
+        path: `${relativeOutputDir}/.opencode/skills/${skill.id}/SKILL.md`,
+        install_path: `.opencode/skills/${skill.id}/SKILL.md`,
+        kind: "skill",
+        content: buildSkillFileContent(skill)
+      }))
+    ],
+    generated_artifacts: integration.generated_artifacts
+  };
+}
+
+export function writeOpencodeInstallPreview({ root, outputDir = ".ai/generated/opencode-install" }) {
+  const preview = buildOpencodeInstallPreview({ root, outputDir });
+  for (const file of preview.files) {
+    writeTextAtomic(path.join(root, file.path), file.content);
+  }
+  return preview;
 }

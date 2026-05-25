@@ -1,0 +1,14 @@
+id: release-0.2.0-dataset
+version: release-0.2.0-dataset@0.1.0
+items:
+  - id: alfred-mvp-release-candidate
+    release: 0.2.0
+    required_harnesses:
+      - vscode
+      - opencode
+      - pi
+    expected:
+      status: pass
+      required_validator_count: 16
+      provider_calls: 0
+      opencode_install_ready: true

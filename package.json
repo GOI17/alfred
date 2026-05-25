@@ -1,12 +1,12 @@
 {
   "name": "alfred",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Alfred handles the operational burden so humans focus on decisions.",
   "packageManager": "pnpm@10.0.0",
   "scripts": {
-    "check": "node scripts/validate-phase-1.mjs && node scripts/validate-phase-2.mjs && node scripts/validate-phase-3.mjs && node scripts/validate-phase-4.mjs && node scripts/validate-phase-5.mjs && node scripts/validate-phase-6.mjs && node scripts/validate-phase-7.mjs && node scripts/validate-roadmap.mjs && node scripts/validate-adapter-hardening.mjs && node scripts/validate-release.mjs && node scripts/validate-roadmap-0.2.0.mjs && node scripts/validate-phase-8.mjs && node scripts/validate-mvp-release-plan.mjs && node scripts/validate-phase-9.mjs && node scripts/validate-phase-10.mjs && node scripts/validate-eval-runner.mjs && pnpm -r check",
-    "test": "node scripts/validate-phase-1.mjs && node scripts/validate-phase-2.mjs && node scripts/validate-phase-3.mjs && node scripts/validate-phase-4.mjs && node scripts/validate-phase-5.mjs && node scripts/validate-phase-6.mjs && node scripts/validate-phase-7.mjs && node scripts/validate-roadmap.mjs && node scripts/validate-adapter-hardening.mjs && node scripts/validate-release.mjs && node scripts/validate-roadmap-0.2.0.mjs && node scripts/validate-phase-8.mjs && node scripts/validate-mvp-release-plan.mjs && node scripts/validate-phase-9.mjs && node scripts/validate-phase-10.mjs && node scripts/validate-eval-runner.mjs && pnpm -r test",
+    "check": "node scripts/validate-phase-1.mjs && node scripts/validate-phase-2.mjs && node scripts/validate-phase-3.mjs && node scripts/validate-phase-4.mjs && node scripts/validate-phase-5.mjs && node scripts/validate-phase-6.mjs && node scripts/validate-phase-7.mjs && node scripts/validate-roadmap.mjs && node scripts/validate-adapter-hardening.mjs && node scripts/validate-release.mjs && node scripts/validate-roadmap-0.2.0.mjs && node scripts/validate-phase-8.mjs && node scripts/validate-mvp-release-plan.mjs && node scripts/validate-phase-9.mjs && node scripts/validate-phase-10.mjs && node scripts/validate-release-0.2.0.mjs && node scripts/validate-eval-runner.mjs && pnpm -r check",
+    "test": "node scripts/validate-phase-1.mjs && node scripts/validate-phase-2.mjs && node scripts/validate-phase-3.mjs && node scripts/validate-phase-4.mjs && node scripts/validate-phase-5.mjs && node scripts/validate-phase-6.mjs && node scripts/validate-phase-7.mjs && node scripts/validate-roadmap.mjs && node scripts/validate-adapter-hardening.mjs && node scripts/validate-release.mjs && node scripts/validate-roadmap-0.2.0.mjs && node scripts/validate-phase-8.mjs && node scripts/validate-mvp-release-plan.mjs && node scripts/validate-phase-9.mjs && node scripts/validate-phase-10.mjs && node scripts/validate-release-0.2.0.mjs && node scripts/validate-eval-runner.mjs && pnpm -r test",
     "validate:phase1": "node scripts/validate-phase-1.mjs",
     "validate:phase2": "node scripts/validate-phase-2.mjs",
     "validate:phase3": "node scripts/validate-phase-3.mjs",
@@ -22,6 +22,7 @@
     "validate:phase8": "node scripts/validate-phase-8.mjs",
     "validate:mvp-release-plan": "node scripts/validate-mvp-release-plan.mjs",
     "validate:phase9": "node scripts/validate-phase-9.mjs",
-    "validate:phase10": "node scripts/validate-phase-10.mjs"
+    "validate:phase10": "node scripts/validate-phase-10.mjs",
+    "validate:release-0.2.0": "node scripts/validate-release-0.2.0.mjs"
   }
 }

@@ -27,6 +27,7 @@
     "phase_8_runtime_hardening": ".ai/execution/phase-8-runtime-hardening.json",
     "phase_9_adapter_generation": ".ai/adapters/phase-9-adapter-generation.json",
     "phase_10_eval_runner_cli": ".ai/evals/cli/phase-10-eval-runner-cli.json",
+    "phase_11_release_0_2_0": ".ai/releases/release-0.2.0.json",
     "mvp_release_plan": ".ai/roadmaps/mvp-release.json"
   },
   "pillars": [
@@ -53,5 +54,6 @@
   "phase_8_entrypoint": ".ai/execution/phase-8-runtime-hardening.md",
   "phase_9_entrypoint": ".ai/execution/phase-9-adapter-generation.md",
   "phase_10_entrypoint": ".ai/execution/phase-10-eval-runner-cli.md",
+  "phase_11_entrypoint": ".ai/execution/phase-11-release-0.2.0.md",
   "mvp_release_plan_entrypoint": ".ai/roadmaps/mvp-release.md"
 }

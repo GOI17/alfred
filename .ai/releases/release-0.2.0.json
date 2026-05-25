@@ -1,0 +1,54 @@
+{
+  "id": "release-0.2.0",
+  "version": "0.2.0",
+  "candidate": "alfred-mvp-0.2.0",
+  "owner": "orchestrator",
+  "status": "complete",
+  "scope": "mvp-runtime",
+  "required_harnesses": ["vscode", "opencode", "pi"],
+  "includes": [
+    "phase-8-runtime-hardening",
+    "phase-9-adapter-generation",
+    "phase-10-eval-runner-cli",
+    "mvp-release-plan"
+  ],
+  "required_validators": [
+    "validate:phase1",
+    "validate:phase2",
+    "validate:phase3",
+    "validate:phase4",
+    "validate:phase5",
+    "validate:phase6",
+    "validate:phase7",
+    "validate:roadmap",
+    "validate:adapter-hardening",
+    "validate:release",
+    "validate:roadmap-0.2.0",
+    "validate:phase8",
+    "validate:mvp-release-plan",
+    "validate:phase9",
+    "validate:phase10",
+    "validate:eval-runner"
+  ],
+  "opencode_install": {
+    "mode": "preview",
+    "output_dir": ".ai/generated/opencode-install",
+    "writes_harness_config_by_default": false,
+    "human_approval_required_before_write": true,
+    "restart_required_after_install": true
+  },
+  "provider_calls_allowed": 0,
+  "baseline_update_requires_human_approval": true,
+  "harness_config_writes_require_human_approval": true,
+  "commit_policy": {
+    "validated_commit_source": "current-git-head-at-validation-time",
+    "commit_source_recorded_in_trace": true,
+    "static_baseline_pins_commit": false
+  },
+  "artifact_manifest": {
+    "release_notes": ".ai/releases/release-0.2.0.md",
+    "baseline": ".ai/evals/baselines/release-0.2.0.json",
+    "trace": ".ai/observability/generated/release-0.2.0.json",
+    "opencode_install_preview": ".ai/generated/opencode-install"
+  }
+}

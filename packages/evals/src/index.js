@@ -17,6 +17,7 @@ export const evalRunnerPhases = [
   "phase-8-runtime-hardening",
   "phase-9-adapter-generation",
   "phase-10-eval-runner-cli",
+  "release-0.2.0",
   "mvp-release-plan"
 ];
 
@@ -57,6 +58,7 @@ export function computeCurrentEvalResults(root) {
   const phase8Trace = readGeneratedTrace(root, ".ai/observability/generated/phase-8-runtime-hardening.json");
   const phase9Trace = readGeneratedTrace(root, ".ai/observability/generated/phase-9-adapter-generation.json");
   const phase10Trace = readGeneratedTrace(root, ".ai/observability/generated/phase-10-eval-runner-cli.json");
+  const release020Trace = readGeneratedTrace(root, ".ai/observability/generated/release-0.2.0.json");
   const mvpReleasePlanTrace = readGeneratedTrace(root, ".ai/observability/generated/mvp-release-plan.json");
   const phase1Baseline = readJson(root, ".ai/evals/baselines/phase-1-architecture-kernel.json");
   const compatibilityMatrix = readJson(root, ".ai/harnesses/compatibility-matrix.json");
@@ -176,6 +178,18 @@ export function computeCurrentEvalResults(root) {
       regressions: phase10Trace.data.regressions,
       provider_calls: phase10Trace.data.provider_calls,
       trace_event: phase10Trace.event
+    },
+    "release-0.2.0": {
+      result: release020Trace.data.status,
+      release_id: release020Trace.data.release_id,
+      version: release020Trace.data.version,
+      required_harness_count: release020Trace.data.required_harness_count,
+      required_validator_count: release020Trace.data.required_validator_count,
+      passed_validator_count: release020Trace.data.passed_validator_count,
+      opencode_install_ready: release020Trace.data.opencode_install_ready,
+      opencode_install_file_count: release020Trace.data.opencode_install_file_count,
+      provider_calls: release020Trace.data.provider_calls,
+      trace_event: release020Trace.event
     },
     "mvp-release-plan": {
       result: mvpReleasePlanTrace.data.status,
