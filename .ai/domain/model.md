@@ -371,3 +371,25 @@ Use cases:
 Ports:
 
 - `AdapterGenerationStore`: reads adapter generation contracts and generated Phase 9 traces.
+
+## Phase 10: Eval Runner CLI
+
+Entities:
+
+- `EvalRunnerCliContract`: model-readable contract for CLI report formats, outputs, and summary sections.
+- `EvalRunnerCliReport`: deterministic report produced from package-level eval runner APIs.
+
+Value objects:
+
+- `ReportFormat`: supported report output such as JSON or text.
+- `ReportSummarySection`: required summary section such as status, regression gate, missing results, and provider calls.
+
+Use cases:
+
+- `LoadEvalRunnerCliContract`: read `.ai/evals/cli/phase-10-eval-runner-cli.json`.
+- `EvaluateEvalRunnerCli`: verify report outputs, summary sections, regression counts, and provider call limits.
+- `BuildEvalRunnerReport`: compute a deterministic report from current baselines, current results, and regression gates.
+
+Ports:
+
+- `EvalRunnerCliReportSink`: writes local JSON and text reports without provider calls.

@@ -1,0 +1,19 @@
+{
+  "id": "phase-10-eval-runner-cli",
+  "version": "phase-10-eval-runner-cli@0.1.0",
+  "owner": "qa",
+  "status": "complete",
+  "contract": ".ai/evals/cli/phase-10-eval-runner-cli.json",
+  "runtime_entrypoint": "packages/evals/src/cli.js",
+  "outputs": {
+    "status": "pass",
+    "report_format_count": 2,
+    "summary_section_count": 7,
+    "provider_calls": 0
+  },
+  "constraints": {
+    "local_only": true,
+    "deterministic_reports": true,
+    "regression_gate_preserved": true
+  }
+}

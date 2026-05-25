@@ -5,12 +5,12 @@ cases:
   - id: discovers-baselines
     input: .ai/evals/baselines
     expected:
-      baseline_count: 15
+      baseline_count: 16
       provider_calls: 0
   - id: computes-current-results
     input: .ai/observability/generated
     expected:
-      current_result_count: 14
+      current_result_count: 15
       provider_calls: 0
   - id: preserves-regression-gates
     input: .ai/evals/regression-gates.json

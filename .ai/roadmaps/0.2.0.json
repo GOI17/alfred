@@ -39,6 +39,7 @@
       "id": "phase-10-eval-runner-cli",
       "order": 3,
       "owner": "qa",
+      "status": "complete",
       "goal": "Expose package-level eval runner APIs through a deterministic CLI with local reports and regression summaries.",
       "scope": ["eval-cli", "report-generation", "regression-summaries"],
       "validation": ["validate:phase10"],
