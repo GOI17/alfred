@@ -1,0 +1,13 @@
+# Local runtime / harness artifacts
+.alfred/
+.opencode/
+
+# Local env files
+.env.local
+.env.development.local
+
+# OS / Editor noise
+.DS_Store
+*.swp
+*.swo
+*.tmp
