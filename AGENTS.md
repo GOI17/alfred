@@ -70,3 +70,86 @@ Humans approve:
 - Baseline updates.
 - Tradeoffs when regressions occur.
 - Harness compatibility compromises.
+
+## Project Files
+
+This project follows a structured approach with source-of-truth files in the `.ai/` directory.
+
+### Core Documentation
+
+| File | Description |
+|------|-------------|
+| `.ai/context.md` | Project overview, architecture, key decisions, and completed milestones |
+| `.ai/development.md` | Development guidelines, SDD process, branch naming, PR requirements |
+| `.ai/domain/model.md` | Domain entities, value objects, use cases, and ports (DDD) |
+| `.ai/domain/glossary.md` | Terminology definitions |
+
+### Agents
+
+| File | Description |
+|------|-------------|
+| `.ai/agents/orchestrator.md` | Primary coordinator agent |
+| `.ai/agents/developer.md` | Coding tasks agent |
+| `.ai/agents/qa.md` | Testing and regression agent |
+| `.ai/agents/librarian.md` | Documentation and skill loading agent |
+| `.ai/agents/architect.md` | Architecture decisions agent |
+| `.ai/agents/reviewer.md` | Code review and policy enforcement agent |
+
+### Harnesses
+
+| File | Description |
+|------|-------------|
+| `.ai/harnesses/pi/adapter-design.md` | Pi harness adapter design |
+| `.ai/harnesses/opencode/adapter-design.md` | opencode adapter design |
+| `.ai/harnesses/vscode/adapter-design.md` | VSCode compatibility contract |
+| `.ai/harnesses/claude/adapter-design.md` | Claude compatibility contract |
+| `.ai/harnesses/codex/adapter-design.md` | Codex compatibility contract |
+| `.ai/harnesses/kiro/adapter-design.md` | Kiro compatibility contract |
+| `.ai/harnesses/compatibility-matrix.json` | Capability preservation matrix |
+
+### Policies
+
+| File | Description |
+|------|-------------|
+| `.ai/policies/security.md` | Security policy (deny-by-default) |
+| `.ai/policies/delegation.md` | Delegation and routing policy |
+| `.ai/policies/provider-request-policy.md` | Local-first provider policy |
+| `.ai/policies/model-assignment.md` | User-owned model assignment |
+
+### Instructions
+
+| File | Description |
+|------|-------------|
+| `.ai/instructions/install-management.md` | Install/update/uninstall instructions |
+
+### Evals
+
+| File | Description |
+|------|-------------|
+| `.ai/evals/baselines/` | Evaluation baselines |
+| `.ai/evals/regression-gates.json` | Regression gate policy |
+
+### Source Code
+
+| File | Description |
+|------|-------------|
+| `packages/core/src/index.js` | Core domain logic (harness-agnostic) |
+| `packages/pi-adapter/src/runtime.js` | Pi adapter runtime |
+| `packages/pi-adapter/src/cli.js` | Pi adapter CLI |
+| `packages/opencode-adapter/src/runtime.js` | opencode adapter runtime |
+
+### Scripts
+
+| File | Description |
+|------|-------------|
+| `scripts/shell/install.sh` | Installation script |
+| `scripts/shell/update.sh` | Update script |
+| `scripts/shell/uninstall.sh` | Uninstall script |
+| `scripts/validate-phase-13.mjs` | Phase 13 validator |
+
+### Releases
+
+| File | Description |
+|------|-------------|
+| `.ai/releases/release-0.1.0.md` | Release 0.1.0 |
+| `.ai/releases/release-0.2.0.md` | Release 0.2.0 (MVP) |
