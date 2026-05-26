@@ -478,3 +478,279 @@ export function buildPiIntegrationPreview({ root }) {
     provider_calls: 0
   };
 }
+
+// --- Install Management Functions ---
+
+function buildPiAgentFileContent(agent) {
+  const name = agent.id.split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+  const mode = agent.id === "orchestrator" ? "primary" : "subagent";
+  return `---
+description: Alfred ${name} agent generated from .ai source of truth.
+mode: ${mode}
+---
+
+You are Alfred's ${name} agent.
+
+Load project instructions from AGENTS.md and Alfred source-of-truth files under .ai/.
+
+Rules:
+- Preserve Alfred's local-first provider policy.
+- Do not broaden permissions.
+- Do not write harness config without explicit human approval.
+- Keep model assignment user-owned at runtime.
+`;
+}
+
+function buildPiConfigJson(kernel) {
+  return {
+    harness: "pi",
+    version: kernel.manifest.version ?? "0.2.0",
+    capabilities: [
+      "primary_control",
+      "specialist_routing",
+      "lazy_skills",
+      "permission_enforcement",
+      "trace_emission",
+      "eval_execution",
+      "model_assignment",
+      "local_first"
+    ]
+  };
+}
+
+function buildPiSkillsRegistry(kernel) {
+  return {
+    skills: kernel.skills.skills.map((skill) => ({
+      id: skill.id,
+      description: skill.description ?? `Use when Alfred needs ${skill.id} project context.`,
+      scope: skill.scope ?? "task-specific",
+      triggers: skill.triggers ?? []
+    })),
+    policy: {
+      loading: kernel.skills.policy?.loading ?? "lazy",
+      default: kernel.skills.policy?.default ?? "available",
+      scope: kernel.skills.policy?.scope ?? "task-specific",
+      load_bodies_globally: kernel.skills.policy?.load_bodies_globally ?? false
+    }
+  };
+}
+
+function buildPiAgentsMd(kernel) {
+  return `---
+description: Alfred orchestrator agent
+---
+
+# Alfred Orchestrator
+
+You are Alfred's Orchestrator agent.
+
+Load project instructions from AGENTS.md and Alfred source-of-truth files under .ai/.
+
+Rules:
+- Preserve Alfred's local-first provider policy.
+- Do not broaden permissions.
+- Do not write harness config without explicit human approval.
+- Keep model assignment user-owned at runtime.
+
+You are powered by the model named minimax-m2.7. The exact model ID is ollama-cloud/minimax-m2.7
+`;
+}
+
+function buildPiReadmeContent() {
+  return `# Alfred Pi Agent Workspace
+
+This workspace has Alfred Pi agent installed.
+
+## Structure
+
+- \`AGENTS.md\` - Orchestrator agent instructions
+- \`.alfred/\` - Alfred configuration and artifacts
+  - \`config.json\` - Pi harness configuration
+  - \`agents/\` - Agent specifications
+  - \`skills/\` - Skill manifests
+  - \`pi-adapter/\` - Pi adapter files
+
+## Updating
+
+To update to the latest version:
+\`\`\`
+curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/update.sh | sh
+\`\`\`
+
+## Uninstalling
+
+To remove Alfred from this workspace:
+\`\`\`
+curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/uninstall.sh | sh
+\`\`\`
+`;
+}
+
+/**
+ * Build install preview for Pi agent files.
+ * Generates a preview of what files would be installed and where.
+ * Does NOT write any files - use writePiInstallPreview for actual writing.
+ *
+ * @param {Object} options
+ * @param {string} options.root - Root directory of the Alfred project
+ * @param {string} options.targetPath - Target installation path (default: ".")
+ * @param {string} options.outputDir - Output directory for preview files (default: ".ai/generated/pi-install")
+ * @returns {Object} Preview object with file list and metadata
+ */
+export function buildPiInstallPreview({ root, targetPath = ".", outputDir = ".ai/generated/pi-install" }) {
+  const kernel = loadArchitectureKernel(root);
+
+  return {
+    harness: "pi",
+    install_mode: "preview",
+    target_path: targetPath,
+    output_dir: outputDir,
+    writes_harness_config_by_default: false,
+    human_approval_required_before_write: true,
+    restart_required_after_install: true,
+    provider_calls: 0,
+    files: [
+      {
+        path: `${outputDir}/AGENTS.md`,
+        install_path: `${targetPath}/AGENTS.md`,
+        kind: "agents",
+        content: buildPiAgentsMd(kernel)
+      },
+      {
+        path: `${outputDir}/.alfred/config.json`,
+        install_path: `${targetPath}/.alfred/config.json`,
+        kind: "config",
+        content: JSON.stringify(buildPiConfigJson(kernel), null, 2) + "\n"
+      },
+      ...kernel.agents.agents.map((agent) => ({
+        path: `${outputDir}/.alfred/agents/${agent.id}.md`,
+        install_path: `${targetPath}/.alfred/agents/${agent.id}.md`,
+        kind: "agent",
+        content: buildPiAgentFileContent(agent)
+      })),
+      {
+        path: `${outputDir}/.alfred/skills/registry.json`,
+        install_path: `${targetPath}/.alfred/skills/registry.json`,
+        kind: "skills-registry",
+        content: JSON.stringify(buildPiSkillsRegistry(kernel), null, 2) + "\n"
+      }
+    ],
+    generated_artifacts: {
+      agents_count: kernel.agents.agents.length,
+      skills_count: kernel.skills.skills.length,
+      config_version: kernel.manifest.version ?? "0.2.0"
+    }
+  };
+}
+
+/**
+ * Write install preview files to disk.
+ * Files are written atomically using temp file + rename pattern.
+ *
+ * @param {Object} options
+ * @param {string} options.root - Root directory of the Alfred project
+ * @param {string} options.targetPath - Target installation path
+ * @param {string} options.outputDir - Output directory for preview files
+ * @returns {Object} Preview object with written file list
+ */
+export function writePiInstallPreview({ root, targetPath = ".", outputDir = ".ai/generated/pi-install" }) {
+  const preview = buildPiInstallPreview({ root, targetPath, outputDir });
+
+  for (const file of preview.files) {
+    const fullPath = path.join(root, file.path);
+    writeTextAtomic(fullPath, file.content);
+  }
+
+  return preview;
+}
+
+/**
+ * Validate an installation path.
+ * Rejects root, protected paths, and non-writable directories.
+ *
+ * @param {string} targetPath - Path to validate
+ * @returns {Object} Validation result with valid boolean and error code
+ */
+export function validateInstallPath(targetPath) {
+  // Check if path is empty
+  if (!targetPath || targetPath.trim() === "") {
+    return { valid: false, error_code: "installation_path_empty" };
+  }
+
+  // Check if path is root
+  if (targetPath === "/") {
+    return { valid: false, error_code: "installation_path_is_root" };
+  }
+
+  // Check for protected segments
+  const protectedSegments = [".ai/", ".opencode/", "harnesses/"];
+  for (const segment of protectedSegments) {
+    if (targetPath.includes(segment)) {
+      return { valid: false, error_code: "installation_path_protected" };
+    }
+  }
+
+  // Check if path is a directory and writable
+  try {
+    if (fs.existsSync(targetPath)) {
+      const stat = fs.statSync(targetPath);
+      if (!stat.isDirectory()) {
+        return { valid: false, error_code: "installation_path_not_directory" };
+      }
+      // Check if writable by attempting to create a temp file
+      const testFile = path.join(targetPath, `.write_test_${process.pid}`);
+      try {
+        fs.writeFileSync(testFile, "");
+        fs.unlinkSync(testFile);
+      } catch {
+        return { valid: false, error_code: "installation_path_not_writable" };
+      }
+    } else {
+      // Directory doesn't exist, check parent
+      const parent = path.dirname(targetPath);
+      if (!fs.existsSync(parent) || !fs.accessSync(parent, fs.constants.W_OK)) {
+        return { valid: false, error_code: "installation_path_parent_not_writable" };
+      }
+    }
+  } catch {
+    return { valid: false, error_code: "installation_path_invalid" };
+  }
+
+  return { valid: true, error_code: null };
+}
+
+/**
+ * Build trace event for install management operations.
+ *
+ * @param {Object} options
+ * @param {string} options.operation - "install", "update", or "uninstall"
+ * @param {string} options.targetPath - Target path
+ * @param {string} options.status - "pass" or "fail"
+ * @param {string|null} options.errorCode - Error code if failed
+ * @param {boolean} options.diffDetected - Whether diff was detected (for updates)
+ * @returns {Object} Trace event object
+ */
+export function buildInstallTrace({ operation, targetPath, status, errorCode = null, diffDetected = false }) {
+  return {
+    trace_id: "phase-13-pi-agent-install-management",
+    timestamp: new Date().toISOString(),
+    event: "install_management_operation",
+    actor: "pi-install",
+    data: {
+      operation,
+      target_path: targetPath,
+      status,
+      error_code: errorCode,
+      diff_detected: diffDetected,
+      human_approval: true,
+      provider_calls: 0
+    }
+  };
+}
+
+function writeTextAtomic(filePath, value) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const temporaryPath = `${filePath}.${process.pid}.tmp`;
+  fs.writeFileSync(temporaryPath, value);
+  fs.renameSync(temporaryPath, filePath);
+}
