@@ -1,0 +1,24 @@
+{
+  "name": "@alfred-labs/memory-mcp",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "bin": {
+    "alfred-memory-mcp": "./src/cli.js"
+  },
+  "scripts": {
+    "check": "node --check src/errors.js && node --check src/server.js && node --check src/index.js && node --check src/cli.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@alfred-labs/memory-client": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.0.0"
+  }
+}
