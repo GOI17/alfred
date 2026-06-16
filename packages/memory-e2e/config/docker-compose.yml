@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: alfred-memory-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-alfred}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_env_file}
+      POSTGRES_DB: ${POSTGRES_DB:-alfred_memory}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - alfred_memory_pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  alfred_memory_pgdata:
