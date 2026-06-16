@@ -39,6 +39,136 @@ beforeEach(startTestServer);
 afterEach(stopTestServer);
 
 describe("Alfred Memory HTTP API and SDK", () => {
+  test("partitions list and search by namespace while direct id access stays user-scoped", async () => {
+    const client = createMemoryClient({ baseUrl, apiKey: "alice-key" });
+
+    const personal = await client.createMemory({
+      type: "preference",
+      content: "Alice keeps personal memory separate from work memory.",
+      tags: ["namespace"],
+      source: "test"
+    });
+    const work = await client.createMemory({
+      namespace: "work",
+      type: "preference",
+      content: "Alice keeps work memory separate from personal memory.",
+      tags: ["namespace"],
+      source: "test"
+    });
+
+    assert.equal(personal.namespace, "personal");
+    assert.equal(work.namespace, "work");
+
+    const workList = await client.listMemories({ namespace: "work" });
+    assert.deepEqual(
+      workList.items.map((memory) => memory.id),
+      [work.id]
+    );
+
+    const workSearch = await client.searchMemories({ namespace: "work", q: "separate memory" });
+    assert.deepEqual(
+      workSearch.items.map((memory) => memory.id),
+      [work.id]
+    );
+
+    assert.equal((await client.getMemory(personal.id)).namespace, "personal");
+    assert.equal((await client.getMemory(work.id)).namespace, "work");
+  });
+
+  test("derives namespace from projectId unless namespace is provided explicitly", async () => {
+    const client = createMemoryClient({ baseUrl, apiKey: "alice-key" });
+
+    const projectMemory = await client.createMemory({
+      projectId: "alfred",
+      type: "decision",
+      content: "Project fallback derives a namespace.",
+      tags: ["namespace"],
+      source: "test"
+    });
+    const teamMemory = await client.createMemory({
+      namespace: "team:platform",
+      projectId: "alfred",
+      type: "decision",
+      content: "Explicit namespace wins over project metadata.",
+      tags: ["namespace"],
+      source: "test"
+    });
+
+    assert.equal(projectMemory.namespace, "project:alfred");
+    assert.equal(projectMemory.projectId, "alfred");
+    assert.equal(teamMemory.namespace, "team:platform");
+    assert.equal(teamMemory.projectId, "alfred");
+
+    const projectList = await client.listMemories({ namespace: "project:alfred" });
+    assert.deepEqual(
+      projectList.items.map((memory) => memory.id),
+      [projectMemory.id]
+    );
+  });
+
+  test("rejects unsafe namespaces and prevents namespace changes through PATCH", async () => {
+    const client = createMemoryClient({ baseUrl, apiKey: "alice-key" });
+    const maxLengthNamespace = "a".repeat(120);
+    const memory = await client.createMemory({
+      namespace: "custom:name_1",
+      type: "fact",
+      content: "Custom safe namespaces may use lowercase letters, numbers, dash, underscore, and colon.",
+      tags: ["namespace"],
+      source: "test"
+    });
+
+    assert.equal(memory.namespace, "custom:name_1");
+
+    const maxLengthMemory = await client.createMemory({
+      namespace: maxLengthNamespace,
+      type: "fact",
+      content: "Safe namespaces may use the full maximum length.",
+      tags: ["namespace"],
+      source: "test"
+    });
+    assert.equal(maxLengthMemory.namespace, maxLengthNamespace);
+
+    for (const namespace of ["", "Work", "bad space", "project:", "team:", "bad/value", "a".repeat(121)]) {
+      await assert.rejects(
+        () =>
+          client.createMemory({
+            namespace,
+            type: "fact",
+            content: "Unsafe namespace should fail.",
+            tags: ["namespace"],
+            source: "test"
+          }),
+        {
+          name: "MemoryApiError",
+          status: 400,
+          code: "validation_error"
+        }
+      );
+    }
+
+    await assert.rejects(() => client.listMemories({ namespace: "Work" }), {
+      name: "MemoryApiError",
+      status: 400,
+      code: "validation_error"
+    });
+
+    await assert.rejects(() => client.searchMemories({ namespace: "bad space", q: "namespace" }), {
+      name: "MemoryApiError",
+      status: 400,
+      code: "validation_error"
+    });
+
+    await assert.rejects(() => client.updateMemory(memory.id, { namespace: "work" }), {
+      name: "MemoryApiError",
+      status: 400,
+      code: "validation_error"
+    });
+
+    const updated = await client.updateMemory(memory.id, { projectId: "alfred" });
+    assert.equal(updated.namespace, "custom:name_1");
+    assert.equal(updated.projectId, "alfred");
+  });
+
   test("creates, reads, lists, searches, updates, and deletes memories for an authenticated user", async () => {
     const client = createMemoryClient({ baseUrl, apiKey: "alice-key" });
 
@@ -52,6 +182,7 @@ describe("Alfred Memory HTTP API and SDK", () => {
     });
 
     assert.equal(created.userId, "alice");
+    assert.equal(created.namespace, "personal");
     assert.equal(created.type, "preference");
     assert.equal(created.projectId, undefined);
     assert.ok(created.id);
@@ -252,6 +383,7 @@ describe("PostgreSQL store adapter", () => {
     const row = {
       id: "memory-1",
       user_id: "alice",
+      namespace: "work",
       project_id: null,
       type: "fact",
       content: "Postgres adapters use pg-style clients.",
@@ -276,6 +408,7 @@ describe("PostgreSQL store adapter", () => {
     await store.create({
       id: "memory-1",
       userId: "alice",
+      namespace: "work",
       type: "fact",
       content: "Postgres adapters use pg-style clients.",
       tags: ["postgres"],
@@ -284,17 +417,22 @@ describe("PostgreSQL store adapter", () => {
       createdAt: "2026-06-15T00:00:00.000Z",
       updatedAt: "2026-06-15T00:00:00.000Z"
     });
-    await store.list("alice", { limit: 10, offset: 0 });
-    await store.search("alice", { q: "postgres", limit: 10, offset: 0 });
+    await store.list("alice", { namespace: "work", limit: 10, offset: 0 });
+    await store.search("alice", { namespace: "work", q: "postgres", limit: 10, offset: 0 });
     await store.get("alice", "memory-1");
     await store.update("alice", "memory-1", { content: "Updated", updatedAt: "2026-06-15T00:01:00.000Z" });
     assert.equal(await store.delete("alice", "memory-1"), true);
 
     assert.equal(calls.length, 6);
+    assert.ok(calls[0].text.includes("namespace"));
+    assert.ok(calls[0].values.includes("work"));
     assert.ok(calls.slice(1).every((call) => call.text.includes("user_id")));
     assert.ok(calls.slice(1).every((call) => call.values.includes("alice")));
+    assert.ok(calls[1].text.includes("namespace"));
+    assert.ok(calls[1].values.includes("work"));
+    assert.ok(calls[2].text.includes("namespace"));
+    assert.ok(calls[2].values.includes("work"));
     assert.ok(calls[2].text.includes("ILIKE"));
-    assert.ok(calls[2].text.includes("plainto_tsquery"));
   });
 
   test("reports total count when list and search offsets are beyond the returned page", async () => {

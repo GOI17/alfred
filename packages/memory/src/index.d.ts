@@ -1,8 +1,10 @@
 export type MemoryType = "preference" | "fact" | "decision" | "workflow" | "project" | "correction" | "source";
+export type MemoryNamespace = string;
 
 export interface MemoryRecord {
   id: string;
   userId: string;
+  namespace: MemoryNamespace;
   type: MemoryType;
   content: string;
   tags: string[];
@@ -16,6 +18,7 @@ export interface MemoryRecord {
 }
 
 export interface CreateMemoryInput {
+  namespace?: MemoryNamespace;
   type: MemoryType;
   content: string;
   tags?: string[];
@@ -50,6 +53,7 @@ export interface MemoryListOptions {
   limit?: number;
   offset?: number;
   type?: MemoryType;
+  namespace?: MemoryNamespace;
   projectId?: string;
   tag?: string;
 }

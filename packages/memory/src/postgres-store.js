@@ -3,6 +3,7 @@ function toMemory(row) {
   return removeUndefined({
     id: row.id,
     userId: row.user_id,
+    namespace: row.namespace,
     projectId: row.project_id,
     type: row.type,
     content: row.content,
@@ -24,6 +25,10 @@ function addFilters(parts, values, options) {
   if (options.type) {
     values.push(options.type);
     parts.push(`type = $${values.length}`);
+  }
+  if (options.namespace) {
+    values.push(options.namespace);
+    parts.push(`namespace = $${values.length}`);
   }
   if (options.projectId) {
     values.push(options.projectId);
@@ -57,12 +62,13 @@ export function createPostgresMemoryStore(client) {
     async create(memory) {
       const result = await client.query(
         `INSERT INTO alfred_memories (
-          id, user_id, project_id, type, content, tags, source, metadata, confidence, expires_at, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12)
+          id, user_id, namespace, project_id, type, content, tags, source, metadata, confidence, expires_at, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13)
         RETURNING *`,
         [
           memory.id,
           memory.userId,
+          memory.namespace,
           memory.projectId ?? null,
           memory.type,
           memory.content,
@@ -107,23 +113,21 @@ export function createPostgresMemoryStore(client) {
       addFilters(where, values, options);
       values.push(`%${options.q}%`);
       const likeQueryIndex = values.length;
-      values.push(options.q);
-      const textQueryIndex = values.length;
       where.push(`(
         content ILIKE $${likeQueryIndex}
         OR source ILIKE $${likeQueryIndex}
         OR type ILIKE $${likeQueryIndex}
+        OR namespace ILIKE $${likeQueryIndex}
         OR project_id ILIKE $${likeQueryIndex}
         OR array_to_string(tags, ' ') ILIKE $${likeQueryIndex}
         OR metadata::text ILIKE $${likeQueryIndex}
-        OR search_vector @@ plainto_tsquery('simple', $${textQueryIndex})
       )`);
       values.push(options.limit, options.offset);
       const result = await client.query(
         `SELECT *, COUNT(*) OVER() AS total_count
          FROM alfred_memories
          WHERE ${where.join(" AND ")}
-         ORDER BY ts_rank_cd(search_vector, plainto_tsquery('simple', $${textQueryIndex})) DESC, created_at DESC, id DESC
+         ORDER BY created_at DESC, id DESC
          LIMIT $${values.length - 1} OFFSET $${values.length}`,
         values
       );

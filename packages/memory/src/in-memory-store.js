@@ -4,6 +4,7 @@ function clone(value) {
 
 function applyFilters(memory, options) {
   if (options.type && memory.type !== options.type) return false;
+  if (options.namespace && memory.namespace !== options.namespace) return false;
   if (options.projectId && memory.projectId !== options.projectId) return false;
   if (options.tag && !memory.tags.includes(options.tag)) return false;
   return true;
@@ -14,6 +15,7 @@ function memorySearchText(memory) {
     memory.type,
     memory.content,
     memory.source,
+    memory.namespace,
     memory.projectId,
     ...(memory.tags ?? []),
     JSON.stringify(memory.metadata ?? {})

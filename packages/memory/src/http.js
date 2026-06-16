@@ -72,6 +72,7 @@ function queryOptions(url) {
     limit: url.searchParams.get("limit") ?? undefined,
     offset: url.searchParams.get("offset") ?? undefined,
     type: url.searchParams.get("type") ?? undefined,
+    namespace: url.searchParams.get("namespace") ?? undefined,
     projectId: url.searchParams.get("projectId") ?? undefined,
     tag: url.searchParams.get("tag") ?? undefined
   };

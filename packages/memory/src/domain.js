@@ -11,6 +11,10 @@ export const ALLOWED_MEMORY_TYPES = Object.freeze([
 ]);
 
 const allowedTypeSet = new Set(ALLOWED_MEMORY_TYPES);
+const DEFAULT_NAMESPACE = "personal";
+const NAMESPACE_MAX_LENGTH = 120;
+const safeNamespacePattern = /^[a-z0-9][a-z0-9:_-]{0,119}$/;
+const partitionedNamespacePattern = /^(project|team):[a-z0-9][a-z0-9_-]*$/;
 
 export class MemoryValidationError extends Error {
   constructor(message, details = []) {
@@ -46,6 +50,39 @@ function requireString(value, field, details) {
 function optionalString(value, field, details) {
   if (value === undefined || value === null) return undefined;
   return requireString(value, field, details);
+}
+
+function normalizeNamespace(value, field, details) {
+  if (typeof value !== "string" || value === "") {
+    details.push({ field, message: `${field} must be a non-empty namespace string.` });
+    return undefined;
+  }
+  if (value !== value.trim() || /\s/.test(value)) {
+    details.push({ field, message: `${field} must not contain whitespace.` });
+    return undefined;
+  }
+  if (value.length > NAMESPACE_MAX_LENGTH || !safeNamespacePattern.test(value) || value.includes("::") || value.endsWith(":")) {
+    details.push({
+      field,
+      message: `${field} must use lowercase letters, numbers, "-", "_", or ":" and be at most ${NAMESPACE_MAX_LENGTH} characters.`
+    });
+    return undefined;
+  }
+  if ((value.startsWith("project:") || value.startsWith("team:")) && !partitionedNamespacePattern.test(value)) {
+    details.push({ field, message: `${field} project/team namespaces must include a safe slug or id after the prefix.` });
+    return undefined;
+  }
+  return value;
+}
+
+function deriveNamespace(body, projectId, details) {
+  if (Object.prototype.hasOwnProperty.call(body, "namespace")) {
+    return normalizeNamespace(body.namespace, "namespace", details);
+  }
+  if (projectId !== undefined) {
+    return normalizeNamespace(`project:${projectId}`, "namespace", details);
+  }
+  return DEFAULT_NAMESPACE;
 }
 
 function normalizeTags(value, details) {
@@ -132,6 +169,7 @@ export function normalizeCreateMemoryInput(input, { userId, now = new Date(), id
   const source = requireString(body.source, "source", details);
   const tags = normalizeTags(body.tags, details);
   const projectId = optionalString(body.projectId, "projectId", details);
+  const namespace = deriveNamespace(body, projectId, details);
   const metadata = normalizeMetadata(body.metadata, details, false) ?? {};
   const confidence = normalizeConfidence(body.confidence, details);
   const expiresAt = normalizeInstant(body.expiresAt, "expiresAt", details);
@@ -142,6 +180,7 @@ export function normalizeCreateMemoryInput(input, { userId, now = new Date(), id
   return removeUndefined({
     id,
     userId: normalizedUserId,
+    namespace,
     projectId,
     type,
     content,
@@ -161,16 +200,20 @@ export function normalizeUpdateMemoryInput(input, { now = new Date() } = {}) {
   if (!isPlainObject(input)) details.push({ field: "body", message: "Request body must be a JSON object." });
 
   const patch = {};
+  const hasNamespacePatch = Object.prototype.hasOwnProperty.call(body, "namespace");
   if (Object.prototype.hasOwnProperty.call(body, "type")) patch.type = normalizeType(body.type, details);
   if (Object.prototype.hasOwnProperty.call(body, "content")) patch.content = requireString(body.content, "content", details);
   if (Object.prototype.hasOwnProperty.call(body, "source")) patch.source = requireString(body.source, "source", details);
   if (Object.prototype.hasOwnProperty.call(body, "tags")) patch.tags = normalizeTags(body.tags, details);
+  if (hasNamespacePatch) {
+    details.push({ field: "namespace", message: "namespace is not editable. Create a new memory or use a future move endpoint." });
+  }
   if (Object.prototype.hasOwnProperty.call(body, "projectId")) patch.projectId = optionalString(body.projectId, "projectId", details) ?? null;
   if (Object.prototype.hasOwnProperty.call(body, "metadata")) patch.metadata = normalizeMetadata(body.metadata, details);
   if (Object.prototype.hasOwnProperty.call(body, "confidence")) patch.confidence = normalizeConfidence(body.confidence, details) ?? null;
   if (Object.prototype.hasOwnProperty.call(body, "expiresAt")) patch.expiresAt = normalizeInstant(body.expiresAt, "expiresAt", details) ?? null;
 
-  if (Object.keys(patch).length === 0) {
+  if (Object.keys(patch).length === 0 && !hasNamespacePatch) {
     details.push({ field: "body", message: "At least one editable memory field is required." });
   }
 
@@ -185,9 +228,10 @@ export function normalizeListOptions(options = {}) {
   const offset = normalizePositiveInteger(options.offset, "offset", 0, details, { min: 0, max: 100000 });
   const type = options.type === undefined ? undefined : normalizeType(options.type, details);
   const projectId = optionalString(options.projectId, "projectId", details);
+  const namespace = options.namespace === undefined ? undefined : normalizeNamespace(options.namespace, "namespace", details);
   const tag = optionalString(options.tag, "tag", details);
   throwIfInvalid(details);
-  return removeUndefined({ limit, offset, type, projectId, tag });
+  return removeUndefined({ limit, offset, type, projectId, namespace, tag });
 }
 
 export function normalizeSearchOptions(options = {}) {

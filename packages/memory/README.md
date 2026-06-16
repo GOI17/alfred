@@ -13,6 +13,7 @@ import { createInMemoryStore, createMemoryService } from "@alfred-labs/memory";
 
 const service = createMemoryService({ store: createInMemoryStore() });
 const memory = await service.createMemory("user-123", {
+  namespace: "work",
   type: "preference",
   content: "Prefer deterministic local work before provider calls.",
   tags: ["local-first"],
@@ -26,8 +27,9 @@ const memory = await service.createMemory("user-123", {
 | --- | --- |
 | Architecture | Isolated package under `packages/memory`; no adapter imports and no `packages/core` changes. |
 | Storage | Store interface with in-memory and PostgreSQL implementations. |
-| Search | Plain deterministic text search using in-memory matching or PostgreSQL `ILIKE` plus `tsvector`. |
+| Search | Plain deterministic text search using in-memory matching or PostgreSQL `ILIKE`. |
 | Auth | API-key resolver maps each request to one user; store operations always scope by `userId`. |
+| Namespace | Contextual partition inside a user; list/search can filter by it while get/update/delete remain secured by `id + userId`. |
 | API | Framework-agnostic Node HTTP handler/server. |
 | SDK | Framework-agnostic fetch client. |
 
@@ -37,6 +39,7 @@ Required fields:
 
 - `id`
 - `userId`
+- `namespace`
 - `type`
 - `content`
 - `tags`
@@ -52,6 +55,26 @@ Optional fields:
 - `expiresAt`
 
 Allowed `type` values: `preference`, `fact`, `decision`, `workflow`, `project`, `correction`, `source`.
+
+### Namespace behavior
+
+`namespace` is the public partition name. It is contextual metadata inside `userId`; it is not a team, workspace, or billing boundary.
+
+Defaults and compatibility:
+
+| Input | Stored namespace |
+| --- | --- |
+| `namespace` provided | Use it exactly after validation. |
+| No `namespace`, `projectId: "alfred"` provided | `project:alfred` |
+| Neither `namespace` nor `projectId` provided | `personal` |
+
+Validation is intentionally flexible but safe:
+
+- Allowed examples: `personal`, `work`, `project:alfred`, `team:platform`, `custom:name_1`.
+- Allowed characters: lowercase letters, numbers, `-`, `_`, and `:`.
+- Rejected: empty strings, whitespace, uppercase letters, path-like or unusual characters, and values longer than 120 characters.
+
+`namespace` is not editable through `PATCH /memories/:id`. If a memory was stored in the wrong namespace, use a future explicit move endpoint rather than mutating the partition accidentally. `projectId` remains optional compatibility metadata; it is not the primary partition.
 
 ## Local setup
 
@@ -73,11 +96,20 @@ This package does not read environment variables directly. Applications usually 
 
 ## PostgreSQL setup
 
-Run the migration once:
+For a fresh database, run migrations in order:
 
 ```bash
 psql "$MEMORY_DATABASE_URL" -f packages/memory/migrations/001_create_memory_tables.sql
+psql "$MEMORY_DATABASE_URL" -f packages/memory/migrations/002_add_memory_namespace.sql
 ```
+
+For an existing database that already applied the initial MVP migration, run only the additive migration:
+
+```bash
+psql "$MEMORY_DATABASE_URL" -f packages/memory/migrations/002_add_memory_namespace.sql
+```
+
+`002_add_memory_namespace.sql` backfills `namespace` from safe `project_id` values or `personal`, and removes the retired generated search vector from early local databases.
 
 Then pass a `pg`-style client or pool:
 
@@ -115,10 +147,10 @@ Every `/memories` route requires either `x-api-key: <key>` or `Authorization: Be
 curl -X POST http://localhost:3000/memories \
   -H 'content-type: application/json' \
   -H 'x-api-key: dev-api-key' \
-  -d '{"type":"decision","content":"Keep core harness agnostic.","tags":["architecture"],"source":"codex"}'
+  -d '{"namespace":"work","type":"decision","content":"Keep core harness agnostic.","tags":["architecture"],"source":"codex"}'
 
-curl -H 'x-api-key: dev-api-key' 'http://localhost:3000/memories?limit=20&offset=0'
-curl -H 'x-api-key: dev-api-key' 'http://localhost:3000/memories/search?q=harness'
+curl -H 'x-api-key: dev-api-key' 'http://localhost:3000/memories?namespace=work&limit=20&offset=0'
+curl -H 'x-api-key: dev-api-key' 'http://localhost:3000/memories/search?namespace=work&q=harness'
 curl -H 'x-api-key: dev-api-key' 'http://localhost:3000/memories/<id>'
 curl -X PATCH -H 'content-type: application/json' -H 'x-api-key: dev-api-key' \
   -d '{"tags":["architecture","core"]}' 'http://localhost:3000/memories/<id>'
@@ -149,13 +181,14 @@ const client = createMemoryClient({
 });
 
 await client.createMemory({
+  namespace: "project:alfred",
   type: "workflow",
   content: "Run package-level tests before root checks.",
   tags: ["testing"],
   source: "codex"
 });
 
-const results = await client.searchMemories({ q: "package-level tests", limit: 10 });
+const results = await client.searchMemories({ namespace: "project:alfred", q: "package-level tests", limit: 10 });
 ```
 
 ## Codex workflow
