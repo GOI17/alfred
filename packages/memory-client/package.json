@@ -1,0 +1,16 @@
+{
+  "name": "@alfred-labs/memory-client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "check": "node --check src/errors.js && node --check src/index.js",
+    "test": "node --test test/*.test.js"
+  }
+}
