@@ -1,0 +1,16 @@
+{
+  "name": "@alfred-labs/memory",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "check": "node --check src/index.js && node --check src/domain.js && node --check src/in-memory-store.js && node --check src/postgres-store.js && node --check src/http.js && node --check src/sdk.js",
+    "test": "node --test test/*.test.js"
+  }
+}
