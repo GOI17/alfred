@@ -30,6 +30,7 @@ const memory = await service.createMemory("user-123", {
 | Search | Plain deterministic text search using in-memory matching or PostgreSQL `ILIKE`. |
 | Auth | API-key resolver maps each request to one user; store operations always scope by `userId`. |
 | Namespace | Contextual partition inside a user; list/search can filter by it while get/update/delete remain secured by `id + userId`. |
+| Policy | Internal deterministic decision engine for future adapters to decide when to search, persist, classify, and suggest namespaces. |
 | API | Framework-agnostic Node HTTP handler/server. |
 | SDK | Framework-agnostic fetch client. |
 
@@ -75,6 +76,36 @@ Validation is intentionally flexible but safe:
 - Rejected: empty strings, whitespace, uppercase letters, path-like or unusual characters, and values longer than 120 characters.
 
 `namespace` is not editable through `PATCH /memories/:id`. If a memory was stored in the wrong namespace, use a future explicit move endpoint rather than mutating the partition accidentally. `projectId` remains optional compatibility metadata; it is not the primary partition.
+
+## MemoryPolicy
+
+`MemoryPolicy` is an internal decision engine for future Alfred adapters. It does not store memories, authenticate users, call providers, summarize conversations, or change REST/SDK behavior.
+
+Use it when a caller needs a local-only recommendation for:
+
+- whether prior memory search is useful for a task;
+- whether a candidate is durable enough to persist;
+- which existing memory type best fits a candidate;
+- which namespace should be suggested from explicit context, `projectId`, or the `personal` fallback.
+
+Policy decisions are intentionally conservative and include a human-readable `reason`. Search decisions may include a `query` when the policy can derive one safely.
+
+```js
+import { createMemoryPolicy } from "@alfred-labs/memory";
+
+const policy = createMemoryPolicy();
+
+const searchDecision = policy.shouldSearch({
+  task: "Recall the previous architecture decision for packages/core."
+});
+
+const persistDecision = policy.shouldPersist({
+  content: "Decision: packages/core remains harness-agnostic.",
+  source: "codex"
+});
+```
+
+`MemoryPolicy` only suggests namespaces. Callers must still pass writes through the existing memory validation and persistence flow; the policy must not bypass namespace validation or mutate existing memories.
 
 ## Local setup
 

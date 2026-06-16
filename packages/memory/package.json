@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "check": "node --check src/index.js && node --check src/domain.js && node --check src/in-memory-store.js && node --check src/postgres-store.js && node --check src/http.js && node --check src/sdk.js",
+    "check": "node --check src/index.js && node --check src/domain.js && node --check src/policy.js && node --check src/in-memory-store.js && node --check src/postgres-store.js && node --check src/http.js && node --check src/sdk.js",
     "test": "node --test test/*.test.js"
   }
 }

@@ -121,3 +121,61 @@ export function createMemoryService(options: { store: MemoryStore; now?: () => D
 export function createMemoryHttpHandler(options?: { service?: MemoryService; apiKeys?: Record<string, string> | Map<string, string> | ((apiKey: string) => string | undefined | Promise<string | undefined>) }): (req: any, res: any) => Promise<void>;
 export function createMemoryHttpServer(options?: Parameters<typeof createMemoryHttpHandler>[0]): any;
 export function createMemoryClient(options: MemoryClientOptions): MemoryClient;
+
+export interface MemoryPolicyContext {
+  query?: string;
+  task?: string;
+  prompt?: string;
+  input?: string;
+  message?: string;
+  intent?: string;
+  content?: string;
+  description?: string;
+  signals?: string[];
+  tags?: string[];
+  namespace?: MemoryNamespace;
+  explicitNamespace?: MemoryNamespace;
+  projectId?: string;
+  project?: string | { id?: string };
+  recall?: boolean;
+  needsMemory?: boolean;
+  priorPreference?: boolean;
+  priorDecision?: boolean;
+  projectHistory?: boolean;
+  recurrentWorkflow?: boolean;
+  correction?: boolean;
+}
+
+export interface MemoryPolicyCandidate {
+  type?: MemoryType | string;
+  content?: string;
+  summary?: string;
+  title?: string;
+  tags?: string[];
+  source?: string;
+}
+
+export interface MemoryPolicyDecision {
+  allow: boolean;
+  reason: string;
+  query?: string;
+}
+
+export interface MemoryClassificationDecision {
+  type: MemoryType;
+  reason: string;
+}
+
+export interface MemoryNamespaceDecision {
+  namespace: MemoryNamespace;
+  reason: string;
+}
+
+export class MemoryPolicy {
+  shouldSearch(context?: MemoryPolicyContext): MemoryPolicyDecision;
+  shouldPersist(candidate?: MemoryPolicyCandidate, context?: MemoryPolicyContext): MemoryPolicyDecision;
+  classify(candidate?: MemoryPolicyCandidate, context?: MemoryPolicyContext): MemoryClassificationDecision;
+  suggestNamespace(context?: MemoryPolicyContext): MemoryNamespaceDecision;
+}
+
+export function createMemoryPolicy(): MemoryPolicy;
