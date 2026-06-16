@@ -5,14 +5,14 @@
   "type": "module",
   "description": "Reproducible E2E environment for validating Alfred Memory with Codex/MCP, ChatGPT Actions and PostgreSQL.",
   "scripts": {
-    "check": "node --check scripts/start-memory-server.js && node --check scripts/smoke-codex.mjs && node --check scripts/smoke-chatgpt.mjs",
+    "check": "node --check scripts/start-memory-server.js && node --check scripts/run-migrations.mjs && node --check scripts/smoke-codex.mjs && node --check scripts/smoke-chatgpt.mjs",
     "setup": "./scripts/setup-e2e.sh",
     "start": "node ./scripts/start-memory-server.js",
     "tunnel:cloudflare": "./scripts/start-cloudflared.sh",
     "tunnel:ngrok": "./scripts/start-ngrok.sh",
     "smoke:codex": "node ./scripts/smoke-codex.mjs",
     "smoke:chatgpt": "node ./scripts/smoke-chatgpt.mjs",
-    "test": "node --check scripts/start-memory-server.js && node --check scripts/smoke-codex.mjs && node --check scripts/smoke-chatgpt.mjs"
+    "test": "node --check scripts/start-memory-server.js && node --check scripts/run-migrations.mjs && node --check scripts/smoke-codex.mjs && node --check scripts/smoke-chatgpt.mjs"
   },
   "dependencies": {
     "@alfred-labs/memory": "workspace:*",
