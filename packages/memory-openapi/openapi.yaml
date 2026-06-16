@@ -1,0 +1,439 @@
+openapi: 3.1.0
+info:
+  title: Alfred Memory API
+  description: "Exposes Alfred Memory as a ChatGPT Action. A Custom GPT can search, list, create, update and delete durable memories for a user through this schema. This is not a native ChatGPT Memory integration: Alfred Memory remains an external service invoked by the Custom GPT at runtime."
+  version: 0.0.0
+  contact:
+    name: Alfred Labs
+servers:
+  - url: https://memory.example.com
+    description: "Production Alfred Memory server (must be public HTTPS on port 443)."
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: "API key passed as an Authorization: Bearer \u003capiKey\u003e header. ChatGPT Actions does not support custom headers, so do not rely on x-api-key when configuring the action."
+
+  schemas:
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+
+    MemoryType:
+      type: string
+      enum:
+        - preference
+        - fact
+        - decision
+        - workflow
+        - project
+        - correction
+        - source
+
+    MemoryRecord:
+      type: object
+      required:
+        - id
+        - userId
+        - namespace
+        - type
+        - content
+        - tags
+        - source
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        namespace:
+          type: string
+        type:
+          $ref: '#/components/schemas/MemoryType'
+        content:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+        projectId:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateMemoryInput:
+      type: object
+      required:
+        - type
+        - content
+        - source
+      properties:
+        namespace:
+          type: string
+          description: "Defaults to personal or project:projectId when projectId is provided."
+        type:
+          $ref: '#/components/schemas/MemoryType'
+        content:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+        projectId:
+          type: string
+        metadata:
+          type: object
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        expiresAt:
+          type: string
+          format: date-time
+
+    UpdateMemoryInput:
+      type: object
+      description: "Partial update. The namespace field is immutable for memory records."
+      properties:
+        type:
+          $ref: '#/components/schemas/MemoryType'
+        content:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+        projectId:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    MemoryPage:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemoryRecord'
+        pagination:
+          type: object
+          required:
+            - limit
+            - offset
+            - total
+          properties:
+            limit:
+              type: integer
+            offset:
+              type: integer
+            total:
+              type: integer
+
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      description: "Returns a simple status response used to validate connectivity."
+      responses:
+        '200':
+          description: "Service is healthy."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /memories/search:
+    get:
+      operationId: searchMemories
+      summary: Search memories
+      description: "Full-text search across the durable memories of the authenticated user."
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: "Search query."
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: "Maximum number of results to return."
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: "Number of results to skip."
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/MemoryType'
+          description: "Filter by memory type."
+        - name: namespace
+          in: query
+          schema:
+            type: string
+          description: "Filter by namespace, for example project:alfred."
+        - name: projectId
+          in: query
+          schema:
+            type: string
+          description: "Filter by project id."
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: "Filter by a single tag."
+      responses:
+        '200':
+          description: "Paginated search results."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryPage'
+        '400':
+          description: "Invalid query parameters."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: "Missing or invalid API key."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /memories:
+    get:
+      operationId: listMemories
+      summary: List memories
+      description: "List durable memories of the authenticated user, optionally filtered."
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: "Maximum number of results to return."
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: "Number of results to skip."
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/MemoryType'
+          description: "Filter by memory type."
+        - name: namespace
+          in: query
+          schema:
+            type: string
+          description: "Filter by namespace, for example project:alfred."
+        - name: projectId
+          in: query
+          schema:
+            type: string
+          description: "Filter by project id."
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: "Filter by a single tag."
+      responses:
+        '200':
+          description: "Paginated list results."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryPage'
+        '401':
+          description: "Missing or invalid API key."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      operationId: createMemory
+      summary: Create memory
+      description: "Store a durable memory for the authenticated user."
+      x-openai-isConsequential: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMemoryInput'
+      responses:
+        '201':
+          description: "Memory created successfully."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryRecord'
+        '400':
+          description: "Invalid memory input."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: "Missing or invalid API key."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /memories/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: "Memory identifier."
+
+    patch:
+      operationId: updateMemory
+      summary: Update memory
+      description: "Partially update an existing memory. The namespace cannot be changed."
+      x-openai-isConsequential: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemoryInput'
+      responses:
+        '200':
+          description: "Memory updated successfully."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryRecord'
+        '400':
+          description: "Invalid update input."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: "Missing or invalid API key."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: "Memory not found."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      operationId: deleteMemory
+      summary: Delete memory
+      description: "Delete a memory by id."
+      x-openai-isConsequential: true
+      responses:
+        '200':
+          description: "Memory deleted successfully."
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - deleted
+                properties:
+                  deleted:
+                    type: boolean
+        '401':
+          description: "Missing or invalid API key."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: "Memory not found."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
