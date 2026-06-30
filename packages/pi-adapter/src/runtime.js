@@ -160,7 +160,7 @@ export function runPiSecuritySpike({ root, traceOutputPath }) {
     {
       id: "denied-unknown-intent",
       agent_id: "librarian",
-      intent: "install_dependencies"
+      intent: "unknown_intent"
     }
   ];
 

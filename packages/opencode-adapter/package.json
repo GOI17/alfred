@@ -10,7 +10,7 @@
   },
   "scripts": {
     "check": "node --check src/runtime.js && node --check src/cli.js",
-    "test": "node -e \"import('./src/runtime.js').then(() => console.log('opencode-adapter test: runtime exports load'))\""
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@alfred-labs/core": "workspace:*"

@@ -9,7 +9,7 @@
   "trace_event": "delegation_decision",
   "reproducibility": {
     "runtime_entrypoint": "packages/pi-adapter/src/runtime.js#runPiAgentSystemSpike",
-    "validation_script": "scripts/validate-phase-3.mjs",
+    "validation_script": "scripts/validate-history.mjs phase3",
     "routing_policy": ".ai/agents/routing-policy.json",
     "fixture_hash": "phase-3-agent-system-fixture-v1"
   }

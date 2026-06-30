@@ -1,0 +1,17 @@
+{
+  "event": "release_candidate_validated",
+  "release": "0.3.0",
+  "validated_commit_source": "8b7cc73143bb598c932a9f6d075cf668842e8532",
+  "timestamp_utc": "2026-06-30",
+  "gates_passed": 13,
+  "gates_total": 13,
+  "tests_total": 198,
+  "policy_checks": 12,
+  "provider_calls": 0,
+  "roadmap_status": "achieved",
+  "phases_complete": 13,
+  "phases_total": 13,
+  "exit_criteria_achieved": 6,
+  "exit_criteria_total": 6,
+  "result": "pass"
+}

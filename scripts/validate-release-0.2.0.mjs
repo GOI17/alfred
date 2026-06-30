@@ -29,7 +29,6 @@ const requiredPaths = [
   ".ai/evals/suites/release-0.2.0.yml",
   ".ai/evals/datasets/release-0.2.0.yml",
   ".ai/execution/phase-11-release-0.2.0.json",
-  ".ai/execution/phase-11-release-0.2.0.md",
   "packages/core/src/index.js",
   "packages/opencode-adapter/src/runtime.js",
   "packages/opencode-adapter/src/cli.js"

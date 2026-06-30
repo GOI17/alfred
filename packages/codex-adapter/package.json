@@ -1,0 +1,17 @@
+{
+  "name": "@alfred-labs/codex-adapter",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": "./src/runtime.js",
+  "bin": {
+    "alfred-codex-install-preview": "./src/cli.js"
+  },
+  "scripts": {
+    "check": "node --check src/runtime.js && node --check src/cli.js",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@alfred-labs/core": "workspace:*"
+  }
+}

@@ -8,6 +8,6 @@
   "reproducibility": {
     "fixture_hash": "phase-2-local-first-schema-validation",
     "runtime_entrypoint": "packages/pi-adapter/src/runtime.js",
-    "validation_script": "scripts/validate-phase-2.mjs"
+    "validation_script": "scripts/validate-history.mjs phase2"
   }
 }

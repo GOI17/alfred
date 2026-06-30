@@ -6,6 +6,6 @@
   "exports": "./src/index.js",
   "scripts": {
     "check": "node --check src/index.js",
-    "test": "node -e \"import('./src/index.js').then(() => console.log('core test: exports load'))\""
+    "test": "node --test test/*.test.mjs"
   }
 }

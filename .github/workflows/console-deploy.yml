@@ -1,0 +1,70 @@
+name: console-web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/console-web/**"
+      - ".github/workflows/console-deploy.yml"
+  workflow_dispatch:
+    inputs:
+      alfred_api_base:
+        description: "Alfred Memory Server URL (where the console should point)"
+        required: true
+        default: "http://localhost:3000"
+
+jobs:
+  test:
+    name: check + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        run: cd packages/console-web && npm install
+      - name: Check
+        run: cd packages/console-web && npm run check
+      - name: Build
+        run: cd packages/console-web && npm run build
+        env:
+          ALFRED_API_BASE: ${{ github.event.inputs.alfred_api_base || 'http://localhost:3000' }}
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-web-dist
+          path: packages/console-web/dist/
+
+  deploy-pages:
+    name: deploy to GitHub Pages
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build
+        run: |
+          cd packages/console-web
+          echo "ALFRED_API_BASE=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}" > .env
+          ALFRED_API_BASE=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }} npm run build
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Add .nojekyll
+        run: touch packages/console-web/dist/.nojekyll
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: packages/console-web/dist
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

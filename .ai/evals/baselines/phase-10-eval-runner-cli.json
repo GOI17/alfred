@@ -12,7 +12,7 @@
   "trace_event": "eval_runner_cli_reported",
   "reproducibility": {
     "runtime_entrypoint": "packages/evals/src/cli.js",
-    "validation_script": "scripts/validate-phase-10.mjs",
+    "validation_script": "scripts/validate-history.mjs phase10",
     "contract": ".ai/evals/cli/phase-10-eval-runner-cli.json",
     "fixture_hash": "phase-10-eval-runner-cli-fixture-v1"
   }

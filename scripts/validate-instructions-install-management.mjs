@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
+const traceTimestamp = "2026-05-26T00:00:00.000Z";
 
 function fail(message) {
   throw new Error(message);
@@ -73,7 +74,7 @@ if (!checks.harnessAwareness) fail("Instructions must reference compatibility ma
 const traceOutputPath = path.join(root, ".ai/observability/generated/instructions-install-management.json");
 const trace = {
   trace_id: "instructions-install-management",
-  timestamp: new Date().toISOString(),
+  timestamp: traceTimestamp,
   event: "instructions_validated",
   actor: "orchestrator",
   data: {

@@ -1,0 +1,13 @@
+{
+  "name": "@alfred-labs/console-web",
+  "private": true,
+  "version": "0.3.0",
+  "type": "module",
+  "description": "Standalone web console for Alfred Memory. Static SPA, deployable to GitHub Pages, Vercel, or Netlify.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs",
+    "dev": "node scripts/serve.mjs",
+    "check": "node --check scripts/build.mjs && node --check scripts/serve.mjs && node scripts/check-html.mjs"
+  }
+}

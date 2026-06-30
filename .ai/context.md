@@ -14,7 +14,9 @@ Alfred is a local-first agent operations runtime. It designs, tests, evaluates, 
 
 ### Core Philosophy
 
-- **Local-first execution**: No provider calls for deterministic operations
+- **Local-first execution (compute, not persistence)**: No provider calls for deterministic operations. Memory persistence may be local (SQLite) or remote (Postgres) based on hosting mode; see Memory Hosting below.
+- **Memory hosting policy**: Storage backend selection rules per tenant kind live in `.ai/policies/memory-hosting-policy.md`. Human agents require Postgres; coding agents are asked on `alfred init`; self-hosted servers use Postgres.
+- **Workspace hierarchy policy**: The relationship between filesystem workspaces and Alfred Memory tenants is governed by `.ai/policies/memory-workspace-policy.md`. Workspaces are not tenants; `tenant_access` is many-to-many with explicit inheritance.
 - **Harness-agnostic**: Core has no knowledge of specific harnesses (Pi, opencode, VSCode, etc.)
 - **User-owned model assignment**: Model selection happens at runtime, not hardcoded
 - **Deny by default**: Security policy requires explicit approval for privileged actions
@@ -91,6 +93,33 @@ curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/uninstall.sh | sh
 ```
 
 Install scripts validate paths (reject root `/` and protected paths like `.ai/`, `.opencode/`, `harnesses/`).
+
+
+## Memory Hosting
+
+Alfred Memory supports four hosting modes. See `.ai/architecture/memory-hosting-modes.md` for the full matrix.
+
+| Mode | Backend | Use case | Status |
+|---|---|---|---|
+| `local-only` | SQLite per tenant | Solo dev on a single laptop | shipped (MVP) |
+| `self-hosted` | Postgres per tenant | Multi-agent, multi-machine, auditable | target of v0.3.0 |
+| `federated` | per-agent SQLite/Postgres with sync | Strict local-first with sync | deferred to v0.4.0 |
+| `hybrid` | Postgres in cloud + SQLite cache | Mostly online with offline fallback | deferred to v0.4.0 |
+
+Key concepts introduced in v0.3.0:
+
+- **Tenant** — a universe of data with one physical DB (SQLite or Postgres).
+- **Workspace** — a directory on disk where an agent invokes Alfred Memory.
+- **`tenant_access`** — many-to-many binding of workspaces to tenants with
+  `access IN ('owner', 'reader')` and explicit `inherited` flag.
+- **`alfred_registry`** — the control-plane SQLite that lives in `~/.alfred/registry.sqlite`.
+
+The two new policies govern creation and traversal:
+
+- `.ai/policies/memory-hosting-policy.md` — storage backend selection rules.
+- `.ai/policies/memory-workspace-policy.md` — workspace invariants and the (a)/(b)/(c) safety guard.
+
+The roadmap for shipping this lives at `.ai/roadmaps/0.3.0.md` and `.ai/roadmaps/0.3.0.json`.
 
 ## Completed Milestones
 

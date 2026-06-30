@@ -194,4 +194,4 @@ All scripts use the same `validate_path()` function:
 - Install management instructions: `.ai/instructions/install-management.md`
 - Pi adapter design: `.ai/harnesses/pi/adapter-design.md`
 - Pi adapter runtime: `packages/pi-adapter/src/runtime.js`
-- Phase 7 harness portability: `.ai/execution/phase-7-harness-portability.md`
+- Phase 7 harness portability: `.ai/evals/baselines/phase-7-harness-portability.json`

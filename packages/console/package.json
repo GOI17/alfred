@@ -1,0 +1,11 @@
+{
+  "name": "@alfred-labs/console",
+  "private": true,
+  "version": "0.3.0",
+  "type": "module",
+  "scripts": {
+    "check": "node --check tui/dashboard.mjs",
+    "test": "node --test test/dashboard.test.mjs",
+    "test": "node --test test/*.mjs"
+  }
+}

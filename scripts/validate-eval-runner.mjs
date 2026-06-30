@@ -16,7 +16,6 @@ const requiredPaths = [
   "packages/evals/src/index.js",
   "packages/evals/package.json",
   "packages/evals/README.md",
-  ".ai/execution/eval-runner-package.md",
   ".ai/execution/eval-runner-package.json",
   ".ai/evals/baselines/eval-runner-package.json",
   ".ai/evals/suites/eval-runner-package.yml",

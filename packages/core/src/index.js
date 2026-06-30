@@ -7,8 +7,8 @@ export function readJson(root, relativePath) {
 
 export function loadArchitectureKernel(root) {
   const manifest = readJson(root, ".ai/manifest.json");
-  if (manifest.phase !== "phase-1-architecture-kernel" || manifest.status !== "complete") {
-    throw new Error("Alfred Pi spike requires a complete Phase 1 architecture kernel");
+  if (manifest.status !== "complete" || !manifest.source_of_truth) {
+    throw new Error("Alfred requires a complete architecture manifest with source_of_truth entries");
   }
 
   return {

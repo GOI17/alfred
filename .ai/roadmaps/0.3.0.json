@@ -1,0 +1,335 @@
+{
+  "id": "roadmap-0.3.0",
+  "version": "roadmap-0.3.0@1.0.0",
+  "owner": "orchestrator",
+  "status": "achieved",
+  "release_target": "0.3.0",
+  "previous_release": "release-0.2.0",
+  "goal": "Turn the released memory MVP into a self-hosted, multi-tenant SaaS-style memory service that supports coding agents and human agents with strict isolation, with workspaces (not tenants) as the operator's day-to-day mental model.",
+  "constraints": {
+    "local_first_for_compute": true,
+    "memory_persistence_local_or_remote": true,
+    "provider_calls_allowed": 0,
+    "core_harness_agnostic": true,
+    "permission_escalation_requires_human_approval": true,
+    "harness_config_writes_require_human_approval": true,
+    "baseline_updates_require_human_approval": true,
+    "human_agents_require_postgres": true,
+    "coding_agents_ask_backend_on_init": true,
+    "workspace_invariant_one_per_directory": true,
+    "tenant_isolation_isolated_db_per_tenant": true
+  },
+  "phases": [
+    {
+      "id": "phase-12-docs-foundation",
+      "order": 0,
+      "owner": "librarian",
+      "status": "complete",
+      "goal": "Produce the three foundational documents that codify the new model: memory-hosting-modes.md, memory-hosting-policy.md, memory-workspace-policy.md. Plus a patch to context.md.",
+      "scope": [
+        "documentation",
+        "policy-codification"
+      ],
+      "deliverables": [
+        ".ai/architecture/memory-hosting-modes.md",
+        ".ai/policies/memory-hosting-policy.md",
+        ".ai/policies/memory-workspace-policy.md",
+        "patch to .ai/context.md"
+      ],
+      "validation": [
+        "validate:policies"
+      ],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-13-alfred-registry",
+      "order": 1,
+      "owner": "developer",
+      "status": "complete",
+      "goal": "Create the alfred_registry control-plane SQLite with tenants, workspaces, tenant_access, and the two TRIGGERs (no_dual_pg, prevent_tenant_delete_with_readers).",
+      "scope": [
+        "registry-schema",
+        "trigger-enforcement"
+      ],
+      "deliverables": [
+        "packages/memory-server/migrations/000_alfred_registry.sql",
+        "test for the two TRIGGERs"
+      ],
+      "validation": [
+        "validate:phase13"
+      ],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-14-tenant-service",
+      "order": 2,
+      "owner": "developer",
+      "status": "complete",
+      "goal": "TDD the TenantService with provision, delete (cascade), and workspace hierarchy traversal.",
+      "scope": [
+        "tenant-service",
+        "in-memory-tenant-store",
+        "postgres-tenant-store"
+      ],
+      "deliverables": [
+        "packages/memory/src/tenants.js",
+        "packages/memory/src/in-memory-tenant-store.js",
+        "packages/memory/src/postgres-tenant-store.js",
+        "packages/memory/test/tenants.test.js"
+      ],
+      "validation": [
+        "validate:phase14"
+      ],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-15-user-service",
+      "order": 3,
+      "owner": "developer",
+      "status": "complete",
+      "goal": "TDD the UserService with provisioning, API key resolution (scrypt hash), rotation, revocation, and delete cascade.",
+      "scope": [
+        "user-service",
+        "api-key-hash"
+      ],
+      "deliverables": [
+        "packages/memory/src/users.js",
+        "packages/memory/src/in-memory-user-store.js",
+        "packages/memory/src/postgres-user-store.js",
+        "packages/memory/test/users.test.js"
+      ],
+      "validation": [
+        "validate:phase15"
+      ],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-16-sessions-topics-ac",
+      "order": 4,
+      "owner": "developer",
+      "status": "complete",
+      "goal": "TDD the Session / Topic / AcceptanceCriterion services with state machines and derived rollups.",
+      "scope": [
+        "sessions",
+        "topics",
+        "acceptance-criteria"
+      ],
+      "deliverables": [
+        "packages/memory/src/sessions/",
+        "packages/memory/src/topics/",
+        "packages/memory/src/acceptance-criteria/",
+        "migration 004_session_topic_ac.sql",
+        "tests for state machines"
+      ],
+      "validation": [
+        "validate:phase16"
+      ],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-17-cli",
+      "order": 5,
+      "owner": "developer",
+      "status": "complete",
+      "goal": "Implement the alfred CLI: init (interactive), provision, list, key rotate, key revoke, key list, migrate, validate-policy, tenant change-kind.",
+      "scope": [
+        "cli",
+        "init-flow",
+        "migrate-flow"
+      ],
+      "deliverables": [
+        "packages/memory-server/scripts/init.mjs (interactive)",
+        "packages/memory-server/scripts/provision.mjs",
+        "packages/memory-server/scripts/migrate.mjs",
+        "packages/memory-server/scripts/validate-policy.mjs",
+        "scripts for key management"
+      ],
+      "validation": [
+        "validate:phase17"
+      ],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-18-server",
+      "order": 6,
+      "owner": "developer",
+      "status": "complete",
+      "goal": "Build the Alfred Memory Server bin with backend selection per tenant, hosting mode env switch, and HTTPS support for self-hosted.",
+      "scope": [
+        "server-bin",
+        "tenant-router",
+        "hosting-mode"
+      ],
+      "deliverables": [
+        "packages/memory-server/bin/alfred-memory-server.mjs",
+        "packages/memory-server/src/app.js",
+        "packages/memory-server/src/config.js",
+        "packages/memory-server/src/tenant-router.js",
+        "tests for hosting-mode start"
+      ],
+      "validation": [
+        "validate:phase18"
+      ],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-19-sqlite-stores",
+      "order": 7,
+      "owner": "developer",
+      "status": "complete",
+      "goal": "Add SQLite stores for users, tenants, sessions, topics, ACs, and memories at feature parity with Postgres stores. Use better-sqlite3 with WAL mode and busy_timeout=5000 for concurrent editor access.",
+      "scope": [
+        "sqlite-stores",
+        "wal-mode"
+      ],
+      "deliverables": [
+        "packages/memory/src/sqlite-*-store.js",
+        "tests for SQLite parity"
+      ],
+      "validation": [
+        "validate:phase19"
+      ],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-20-cross-tenant-tests",
+      "order": 8,
+      "owner": "qa",
+      "status": "complete",
+      "goal": "Run 15+ vectors of intentional cross-tenant leak attempts and verify that all return empty / 401. Include storage-policy negative tests.",
+      "scope": [
+        "isolation-tests",
+        "policy-tests"
+      ],
+      "deliverables": [
+        "test/cross-tenant-isolation.test.js",
+        "test/memory-storage-policy.test.js",
+        "test/memory-workspace-policy.test.js"
+      ],
+      "validation": [
+        "validate:phase20"
+      ],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-21-chatgpt-adapter",
+      "order": 9,
+      "owner": "developer",
+      "status": "complete",
+      "goal": "Implement the ChatGPT Custom GPT Actions adapter. Generate OpenAPI 3.1 from index.d.ts and provide a bridge server that proxies HTTPS requests to Alfred Memory Server.",
+      "scope": [
+        "openai-custom-gpt",
+        "openapi-generation"
+      ],
+      "deliverables": [
+        "packages/chatgpt-adapter/openapi.json (generated)",
+        "packages/chatgpt-adapter/server.mjs (bridge)",
+        "test that validates OpenAPI conformance"
+      ],
+      "validation": [
+        "validate:phase21"
+      ],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-22-readme-changelog",
+      "order": 10,
+      "owner": "librarian",
+      "status": "complete",
+      "goal": "Update READMEs for all changed packages and produce a CHANGELOG entry for 0.3.0.",
+      "scope": [
+        "readme",
+        "changelog"
+      ],
+      "deliverables": [
+        "packages/memory/README.md updated",
+        "packages/memory-server/README.md new",
+        "packages/chatgpt-adapter/README.md new",
+        "packages/memory/CHANGELOG.md with v0.3.0 entry"
+      ],
+      "validation": [
+        "validate:phase22"
+      ],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-23-evals-gates",
+      "order": 11,
+      "owner": "qa",
+      "status": "complete",
+      "goal": "Add eval datasets for memory hosting, memory hosting policy, memory workspace policy, cross-tenant isolation, and ChatGPT adapter contract. Update regression-gates.json.",
+      "scope": [
+        "evals",
+        "regression-gates"
+      ],
+      "deliverables": [
+        ".ai/evals/datasets/memory-hosting-policy.yml",
+        ".ai/evals/datasets/memory-workspace-policy.yml",
+        ".ai/evals/datasets/cross-tenant-isolation.yml",
+        ".ai/evals/datasets/chatgpt-adapter-contract.yml",
+        ".ai/evals/regression-gates.json updated"
+      ],
+      "validation": [
+        "validate:phase23"
+      ],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-24-release-0.3.0",
+      "order": 12,
+      "owner": "orchestrator",
+      "status": "complete",
+      "goal": "Cut the 0.3.0 release candidate with validation scripts and a release note.",
+      "scope": [
+        "release-candidate"
+      ],
+      "deliverables": [
+        ".ai/releases/release-0.3.0.md",
+        ".ai/releases/release-0.3.0.json",
+        "scripts/validate-phase-24.mjs"
+      ],
+      "validation": [
+        "validate:release-0.3.0"
+      ],
+      "provider_calls_allowed": 0
+    }
+  ],
+  "entry_criteria": [
+    "release-0.2.0 is complete",
+    "memory MVP is shipped",
+    "policies/memory-hosting-policy.md and policies/memory-workspace-policy.md are approved"
+  ],
+  "exit_criteria": [
+    {
+      "criterion": "alfred init is interactive and asks the storage backend question",
+      "achieved": true
+    },
+    {
+      "criterion": "alfred_registry enforces both new policies at the DB level",
+      "achieved": true
+    },
+    {
+      "criterion": "cross-tenant isolation tests pass with 15+ vectors",
+      "achieved": true
+    },
+    {
+      "criterion": "ChatGPT Custom GPT can list/create/update memories through the bridge",
+      "achieved": true
+    },
+    {
+      "criterion": "Self-hosted server starts in HTTPS mode with API key auth",
+      "achieved": true
+    },
+    {
+      "criterion": "release-0.3.0 is reproducible and fully gated",
+      "achieved": true
+    }
+  ],
+  "non_goals_for_0_3_0": [
+    "Native Anthropic / Google Gemini adapters (deferred)",
+    "Federated sync between agent instances (deferred to v0.4)",
+    "Hybrid offline cache (deferred to v0.4)",
+    "Multi-agent collaboration sessions (deferred)",
+    "Embedding-based semantic search (deferred)"
+  ]
+}

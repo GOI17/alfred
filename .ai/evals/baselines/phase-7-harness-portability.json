@@ -11,7 +11,7 @@
   "trace_event": "harness_portability_evaluated",
   "reproducibility": {
     "runtime_entrypoint": "packages/opencode-adapter/src/runtime.js#runOpencodePortabilitySpike",
-    "validation_script": "scripts/validate-phase-7.mjs",
+    "validation_script": "scripts/validate-history.mjs phase7",
     "compatibility_matrix": ".ai/harnesses/compatibility-matrix.json",
     "fixture_hash": "phase-7-harness-portability-fixture-v1"
   }

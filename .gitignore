@@ -11,3 +11,20 @@
 *.swp
 *.swo
 *.tmp
+
+# Local runtime / state
+.atl/
+.playwright-mcp/
+.pnpm-store/
+*.sqlite
+!packages/memory-server/migrations/*.sqlite
+!packages/memory-server/test/fixtures/*.sqlite
+
+# Editor / OS noise
+*~
+*.bak
+.DS_Store
+
+# Memory server working files
+direct-test.sqlite
+test-registry.sqlite

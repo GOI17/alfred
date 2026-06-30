@@ -1,243 +1,123 @@
-# Alfred Memory MVP
+# Alfred Memory v0.3.0
 
-Alfred Memory is a small, local-first memory service package for storing user-scoped memories that future Alfred adapters, APIs, or SDKs can consume without coupling `packages/core` to storage or HTTP concerns.
+Alfred Memory is a multi-tenant, harness-agnostic memory store for agent operations. v0.3.0 introduces the **TenantService** layer (workspaces, tenant_access, hosting policy enforcement) and the **UserService** layer (API keys with scrypt hashing) on top of the v0.2.0 memory MVP.
+
+## Hosting modes
+
+See `.ai/architecture/memory-hosting-modes.md` for the full matrix. Summary:
+
+| Mode | Backend | Operator |
+|---|---|---|
+| `local-only` | SQLite per tenant | Solo dev |
+| `self-hosted` | Postgres per tenant | VPS / cloud / on-prem |
+
+Switch at runtime with `ALFRED_MEMORY_HOSTING=local|self-hosted`.
+
+## Storage backend selection
+
+`tenant.kind` is the gate:
+
+- `human_agent`, `hybrid_with_human`, `server_managed` → **must use Postgres**.
+- `coding_agent_only` → ask the user at `alfred init` time (SQLite or Postgres).
+
+A failing selection is rejected at three independent layers:
+
+1. The `tenants` table CHECK constraints in `migrations/000_alfred_registry.sql`.
+2. The `TenantService.provisionTenant` validation in `src/tenants.js`.
+3. The CLI prompts in `../memory-server/scripts/init.mjs`.
+
+Defense in depth. See `.ai/policies/memory-hosting-policy.md`.
+
+## Workspaces vs tenants
+
+A **workspace** is a directory on disk. A **tenant** is a universe of data. They are linked through `tenant_access`, which is many-to-many with explicit `inherited = true|false`.
+
+When `alfred init` runs in a directory that contains or descends from another initialized workspace, it emits the (a)/(b)/(c) safety guard. See `.ai/policies/memory-workspace-policy.md`.
 
 ## Quick path
 
-1. Use the in-memory store for tests and local development.
-2. Run the SQL migration before using PostgreSQL.
-3. Protect every API call with an API key that resolves to exactly one `userId`.
-
 ```js
-import { createInMemoryStore, createMemoryService } from "@alfred-labs/memory";
+import {
+  createMemoryService,
+  createInMemoryStore,
+  createTenantService,
+  createInMemoryTenantStore,
+  createUserService,
+  createInMemoryUserStore,
+  sha256OfPath
+} from "@alfred-labs/memory";
 
-const service = createMemoryService({ store: createInMemoryStore() });
-const memory = await service.createMemory("user-123", {
-  namespace: "work",
+// Provision a tenant
+const tenantService = createTenantService({ store: createInMemoryTenantStore() });
+const tenant = await tenantService.provisionTenant({
+  kind: "coding_agent_only",
+  storage_backend: "sqlite",
+  db_path: "/tmp/tenant.sqlite",
+  display_name: "Personal"
+});
+
+// Provision an API key for an agent
+const userService = createUserService({
+  store: createInMemoryUserStore({ initialTenants: [tenant] })
+});
+const { apiKey, key } = await userService.provisionApiKey({
+  tenant_id: tenant.id,
+  label: "laptop"
+});
+// apiKey is shown ONCE. Save it now.
+
+// Use the memory service scoped to tenant_id
+const memoryService = createMemoryService({ store: createInMemoryStore() });
+const memory = await memoryService.createMemory(tenant.id, {
+  namespace: "personal",
   type: "preference",
-  content: "Prefer deterministic local work before provider calls.",
-  tags: ["local-first"],
+  content: "Local-first by default.",
+  tags: ["policy"],
   source: "codex"
 });
 ```
 
-## What this package includes
+## API surface
 
-| Area | MVP decision |
-| --- | --- |
-| Architecture | Isolated package under `packages/memory`; no adapter imports and no `packages/core` changes. |
-| Storage | Store interface with in-memory and PostgreSQL implementations. |
-| Search | Plain deterministic text search using in-memory matching or PostgreSQL `ILIKE`. |
-| Auth | API-key resolver maps each request to one user; store operations always scope by `userId`. |
-| Namespace | Contextual partition inside a user; list/search can filter by it while get/update/delete remain secured by `id + userId`. |
-| Policy | Internal deterministic decision engine for future adapters to decide when to search, persist, classify, and suggest namespaces. |
-| API | Framework-agnostic Node HTTP handler/server. |
-| SDK | Framework-agnostic fetch client. |
+| Module | Public exports |
+|---|---|
+| `domain.js` | `ALLOWED_MEMORY_TYPES`, `createMemoryService`, normalize helpers, `MemoryValidationError`, `MemoryNotFoundError` |
+| `in-memory-store.js` | `createInMemoryStore` |
+| `postgres-store.js` | `createPostgresMemoryStore(client)` |
+| `sqlite-memory-store.js` | `createSqliteMemoryStore(db)`, `openSqliteMemoryStore(path)` |
+| `http.js` | `createMemoryHttpHandler`, `createMemoryHttpServer` |
+| `sdk.js` | `createMemoryClient` |
+| `policy.js` | `MemoryPolicy`, `createMemoryPolicy` |
+| `tenants.js` | `createTenantService`, normalize helpers, `TenantValidationError`, `TenantNotFoundError`, `TenantConflictError`, `TenantPolicyError` |
+| `in-memory-tenant-store.js` | `createInMemoryTenantStore`, `sha256OfPath` |
+| `users.js` | `createUserService`, `verifyApiKey`, `UserValidationError`, `UserNotFoundError`, `ApiKeyInvalidError` |
+| `in-memory-user-store.js` | `createInMemoryUserStore` |
 
-## Memory model
-
-Required fields:
-
-- `id`
-- `userId`
-- `namespace`
-- `type`
-- `content`
-- `tags`
-- `source`
-- `createdAt`
-- `updatedAt`
-
-Optional fields:
-
-- `projectId`
-- `metadata`
-- `confidence` (`0` to `1`)
-- `expiresAt`
-
-Allowed `type` values: `preference`, `fact`, `decision`, `workflow`, `project`, `correction`, `source`.
-
-### Namespace behavior
-
-`namespace` is the public partition name. It is contextual metadata inside `userId`; it is not a team, workspace, or billing boundary.
-
-Defaults and compatibility:
-
-| Input | Stored namespace |
-| --- | --- |
-| `namespace` provided | Use it exactly after validation. |
-| No `namespace`, `projectId: "alfred"` provided | `project:alfred` |
-| Neither `namespace` nor `projectId` provided | `personal` |
-
-Validation is intentionally flexible but safe:
-
-- Allowed examples: `personal`, `work`, `project:alfred`, `team:platform`, `custom:name_1`.
-- Allowed characters: lowercase letters, numbers, `-`, `_`, and `:`.
-- Rejected: empty strings, whitespace, uppercase letters, path-like or unusual characters, and values longer than 120 characters.
-
-`namespace` is not editable through `PATCH /memories/:id`. If a memory was stored in the wrong namespace, use a future explicit move endpoint rather than mutating the partition accidentally. `projectId` remains optional compatibility metadata; it is not the primary partition.
-
-## MemoryPolicy
-
-`MemoryPolicy` is an internal decision engine for future Alfred adapters. It does not store memories, authenticate users, call providers, summarize conversations, or change REST/SDK behavior.
-
-Use it when a caller needs a local-only recommendation for:
-
-- whether prior memory search is useful for a task;
-- whether a candidate is durable enough to persist;
-- which existing memory type best fits a candidate;
-- which namespace should be suggested from explicit context, `projectId`, or the `personal` fallback.
-
-Policy decisions are intentionally conservative and include a human-readable `reason`. Search decisions may include a `query` when the policy can derive one safely.
-
-```js
-import { createMemoryPolicy } from "@alfred-labs/memory";
-
-const policy = createMemoryPolicy();
-
-const searchDecision = policy.shouldSearch({
-  task: "Recall the previous architecture decision for packages/core."
-});
-
-const persistDecision = policy.shouldPersist({
-  content: "Decision: packages/core remains harness-agnostic.",
-  source: "codex"
-});
-```
-
-`MemoryPolicy` only suggests namespaces. Callers must still pass writes through the existing memory validation and persistence flow; the policy must not bypass namespace validation or mutate existing memories.
-
-## Local setup
+## Tests
 
 ```bash
-pnpm --filter @alfred-labs/memory check
-pnpm --filter @alfred-labs/memory test
+npm run check
+npm test
 ```
 
-No external dependency is required for the in-memory path. PostgreSQL support expects a `pg`-style client or pool supplied by the caller.
+Test counts:
 
-## Environment variables
+- `policy.test.js` — 9 tests, MemoryPolicy decisions.
+- `memory.test.js` — HTTP/SDK lifecycle (requires loopback).
+- `tenants.test.js` — 28 tests, covering policy invariants W5/W6.
+- `users.test.js` — 17 tests, covering scrypt hashing and rotation.
+- `sqlite-memory-store.test.js` — 9 tests, parity with Postgres.
 
-This package does not read environment variables directly. Applications usually provide:
+## Migrations
 
-| Variable | Purpose |
-| --- | --- |
-| `MEMORY_DATABASE_URL` | Used by the host app to create its PostgreSQL client/pool. |
-| `MEMORY_API_KEYS` | Used by the host app to map API keys to user IDs. Prefer a secret manager in production. |
+| File | Purpose |
+|---|---|
+| `migrations/001_create_memory_tables.sql` | Initial tables. |
+| `migrations/002_add_memory_namespace.sql` | Adds `namespace` column. |
+| `migrations/sqlite/001_memory.sqlite.sql` | SQLite twin for local tenants. |
 
-## PostgreSQL setup
+For multi-tenant SQLite, the `alfred_registry` lives separately in `../memory-server/migrations/000_alfred_registry.sql`.
 
-For a fresh database, run migrations in order:
+## Versioning
 
-```bash
-psql "$MEMORY_DATABASE_URL" -f packages/memory/migrations/001_create_memory_tables.sql
-psql "$MEMORY_DATABASE_URL" -f packages/memory/migrations/002_add_memory_namespace.sql
-```
-
-For an existing database that already applied the initial MVP migration, run only the additive migration:
-
-```bash
-psql "$MEMORY_DATABASE_URL" -f packages/memory/migrations/002_add_memory_namespace.sql
-```
-
-`002_add_memory_namespace.sql` backfills `namespace` from safe `project_id` values or `personal`, and removes the retired generated search vector from early local databases.
-
-Then pass a `pg`-style client or pool:
-
-```js
-import pg from "pg";
-import { createMemoryService, createPostgresMemoryStore } from "@alfred-labs/memory";
-
-const pool = new pg.Pool({ connectionString: process.env.MEMORY_DATABASE_URL });
-const service = createMemoryService({ store: createPostgresMemoryStore(pool) });
-```
-
-The migration includes `alfred_memory_users` for ownership and `alfred_memories` for memory records. API-key hashing and user provisioning belong to the host application.
-
-## REST API
-
-Create a server:
-
-```js
-import { createMemoryHttpServer, createMemoryService, createInMemoryStore } from "@alfred-labs/memory";
-
-const service = createMemoryService({ store: createInMemoryStore() });
-const server = createMemoryHttpServer({
-  service,
-  apiKeys: {
-    "dev-api-key": "user-123"
-  }
-});
-
-server.listen(3000);
-```
-
-Every `/memories` route requires either `x-api-key: <key>` or `Authorization: Bearer <key>`.
-
-```bash
-curl -X POST http://localhost:3000/memories \
-  -H 'content-type: application/json' \
-  -H 'x-api-key: dev-api-key' \
-  -d '{"namespace":"work","type":"decision","content":"Keep core harness agnostic.","tags":["architecture"],"source":"codex"}'
-
-curl -H 'x-api-key: dev-api-key' 'http://localhost:3000/memories?namespace=work&limit=20&offset=0'
-curl -H 'x-api-key: dev-api-key' 'http://localhost:3000/memories/search?namespace=work&q=harness'
-curl -H 'x-api-key: dev-api-key' 'http://localhost:3000/memories/<id>'
-curl -X PATCH -H 'content-type: application/json' -H 'x-api-key: dev-api-key' \
-  -d '{"tags":["architecture","core"]}' 'http://localhost:3000/memories/<id>'
-curl -X DELETE -H 'x-api-key: dev-api-key' 'http://localhost:3000/memories/<id>'
-curl http://localhost:3000/health
-```
-
-Errors are predictable JSON:
-
-```json
-{
-  "error": {
-    "code": "validation_error",
-    "message": "Memory input is invalid.",
-    "details": [{ "field": "type", "message": "type must be one of: preference, fact, decision, workflow, project, correction, source." }]
-  }
-}
-```
-
-## SDK example
-
-```js
-import { createMemoryClient } from "@alfred-labs/memory";
-
-const client = createMemoryClient({
-  baseUrl: "http://localhost:3000",
-  apiKey: "dev-api-key"
-});
-
-await client.createMemory({
-  namespace: "project:alfred",
-  type: "workflow",
-  content: "Run package-level tests before root checks.",
-  tags: ["testing"],
-  source: "codex"
-});
-
-const results = await client.searchMemories({ namespace: "project:alfred", q: "package-level tests", limit: 10 });
-```
-
-## Codex workflow
-
-- Keep changes inside `packages/memory/**` unless a future task explicitly expands ownership.
-- Prefer TDD through the public HTTP/API/SDK interface.
-- Run `pnpm --filter @alfred-labs/memory check` and `pnpm --filter @alfred-labs/memory test` before handing off.
-- Do not modify `packages/core` for memory storage, auth, HTTP, or PostgreSQL behavior.
-
-## Explicitly out of scope
-
-This MVP intentionally does not implement:
-
-- OpenCode, Claude, Copilot, Codex, VSCode, or Pi integrations.
-- Agent orchestration.
-- RAG, embeddings, vector databases, or semantic ranking.
-- Billing or team workspaces.
-- Scheduling, notifications, or background jobs.
-- Knowledge graphs.
-- LLM extraction.
-- Automatic tagging.
+v0.3.0 is the multi-tenant milestone. See `../memory-server/CHANGELOG.md` for release notes.

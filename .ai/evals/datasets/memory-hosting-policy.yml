@@ -1,0 +1,78 @@
+id: memory-hosting-policy@0.3.0
+description: >
+  Hosting-policy enforcement. Verifies that human agents cannot be
+  provisioned with SQLite and that the registry CHECK constraints are
+  present in the canonical SQL migration.
+status: pass
+dataset:
+  - id: hosting-policy-human-agent-rejected-sqlite
+    type: reject
+    input:
+      tenant_kind: human_agent
+      storage_backend: sqlite
+    expected:
+      status: validation_error
+      message_regex: "Rule 1"
+    actual:
+      status: validation_error
+      message_regex: "Rule 1"
+    outcome: pass
+
+  - id: hosting-policy-hybrid-with-human-rejected-sqlite
+    type: reject
+    input:
+      tenant_kind: hybrid_with_human
+      storage_backend: sqlite
+    expected:
+      status: validation_error
+      message_regex: "Rule 1"
+    actual:
+      status: validation_error
+      message_regex: "Rule 1"
+    outcome: pass
+
+  - id: hosting-policy-server-managed-rejected-sqlite
+    type: reject
+    input:
+      tenant_kind: server_managed
+      storage_backend: sqlite
+    expected:
+      status: validation_error
+      message_regex: "Rule 3"
+    actual:
+      status: validation_error
+      message_regex: "Rule 3"
+    outcome: pass
+
+  - id: hosting-policy-coding-agent-only-accepts-sqlite
+    type: accept
+    input:
+      tenant_kind: coding_agent_only
+      storage_backend: sqlite
+      db_path: /tmp/x.sqlite
+    expected:
+      status: ok
+    actual:
+      status: ok
+    outcome: pass
+
+  - id: hosting-policy-coding-agent-only-accepts-postgres
+    type: accept
+    input:
+      tenant_kind: coding_agent_only
+      storage_backend: postgres
+      db_connection: postgres://localhost/x
+    expected:
+      status: ok
+    actual:
+      status: ok
+    outcome: pass
+
+  - id: hosting-policy-canonical-migration-contains-check
+    type: snapshot
+    source: packages/memory-server/migrations/000_alfred_registry.sql
+    expected_substrings:
+      - "kind NOT IN ('human_agent', 'hybrid_with_human')"
+      - "storage_backend = 'postgres'"
+      - "kind <> 'server_managed'"
+    outcome: pass

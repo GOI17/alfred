@@ -10,8 +10,8 @@
   "provider_calls": 0,
   "trace_event": "adapter_generation_evaluated",
   "reproducibility": {
-    "runtime_entrypoint": "scripts/validate-phase-9.mjs",
-    "validation_script": "scripts/validate-phase-9.mjs",
+    "runtime_entrypoint": "scripts/validate-history.mjs phase9",
+    "validation_script": "scripts/validate-history.mjs phase9",
     "contract": ".ai/adapters/phase-9-adapter-generation.json",
     "fixture_hash": "phase-9-adapter-generation-fixture-v1"
   }

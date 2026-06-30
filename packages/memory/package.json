@@ -10,7 +10,10 @@
     }
   },
   "scripts": {
-    "check": "node --check src/index.js && node --check src/domain.js && node --check src/policy.js && node --check src/in-memory-store.js && node --check src/postgres-store.js && node --check src/http.js && node --check src/sdk.js",
-    "test": "node --test test/*.test.js"
+    "check": "node --check src/index.js && node --check src/domain.js && node --check src/policy.js && node --check src/in-memory-store.js && node --check src/postgres-store.js && node --check src/sqlite-memory-store.js && node --check src/http.js && node --check src/sdk.js && node --check src/tenants.js && node --check src/in-memory-tenant-store.js && node --check src/users.js && node --check src/in-memory-user-store.js",
+    "test": "node --test test/*.test.js",
+    "test:tenants": "node --test test/tenants.test.js",
+    "test:users": "node --test test/users.test.js",
+    "test:policy": "node --test test/policy.test.js"
   }
 }

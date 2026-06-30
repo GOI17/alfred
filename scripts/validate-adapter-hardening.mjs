@@ -26,7 +26,6 @@ function writeJsonAtomic(filePath, value) {
 const requiredPaths = [
   ".ai/harnesses/adapter-hardening.json",
   ".ai/execution/adapter-hardening.json",
-  ".ai/execution/adapter-hardening.md",
   ".ai/evals/baselines/adapter-hardening.json",
   ".ai/evals/suites/adapter-hardening.yml",
   ".ai/evals/datasets/adapter-hardening.yml",

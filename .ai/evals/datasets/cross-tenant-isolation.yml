@@ -1,0 +1,57 @@
+id: cross-tenant-isolation@0.3.0
+description: >
+  Tests that no operation across tenants can leak memory or authentication
+  state to an unauthorized tenant. Each vector is a separate test case in
+  packages/memory-server/test/cross-tenant-isolation.test.mjs.
+status: pass
+dataset:
+  vectors:
+    - id: V01
+      name: storageBackend=sqlite is rejected for kind=human_agent
+      outcome: pass
+    - id: V02
+      name: storageBackend=sqlite is rejected for kind=hybrid_with_human
+      outcome: pass
+    - id: V03
+      name: storageBackend=sqlite is rejected for kind=server_managed
+      outcome: pass
+    - id: V04
+      name: db_path required when storage=sqlite
+      outcome: pass
+    - id: V05
+      name: db_connection required when storage=postgres
+      outcome: pass
+    - id: V06
+      name: listTenants respects kind filter
+      outcome: pass
+    - id: V07
+      name: deleteTenant blocked by non-inherited reader (W5)
+      outcome: pass
+    - id: V08
+      name: api keys for tenant A do not work for tenant B
+      outcome: pass
+    - id: V09
+      name: revoked api key resolves to null even with correct prefix
+      outcome: pass
+    - id: V10
+      name: dual Postgres tenants in workspace chain rejected (W6)
+      outcome: pass
+    - id: V11
+      name: deleting tenant cascades tenant_access
+      outcome: pass
+    - id: V12
+      name: validatePolicy flags human_agent + sqlite at the registry level
+      outcome: pass
+    - id: V13
+      name: tampered api key resolves to null
+      outcome: pass
+    - id: V14
+      name: api key with non-matching prefix does not resolve
+      outcome: pass
+    - id: V15
+      name: memoryStore.list scopes by userId (no leak across tenants)
+      outcome: pass
+  totals:
+    vectors: 15
+    pass: 15
+    fail: 0

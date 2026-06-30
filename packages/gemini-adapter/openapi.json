@@ -1,0 +1,123 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Alfred Memory API",
+    "description": "Custom Extension for Google Gemini / AI Studio. Auth via API Key in header (X-Goog-Api-Key equivalent).",
+    "version": "0.3.0"
+  },
+  "servers": [
+    {
+      "url": "https://alfred-memory.example.com",
+      "description": "Self-hosted Alfred Memory Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key"
+      }
+    },
+    "schemas": {
+      "MemoryRecord": {
+        "type": "object",
+        "required": ["id","userId","namespace","type","content","tags","source","createdAt","updatedAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "userId": { "type": "string" },
+          "namespace": { "type": "string" },
+          "projectId": { "type": ["string","null"] },
+          "type": { "type": "string","enum": ["preference","fact","decision","workflow","project","correction","source"] },
+          "content": { "type": "string" },
+          "tags": { "type": "array","items": { "type": "string" } },
+          "source": { "type": "string" },
+          "metadata": { "type": "object" },
+          "createdAt": { "type": "string" },
+          "updatedAt": { "type": "string" }
+        }
+      },
+      "MemoryPage": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array","items": { "$ref": "#/components/schemas/MemoryRecord" } },
+          "pagination": { "type": "object" }
+        }
+      },
+      "CreateMemoryInput": {
+        "type": "object",
+        "required": ["type","content","source"],
+        "properties": {
+          "namespace": { "type": "string" },
+          "projectId": { "type": "string" },
+          "type": { "type": "string","enum": ["preference","fact","decision","workflow","project","correction","source"] },
+          "content": { "type": "string" },
+          "tags": { "type": "array","items": { "type": "string" } },
+          "source": { "type": "string" },
+          "metadata": { "type": "object" }
+        }
+      }
+    }
+  },
+  "security": [{ "ApiKeyAuth": [] }],
+  "paths": {
+    "/memories": {
+      "get": {
+        "operationId": "alfred_list_memories",
+        "summary": "List memories.",
+        "parameters": [
+          {"name":"namespace","in":"query","schema":{"type":"string"}},
+          {"name":"type","in":"query","schema":{"type":"string"}},
+          {"name":"limit","in":"query","schema":{"type":"integer","minimum":1,"maximum":100}},
+          {"name":"offset","in":"query","schema":{"type":"integer","minimum":0}}
+        ],
+        "responses": {"200":{"description":"Memory page","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MemoryPage"}}}}}
+      },
+      "post": {
+        "operationId": "alfred_create_memory",
+        "summary": "Create a memory.",
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateMemoryInput"}}}},
+        "responses": {"201":{"description":"Created","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MemoryRecord"}}}}}
+      }
+    },
+    "/memories/search": {
+      "get": {
+        "operationId": "alfred_search_memories",
+        "summary": "Search memories.",
+        "parameters": [
+          {"name":"q","in":"query","required":true,"schema":{"type":"string"}},
+          {"name":"namespace","in":"query","schema":{"type":"string"}},
+          {"name":"limit","in":"query","schema":{"type":"integer"}}
+        ],
+        "responses": {"200":{"description":"Memory page","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MemoryPage"}}}}}
+      }
+    },
+    "/memories/{id}": {
+      "parameters": [{"name":"id","in":"path","required":true,"schema":{"type":"string"}}],
+      "get": {
+        "operationId": "alfred_get_memory",
+        "summary": "Fetch one memory by id.",
+        "responses": {"200":{"description":"Memory","content":{"application/json":{"schema":{"$ref":"#/components/schemas/MemoryRecord"}}}}}
+      },
+      "delete": {
+        "operationId": "alfred_delete_memory",
+        "summary": "Delete one memory by id.",
+        "responses": {"200":{"description":"Deleted"}}
+      }
+    },
+    "/policy": {
+      "get": {
+        "operationId": "alfred_policy",
+        "summary": "Run the hosting-policy report.",
+        "responses": {"200":{"description":"Report"}}
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "alfred_health",
+        "summary": "Liveness probe.",
+        "responses": {"200":{"description":"OK"}}
+      }
+    }
+  }
+}
