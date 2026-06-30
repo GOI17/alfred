@@ -1,13 +1,13 @@
 {
   "phase": "adapter-hardening",
   "result": "pass",
-  "executable_adapter_count": 2,
-  "hardened_adapter_count": 2,
+  "executable_adapter_count": 3,
+  "hardened_adapter_count": 3,
   "invariant_failures": 0,
   "provider_calls": 0,
   "trace_event": "adapter_hardening_evaluated",
   "reproducibility": {
-    "runtime_entrypoint": "packages/pi-adapter/src/runtime.js#buildPiAdapterReadiness + packages/opencode-adapter/src/runtime.js#buildOpencodeAdapterReadiness",
+    "runtime_entrypoint": "packages/pi-adapter/src/runtime.js#buildPiAdapterReadiness + packages/opencode-adapter/src/runtime.js#buildOpencodeAdapterReadiness + packages/codex-adapter/src/runtime.js#buildCodexAdapterReadiness",
     "validation_script": "scripts/validate-adapter-hardening.mjs",
     "contract": ".ai/harnesses/adapter-hardening.json",
     "fixture_hash": "adapter-hardening-fixture-v1"

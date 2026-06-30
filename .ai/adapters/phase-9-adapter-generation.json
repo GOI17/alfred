@@ -3,9 +3,17 @@
   "version": "phase-9-adapter-generation@0.1.0",
   "owner": "developer",
   "status": "complete",
-  "goal": "Generate MVP-grade integration artifact previews for VSCode, opencode, and Pi while keeping Claude, Codex, and Kiro preview-only portability targets.",
-  "required_harnesses": ["vscode", "opencode", "pi"],
-  "preview_harnesses": ["claude", "codex", "kiro"],
+  "goal": "Generate MVP-grade integration artifact previews for VSCode, opencode, Pi, and Codex while keeping Claude and Kiro preview-only portability targets.",
+  "required_harnesses": [
+    "vscode",
+    "opencode",
+    "pi",
+    "codex"
+  ],
+  "preview_harnesses": [
+    "claude",
+    "kiro"
+  ],
   "provider_calls_allowed": 0,
   "writes_harness_config_by_default": false,
   "human_approval_required_before_write": true,
@@ -19,6 +27,7 @@
   "runtime_entrypoints": {
     "vscode": "packages/vscode-adapter/src/runtime.js#buildVscodeIntegrationPreview",
     "opencode": "packages/opencode-adapter/src/runtime.js#buildOpencodeIntegrationPreview",
-    "pi": "packages/pi-adapter/src/runtime.js#buildPiIntegrationPreview"
+    "pi": "packages/pi-adapter/src/runtime.js#buildPiIntegrationPreview",
+    "codex": "packages/codex-adapter/src/runtime.js#buildCodexIntegrationPreview"
   }
 }

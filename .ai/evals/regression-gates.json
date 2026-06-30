@@ -146,10 +146,43 @@
       "command": "node --test packages/console-web/test/build.test.mjs",
       "expected_test_count": 10,
       "blocked_on_failure": true
+    },
+    {
+      "id": "core-kernel-tests",
+      "description": "Core architecture kernel accepts current complete manifests without adapter leakage",
+      "files": [
+        "packages/core/test/kernel.test.mjs",
+        "packages/core/src/index.js"
+      ],
+      "command": "node --test packages/core/test/kernel.test.mjs",
+      "expected_test_count": 2,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "opencode-agent-adapter-contract",
+      "description": "opencode Alfred agents use current project agent paths and preview-only install artifacts",
+      "files": [
+        "packages/opencode-adapter/test/runtime.test.mjs",
+        "packages/opencode-adapter/src/runtime.js"
+      ],
+      "command": "node --test packages/opencode-adapter/test/runtime.test.mjs",
+      "expected_test_count": 4,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "codex-agent-adapter-contract",
+      "description": "Codex Alfred agents generate project custom agents and repo skills without hard-coded model defaults",
+      "files": [
+        "packages/codex-adapter/test/runtime.test.mjs",
+        "packages/codex-adapter/src/runtime.js"
+      ],
+      "command": "node --test packages/codex-adapter/test/runtime.test.mjs",
+      "expected_test_count": 6,
+      "blocked_on_failure": true
     }
   ],
   "totals": {
     "files_validated": 5,
-    "tests_total": 198
+    "tests_total": 210
   }
 }

@@ -35,7 +35,9 @@ test("opencode install preview maps files to installable opencode agent artifact
   const developer = agents.find((file) => file.install_path === ".opencode/agents/developer.md");
   assert.ok(developer);
   assert.match(developer.content, /Mission: implement scoped code changes under policy\./);
-  assert.match(developer.content, /Alfred source agent spec \(\.ai\/agents\/developer\.md\):/);
+  assert.match(developer.content, /Alfred source agent spec \(\.ai\/agents\/developer\.md\), quoted to avoid nested frontmatter parsing:/);
+  assert.match(developer.content, /> Mission: implement scoped code changes under policy\./);
+  assert.doesNotMatch(developer.content, /\n---\nid: developer\n/);
 });
 
 test("opencode config preview keeps permission gates conservative", () => {

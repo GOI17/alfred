@@ -48,8 +48,25 @@
       }
     },
     {
-      "id": "claude",
+      "id": "codex",
       "priority": 3,
+      "adapter_status": "executable-translation-spike",
+      "adapter_package": "packages/codex-adapter",
+      "design_doc": ".ai/harnesses/codex/adapter-design.md",
+      "capabilities": {
+        "primary_control": "generated",
+        "specialist_routing": "native",
+        "lazy_skills": "native",
+        "permission_enforcement": "native",
+        "trace_emission": "adapter",
+        "eval_execution": "external-script",
+        "model_assignment": "native",
+        "local_first": "adapter"
+      }
+    },
+    {
+      "id": "claude",
+      "priority": 4,
       "adapter_status": "compatibility-contract",
       "adapter_package": null,
       "design_doc": ".ai/harnesses/claude/adapter-design.md",
@@ -57,23 +74,6 @@
         "primary_control": "generated",
         "specialist_routing": "generated",
         "lazy_skills": "native",
-        "permission_enforcement": "external-script",
-        "trace_emission": "external-script",
-        "eval_execution": "external-script",
-        "model_assignment": "native",
-        "local_first": "external-script"
-      }
-    },
-    {
-      "id": "codex",
-      "priority": 4,
-      "adapter_status": "compatibility-contract",
-      "adapter_package": null,
-      "design_doc": ".ai/harnesses/codex/adapter-design.md",
-      "capabilities": {
-        "primary_control": "generated",
-        "specialist_routing": "generated",
-        "lazy_skills": "generated",
         "permission_enforcement": "external-script",
         "trace_emission": "external-script",
         "eval_execution": "external-script",

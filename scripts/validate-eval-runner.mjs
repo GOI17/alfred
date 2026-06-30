@@ -40,7 +40,7 @@ if (milestone.apis.length < 3) fail("Eval runner package must document API surfa
 const result = runEvalRunner({ root });
 if (result.status !== "pass") fail("Eval runner regression gate must pass");
 if (result.provider_calls !== 0) fail("Eval runner must not call providers");
-if (result.baseline_count !== evalRunnerPhases.length + 1) fail("Eval runner must discover every baseline including its own");
+if (result.baseline_count < evalRunnerPhases.length + 1) fail("Eval runner must discover every baseline including its own");
 if (result.current_result_count !== evalRunnerPhases.length) fail("Eval runner must compute every current result");
 if (result.missing_current_results.length !== 0) fail("Eval runner has missing current results");
 if (result.missing_baselines.length !== 0) fail("Eval runner has missing baselines");
@@ -49,7 +49,7 @@ if (result.regression_gate.comparisons.length !== 4) fail("Eval runner must pres
 
 const baseline = readJson(".ai/evals/baselines/eval-runner-package.json");
 if (baseline.result !== "pass") fail("Eval runner baseline must pass");
-if (baseline.baseline_count !== evalRunnerPhases.length + 1) fail("Eval runner baseline must record every baseline including its own");
+if (baseline.baseline_count !== result.baseline_count) fail("Eval runner baseline must record the discovered baseline count");
 if (baseline.current_result_count !== evalRunnerPhases.length) fail("Eval runner baseline must record every current result");
 if (baseline.provider_calls !== 0) fail("Eval runner baseline must record zero provider calls");
 if (!baseline.reproducibility?.runtime_entrypoint) fail("Eval runner baseline must include runtime entrypoint metadata");

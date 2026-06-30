@@ -1,6 +1,8 @@
 # Local runtime / harness artifacts
 .alfred/
 .opencode/
+!.ai/generated/**/.opencode/
+!.ai/generated/**/.opencode/**
 
 # Local env files
 .env.local

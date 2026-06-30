@@ -8,6 +8,7 @@ import {
 } from "../packages/core/src/index.js";
 import { buildPiAdapterReadiness } from "../packages/pi-adapter/src/runtime.js";
 import { buildOpencodeAdapterReadiness } from "../packages/opencode-adapter/src/runtime.js";
+import { buildCodexAdapterReadiness } from "../packages/codex-adapter/src/runtime.js";
 
 const root = process.cwd();
 const traceOutputPath = path.join(root, ".ai/observability/generated/adapter-hardening.json");
@@ -31,6 +32,7 @@ const requiredPaths = [
   ".ai/evals/datasets/adapter-hardening.yml",
   "packages/pi-adapter/src/runtime.js",
   "packages/opencode-adapter/src/runtime.js",
+  "packages/codex-adapter/src/runtime.js",
   "packages/core/src/index.js"
 ];
 
@@ -42,8 +44,8 @@ const contract = loadAdapterHardeningContract(root);
 if (contract.owner !== "architect") fail("Adapter hardening contract must be architect-owned");
 if (contract.status !== "complete") fail("Adapter hardening contract must be complete");
 if (contract.provider_calls_allowed !== 0) fail("Adapter hardening must be local-only");
-if (contract.executable_adapters.length !== 2) fail("Adapter hardening must cover exactly two executable adapters");
-for (const harness of ["pi", "opencode"]) {
+if (contract.executable_adapters.length !== 3) fail("Adapter hardening must cover exactly three executable adapters");
+for (const harness of ["pi", "opencode", "codex"]) {
   if (!contract.executable_adapters.includes(harness)) fail(`Adapter hardening must include ${harness}`);
 }
 if (contract.artifact_policy.writes_harness_config_by_default !== false) {
@@ -53,11 +55,11 @@ if (contract.artifact_policy.human_approval_required_before_config_write !== tru
   fail("Adapters must require human approval before harness config writes");
 }
 
-const readiness = [buildPiAdapterReadiness({ root }), buildOpencodeAdapterReadiness({ root })];
+const readiness = [buildPiAdapterReadiness({ root }), buildOpencodeAdapterReadiness({ root }), buildCodexAdapterReadiness({ root })];
 const evaluation = evaluateAdapterHardening({ contract, readiness });
 if (evaluation.status !== "pass") fail("Adapter hardening evaluation must pass");
 if (evaluation.provider_calls !== 0) fail("Adapter hardening evaluation must avoid providers");
-if (evaluation.hardened_adapter_count !== 2) fail("Adapter hardening must harden Pi and opencode");
+if (evaluation.hardened_adapter_count !== 3) fail("Adapter hardening must harden Pi, opencode, and Codex");
 if (evaluation.invariant_failures.length !== 0) fail("Adapter hardening invariants must all pass");
 
 for (const adapter of readiness) {
@@ -89,11 +91,11 @@ writeJsonAtomic(traceOutputPath, trace);
 const generatedTrace = readJson(root, ".ai/observability/generated/adapter-hardening.json");
 if (generatedTrace.event !== "adapter_hardening_evaluated") fail("Adapter hardening trace event is incorrect");
 if (generatedTrace.data.provider_calls !== 0) fail("Adapter hardening trace must record zero provider calls");
-if (generatedTrace.data.hardened_adapter_count !== 2) fail("Adapter hardening trace must record two hardened adapters");
+if (generatedTrace.data.hardened_adapter_count !== 3) fail("Adapter hardening trace must record three hardened adapters");
 
 const baseline = readJson(root, ".ai/evals/baselines/adapter-hardening.json");
 if (baseline.result !== "pass") fail("Adapter hardening baseline must pass");
-if (baseline.hardened_adapter_count !== 2) fail("Adapter hardening baseline must record two hardened adapters");
+if (baseline.hardened_adapter_count !== 3) fail("Adapter hardening baseline must record three hardened adapters");
 if (baseline.invariant_failures !== 0) fail("Adapter hardening baseline must record zero invariant failures");
 if (baseline.provider_calls !== 0) fail("Adapter hardening baseline must record zero provider calls");
 if (!baseline.reproducibility?.runtime_entrypoint) fail("Adapter hardening baseline must include reproducibility metadata");
@@ -104,7 +106,7 @@ if (corePackage.dependencies || corePackage.devDependencies) {
 }
 
 const coreSource = fs.readFileSync(path.join(root, "packages/core/src/index.js"), "utf8");
-if (coreSource.includes("pi-adapter") || coreSource.includes("opencode-adapter")) {
+if (coreSource.includes("pi-adapter") || coreSource.includes("opencode-adapter") || coreSource.includes("codex-adapter")) {
   fail("packages/core must not import adapter packages");
 }
 

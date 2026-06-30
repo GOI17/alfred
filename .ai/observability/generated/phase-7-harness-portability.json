@@ -72,37 +72,37 @@
     "generated_artifacts": {
       "agents": [
         {
-          "path": ".opencode/agent/orchestrator.md",
+          "path": ".opencode/agents/orchestrator.md",
           "mode": "primary",
           "permission": "mapped-from-alfred-permission-policy",
           "model": "user-owned-runtime-configuration"
         },
         {
-          "path": ".opencode/agent/developer.md",
+          "path": ".opencode/agents/developer.md",
           "mode": "subagent",
           "permission": "mapped-from-alfred-permission-policy",
           "model": "user-owned-runtime-configuration"
         },
         {
-          "path": ".opencode/agent/qa.md",
+          "path": ".opencode/agents/qa.md",
           "mode": "subagent",
           "permission": "mapped-from-alfred-permission-policy",
           "model": "user-owned-runtime-configuration"
         },
         {
-          "path": ".opencode/agent/librarian.md",
+          "path": ".opencode/agents/librarian.md",
           "mode": "subagent",
           "permission": "mapped-from-alfred-permission-policy",
           "model": "user-owned-runtime-configuration"
         },
         {
-          "path": ".opencode/agent/architect.md",
+          "path": ".opencode/agents/architect.md",
           "mode": "subagent",
           "permission": "mapped-from-alfred-permission-policy",
           "model": "user-owned-runtime-configuration"
         },
         {
-          "path": ".opencode/agent/reviewer.md",
+          "path": ".opencode/agents/reviewer.md",
           "mode": "subagent",
           "permission": "mapped-from-alfred-permission-policy",
           "model": "user-owned-runtime-configuration"

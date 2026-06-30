@@ -1,8 +1,8 @@
 {
   "phase": "phase-9-adapter-generation",
   "result": "pass",
-  "required_harness_count": 3,
-  "preview_harness_count": 3,
+  "required_harness_count": 4,
+  "preview_harness_count": 2,
   "generated_harness_count": 6,
   "write_gate_failures": 0,
   "approval_failures": 0,

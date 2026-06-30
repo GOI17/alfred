@@ -4,11 +4,6 @@
   "instructions": [
     "AGENTS.md"
   ],
-  "skills": {
-    "paths": [
-      ".opencode/skills"
-    ]
-  },
   "permission": {
     "edit": "ask",
     "bash": {
@@ -22,6 +17,9 @@
       "**/.env*": "deny",
       "**/secrets/**": "deny",
       "**/.ssh/**": "deny"
+    },
+    "skill": {
+      "*": "ask"
     }
   }
 }

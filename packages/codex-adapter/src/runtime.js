@@ -167,6 +167,50 @@ export function buildCodexAdapterReadiness({ root }) {
   };
 }
 
+export function buildCodexStableRuntime({ root }) {
+  const readiness = buildCodexAdapterReadiness({ root });
+
+  return {
+    harness: "codex",
+    status: "stable",
+    adapter_package: readiness.adapter_package,
+    runtime_api: "packages/codex-adapter/src/runtime.js#buildCodexStableRuntime",
+    capabilities: readiness.validated_capabilities,
+    trace_events: ["provider_request_avoided", "adapter_artifact_previewed"],
+    boundaries: {
+      core_is_harness_agnostic: true,
+      harness_config_writes_disabled_by_default: true,
+      model_assignment_user_owned: readiness.invariants.model_assignment_user_owned,
+      local_first_execution: readiness.invariants.provider_calls_are_local_first,
+      permission_policy_externalized: readiness.invariants.permissions_deny_by_default
+    },
+    generated_artifact_counts: readiness.generated_artifact_counts,
+    provider_calls: 0
+  };
+}
+
+export function buildCodexIntegrationPreview({ root }) {
+  const kernel = loadArchitectureKernel(root);
+  const preview = buildCodexAdapterPreview({ root, kernel });
+  const stableRuntime = buildCodexStableRuntime({ root });
+
+  return {
+    harness: "codex",
+    mvp_required: true,
+    preview_only: false,
+    adapter_package: "packages/codex-adapter",
+    generated_artifacts: {
+      agents: preview.generated_artifacts.agents,
+      skills: preview.generated_artifacts.skills,
+      instructions: preview.generated_artifacts.instructions,
+      stable_runtime_api: stableRuntime.runtime_api
+    },
+    writes_harness_config_by_default: false,
+    human_approval_required_before_write: true,
+    provider_calls: 0
+  };
+}
+
 export function buildCodexInstallPreview({ root, outputDir = ".ai/generated/codex-install" }) {
   const kernel = loadArchitectureKernel(root);
   const agentArtifacts = kernel.agents.agents.map((agent) => toCodexAgentArtifact({ root, agent }));

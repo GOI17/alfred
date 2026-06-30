@@ -1,8 +1,8 @@
 Alfred Eval Runner Report
 Status: pass
-Baselines: 17
-Current Results: 16
-Targets: 16
+Baselines: 19
+Current Results: 17
+Targets: 17
 Regression Gate: pass
 Regressions: 0
 Missing Current Results: 0
@@ -26,3 +26,4 @@ Targets:
 - phase-10-eval-runner-cli
 - release-0.2.0
 - mvp-release-plan
+- instructions-install-management

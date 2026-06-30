@@ -6,9 +6,9 @@ items:
       - vscode
       - opencode
       - pi
+      - codex
     preview_harnesses:
       - claude
-      - codex
       - kiro
     expected:
       status: pass

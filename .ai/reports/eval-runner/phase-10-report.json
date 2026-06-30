@@ -2,9 +2,9 @@
   "id": "phase-10-eval-runner-cli-report",
   "status": "pass",
   "summary": {
-    "baseline_count": 17,
-    "current_result_count": 16,
-    "phase_count": 16,
+    "baseline_count": 19,
+    "current_result_count": 17,
+    "phase_count": 17,
     "missing_current_results": [],
     "missing_baselines": [],
     "regression_gate_status": "pass",
@@ -27,7 +27,8 @@
     "phase-9-adapter-generation",
     "phase-10-eval-runner-cli",
     "release-0.2.0",
-    "mvp-release-plan"
+    "mvp-release-plan",
+    "instructions-install-management"
   ],
   "regression_gate": {
     "status": "pass",

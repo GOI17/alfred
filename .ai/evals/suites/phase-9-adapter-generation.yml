@@ -9,15 +9,15 @@ cases:
         - vscode
         - opencode
         - pi
-      required_harness_count: 3
+        - codex
+      required_harness_count: 4
   - id: preview-only-portability-targets
     input: .ai/adapters/phase-9-adapter-generation.json
     expected:
       preview_harnesses:
         - claude
-        - codex
         - kiro
-      preview_harness_count: 3
+      preview_harness_count: 2
   - id: local-preview-generation
     input: .ai/observability/generated/phase-9-adapter-generation.json
     expected:

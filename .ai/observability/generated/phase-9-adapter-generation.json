@@ -11,23 +11,23 @@
     "required_harnesses": [
       "vscode",
       "opencode",
-      "pi"
+      "pi",
+      "codex"
     ],
     "preview_harnesses": [
       "claude",
-      "codex",
       "kiro"
     ],
     "generated_harnesses": [
       "vscode",
       "opencode",
       "pi",
-      "claude",
       "codex",
+      "claude",
       "kiro"
     ],
-    "required_harness_count": 3,
-    "preview_harness_count": 3,
+    "required_harness_count": 4,
+    "preview_harness_count": 2,
     "generated_harness_count": 6,
     "write_gate_failures": [],
     "approval_failures": [],
@@ -122,37 +122,37 @@
         "generated_artifacts": {
           "agents": [
             {
-              "path": ".opencode/agent/orchestrator.md",
+              "path": ".opencode/agents/orchestrator.md",
               "mode": "primary",
               "permission": "mapped-from-alfred-permission-policy",
               "model": "user-owned-runtime-configuration"
             },
             {
-              "path": ".opencode/agent/developer.md",
+              "path": ".opencode/agents/developer.md",
               "mode": "subagent",
               "permission": "mapped-from-alfred-permission-policy",
               "model": "user-owned-runtime-configuration"
             },
             {
-              "path": ".opencode/agent/qa.md",
+              "path": ".opencode/agents/qa.md",
               "mode": "subagent",
               "permission": "mapped-from-alfred-permission-policy",
               "model": "user-owned-runtime-configuration"
             },
             {
-              "path": ".opencode/agent/librarian.md",
+              "path": ".opencode/agents/librarian.md",
               "mode": "subagent",
               "permission": "mapped-from-alfred-permission-policy",
               "model": "user-owned-runtime-configuration"
             },
             {
-              "path": ".opencode/agent/architect.md",
+              "path": ".opencode/agents/architect.md",
               "mode": "subagent",
               "permission": "mapped-from-alfred-permission-policy",
               "model": "user-owned-runtime-configuration"
             },
             {
-              "path": ".opencode/agent/reviewer.md",
+              "path": ".opencode/agents/reviewer.md",
               "mode": "subagent",
               "permission": "mapped-from-alfred-permission-policy",
               "model": "user-owned-runtime-configuration"
@@ -227,26 +227,94 @@
         "provider_calls": 0
       },
       {
-        "harness": "claude",
-        "mvp_required": false,
-        "preview_only": true,
-        "adapter_package": null,
+        "harness": "codex",
+        "mvp_required": true,
+        "preview_only": false,
+        "adapter_package": "packages/codex-adapter",
         "generated_artifacts": {
-          "compatibility_contract": ".ai/harnesses/claude/adapter-design.md",
-          "artifact_mode": "preview-only",
-          "promotion_requires_human_approval": true
+          "agents": [
+            {
+              "path": ".codex/agents/orchestrator.toml",
+              "name": "orchestrator",
+              "description": "Alfred Orchestrator agent generated from .ai source of truth.",
+              "nickname_candidates": [
+                "Orchestrator"
+              ]
+            },
+            {
+              "path": ".codex/agents/developer.toml",
+              "name": "developer",
+              "description": "Alfred Developer agent generated from .ai source of truth.",
+              "nickname_candidates": [
+                "Developer"
+              ]
+            },
+            {
+              "path": ".codex/agents/qa.toml",
+              "name": "qa",
+              "description": "Alfred Qa agent generated from .ai source of truth.",
+              "nickname_candidates": [
+                "Qa"
+              ]
+            },
+            {
+              "path": ".codex/agents/librarian.toml",
+              "name": "librarian",
+              "description": "Alfred Librarian agent generated from .ai source of truth.",
+              "nickname_candidates": [
+                "Librarian"
+              ]
+            },
+            {
+              "path": ".codex/agents/architect.toml",
+              "name": "architect",
+              "description": "Alfred Architect agent generated from .ai source of truth.",
+              "nickname_candidates": [
+                "Architect"
+              ]
+            },
+            {
+              "path": ".codex/agents/reviewer.toml",
+              "name": "reviewer",
+              "description": "Alfred Reviewer agent generated from .ai source of truth.",
+              "nickname_candidates": [
+                "Reviewer"
+              ]
+            }
+          ],
+          "skills": [
+            {
+              "path": ".agents/skills/typescript-project/SKILL.md",
+              "source_body_path": ".ai/skills/project/typescript-project/SKILL.md",
+              "load_body_by_default": false,
+              "scope": "project",
+              "description": "Use only when TypeScript project files, package scripts, or ts/js source changes require TypeScript-specific guidance."
+            },
+            {
+              "path": ".agents/skills/architecture-docs/SKILL.md",
+              "source_body_path": ".ai/skills/project/architecture-docs/SKILL.md",
+              "load_body_by_default": false,
+              "scope": "project",
+              "description": "Use only when architecture documents, DDD language, phase handoffs, or model-readable project policy files are edited."
+            }
+          ],
+          "instructions": {
+            "path": "AGENTS.md",
+            "discovery": "codex-instruction-chain"
+          },
+          "stable_runtime_api": "packages/codex-adapter/src/runtime.js#buildCodexStableRuntime"
         },
         "writes_harness_config_by_default": false,
         "human_approval_required_before_write": true,
         "provider_calls": 0
       },
       {
-        "harness": "codex",
+        "harness": "claude",
         "mvp_required": false,
         "preview_only": true,
         "adapter_package": null,
         "generated_artifacts": {
-          "compatibility_contract": ".ai/harnesses/codex/adapter-design.md",
+          "compatibility_contract": ".ai/harnesses/claude/adapter-design.md",
           "artifact_mode": "preview-only",
           "promotion_requires_human_approval": true
         },
