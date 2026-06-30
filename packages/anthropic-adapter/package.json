@@ -1,0 +1,13 @@
+{
+  "name": "@alfred-labs/anthropic-adapter",
+  "private": true,
+  "version": "0.3.0",
+  "type": "module",
+  "bin": {
+    "alfred-mcp": "./bin/alfred-mcp.mjs"
+  },
+  "scripts": {
+    "check": "node --check src/server.mjs && node --check bin/alfred-mcp.mjs",
+    "test": "node --test test/*.mjs"
+  }
+}

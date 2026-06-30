@@ -1,334 +1,216 @@
 #!/bin/sh
-# Alfred Pi Agent Installation Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh
-# Or:    curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --path ./alfred-workspace
+# Alfred Memory installer. One-shot, no dependencies beyond Node 22+.
 #
-# This script installs only Pi agent files into a user workspace.
-# It does NOT install the full Alfred repository.
+# USAGE
+#   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --profile=web --name my-mem
+#   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --profile=coding --path ~/clients/acme
+#
+# WHAT IT DOES
+#   1. Clones (or reuses) the Alfred repo into a target path.
+#   2. Runs `alfred init` with the requested profile.
+#   3. Optionally starts the server + bridge in the background.
+#   4. Prints the API key and integration steps.
+#
+# FLAGS
+#   --profile=<coding|web|both>   Default: web (most common, no coding deps)
+#   --name <name>                 Display name for the tenant
+#   --path <dir>                  Where to clone the repo. Default: ~/.alfred
+#   --start-server                Start alfred serve in the background after init
+#   --no-clone                    Assume repo already exists at --path
+#   --registry <path>             Override registry path
+#   --help                        Show this message
+#
+# Requires Node 22+. macOS / Linux supported.
 
 set -e
 
-VERSION="0.2.0"
-INSTALL_BASE="https://raw.githubusercontent.com/GOI17/alfred/main"
-DRY_RUN=false
-TARGET_PATH=""
+VERSION="0.3.0"
+REPO_URL="https://github.com/GOI17/alfred.git"
+NODE_MIN="22"
 
-# --- Helper Functions ---
+# Default flags.
+PROFILE="web"
+NAME=""
+TARGET_PATH="$HOME/.alfred"
+START_SERVER=false
+NO_CLONE=false
+REGISTRY_PATH=""
+CWD_OVERRIDE=""
 
-logger() {
-  echo "[pi-install] $1"
-}
-
-write_trace() {
-  target="$1"
-  operation="$2"
-  status="$3"
-  error_code="$4"
-
-  trace_dir="${target}/.alfred/observability"
-  mkdir -p "$trace_dir"
-
-  timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.%NZ")
-
-  # Atomic write using temp file
-  trace_file="${trace_dir}/install-trace.json"
-  temp_file="${trace_file}.${$}.tmp"
-
-  cat > "$temp_file" << EOF
-{
-  "trace_id": "phase-13-pi-agent-install-management",
-  "timestamp": "${timestamp}",
-  "event": "install_management_operation",
-  "actor": "pi-install",
-  "data": {
-    "operation": "${operation}",
-    "target_path": "${target}",
-    "status": "${status}",
-    "error_code": ${error_code:+"\"${error_code}\""}${error_code:-null},
-    "human_approval": true,
-    "provider_calls": 0
-  }
-}
-EOF
-  mv "$temp_file" "$trace_file"
-}
-
-validate_path() {
-  path="$1"
-
-  # Check if path is empty
-  if [ -z "$path" ]; then
-    echo "error:installation_path_empty"
-    return 1
-  fi
-
-  # Check if path is root
-  if [ "$path" = "/" ]; then
-    echo "error:installation_path_is_root"
-    return 1
-  fi
-
-  # Check for protected segments using case-insensitive match
-  case "$path" in
-    *".ai/"*)     echo "error:installation_path_protected"; return 1 ;;
-    *".opencode/"*) echo "error:installation_path_protected"; return 1 ;;
-    *"/harnesses/"*) echo "error:installation_path_protected"; return 1 ;;
-    *".ai"*)      echo "error:installation_path_protected"; return 1 ;;
-    *".opencode"*) echo "error:installation_path_protected"; return 1 ;;
-    *"harnesses"*) echo "error:installation_path_protected"; return 1 ;;
+for arg in "$@"; do
+  case "$arg" in
+    --profile=*)  PROFILE="${arg#*=}" ;;
+    --name=*)     NAME="${arg#*=}" ;;
+    --path=*)     TARGET_PATH="${arg#*=}" ;;
+    --registry=*) REGISTRY_PATH="${arg#*=}" ;;
+    --cwd=*)      CWD_OVERRIDE="${arg#*=}" ;;
+    --start-server) START_SERVER=true ;;
+    --no-clone)    NO_CLONE=true ;;
+    --help|-h)     sed -n '2,30p' "$0"; exit 0 ;;
+    *) echo "[alfred] Unknown flag: $arg (use --help)"; exit 2 ;;
   esac
+done
 
-  # Check if directory exists and is writable
-  if [ -e "$path" ]; then
-    if [ ! -d "$path" ]; then
-      echo "error:installation_path_not_directory"
-      return 1
-    fi
-    if [ ! -w "$path" ]; then
-      echo "error:installation_path_not_writable"
-      return 1
-    fi
+log()  { printf "[alfred] %s\n" "$*"; }
+err()  { printf "[alfred][error] %s\n" "$*" 1>&2; exit 1; }
+note() { printf "[alfred] %s\n" "$*"; }
+
+# Node check.
+NODE_VERSION="$(node -v 2>/dev/null || true)"
+if [ -z "$NODE_VERSION" ]; then
+  err "Node.js is not on PATH. Install Node 22+ first (https://nodejs.org)."
+fi
+NODE_MAJOR="$(printf '%s' "$NODE_VERSION" | sed -E 's/^v([0-9]+).*/\1/')"
+if [ "$NODE_MAJOR" -lt "$NODE_MIN" ] 2>/dev/null; then
+  err "Node $NODE_VERSION found, but $NODE_MIN+ required."
+fi
+
+# Clone or reuse.
+if [ "$NO_CLONE" = true ] && [ -d "$TARGET_PATH" ]; then
+  log "Reusing existing repo at $TARGET_PATH"
+else
+  if [ -d "$TARGET_PATH/.git" ]; then
+    log "Repo already cloned at $TARGET_PATH. Pulling latest."
+    (cd "$TARGET_PATH" && git pull --ff-only 2>/dev/null || true)
   else
-    # Directory doesn't exist, check if parent is writable
-    parent=$(dirname "$path")
-    if [ ! -w "$parent" ]; then
-      echo "error:installation_path_parent_not_writable"
-      return 1
+    log "Cloning Alfred v$VERSION into $TARGET_PATH ..."
+    if command -v git >/dev/null 2>&1; then
+      git clone --depth 1 --branch "v$VERSION" "$REPO_URL" "$TARGET_PATH" 2>/dev/null || \
+        git clone --depth 1 "$REPO_URL" "$TARGET_PATH"
+    else
+      err "git is required. Install git or use --no-clone with the repo pre-cloned."
     fi
   fi
+fi
 
-  echo "ok"
-  return 0
-}
+# Resolve registry path.
+if [ -z "$REGISTRY_PATH" ]; then
+  REGISTRY_PATH="$HOME/.alfred/registry.sqlite"
+fi
+export ALFRED_MEMORY_REGISTRY="$REGISTRY_PATH"
+mkdir -p "$(dirname "$REGISTRY_PATH")"
 
-# --- Argument Parsing ---
+# Build init args.
+INIT_ARGS="--profile=$PROFILE --non-interactive"
+if [ -n "$NAME" ]; then INIT_ARGS="$INIT_ARGS --name=$NAME"; fi
+if [ -n "$CWD_OVERRIDE" ]; then INIT_ARGS="$INIT_ARGS --cwd=$CWD_OVERRIDE"; fi
 
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --path)
-      TARGET_PATH="$2"
-      shift 2
-      ;;
-    --dry-run)
-      DRY_RUN=true
-      shift
-      ;;
-    -h|--help)
-      echo "Usage: $0 [--path <directory>] [--dry-run]"
-      echo "  --path    Installation target directory (default: current directory)"
-      echo "  --dry-run Preview operation without making changes"
-      exit 0
-      ;;
-    *)
-      # If not a flag, treat as positional path argument
-      if [ -z "$TARGET_PATH" ] && [ "${1#-}" = "$1" ]; then
-        TARGET_PATH="$1"
+case "$PROFILE" in
+  coding)
+    WORKSPACE_PATH="${CWD_OVERRIDE:-$PWD}"
+    INIT_ARGS="$INIT_ARGS --cwd=$WORKSPACE_PATH"
+    # Default: derive a per-tenant sqlite file under the install dir.
+    if [ -z "$NAME" ]; then NAME="alfred-coding-$(date +%F)"; fi
+    if [ -z "$CWD_OVERRIDE" ]; then
+      CWD_OVERRIDE="$WORKSPACE_PATH"
+    fi
+    ;;
+  web)
+    # No workspace binding. We just need a tenant + key. Postgres is required
+    # by hosting policy for human_agent, but if the operator has no Postgres
+    # we fall back to SQLite+human_agent as bootstrap, which is rejected by
+    # the registry. So in the installer we prompt for a connection string.
+    if [ -z "${ALFRED_MEMORY_DB:-}" ]; then
+      printf "[alfred] Web profile requires a Postgres connection. Set ALFRED_MEMORY_DB=postgres://user:pass@host/db or pass --db-connection.\n" 1>&2
+      if [ -t 0 ]; then
+        printf "Postgres URL: "
+        read -r DB_URL
+      else
+        DB_URL=""
       fi
-      shift
-      ;;
-  esac
-done
+      if [ -z "$DB_URL" ]; then
+        err "No Postgres URL provided. Set ALFRED_MEMORY_DB and re-run."
+      fi
+      export ALFRED_MEMORY_DB="$DB_URL"
+    fi
+    INIT_ARGS="$INIT_ARGS --db-connection=$ALFRED_MEMORY_DB"
+    ;;
+  both)
+    WORKSPACE_PATH="${CWD_OVERRIDE:-$PWD}"
+    INIT_ARGS="$INIT_ARGS --cwd=$WORKSPACE_PATH"
+    if [ -z "$NAME" ]; then NAME="alfred-shared-$(date +%F)"; fi
+    if [ -z "${ALFRED_MEMORY_DB:-}" ]; then
+      printf "[alfred] 'both' profile requires a Postgres connection. Set ALFRED_MEMORY_DB=postgres://user:pass@host/db or pass --db-connection.\n" 1>&2
+      if [ -t 0 ]; then
+        printf "Postgres URL: "
+        read -r DB_URL
+      else
+        DB_URL=""
+      fi
+      if [ -z "$DB_URL" ]; then
+        err "No Postgres URL provided. Set ALFRED_MEMORY_DB and re-run."
+      fi
+      export ALFRED_MEMORY_DB="$DB_URL"
+    fi
+    INIT_ARGS="$INIT_ARGS --db-connection=$ALFRED_MEMORY_DB"
+    ;;
+  *) err "Unknown profile: $PROFILE (use coding, web, or both)" ;;
+esac
 
-# Default to current directory if no path specified
-if [ -z "$TARGET_PATH" ]; then
-  TARGET_PATH="."
-fi
+log "Running: alfred init $INIT_ARGS"
+log "(registry: $REGISTRY_PATH)"
 
-# --- Path Validation ---
-
-logger "Validating installation path: ${TARGET_PATH}"
-
-validation_result=$(validate_path "$TARGET_PATH")
-if [ $? -ne 0 ]; then
-  case "$validation_result" in
-    error:installation_path_is_root)
-      logger "ERROR: Installation path cannot be root (/)."
-      logger "Use a user workspace path like ./alfred or ~/projects/alfred"
-      exit 1
-      ;;
-    error:installation_path_protected)
-      logger "ERROR: Installation path contains protected segments (.ai/, .opencode/, harnesses/)."
-      logger "Cannot install into Alfred system directories."
-      exit 1
-      ;;
-    error:installation_path_not_directory)
-      logger "ERROR: Installation path exists but is not a directory."
-      exit 1
-      ;;
-    error:installation_path_not_writable)
-      logger "ERROR: Installation path is not writable."
-      exit 1
-      ;;
-    error:installation_path_empty)
-      logger "ERROR: Installation path is empty."
-      exit 1
-      ;;
-    *)
-      logger "ERROR: Unknown validation error: $validation_result"
-      exit 1
-      ;;
-  esac
-fi
-
-logger "Path validation passed."
-
-# --- Dry Run Mode ---
-
-if [ "$DRY_RUN" = true ]; then
-  logger "DRY-RUN MODE: No files will be written."
-  logger "Would install to: ${TARGET_PATH}"
-  logger "Files to be downloaded from: ${INSTALL_BASE}/pi/${VERSION}"
-  exit 0
-fi
-
-# --- Installation ---
-
-logger "Installing Alfred Pi Agent to: ${TARGET_PATH}"
-
-# Create directory structure
-alfred_dir="${TARGET_PATH}/.alfred"
-agents_dir="${alfred_dir}/agents"
-skills_dir="${alfred_dir}/skills"
-adapter_dir="${alfred_dir}/pi-adapter"
-
-mkdir -p "$agents_dir"
-mkdir -p "$skills_dir"
-mkdir -p "$adapter_dir"
-
-# Track success for trace
-install_success=true
-error_code=null
-
-# Download and install AGENTS.md
-logger "Downloading AGENTS.md..."
-agents_md_tmp="${TARGET_PATH}/AGENTS.md.$$.tmp"
-if ! curl -fsSL "${INSTALL_BASE}/pi/${VERSION}/AGENTS.md" -o "$agents_md_tmp" 2>/dev/null; then
-  logger "WARNING: Could not download AGENTS.md, creating default..."
-  cat > "$agents_md_tmp" << 'EOF'
----
-description: Alfred orchestrator agent
----
-
-# Alfred Orchestrator
-
-You are Alfred's Orchestrator agent.
-
-Load project instructions from AGENTS.md and Alfred source-of-truth files under .ai/.
-
-Rules:
-- Preserve Alfred's local-first provider policy.
-- Do not broaden permissions.
-- Do not write harness config without explicit human approval.
-- Keep model assignment user-owned at runtime.
-You are powered by the model named minimax-m2.7. The exact model ID is ollama-cloud/minimax-m2.7
-EOF
-fi
-mv "$agents_md_tmp" "${TARGET_PATH}/AGENTS.md"
-
-# Download config.json
-logger "Downloading config.json..."
-config_tmp="${alfred_dir}/config.json.$$.tmp"
-if curl -fsSL "${INSTALL_BASE}/pi/${VERSION}/.alfred/config.json" -o "$config_tmp" 2>/dev/null; then
-  mv "$config_tmp" "${alfred_dir}/config.json"
-else
-  # Create default config
-  cat > "${alfred_dir}/config.json" << 'EOF'
-{
-  "harness": "pi",
-  "version": "0.2.0",
-  "capabilities": [
-    "primary_control",
-    "specialist_routing",
-    "lazy_skills",
-    "permission_enforcement",
-    "trace_emission",
-    "eval_execution",
-    "model_assignment",
-    "local_first"
-  ]
+INIT_OUTPUT="$(cd "$TARGET_PATH" && node packages/memory-server/scripts/alfred.mjs init $INIT_ARGS 2>&1)" || {
+  printf '%s\n' "$INIT_OUTPUT" 1>&2
+  err "alfred init failed"
 }
-EOF
+printf '%s\n' "$INIT_OUTPUT"
+
+# Capture the API key from the JSON output.
+API_KEY="$(printf '%s\n' "$INIT_OUTPUT" | grep -oE '"api_key": *"alk_[A-Za-z0-9_]+' | head -1 | sed 's/.*"alk_/alk_/' | tr -d ' ')"
+
+if [ "$START_SERVER" = true ]; then
+  log "Starting alfred-memory server in background (logs: $TARGET_PATH/alfred-server.log)"
+  nohup node "$TARGET_PATH/packages/memory-server/scripts/serve.mjs" \
+    >"$TARGET_PATH/alfred-server.log" 2>&1 &
+  disown 2>/dev/null || true
+  log "Server starting. After ~1s, health check: curl http://localhost:3000/health"
 fi
 
-# Download agent files
-logger "Downloading agent files..."
-for agent in orchestrator developer qa librarian architect reviewer; do
-  agent_tmp="${agents_dir}/${agent}.md.$$.tmp"
-  if curl -fsSL "${INSTALL_BASE}/pi/${VERSION}/.alfred/agents/${agent}.md" -o "$agent_tmp" 2>/dev/null; then
-    mv "$agent_tmp" "${agents_dir}/${agent}.md"
-    logger "  Installed ${agent}.md"
-  else
-    logger "  WARNING: Could not download ${agent}.md"
-  fi
-done
+cat <<EOF
 
-# Download skills registry
-logger "Downloading skills registry..."
-registry_tmp="${skills_dir}/registry.json.$$.tmp"
-if curl -fsSL "${INSTALL_BASE}/pi/${VERSION}/.alfred/skills/registry.json" -o "$registry_tmp" 2>/dev/null; then
-  mv "$registry_tmp" "${skills_dir}/registry.json"
-else
-  # Create default registry
-  cat > "${skills_dir}/registry.json" << 'EOF'
-{
-  "skills": [],
-  "policy": {
-    "loading": "lazy",
-    "default": "available",
-    "scope": "task-specific",
-    "load_bodies_globally": false
-  }
-}
-EOF
-fi
+==============================================================
+ALFRED MEMORY INSTALLED
+==============================================================
 
-# Download pi-adapter files
-logger "Downloading pi-adapter files..."
-for file in runtime.js cli.js package.json README.md; do
-  adapter_tmp="${adapter_dir}/${file}.$$.tmp"
-  if curl -fsSL "${INSTALL_BASE}/pi/${VERSION}/.alfred/pi-adapter/${file}" -o "$adapter_tmp" 2>/dev/null; then
-    mv "$adapter_tmp" "${adapter_dir}/${file}"
-    logger "  Installed ${file}"
-  fi
-done
+Repository:    $TARGET_PATH
+Registry:      $REGISTRY_PATH
+Profile:       $PROFILE
+API key:       ${API_KEY:-<not captured>}
 
-# Create README in target path
-cat > "${TARGET_PATH}/README.md" << 'EOF'
-# Alfred Pi Agent Workspace
-
-This workspace has Alfred Pi agent installed.
-
-## Structure
-
-- `AGENTS.md` - Orchestrator agent instructions
-- `.alfred/` - Alfred configuration and artifacts
-  - `config.json` - Pi harness configuration
-  - `agents/` - Agent specifications
-  - `skills/` - Skill manifests
-  - `pi-adapter/` - Pi adapter files
-
-## Updating
-
-To update to the latest version:
-```
-curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/update.sh | sh
-```
-
-## Uninstalling
-
-To remove Alfred from this workspace:
-```
-curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/uninstall.sh | sh
-```
+NEXT STEPS
 EOF
 
-# --- Finalization ---
+case "$PROFILE" in
+  web)
+    cat <<EOF2
+  - For ChatGPT: my GPTs > Create > Actions > Import
+    $TARGET_PATH/packages/chatgpt-adapter/openapi.json
+    Auth: API Key, Bearer, value=\$API_KEY
+  - For Claude Desktop: edit claude_desktop_config.json and add:
+    {"mcpServers": {"alfred-memory": {"command": "node", "args": ["$TARGET_PATH/packages/anthropic-adapter/bin/alfred-mcp.mjs"], "env": {"ALFRED_MEMORY_API_KEY": "\$API_KEY"}}}}
+  - For Gemini / AI Studio: Tools > Extensions > Import
+    $TARGET_PATH/packages/gemini-adapter/openapi.json
+    Auth: API Key, header x-api-key, value=\$API_KEY
+  - Run a server: $TARGET_PATH/scripts/serve.sh
+  - Get another key: alfred keys issue --tenant <id>
+EOF2
+    ;;
+  coding|both)
+    cat <<EOF2
+  - Your config is in \$(pwd)/.alfred/config.json
+  - Run a server: $TARGET_PATH/scripts/serve.sh
+  - Wire ChatGPT/Claude/Gemini with: alfred adapters instructions <name>
+EOF2
+    ;;
+esac
 
-logger "Installation complete."
-logger "Installed to: ${TARGET_PATH}"
+cat <<EOF3
+  - Issue another key:   alfred keys issue --tenant <id>
+  - Show all tenants:    alfred list
+  - Validate policy:     alfred validate-policy
+  - Migrate data:        alfred migrate --from sqlite --to postgres --tenant <id>
 
-# Emit trace
-write_trace "$TARGET_PATH" "install" "pass" "$error_code"
-
-logger "Trace written to: ${TARGET_PATH}/.alfred/observability/install-trace.json"
-logger "Restart your harness to activate the installation."
+Get help:        alfred --help
+EOF3

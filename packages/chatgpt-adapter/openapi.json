@@ -1,0 +1,183 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Alfred Memory API",
+    "description": "Custom GPT Actions contract for Alfred Memory. Authenticate with Bearer token in Authorization header.",
+    "version": "0.3.0"
+  },
+  "servers": [
+    {
+      "url": "https://alfred-memory.example.com",
+      "description": "Self-hosted Alfred Memory Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "alk_<base64url>"
+      }
+    },
+    "schemas": {
+      "MemoryRecord": {
+        "type": "object",
+        "required": ["id", "userId", "namespace", "type", "content", "tags", "source", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "userId": { "type": "string" },
+          "namespace": { "type": "string" },
+          "projectId": { "type": ["string", "null"] },
+          "type": { "type": "string", "enum": ["preference","fact","decision","workflow","project","correction","source"] },
+          "content": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "source": { "type": "string" },
+          "metadata": { "type": "object", "additionalProperties": true },
+          "confidence": { "type": ["number", "null"] },
+          "expiresAt": { "type": ["string", "null"] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "MemoryPage": {
+        "type": "object",
+        "required": ["items", "pagination"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/MemoryRecord" } },
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "limit": { "type": "integer" },
+              "offset": { "type": "integer" },
+              "total": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "CreateMemoryInput": {
+        "type": "object",
+        "required": ["type", "content", "source"],
+        "properties": {
+          "namespace": { "type": "string" },
+          "projectId": { "type": "string" },
+          "type": { "type": "string", "enum": ["preference","fact","decision","workflow","project","correction","source"] },
+          "content": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "source": { "type": "string" },
+          "metadata": { "type": "object" }
+        }
+      }
+    }
+  },
+  "security": [{ "BearerAuth": [] }],
+  "paths": {
+    "/memories": {
+      "get": {
+        "operationId": "listMemories",
+        "summary": "List memories visible to this tenant.",
+        "parameters": [
+          { "name": "namespace", "in": "query", "schema": { "type": "string" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "minimum": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Memory page",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/MemoryPage" } }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createMemory",
+        "summary": "Create a memory entry.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/CreateMemoryInput" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created memory",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/MemoryRecord" } }
+            }
+          }
+        }
+      }
+    },
+    "/memories/search": {
+      "get": {
+        "operationId": "searchMemories",
+        "summary": "Search memories by text query.",
+        "parameters": [
+          { "name": "q", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "namespace", "in": "query", "schema": { "type": "string" } },
+          { "name": "type", "in": "query", "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "minimum": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Memory page filtered by query.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/MemoryPage" } }
+            }
+          }
+        }
+      }
+    },
+    "/memories/{id}": {
+      "parameters": [
+        { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+      ],
+      "get": {
+        "operationId": "getMemory",
+        "summary": "Fetch a single memory by id.",
+        "responses": {
+          "200": {
+            "description": "Memory record",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MemoryRecord" } } }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteMemory",
+        "summary": "Delete a memory by id.",
+        "responses": { "200": { "description": "Deleted" } }
+      }
+    },
+    "/policy": {
+      "get": {
+        "operationId": "validatePolicy",
+        "summary": "Run hosting-policy validation against the registry.",
+        "responses": {
+          "200": {
+            "description": "Policy report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": { "type": "boolean" },
+                    "violations": { "type": "array", "items": { "type": "object" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Liveness probe.",
+        "responses": { "200": { "description": "OK" } }
+      }
+    }
+  }
+}

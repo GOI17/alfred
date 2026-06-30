@@ -219,12 +219,13 @@ export function runEvalRunner({ root }) {
   const baselines = loadEvalBaselines(root);
   const currentResults = computeCurrentEvalResults(root);
   const gatePolicy = readJson(root, ".ai/evals/regression-gates.json");
-  const gateBaselines = Object.fromEntries(gatePolicy.phases.map((phaseGate) => [phaseGate.phase, baselines[phaseGate.phase]]));
+  const phaseGates = Array.isArray(gatePolicy.phases) ? gatePolicy.phases : legacyRegressionPhaseGates();
+  const gateBaselines = Object.fromEntries(phaseGates.map((phaseGate) => [phaseGate.phase, baselines[phaseGate.phase]]));
   const gateCurrentResults = Object.fromEntries(
-    gatePolicy.phases.map((phaseGate) => [phaseGate.phase, currentResults[phaseGate.phase]])
+    phaseGates.map((phaseGate) => [phaseGate.phase, currentResults[phaseGate.phase]])
   );
   const regressionGate = evaluateRegressionGate({
-    gatePolicy,
+    gatePolicy: { ...gatePolicy, phases: phaseGates, baseline_update_requires_human_approval: true },
     baselines: gateBaselines,
     currentResults: gateCurrentResults
   });
@@ -239,6 +240,49 @@ export function runEvalRunner({ root }) {
     regression_gate: regressionGate,
     provider_calls: 0
   };
+}
+
+function legacyRegressionPhaseGates() {
+  return [
+    {
+      phase: "phase-1-architecture-kernel",
+      rules: [
+        { metric: "result", operator: "equals", value: "pass" },
+        { metric: "provider_calls", operator: "equals", value: 0 }
+      ]
+    },
+    {
+      phase: "phase-2-pi-runtime-spike",
+      rules: [
+        { metric: "result", operator: "equals", value: "pass" },
+        { metric: "provider_calls", operator: "less_than_or_equal_baseline" },
+        { metric: "trace_event", operator: "equals" }
+      ]
+    },
+    {
+      phase: "phase-3-agent-system",
+      rules: [
+        { metric: "result", operator: "equals", value: "pass" },
+        { metric: "small_task_delegations", operator: "less_than_or_equal_baseline" },
+        { metric: "specialist_delegations", operator: "greater_than_or_equal_baseline" },
+        { metric: "temporary_agent_proposals", operator: "greater_than_or_equal_baseline" },
+        { metric: "provider_calls", operator: "less_than_or_equal_baseline" }
+      ]
+    },
+    {
+      phase: "phase-4-security-enforcement",
+      rules: [
+        { metric: "result", operator: "equals", value: "pass" },
+        { metric: "allowed_permissions", operator: "less_than_or_equal_baseline" },
+        { metric: "denied_permissions", operator: "greater_than_or_equal_baseline" },
+        { metric: "protected_path_denials", operator: "greater_than_or_equal_baseline" },
+        { metric: "destructive_command_denials", operator: "greater_than_or_equal_baseline" },
+        { metric: "permission_broadening_denials", operator: "greater_than_or_equal_baseline" },
+        { metric: "default_denials", operator: "greater_than_or_equal_baseline" },
+        { metric: "provider_calls", operator: "less_than_or_equal_baseline" }
+      ]
+    }
+  ];
 }
 
 export function buildEvalRunnerReport({ root }) {

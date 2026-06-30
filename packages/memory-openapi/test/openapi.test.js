@@ -6,20 +6,29 @@ import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const yamlPath = join(__dirname, "..", "openapi.yaml");
-
-let parse;
-try {
-  ({ parse } = await import("yaml"));
-} catch {
-  // Fallback to the yaml copy available in this workspace when dependencies are
-  // not installed yet.
-  ({ parse } = await import("../../../.opencode/node_modules/yaml/dist/index.js"));
-}
+const packageJsonPath = join(__dirname, "..", "package.json");
 
 const yamlText = readFileSync(yamlPath, "utf8");
-const spec = parse(yamlText);
+const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+const spec = parseYamlSubset(yamlText);
+
+const expectedRoutes = new Set([
+  "GET /health",
+  "GET /memories/search",
+  "POST /memories",
+  "GET /memories",
+  "PATCH /memories/{id}",
+  "DELETE /memories/{id}"
+]);
 
 describe("memory-openapi schema", () => {
+  it("keeps the schema package dependency-free", () => {
+    assert.equal(packageJson.dependencies, undefined);
+    assert.equal(packageJson.devDependencies, undefined);
+    assert.equal(packageJson.peerDependencies, undefined);
+    assert.equal(packageJson.optionalDependencies, undefined);
+  });
+
   it("parses as valid YAML", () => {
     assert.equal(typeof spec, "object");
     assert.notEqual(spec, null);
@@ -48,6 +57,10 @@ describe("memory-openapi schema", () => {
       "deleteMemory"
     ]);
     assert.deepEqual(actual, expected);
+  });
+
+  it("exposes exactly the approved route surface", () => {
+    assert.deepEqual(collectRoutes(spec), expectedRoutes);
   });
 
   it("marks mutators as consequential", () => {
@@ -84,11 +97,10 @@ describe("memory-openapi schema", () => {
   });
 
   it("contains the required paths", () => {
-    const paths = Object.keys(spec.paths ?? {});
-    assert.ok(paths.includes("/health"));
-    assert.ok(paths.includes("/memories/search"));
-    assert.ok(paths.includes("/memories"));
-    assert.ok(paths.includes("/memories/{id}"));
+    for (const route of expectedRoutes) {
+      const [method, path] = route.split(" ");
+      assert.ok(spec.paths?.[path]?.[method.toLowerCase()], `${route} must exist`);
+    }
   });
 
   it("does not expose out-of-scope paths", () => {
@@ -145,6 +157,18 @@ function collectOperationIds(spec) {
   return ids;
 }
 
+function collectRoutes(spec) {
+  const routes = new Set();
+  for (const [path, pathItem] of Object.entries(spec.paths ?? {})) {
+    for (const method of ["get", "post", "put", "patch", "delete"]) {
+      if (pathItem[method]) {
+        routes.add(`${method.toUpperCase()} ${path}`);
+      }
+    }
+  }
+  return routes;
+}
+
 function findOperation(spec, operationId) {
   for (const pathItem of Object.values(spec.paths ?? {})) {
     for (const method of ["get", "post", "patch", "put", "delete"]) {
@@ -168,6 +192,165 @@ function resolveRef(spec, ref) {
     if (value === undefined) {
       throw new Error(`Cannot resolve ref ${ref}`);
     }
+  }
+  return value;
+}
+
+function parseYamlSubset(text) {
+  const lines = text
+    .split(/\r?\n/)
+    .map((raw, index) => ({
+      index: index + 1,
+      indent: raw.match(/^ */)[0].length,
+      text: raw.trim()
+    }))
+    .filter((line) => line.text !== "" && !line.text.startsWith("#"));
+
+  const { value, nextIndex } = parseBlock(lines, 0, 0);
+  assert.equal(nextIndex, lines.length, "YAML parser must consume the full document");
+  return value;
+}
+
+function parseBlock(lines, startIndex, indent) {
+  if (startIndex >= lines.length) {
+    return { value: {}, nextIndex: startIndex };
+  }
+
+  const first = lines[startIndex];
+  if (first.indent < indent) {
+    return { value: {}, nextIndex: startIndex };
+  }
+
+  if (first.indent !== indent) {
+    throw new Error(
+      `Unexpected indentation on line ${first.index}: expected ${indent}, got ${first.indent}`
+    );
+  }
+
+  return first.text.startsWith("- ")
+    ? parseSequence(lines, startIndex, indent)
+    : parseMapping(lines, startIndex, indent);
+}
+
+function parseSequence(lines, startIndex, indent) {
+  const array = [];
+  let index = startIndex;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    if (line.indent < indent) {
+      break;
+    }
+    if (line.indent !== indent || !line.text.startsWith("- ")) {
+      break;
+    }
+
+    const itemText = line.text.slice(2).trim();
+    index += 1;
+
+    let item;
+    if (itemText === "") {
+      const parsed = parseBlock(lines, index, indent + 2);
+      item = parsed.value;
+      index = parsed.nextIndex;
+    } else if (isMappingPair(itemText)) {
+      const [key, rawValue] = splitPair(itemText, line.index);
+      item = {};
+      index = assignValue(item, key, rawValue, lines, index, indent + 2);
+
+      if (index < lines.length && lines[index].indent === indent + 2) {
+        const parsed = parseMapping(lines, index, indent + 2);
+        Object.assign(item, parsed.value);
+        index = parsed.nextIndex;
+      }
+    } else {
+      item = parseScalar(itemText);
+    }
+
+    array.push(item);
+  }
+
+  return { value: array, nextIndex: index };
+}
+
+function parseMapping(lines, startIndex, indent) {
+  const object = {};
+  let index = startIndex;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    if (line.indent < indent) {
+      break;
+    }
+    if (line.indent !== indent || line.text.startsWith("- ")) {
+      break;
+    }
+
+    const [key, rawValue] = splitPair(line.text, line.index);
+    index += 1;
+    index = assignValue(object, key, rawValue, lines, index, indent + 2);
+  }
+
+  return { value: object, nextIndex: index };
+}
+
+function assignValue(object, key, rawValue, lines, index, nestedIndent) {
+  if (rawValue !== "") {
+    object[key] = parseScalar(rawValue);
+    return index;
+  }
+
+  if (index >= lines.length || lines[index].indent < nestedIndent) {
+    object[key] = {};
+    return index;
+  }
+
+  const parsed = parseBlock(lines, index, nestedIndent);
+  object[key] = parsed.value;
+  return parsed.nextIndex;
+}
+
+function isMappingPair(text) {
+  const colonIndex = text.indexOf(":");
+  return colonIndex > 0;
+}
+
+function splitPair(text, lineNumber) {
+  const colonIndex = text.indexOf(":");
+  if (colonIndex <= 0) {
+    throw new Error(`Expected mapping pair on line ${lineNumber}: ${text}`);
+  }
+
+  const key = stripQuotes(text.slice(0, colonIndex).trim());
+  const value = text.slice(colonIndex + 1).trim();
+  return [key, value];
+}
+
+function parseScalar(value) {
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  if (value === "null") {
+    return null;
+  }
+  if (value === "[]") {
+    return [];
+  }
+  if (/^-?\d+(\.\d+)?$/.test(value)) {
+    return Number(value);
+  }
+  return stripQuotes(value);
+}
+
+function stripQuotes(value) {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
   }
   return value;
 }

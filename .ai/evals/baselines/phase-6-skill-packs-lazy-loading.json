@@ -9,7 +9,7 @@
   "trace_event": "skill_activation_decision",
   "reproducibility": {
     "runtime_entrypoint": "packages/pi-adapter/src/runtime.js#runPiSkillLoadingSpike",
-    "validation_script": "scripts/validate-phase-6.mjs",
+    "validation_script": "scripts/validate-history.mjs phase6",
     "skill_registry": ".ai/skills/registry.json",
     "fixture_hash": "phase-6-skill-packs-lazy-loading-fixture-v1"
   }

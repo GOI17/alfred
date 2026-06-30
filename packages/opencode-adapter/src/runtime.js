@@ -17,7 +17,7 @@ function writeJsonAtomic(filePath, value) {
 
 function toOpencodeAgent(agent) {
   return {
-    path: `.opencode/agent/${agent.id}.md`,
+    path: `.opencode/agents/${agent.id}.md`,
     mode: agent.id === "orchestrator" ? "primary" : "subagent",
     description: agent.description,
     permission: "mapped-from-alfred-permission-policy",
@@ -32,8 +32,20 @@ function toTitle(value) {
     .join(" ");
 }
 
-function buildAgentFileContent(agent) {
+function readSourceText(root, relativePath) {
+  return fs.readFileSync(path.join(root, relativePath), "utf8").trim();
+}
+
+function quoteMarkdownSource(sourceSpec) {
+  return sourceSpec
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+}
+
+function buildAgentFileContent({ root, agent }) {
   const mode = agent.id === "orchestrator" ? "primary" : "subagent";
+  const sourceSpec = readSourceText(root, agent.spec);
   return `---
 description: Alfred ${toTitle(agent.id)} agent generated from .ai source of truth.
 mode: ${mode}
@@ -45,6 +57,10 @@ permission:
 You are Alfred's ${toTitle(agent.id)} agent.
 
 Load project instructions from AGENTS.md and Alfred source-of-truth files under .ai/.
+
+Alfred source agent spec (${agent.spec}), quoted to avoid nested frontmatter parsing:
+
+${quoteMarkdownSource(sourceSpec)}
 
 Rules:
 - Preserve Alfred's local-first provider policy.
@@ -80,9 +96,6 @@ function buildOpencodeJsonPreview() {
     $schema: "https://opencode.ai/config.json",
     default_agent: "orchestrator",
     instructions: ["AGENTS.md"],
-    skills: {
-      paths: [".opencode/skills"]
-    },
     permission: {
       edit: "ask",
       bash: {
@@ -96,6 +109,9 @@ function buildOpencodeJsonPreview() {
         "**/.env*": "deny",
         "**/secrets/**": "deny",
         "**/.ssh/**": "deny"
+      },
+      skill: {
+        "*": "ask"
       }
     }
   };
@@ -293,10 +309,10 @@ export function buildOpencodeInstallPreview({ root, outputDir = ".ai/generated/o
         content: `${JSON.stringify(buildOpencodeJsonPreview(), null, 2)}\n`
       },
       ...kernel.agents.agents.map((agent) => ({
-        path: `${relativeOutputDir}/.opencode/agent/${agent.id}.md`,
-        install_path: `.opencode/agent/${agent.id}.md`,
+        path: `${relativeOutputDir}/.opencode/agents/${agent.id}.md`,
+        install_path: `.opencode/agents/${agent.id}.md`,
         kind: "agent",
-        content: buildAgentFileContent(agent)
+        content: buildAgentFileContent({ root, agent })
       })),
       ...kernel.skills.skills.map((skill) => ({
         path: `${relativeOutputDir}/.opencode/skills/${skill.id}/SKILL.md`,

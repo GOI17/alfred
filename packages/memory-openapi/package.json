@@ -12,8 +12,5 @@
   "scripts": {
     "check": "node --check test/openapi.test.js",
     "test": "node --test test/openapi.test.js"
-  },
-  "devDependencies": {
-    "yaml": "^2.7.0"
   }
 }

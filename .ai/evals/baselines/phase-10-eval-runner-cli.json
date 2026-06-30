@@ -3,8 +3,8 @@
   "result": "pass",
   "report_format_count": 2,
   "summary_section_count": 7,
-  "baseline_count": 17,
-  "current_result_count": 16,
+  "baseline_count": 19,
+  "current_result_count": 17,
   "missing_current_results": 0,
   "missing_baselines": 0,
   "regressions": 0,
@@ -12,7 +12,7 @@
   "trace_event": "eval_runner_cli_reported",
   "reproducibility": {
     "runtime_entrypoint": "packages/evals/src/cli.js",
-    "validation_script": "scripts/validate-phase-10.mjs",
+    "validation_script": "scripts/validate-history.mjs phase10",
     "contract": ".ai/evals/cli/phase-10-eval-runner-cli.json",
     "fixture_hash": "phase-10-eval-runner-cli-fixture-v1"
   }

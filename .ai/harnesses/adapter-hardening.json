@@ -3,7 +3,11 @@
   "version": "adapter-hardening@0.1.0",
   "owner": "architect",
   "status": "complete",
-  "executable_adapters": ["pi", "opencode"],
+  "executable_adapters": [
+    "pi",
+    "opencode",
+    "codex"
+  ],
   "required_capabilities": [
     "primary_control",
     "specialist_routing",

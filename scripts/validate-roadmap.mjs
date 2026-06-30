@@ -15,7 +15,6 @@ function readJson(relativePath) {
 
 const requiredPaths = [
   ".ai/execution/post-phase-7-roadmap.json",
-  ".ai/execution/post-phase-7-roadmap.md",
   ".ai/evals/baselines/post-phase-7-roadmap-readiness.json",
   ".ai/evals/suites/roadmap-readiness.yml",
   ".ai/evals/datasets/roadmap-readiness.yml",

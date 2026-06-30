@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
+const traceTimestamp = "2026-05-26T00:00:00.000Z";
 
 function fail(message) {
   throw new Error(message);
@@ -114,7 +115,7 @@ console.log("Phase 13 path validation tests would check:", validatePathTests.map
 const traceOutputPath = path.join(root, ".ai/observability/generated/phase-13-pi-agent-install-management.json");
 const trace = {
   trace_id: "phase-13-pi-agent-install-management",
-  timestamp: new Date().toISOString(),
+  timestamp: traceTimestamp,
   event: "phase_validated",
   actor: "orchestrator",
   data: {

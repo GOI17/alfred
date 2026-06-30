@@ -13,7 +13,7 @@
   },
   "reproducibility": {
     "fixture_hash": "phase-1-local-files",
-    "runner": "scripts/validate-phase-1.mjs",
+    "runner": "scripts/validate-history.mjs phase1",
     "provider_calls": 0
   }
 }

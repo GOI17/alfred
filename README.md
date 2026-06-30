@@ -37,9 +37,12 @@ You are an AI agent working in an Alfred workspace. Start here to find your next
 ```
 packages/
 ├── core/        # Domain, use cases, ports, policies (harness-agnostic)
+├── memory/      # Vendor-agnostic persistent memory MVP
 ├── pi-adapter/  # Pi.dev runtime integration
-├── evals/       # Eval runner, baselines, reports
-└── cli/         # Local commands and validators
+├── opencode-adapter/ # opencode runtime integration
+├── codex-adapter/    # Codex custom agents + repo skills preview
+├── vscode-adapter/   # VSCode compatibility preview
+└── evals/            # Eval runner, baselines, reports
 
 .ai/
 ├── instructions/   # Agent-readable task instructions
@@ -52,6 +55,7 @@ packages/
 
 Do not read or modify without explicit human approval:
 - `.opencode/` — harness config
+- `.codex/` and `.agents/` — Codex custom agents/skills config
 - `.ai/harnesses/` — harness specs
 - `packages/core/` — core domain (adapters may depend, core must not)
 

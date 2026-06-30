@@ -1,7 +1,7 @@
 # @alfred-labs/memory-openapi
 
 OpenAPI schema and setup guide for exposing [Alfred Memory](../memory) to a
-ChatGPT Custom GPT via [ChatGPT Actions](https://developers.openai.com/api/docs/actions/getting-started).
+ChatGPT Custom GPT via ChatGPT Actions.
 
 This is **not** a native ChatGPT Memory integration. Alfred Memory stays external;
 the Custom GPT invokes it through HTTP requests described by this schema.
@@ -34,8 +34,9 @@ It intentionally does **not** contain:
 
 ## Authentication
 
-ChatGPT Actions supports `None`, `API Key` and `OAuth`. For this MVP we use an
-**API key sent as a Bearer token**:
+ChatGPT Actions supports `None`, `API Key` and `OAuth`; see the official
+[GPT Action authentication guide](https://developers.openai.com/api/docs/actions/authentication).
+For this MVP we use an **API key sent as a Bearer token**:
 
 1. In the Custom GPT Action, set **Authentication** to **API Key**.
 2. Configure the schema location (`openapi.yaml`) and set the API key.
@@ -46,8 +47,10 @@ ChatGPT Actions supports `None`, `API Key` and `OAuth`. For this MVP we use an
    Authorization: Bearer <api-key>
    ```
 
-Do not rely on the `x-api-key` header; ChatGPT Actions does not support custom
-headers in production.
+Do not rely on the `x-api-key` header. The schema models authentication as the
+standard `Authorization` header, and OpenAI's
+[production notes](https://developers.openai.com/api/docs/actions/production)
+list custom headers as an Actions limitation.
 
 ## Hosting requirement
 
@@ -122,3 +125,7 @@ Or directly with Node:
 cd packages/memory-openapi
 node --test test/openapi.test.js
 ```
+
+The package is intentionally dependency-free. The test suite uses a small,
+deterministic YAML structure scanner that validates the OpenAPI contract without
+requiring a package-level YAML parser or lockfile update.

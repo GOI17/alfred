@@ -12,7 +12,7 @@
   "trace_event": "permission_enforcement",
   "reproducibility": {
     "runtime_entrypoint": "packages/pi-adapter/src/runtime.js#runPiSecuritySpike",
-    "validation_script": "scripts/validate-phase-4.mjs",
+    "validation_script": "scripts/validate-history.mjs phase4",
     "permissions_policy": ".ai/policies/permissions.example.json",
     "security_policy": ".ai/policies/security.md",
     "fixture_hash": "phase-4-security-enforcement-fixture-v1"

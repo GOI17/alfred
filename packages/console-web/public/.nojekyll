@@ -1,0 +1,2 @@
+# Tells GitHub Pages to serve the dist/ folder as plain static files
+# without running it through Jekyll (which would mangle the SPA).

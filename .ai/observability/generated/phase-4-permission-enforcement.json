@@ -45,7 +45,7 @@
       {
         "scenario_id": "denied-unknown-intent",
         "agent_id": "librarian",
-        "intent": "install_dependencies",
+        "intent": "unknown_intent",
         "decision": "deny",
         "reason": "default_deny_policy",
         "policy_source": "default"

@@ -1,0 +1,10 @@
+{
+  "name": "@alfred-labs/gemini-adapter",
+  "private": true,
+  "version": "0.3.0",
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/bridge.mjs && node -e \"JSON.parse(require('fs').readFileSync('openapi.json','utf8'))\"",
+    "test": "node --test test/*.mjs"
+  }
+}

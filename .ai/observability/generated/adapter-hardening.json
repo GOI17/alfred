@@ -7,8 +7,8 @@
     "trace_id": "adapter-hardening",
     "timestamp": "2026-05-19T00:00:00.000Z",
     "status": "pass",
-    "executable_adapter_count": 2,
-    "hardened_adapter_count": 2,
+    "executable_adapter_count": 3,
+    "hardened_adapter_count": 3,
     "invariant_failures": [],
     "provider_calls": 0,
     "contract": ".ai/harnesses/adapter-hardening.json"

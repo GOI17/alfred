@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alfred Memory · Console</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #181b22;
+      --text: #e6e7eb;
+      --muted: #8a8f99;
+      --accent: #6ec1ff;
+      --good: #4ade80;
+      --warn: #facc15;
+      --bad:  #f87171;
+      --border: #262a33;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      min-height: 100vh;
+    }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+    .brand { font-weight: 600; letter-spacing: 0.4px; }
+    .brand .dot { color: var(--accent); }
+    .api { display: flex; align-items: center; gap: 8px; }
+    .api input {
+      background: #0d0f13; color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 6px 10px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+      width: 280px;
+    }
+    .api button, .btn {
+      background: var(--accent); color: #0b1015; border: 0; cursor: pointer;
+      padding: 6px 12px; border-radius: 6px; font: 13px/1.5 inherit; font-weight: 500;
+    }
+    .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn.danger { background: var(--bad); color: #1b0a0a; }
+    .container { max-width: 1080px; margin: 0 auto; padding: 24px; }
+    .panel {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px; margin-bottom: 16px;
+    }
+    h2 { margin: 0 0 12px 0; font-size: 16px; font-weight: 600; }
+    .hint { color: var(--muted); margin: 0 0 16px 0; font-size: 13px; }
+    .empty { color: var(--muted); padding: 12px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; font-weight: 500; }
+    td { font-size: 13px; }
+    td.mono, .mono { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 500;
+      background: #232732; color: var(--muted);
+    }
+    .pill.human { background: #3a1f3f; color: #f5b4f8; }
+    .pill.hybrid { background: #3a3020; color: #f9d77e; }
+    .pill.coding { background: #1f3a2d; color: #6ee7a0; }
+    .pill.server { background: #1f2a3a; color: #93c5fd; }
+    .pill.archived { background: #2a2a2a; color: var(--muted); }
+    .key-display {
+      background: #0b0d11; border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px; margin: 8px 0;
+      font: 12px/1.5 ui-monospace, monospace; color: var(--good);
+      word-break: break-all;
+    }
+    .small { font-size: 12px; color: var(--muted); }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .spacer { flex: 1; }
+    .error { color: var(--bad); padding: 8px 12px; background: #2a1a1a; border-radius: 6px; margin-bottom: 12px; }
+    .ok { color: var(--good); }
+    details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+    details[open] summary { color: var(--text); }
+    pre { background: #0b0d11; padding: 10px; border-radius: 6px; overflow-x: auto; font: 12px ui-monospace, monospace; }
+    .step-num { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; background: var(--accent); color: #0b1015; border-radius: 50%; font-weight: 600; margin-right: 8px; }
+    .step { margin: 12px 0; }
+  </style>
+<!-- /* __ALFRED_BUILD_INJECT__ */ -->
+<script>
+  window.ALFRED_API_BASE = "http://localhost:3000";
+  window.ALFRED_BUILD_VERSION = "2026-06-30";
+</script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">Alfred <span class="dot">·</span> Memory Console</div>
+  <div class="api">
+    <input id="apiKey" type="password" placeholder="alk_..." />
+    <button onclick="setKey()">Unlock</button>
+    <span id="apiStatus" class="small"></span>
+  </div>
+</div>
+
+<div class="container">
+
+  <div id="locked" class="panel">
+    <h2>Welcome</h2>
+    <p class="hint">This console manages API keys and connected services for your Alfred Memory install.</p>
+    <p class="hint">Paste an API key from <code>alfred init</code> or <code>alfred keys issue</code> above and click <strong>Unlock</strong>.</p>
+    <p class="hint">Don't have one yet? On a fresh install, run <code>alfred init --profile=web --name my-mem</code> in a terminal.</p>
+  </div>
+
+  <div id="unlocked" style="display: none;">
+
+    <div class="panel">
+      <h2>Tenants</h2>
+      <p class="hint">A tenant is a universe of memory with one storage backend. Each tenant has its own API keys.</p>
+      <div id="tenantsBody">
+        <div class="empty">Loading...</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>API Keys</h2>
+      <p class="hint">API keys are credentials for any agent. They are shown once when issued — copy and store safely.</p>
+      <div class="row" style="margin-bottom: 12px;">
+        <select id="keyTenant"></select>
+        <input id="keyLabel" placeholder="label (e.g. chatgpt-laptop)" style="background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace;" />
+        <button onclick="issueKey()">Issue new key</button>
+        <div class="spacer"></div>
+        <label class="small"><input type="checkbox" id="showRevoked" onchange="loadKeys()" /> Show revoked</label>
+      </div>
+      <div id="newKeyBody"></div>
+      <div id="keysBody">
+        <div class="empty">Select a tenant to view keys.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Connected services</h2>
+      <p class="hint">Set up ChatGPT, Claude Desktop, or Gemini to use the same memory. Each adapter needs a tenant API key.</p>
+
+      <div class="step">
+        <span class="step-num">1</span><strong>ChatGPT (Plus/Pro)</strong>
+        <div class="small" style="margin-top: 4px;">Import <code>openapi.json</code> as Custom GPT Actions.</div>
+        <details>
+          <summary>Show steps</summary>
+          <pre>
+1. Run the bridge:
+   ALFRED_MEMORY_BASE_URL=&lt;your-server&gt; ALFRED_MEMORY_API_KEY=&lt;key&gt; \
+     node packages/chatgpt-adapter/src/bridge.mjs &amp;
+
+2. In ChatGPT: My GPTs → Create → Configure → Actions → Import OpenAPI.
+3. Upload: packages/chatgpt-adapter/openapi.json
+4. Auth: API Key · Bearer · paste the alk_... key
+5. Save and test: ask the GPT "list my last 5 memories"</pre>
+        </details>
+      </div>
+
+      <div class="step">
+        <span class="step-num">2</span><strong>Claude Desktop (MCP)</strong>
+        <details>
+          <summary>Show steps</summary>
+          <pre>
+Edit ~/Library/Application Support/Claude/claude_desktop_config.json:
+{
+  "mcpServers": {
+    "alfred-memory": {
+      "command": "node",
+      "args": ["&lt;abs path&gt;/packages/anthropic-adapter/bin/alfred-mcp.mjs"],
+      "env": {
+        "ALFRED_MEMORY_API_KEY": "&lt;paste alk_...&gt;",
+        "ALFRED_MEMORY_BASE_URL": "&lt;your-server&gt;"
+      }
+    }
+  }
+}
+
+Restart Claude Desktop. Tools appear in the conversation panel.</pre>
+        </details>
+      </div>
+
+      <div class="step">
+        <span class="step-num">3</span><strong>Google Gemini / AI Studio</strong>
+        <details>
+          <summary>Show steps</summary>
+          <pre>
+1. Run the bridge:
+   ALFRED_MEMORY_BASE_URL=&lt;your-server&gt; ALFRED_MEMORY_API_KEY=&lt;key&gt; \
+     node packages/gemini-adapter/bin/bridge.mjs &amp;
+
+2. In AI Studio: Tools → Extensions → Create Extension.
+3. Upload: packages/gemini-adapter/openapi.json
+4. Auth: API Key · header x-api-key · paste alk_...</pre>
+        </details>
+      </div>
+
+      <div class="step">
+        <span class="step-num">4</span><strong>Coding agents (opencode / Codex / Pi)</strong>
+        <details>
+          <summary>Show steps</summary>
+          <pre>
+1. cd into your project directory.
+2. Run: alfred init --profile=coding --name=&lt;project-name&gt;
+3. This writes .alfred/config.json in cwd with your API key.
+4. The agent reads it on every session start.
+5. Run the server: alfred serve</pre>
+        </details>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>What is this?</h2>
+      <p class="hint">Alfred Memory is a multi-tenant memory store. The console manages which agents can talk to it and with which credentials.</p>
+      <p class="hint">Memory is never written here — it lives in each tenant's database (Postgres or SQLite). This page only shows the keys and connections.</p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let API_KEY = "";
+let CURRENT_TENANT = "";
+
+function setKey() {
+  const input = document.getElementById("apiKey");
+  API_KEY = input.value.trim();
+  if (!API_KEY) return;
+  document.getElementById("apiStatus").textContent = "✓ unlocked";
+  document.getElementById("locked").style.display = "none";
+  document.getElementById("unlocked").style.display = "block";
+  localStorage.setItem("alfred_api_key", API_KEY);
+  loadAll();
+}
+
+if (localStorage.getItem("alfred_api_key")) {
+  document.getElementById("apiKey").value = localStorage.getItem("alfred_api_key");
+  setKey();
+}
+
+// Build the base URL for API calls. The build script injects
+// window.ALFRED_API_BASE. When the page is served same-origin (e.g. by
+// alfred-memory-server) we use relative paths. When the page is served
+// from a different origin (Vercel, GitHub Pages, Netlify) we use the
+// absolute base.
+function apiBase(path) {
+  const base = (typeof window !== "undefined" && window.ALFRED_API_BASE) || "";
+  // If path is absolute (starts with http) or base is empty, use as-is.
+  if (path.startsWith("http")) return path;
+  if (base) return base.replace(/\/$/, "") + path;
+  return path;
+}
+
+async function api(path, options = {}) {
+  const headers = { "authorization": "Bearer " + API_KEY };
+  if (options.body) headers["content-type"] = "application/json";
+  const url = apiBase(path);
+  const res = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(res.status + " " + res.statusText + ": " + text);
+  }
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) return res.json();
+  return res.text();
+}
+
+function pill(kind) {
+  const labels = { human_agent: "human", coding_agent_only: "coding", hybrid_with_human: "hybrid", server_managed: "server", archived: "archived" };
+  return '<span class="pill ' + (labels[kind] || "coding") + '">' + kind + '</span>';
+}
+
+async function loadAll() {
+  try { await loadTenants(); }
+  catch (err) { showError(err); }
+}
+
+async function loadTenants() {
+  const res = await api("/console/api/tenants");
+  const tenants = res.items || [];
+  const sel = document.getElementById("keyTenant");
+  sel.innerHTML = "";
+  if (tenants.length === 0) {
+    document.getElementById("tenantsBody").innerHTML = '<div class="empty">No tenants yet. Run <code>alfred init</code> in a terminal to create one.</div>';
+    return;
+  }
+  let rows = "";
+  for (const t of tenants) {
+    rows += "<tr>" +
+      "<td class='mono'>" + t.id + "</td>" +
+      "<td>" + (t.display_name || "—") + "</td>" +
+      "<td>" + pill(t.kind) + "</td>" +
+      "<td>" + t.storage_backend + "</td>" +
+      "<td class='small'>" + (t.db_path || t.db_connection || "—") + "</td>" +
+      "<td class='small'>" + t.created_at.slice(0, 10) + "</td>" +
+      "</tr>";
+  }
+  document.getElementById("tenantsBody").innerHTML = '<table><thead><tr><th>ID</th><th>Name</th><th>Kind</th><th>Backend</th><th>DB</th><th>Created</th></tr></thead><tbody>' + rows + "</tbody></table>";
+  for (const t of tenants) {
+    const opt = document.createElement("option");
+    opt.value = t.id; opt.textContent = (t.display_name || t.id) + "  [" + t.kind + "]";
+    sel.appendChild(opt);
+  }
+  CURRENT_TENANT = tenants[0].id;
+  loadKeys();
+}
+
+async function loadKeys() {
+  if (!CURRENT_TENANT) return;
+  const showRevoked = document.getElementById("showRevoked").checked;
+  const res = await api("/console/api/tenants/" + CURRENT_TENANT + "/keys?include_revoked=" + showRevoked);
+  const keys = res.keys || [];
+  if (keys.length === 0) {
+    document.getElementById("keysBody").innerHTML = '<div class="empty">No keys for this tenant.</div>';
+    return;
+  }
+  let rows = "";
+  for (const k of keys) {
+    const isRevoked = !!k.revoked_at;
+    rows += "<tr>" +
+      "<td class='mono'>" + k.key_prefix + "...</td>" +
+      "<td>" + (k.label || "—") + "</td>" +
+      "<td class='small'>" + (k.created_at || "").slice(0, 16).replace("T", " ") + "</td>" +
+      "<td class='small'>" + (k.last_used_at ? k.last_used_at.slice(0, 16).replace("T", " ") : "—") + "</td>" +
+      "<td>" + (isRevoked ? "<span class='pill archived'>revoked</span>" : "<span class='pill coding'>active</span>") + "</td>" +
+      "<td>" + (isRevoked ? "" : "<button class='btn danger' onclick='revokeKey(\"" + k.id + "\")'>Revoke</button>") + "</td>" +
+      "</tr>";
+  }
+  document.getElementById("keysBody").innerHTML = '<table><thead><tr><th>Prefix</th><th>Label</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr></thead><tbody>' + rows + "</tbody></table>";
+}
+
+async function issueKey() {
+  const tenantId = document.getElementById("keyTenant").value;
+  if (!tenantId) return;
+  const label = document.getElementById("keyLabel").value.trim() || null;
+  try {
+    const res = await api("/console/api/tenants/" + tenantId + "/keys", {
+      method: "POST",
+      body: JSON.stringify({ label })
+    });
+    document.getElementById("newKeyBody").innerHTML =
+      '<div class="panel" style="background: #1a2a1a; border-color: var(--good);">' +
+      '<strong class="ok">New API key for tenant ' + tenantId + '</strong><br>' +
+      '<div class="key-display">' + res.api_key + '</div>' +
+      '<div class="small">Copy this key now. It will not be shown again. The key is <code>' + res.key_prefix + '...</code></div>' +
+      '</div>';
+    loadKeys();
+  } catch (err) { showError(err); }
+}
+
+async function revokeKey(keyId) {
+  if (!confirm("Revoke this key? Any agent using it will get 401.")) return;
+  try {
+    await api("/console/api/keys/" + keyId, { method: "DELETE" });
+    loadKeys();
+  } catch (err) { showError(err); }
+}
+
+function showError(err) {
+  const el = document.createElement("div");
+  el.className = "error";
+  el.textContent = err.message;
+  document.querySelector(".container").prepend(el);
+  setTimeout(() => el.remove(), 8000);
+}
+</script>
+</body>
+</html>

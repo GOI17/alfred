@@ -2,37 +2,95 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import {
   createMemoryClient,
-  createMemoryHttpServer,
+  createMemoryHttpHandler,
   createMemoryService,
   createInMemoryStore,
   createPostgresMemoryStore
 } from "../src/index.js";
 
-let server;
 let baseUrl;
+let originalFetch;
+
+function lowerCaseHeaders(headers = {}) {
+  const normalized = {};
+  for (const [key, value] of Object.entries(headers)) normalized[key.toLowerCase()] = value;
+  return normalized;
+}
+
+function fakeReq({ method = "GET", url = "/", headers = {}, body = undefined } = {}) {
+  return {
+    method,
+    url,
+    headers: lowerCaseHeaders(headers),
+    [Symbol.asyncIterator]() {
+      const chunks = body === undefined ? [] : [Buffer.from(String(body))];
+      let index = 0;
+      return {
+        next() {
+          if (index < chunks.length) return Promise.resolve({ value: chunks[index++], done: false });
+          return Promise.resolve({ value: undefined, done: true });
+        }
+      };
+    }
+  };
+}
+
+async function invoke(handler, req) {
+  const res = {
+    statusCode: 200,
+    headers: {},
+    chunks: [],
+    writeHead(status, headers) {
+      this.statusCode = status;
+      for (const [key, value] of Object.entries(headers ?? {})) this.headers[key.toLowerCase()] = value;
+    },
+    end(chunk) {
+      if (chunk !== undefined) this.chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    }
+  };
+  await handler(req, res);
+  return {
+    statusCode: res.statusCode,
+    headers: res.headers,
+    body: Buffer.concat(res.chunks)
+  };
+}
+
+function createHandlerFetch(handler) {
+  return async function handlerFetch(input, init = {}) {
+    const url = new URL(String(input));
+    const req = fakeReq({
+      method: init.method ?? "GET",
+      url: `${url.pathname}${url.search}`,
+      headers: init.headers ?? {},
+      body: init.body
+    });
+    const res = await invoke(handler, req);
+    return new Response(res.body, {
+      status: res.statusCode,
+      headers: res.headers
+    });
+  };
+}
 
 async function startTestServer() {
   const store = createInMemoryStore();
   const service = createMemoryService({ store });
-  server = createMemoryHttpServer({
+  const handler = createMemoryHttpHandler({
     service,
     apiKeys: {
       "alice-key": "alice",
       "bob-key": "bob"
     }
   });
-
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address();
-  baseUrl = `http://127.0.0.1:${port}`;
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = createHandlerFetch(handler);
+  baseUrl = "http://memory.test";
 }
 
 async function stopTestServer() {
-  if (!server) return;
-  await new Promise((resolve, reject) => {
-    server.close((error) => (error ? reject(error) : resolve()));
-  });
-  server = undefined;
+  globalThis.fetch = originalFetch;
+  originalFetch = undefined;
 }
 
 beforeEach(startTestServer);

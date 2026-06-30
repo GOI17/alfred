@@ -1,0 +1,22 @@
+{
+  "phase": "release-0.3.0",
+  "result": "pass",
+  "version": "0.3.0",
+  "required_harness_count": 0,
+  "required_validator_count": 2,
+  "passed_validator_count": 2,
+  "tests_total": 198,
+  "gate_count": 13,
+  "policy_checks_total": 12,
+  "package_test_count": 6,
+  "provider_calls": 0,
+  "trace_event": "release_candidate_validated",
+  "reproducibility": {
+    "runtime_entrypoint": "packages/memory-server/src/index.js",
+    "validation_script": "scripts/validate-release-0.3.0.mjs",
+    "release_candidate": ".ai/releases/release-0.3.0.json",
+    "roadmap": ".ai/roadmaps/0.3.0.json",
+    "fixture_hash": "release-0.3.0-fixture-v1",
+    "validated_commit_source": "8b7cc73143bb598c932a9f6d075cf668842e8532"
+  }
+}

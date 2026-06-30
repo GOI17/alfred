@@ -1,0 +1,39 @@
+{
+  "snapshot_id": "policies-phase12-v1",
+  "captured_at": "2026-06-29T00:00:00Z",
+  "phase": "phase-12-docs-foundation",
+  "documents": [
+    {
+      "path": ".ai/architecture/memory-hosting-modes.md",
+      "checksum": "see-git",
+      "covers": ["hosting modes", "decision matrix"]
+    },
+    {
+      "path": ".ai/policies/memory-hosting-policy.md",
+      "checksum": "see-git",
+      "covers": ["Rule 1 (human agents -> Postgres)", "Rule 2 (coding agents ask)", "Rule 3 (self-hosted -> Postgres)", "Rule 4 (migration allowed)", "Rule 5 (one backend per workspace)"]
+    },
+    {
+      "path": ".ai/policies/memory-workspace-policy.md",
+      "checksum": "see-git",
+      "covers": ["Invariant W1 (workspace != tenant)", "Invariant W2 (UNIQUE workspace_hash)", "Invariant W3 (cross-tenant init guard)", "Invariant W4 (inherited is explicit)", "Invariant W5 (readers block cascade delete)", "Invariant W6 (no dual Postgres in chain)"]
+    },
+    {
+      "path": ".ai/roadmaps/0.3.0.json",
+      "checksum": "see-git",
+      "covers": ["24-phase plan", "constraints", "non-goals"]
+    }
+  ],
+  "registry": {
+    "schema_path": "packages/memory-server/migrations/000_alfred_registry.sql",
+    "tables": ["tenants", "workspaces", "tenant_access", "tenant_api_keys", "tenant_trace"],
+    "triggers": [
+      "tenant_delete_block (Workspace Policy W5)",
+      "tenant_access_no_dual_pg_insert (Workspace Policy W6)",
+      "tenant_access_no_dual_pg_update (Workspace Policy W6)",
+      "tenants_bump_updated_at"
+    ],
+    "tests_passing": 13
+  },
+  "context_md_includes_memory_hosting_section": true
+}

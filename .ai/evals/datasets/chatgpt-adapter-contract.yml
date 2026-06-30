@@ -1,0 +1,55 @@
+id: chatgpt-adapter-contract@0.3.0
+description: >
+  OpenAPI 3.1 spec and bridge forwarding tests. Covers Bearer auth, the
+  five CRUD operations, and bridge behavior under network/CORS failures.
+status: pass
+dataset:
+  - id: openapi-spec-valid
+    type: snapshot
+    source: packages/chatgpt-adapter/openapi.json
+    expected_substrings:
+      - "openapi: 3.1.0"
+      - "BearerAuth"
+      - "listMemories"
+      - "createMemory"
+    outcome: pass
+
+  - id: bridge-forwards-get
+    type: accept
+    input:
+      method: GET
+      url: /memories?limit=10
+    expected:
+      status: 200
+      forwarded_authorization: "Bearer alk_test"
+    outcome: pass
+
+  - id: bridge-forwards-post-body
+    type: accept
+    input:
+      method: POST
+      url: /memories
+      body: { type: "fact", content: "Hello", source: "test" }
+    expected:
+      status: 201
+    outcome: pass
+
+  - id: bridge-cors-blocks-non-allowed-origin
+    type: reject
+    input:
+      method: OPTIONS
+      origin: https://evil.example.com
+    expected:
+      status: 204
+      access_control_allow_origin: null
+    outcome: pass
+
+  - id: bridge-502-on-upstream-failure
+    type: reject
+    input:
+      method: GET
+      url: /health
+      upstream_throws: true
+    expected:
+      status: 502
+    outcome: pass

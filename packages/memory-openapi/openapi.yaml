@@ -363,15 +363,14 @@ paths:
                 $ref: '#/components/schemas/Error'
 
   /memories/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-        description: "Memory identifier."
-
     patch:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: "Memory identifier."
       operationId: updateMemory
       summary: Update memory
       description: "Partially update an existing memory. The namespace cannot be changed."
@@ -409,6 +408,13 @@ paths:
                 $ref: '#/components/schemas/Error'
 
     delete:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: "Memory identifier."
       operationId: deleteMemory
       summary: Delete memory
       description: "Delete a memory by id."

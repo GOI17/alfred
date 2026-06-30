@@ -1,47 +1,188 @@
 {
-  "id": "phase-5-regression-gates",
-  "version": "regression-gates@0.1.0",
-  "owner": "core",
-  "baseline_update_requires_human_approval": true,
-  "provider_calls_allowed": 0,
-  "phases": [
+  "id": "regression-gates@0.3.0",
+  "version": "0.3.0",
+  "owner": "qa",
+  "status": "active",
+  "applies_to_release": "0.3.0",
+  "gates": [
     {
-      "phase": "phase-1-architecture-kernel",
-      "rules": [
-        { "metric": "result", "operator": "equals", "value": "pass" },
-        { "metric": "provider_calls", "operator": "equals", "value": 0 }
-      ]
+      "id": "policy-docs-present",
+      "description": "Three foundational documents exist",
+      "files": [
+        ".ai/architecture/memory-hosting-modes.md",
+        ".ai/policies/memory-hosting-policy.md",
+        ".ai/policies/memory-workspace-policy.md"
+      ],
+      "command": "node scripts/validate-policies.mjs",
+      "expected_status": 0,
+      "blocked_on_failure": true
     },
     {
-      "phase": "phase-2-pi-runtime-spike",
-      "rules": [
-        { "metric": "result", "operator": "equals", "value": "pass" },
-        { "metric": "provider_calls", "operator": "less_than_or_equal_baseline" },
-        { "metric": "trace_event", "operator": "equals" }
-      ]
+      "id": "registry-schema-tests",
+      "description": "Registry schema + TRIGGERs behave as documented",
+      "files": [
+        "packages/memory-server/test/registry-schema.test.mjs",
+        "packages/memory-server/migrations/sqlite_registry.sql"
+      ],
+      "command": "node --test packages/memory-server/test/registry-schema.test.mjs",
+      "expected_test_count": 13,
+      "blocked_on_failure": true
     },
     {
-      "phase": "phase-3-agent-system",
-      "rules": [
-        { "metric": "result", "operator": "equals", "value": "pass" },
-        { "metric": "small_task_delegations", "operator": "less_than_or_equal_baseline" },
-        { "metric": "specialist_delegations", "operator": "greater_than_or_equal_baseline" },
-        { "metric": "temporary_agent_proposals", "operator": "greater_than_or_equal_baseline" },
-        { "metric": "provider_calls", "operator": "less_than_or_equal_baseline" }
-      ]
+      "id": "tenants-tests",
+      "description": "TenantService enforces policy + W5/W6 invariants",
+      "files": [
+        "packages/memory/test/tenants.test.js"
+      ],
+      "command": "node --test packages/memory/test/tenants.test.js",
+      "expected_test_count": 28,
+      "blocked_on_failure": true
     },
     {
-      "phase": "phase-4-security-enforcement",
-      "rules": [
-        { "metric": "result", "operator": "equals", "value": "pass" },
-        { "metric": "allowed_permissions", "operator": "less_than_or_equal_baseline" },
-        { "metric": "denied_permissions", "operator": "greater_than_or_equal_baseline" },
-        { "metric": "protected_path_denials", "operator": "greater_than_or_equal_baseline" },
-        { "metric": "destructive_command_denials", "operator": "greater_than_or_equal_baseline" },
-        { "metric": "permission_broadening_denials", "operator": "greater_than_or_equal_baseline" },
-        { "metric": "default_denials", "operator": "greater_than_or_equal_baseline" },
-        { "metric": "provider_calls", "operator": "less_than_or_equal_baseline" }
-      ]
+      "id": "users-tests",
+      "description": "UserService scrypt hashing, rotation, revocation",
+      "files": [
+        "packages/memory/test/users.test.js"
+      ],
+      "command": "node --test packages/memory/test/users.test.js",
+      "expected_test_count": 17,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "sessions-tests",
+      "description": "Sessions / Topics / AcceptanceCriteria services",
+      "files": [
+        "packages/memory/test/sessions.test.js"
+      ],
+      "command": "node --test packages/memory/test/sessions.test.js",
+      "expected_test_count": 9,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "sqlite-memory-parity",
+      "description": "SQLite memory store parity with Postgres",
+      "files": [
+        "packages/memory/test/sqlite-memory-store.test.js"
+      ],
+      "command": "node --test packages/memory/test/sqlite-memory-store.test.js",
+      "expected_test_count": 9,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "memory-server-tests",
+      "description": "Server handlers, init, CLI, migrate",
+      "files": [
+        "packages/memory-server/test/server.test.mjs",
+        "packages/memory-server/test/init.test.mjs",
+        "packages/memory-server/test/cli.test.mjs",
+        "packages/memory-server/test/registry-sqlite-store.test.mjs",
+        "packages/memory-server/test/migrate-sqlite.test.mjs",
+        "packages/memory-server/test/console.test.mjs"
+      ],
+      "command": "node --test packages/memory-server/test/{server,init,cli,registry-sqlite-store,migrate-sqlite,console}.test.mjs",
+      "expected_test_count": 63,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "cross-tenant-isolation",
+      "description": "All 15 leak vectors blocked",
+      "files": [
+        "packages/memory-server/test/cross-tenant-isolation.test.mjs"
+      ],
+      "command": "node --test packages/memory-server/test/cross-tenant-isolation.test.mjs",
+      "expected_test_count": 15,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "chatgpt-adapter-contract",
+      "description": "OpenAPI 3.1 + bridge forwarding",
+      "files": [
+        "packages/chatgpt-adapter/test/contract.test.mjs"
+      ],
+      "command": "node --test packages/chatgpt-adapter/test/contract.test.mjs",
+      "expected_test_count": 11,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "anthropic-adapter-contract",
+      "description": "MCP server JSON-RPC conformance",
+      "files": [
+        "packages/anthropic-adapter/test/contract.test.mjs"
+      ],
+      "command": "node --test packages/anthropic-adapter/test/contract.test.mjs",
+      "expected_test_count": 8,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "gemini-adapter-contract",
+      "description": "OpenAPI 3.0 + bridge forwarding for Google AI Studio",
+      "files": [
+        "packages/gemini-adapter/test/contract.test.mjs"
+      ],
+      "command": "node --test packages/gemini-adapter/test/contract.test.mjs",
+      "expected_test_count": 10,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "console-tests",
+      "description": "TUI dashboard (in-memory mode)",
+      "files": [
+        "packages/console/test/dashboard.test.mjs"
+      ],
+      "command": "node --test packages/console/test/dashboard.test.mjs",
+      "expected_test_count": 3,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "console-web-build",
+      "description": "Standalone web console build (deployable to GH Pages/Vercel/Netlify)",
+      "files": [
+        "packages/console-web/src/index.html",
+        "packages/console-web/scripts/build.mjs",
+        "packages/console-web/vercel.json",
+        "packages/console-web/netlify.toml",
+        "packages/console-web/public/.nojekyll"
+      ],
+      "command": "node --test packages/console-web/test/build.test.mjs",
+      "expected_test_count": 10,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "core-kernel-tests",
+      "description": "Core architecture kernel accepts current complete manifests without adapter leakage",
+      "files": [
+        "packages/core/test/kernel.test.mjs",
+        "packages/core/src/index.js"
+      ],
+      "command": "node --test packages/core/test/kernel.test.mjs",
+      "expected_test_count": 2,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "opencode-agent-adapter-contract",
+      "description": "opencode Alfred agents use current project agent paths and preview-only install artifacts",
+      "files": [
+        "packages/opencode-adapter/test/runtime.test.mjs",
+        "packages/opencode-adapter/src/runtime.js"
+      ],
+      "command": "node --test packages/opencode-adapter/test/runtime.test.mjs",
+      "expected_test_count": 4,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "codex-agent-adapter-contract",
+      "description": "Codex Alfred agents generate project custom agents and repo skills without hard-coded model defaults",
+      "files": [
+        "packages/codex-adapter/test/runtime.test.mjs",
+        "packages/codex-adapter/src/runtime.js"
+      ],
+      "command": "node --test packages/codex-adapter/test/runtime.test.mjs",
+      "expected_test_count": 6,
+      "blocked_on_failure": true
     }
-  ]
+  ],
+  "totals": {
+    "files_validated": 5,
+    "tests_total": 210
+  }
 }

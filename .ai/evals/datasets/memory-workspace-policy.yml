@@ -1,0 +1,78 @@
+id: memory-workspace-policy@0.3.0
+description: >
+  Workspace-policy enforcement. Verifies the (a)/(b)/(c) safety guard
+  semantics and the W5/W6 TRIGGERs in the canonical Postgres migration.
+status: pass
+dataset:
+  - id: w6-dual-postgres-rejected
+    type: reject
+    input:
+      ancestors:
+        - tenant_id: A
+          storage_backend: postgres
+          access: owner
+      new_workspace:
+        - tenant_id: B
+          storage_backend: postgres
+          access: owner
+    expected:
+      status: hosting_policy_violation
+      message_regex: "two distinct Postgres tenants"
+    outcome: pass
+
+  - id: w6-same-postgres-tenant-id-allowed
+    type: accept
+    input:
+      new_workspace:
+        - tenant_id: A
+          storage_backend: postgres
+          access: reader
+    expected:
+      status: ok
+    outcome: pass
+
+  - id: w5-non-inherited-reader-blocks-delete
+    type: reject
+    input:
+      tenant_id: T
+      readers:
+        - access: reader
+          inherited: false
+      delete_tenant: true
+    expected:
+      status: tenant_conflict
+      message_regex: "non-inherited readers"
+    outcome: pass
+
+  - id: w5-inherited-reader-allows-delete
+    type: accept
+    input:
+      tenant_id: T
+      readers:
+        - access: reader
+          inherited: true
+      delete_tenant: true
+    expected:
+      status: ok
+    outcome: pass
+
+  - id: w2-unique-workspace-hash-enforced
+    type: reject
+    input:
+      workspaces:
+        - workspace_hash: "h1"
+        - workspace_hash: "h1"
+    expected:
+      status: tenant_conflict
+      message_regex: "hash"
+    outcome: pass
+
+  - id: canonical-migration-contains-triggers
+    type: snapshot
+    source: packages/memory-server/migrations/000_alfred_registry.sql
+    expected_substrings:
+      - "tenant_delete_block"
+      - "tenant_access_no_dual_pg"
+      - "prevent_tenant_delete_with_readers"
+      - "check_no_dual_postgres_in_hierarchy"
+    outcome: pass
