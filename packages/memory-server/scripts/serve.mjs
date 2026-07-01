@@ -10,7 +10,7 @@ import {
   createServer,
   startServer
 } from "../src/server.js";
-import { createConsoleRouter } from "../src/index.js";
+import { createConsoleRouter, createOpenapiRouter } from "../src/index.js";
 import {
   createTenantService,
   createUserService,
@@ -91,12 +91,22 @@ export async function run(argv = [], env = process.env) {
     registry,
     sharedUrl: process.env.ALFRED_SAAS_DATABASE_URL ?? null
   });
+  const openapiRouter = createOpenapiRouter({
+    userService,
+    getMemoryService: memoryFactory,
+    searchServiceFactory: null,  // v0.4.1: keyword fallback only; semantic+hybrid in v0.4.0 wired separately
+    projectRoot: process.cwd(),
+    registry,
+    requireAuth: true
+  });
   const app = createApp({
     tenantService,
     memoryService: null,  // unused; we route per-tenant
     userService,
     config,
-    getMemoryService: memoryFactory
+    consoleRouter,
+    openapiRouter,
+    registry
   });
 
   const server = createServer({ app });

@@ -1,7 +1,7 @@
 {
   "name": "@alfred-labs/memory-openapi",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.4.1",
   "type": "module",
   "description": "OpenAPI schema and documentation for exposing Alfred Memory to ChatGPT Actions.",
   "exports": {

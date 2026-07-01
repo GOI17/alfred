@@ -1,0 +1,62 @@
+{
+  "id": "release-0.4.1",
+  "version": "0.4.1",
+  "candidate": "alfred-custom-gpt-surface-0.4.1",
+  "owner": "orchestrator",
+  "status": "complete",
+  "scope": "custom-gpt-surface",
+  "previous_release": "release-0.4.0",
+  "includes": [
+    "v0.4.1-openapi-router",
+    "v0.4.1-action-rate-limiter",
+    "v0.4.1-gpt-builder-config",
+    "v0.4.1-deploy-guide"
+  ],
+  "required_validators": [
+    "validate:policies",
+    "validate:release-0.4.1"
+  ],
+  "totals": {
+    "tests": 244,
+    "gates": 17,
+    "policy_checks": 12,
+    "package_test_suites": 6,
+    "new_tests_added": 16,
+    "new_gates_added": 0,
+    "provider_calls": 0
+  },
+  "new_endpoints": [
+    { "method": "GET",  "path": "/health",            "auth": "none",     "rate_limit": "none", "purpose": "Liveness for GPT healthcheck" },
+    { "method": "GET",  "path": "/agents/manifest",   "auth": "none",     "rate_limit": "none", "purpose": "List 6 active agents" },
+    { "method": "GET",  "path": "/skills/manifest",   "auth": "none",     "rate_limit": "none", "purpose": "List skill catalog" },
+    { "method": "POST", "path": "/policies/check",    "auth": "none",     "rate_limit": "none", "purpose": "Is a proposed action allowed?" },
+    { "method": "POST", "path": "/search",            "auth": "bearer",   "rate_limit": "100/min/key", "purpose": "Semantic/keyword/hybrid search" }
+  ],
+  "rate_limits": {
+    "actions": "100 req per API key per 60 minutes (v0.4.1)",
+    "bootstrap": "5 req per IP per 60 minutes (v0.3.1, unchanged)",
+    "recovery": "3 req per IP per hour (v0.4.0, unchanged)"
+  },
+  "auth": {
+    "type": "api_key",
+    "header": "Authorization: Bearer alk_...  OR  X-API-Key: alk_...",
+    "rotation": "user-initiated via /console (forgot-my-key) or operator via SQLite"
+  },
+  "policy_overrides": [],
+  "provider_calls_allowed": 0,
+  "baseline_update_requires_human_approval": true,
+  "harness_config_writes_require_human_approval": true,
+  "commit_policy": {
+    "validated_commit_source": "pending-at-commit-time",
+    "commit_source_recorded_in_trace": true,
+    "static_baseline_pins_commit": false
+  },
+  "artifact_manifest": {
+    "release_notes": ".ai/releases/release-0.4.1.md",
+    "roadmap": ".ai/roadmaps/0.4.0.json",
+    "regression_gates": ".ai/evals/regression-gates.json",
+    "trace": ".ai/observability/generated/release-0.4.1.json",
+    "gpt_config": ".ai/gpt/alfred-memory-gpt.json",
+    "deploy_guide": ".ai/docs/custom-gpt-deploy.md"
+  }
+}

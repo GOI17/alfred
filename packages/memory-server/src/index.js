@@ -36,3 +36,9 @@ export {
 
 // Web console router (sub-path /console)
 export { createConsoleRouter } from "./console-router.js";
+
+// v0.4.1: Custom GPT / OpenAPI surface
+export { createOpenapiRouter } from "./openapi-router.js";
+
+// v0.4.1: Action rate limiter (100 req/min per API key)
+export { createActionRateLimiter } from "./bootstrap/action-rate-limiter.js";

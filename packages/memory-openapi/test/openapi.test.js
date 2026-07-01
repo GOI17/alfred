@@ -14,6 +14,10 @@ const spec = parseYamlSubset(yamlText);
 
 const expectedRoutes = new Set([
   "GET /health",
+  "GET /agents/manifest",
+  "GET /skills/manifest",
+  "POST /policies/check",
+  "POST /search",
   "GET /memories/search",
   "POST /memories",
   "GET /memories",
@@ -50,6 +54,10 @@ describe("memory-openapi schema", () => {
     const actual = collectOperationIds(spec);
     const expected = new Set([
       "healthCheck",
+      "listAgents",
+      "listSkills",
+      "checkPolicy",
+      "searchMemoriesV2",
       "searchMemories",
       "listMemories",
       "createMemory",
@@ -106,6 +114,10 @@ describe("memory-openapi schema", () => {
   it("does not expose out-of-scope paths", () => {
     const allowed = new Set([
       "/health",
+      "/agents/manifest",
+      "/skills/manifest",
+      "/policies/check",
+      "/search",
       "/memories/search",
       "/memories",
       "/memories/{id}"
@@ -124,7 +136,15 @@ describe("memory-openapi schema", () => {
       "UpdateMemoryInput",
       "MemoryPage",
       "Error",
-      "HealthResponse"
+      "HealthResponse",
+      "Agent",
+      "AgentManifest",
+      "Skill",
+      "SkillManifest",
+      "PolicyCheckInput",
+      "PolicyCheckResult",
+      "SearchInput",
+      "SearchResult"
     ]) {
       assert.ok(schemas.includes(name), `schema ${name} must be defined`);
     }

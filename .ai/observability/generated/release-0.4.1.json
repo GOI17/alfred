@@ -1,0 +1,32 @@
+{
+  "event": "release_candidate_validated",
+  "release": "0.4.1",
+  "validated_commit_source": "pending",
+  "timestamp_utc": "2026-07-01",
+  "gates_passed": 17,
+  "gates_total": 17,
+  "tests_total": 244,
+  "policy_checks": 12,
+  "provider_calls": 0,
+  "phase": "v0.4.1-custom-gpt-surface",
+  "scope": "Custom GPT Action surface: 10 endpoints (4 public + 6 auth), 100/min per API key rate limit, versioned GPT builder config, deploy guide.",
+  "key_artifacts": [
+    "packages/memory-server/src/openapi-router.js (10 endpoints, public + auth)",
+    "packages/memory-server/src/bootstrap/action-rate-limiter.js (100/min per API key)",
+    "packages/memory-server/migrations/009_action_attempts.sql",
+    "packages/memory-server/src/server.js (createApp accepts openapiRouter)",
+    "packages/memory-server/scripts/serve.mjs (wired openapi router)",
+    "packages/memory-server/src/registry/sqlite-registry-store.js (action_attempts contract)",
+    "packages/memory-server/src/index.js (re-exports)",
+    "packages/memory-openapi/openapi.yaml (4 new paths, 9 new schemas)",
+    "packages/memory-openapi/test/openapi.test.js (12 -> 13 tests)",
+    "packages/memory-server/test/console.test.mjs (81 -> 97 tests)",
+    "scripts/validate-release-0.4.1.mjs",
+    ".ai/gpt/alfred-memory-gpt.json (GPT builder config)",
+    ".ai/docs/custom-gpt-deploy.md (deploy guide)",
+    ".ai/evals/regression-gates.json (version 0.4.1; 17 gates; 244 tests)",
+    "packages/memory/CHANGELOG.md (0.4.1 entry)",
+    "package.json (0.4.1)"
+  ],
+  "result": "pass"
+}

@@ -122,3 +122,78 @@ Postgres isolation + key recovery + local semantic search. **228 tests
 - `regression-gates.json`: 16 → 17 gates; totals stay 228
 - `releases/release-0.4.0.{md,json}`, observability trace
   `release-0.4.0.json`
+
+## 0.4.1 — 2026-07-01
+
+Custom GPT surface. **244 tests / 17 release gates / 12 policy checks.**
+Zero provider calls.
+
+### Added
+
+- **`createOpenapiRouter`** (`packages/memory-server/src/openapi-router.js`) — the
+  HTTP surface a Custom GPT (or any OpenAPI 3.1 consumer) can call against
+  Alfred Memory. Public endpoints (no auth) include `/health`,
+  `/agents/manifest`, `/skills/manifest`, and `/policies/check`. Authenticated
+  endpoints reuse the existing `/memories` CRUD plus a new `/search` endpoint
+  that accepts `mode: 'semantic' | 'keyword' | 'hybrid'`.
+
+- **Action rate limiter** (`createActionRateLimiter`,
+  `packages/memory-server/src/bootstrap/action-rate-limiter.js`) — 100 requests
+  per API key per rolling 60 minutes. Keyed by SHA-256 of the API key, so a
+  user burning through their quota does not affect anyone else. State stored
+  in a new `action_attempts` table (Postgres + SQLite twins).
+
+- **OpenAPI 3.1 schema extension** (`packages/memory-openapi/openapi.yaml`) —
+  4 new paths (`/agents/manifest`, `/skills/manifest`, `/policies/check`,
+  `/search`) and 9 new component schemas (`Agent`, `AgentManifest`, `Skill`,
+  `SkillManifest`, `PolicyCheckInput`, `PolicyCheckResult`, `SearchInput`,
+  `SearchResult`).
+
+- **Custom GPT builder config** (`.ai/gpt/alfred-memory-gpt.json`) — versioned
+  GPT configuration: name, description, system prompt, conversation starters,
+  capabilities (web/dall-e/code-interpreter all disabled), action metadata.
+  This is the file you import when creating the GPT in the ChatGPT builder.
+
+- **Custom GPT deploy guide** (`.ai/docs/custom-gpt-deploy.md`) — step-by-step
+  instructions for hosting Alfred Memory, serving the OpenAPI schema, creating
+  the Custom GPT, publishing to the GPT Store, and rotating keys.
+
+### Changed
+
+- **`regression-gates.json`** — `memory-server-console-handlers` count
+  81 → 97 (16 new tests covering the openapi surface). Total tests
+  228 → 244. Gate count stays at 17.
+
+- **`package.json`** — `0.4.0` → `0.4.1`; test pipeline swapped to
+  `validate:release-0.4.1`.
+
+- **`packages/memory-server/src/server.js`** — `createApp` accepts an
+  optional `openapiRouter` parameter and routes the Custom GPT surface
+  through it. Backward-compatible.
+
+- **`packages/memory-server/scripts/serve.mjs`** — wires
+  `createOpenapiRouter` into the app, with `projectRoot: process.cwd()` and
+  the registry for rate limiting.
+
+### Policy
+
+No new policy. All endpoints honor the existing
+`memory-hosting-policy.md` and `security.md`. The `/policies/check` endpoint
+is a thin v0.4.1 implementation that rejects a fixed set of forbidden
+actions and verifies namespace + cross-tenant access; it is not a full
+policy engine (that's v0.5.0).
+
+### Files
+
+- New modules:
+  `packages/memory-server/src/openapi-router.js`,
+  `packages/memory-server/src/bootstrap/action-rate-limiter.js`
+- New migration: `009_action_attempts.sql` (Postgres + SQLite twin)
+- New tests: 16 new tests in `console.test.mjs` (81 → 97); updated
+  `packages/memory-openapi/test/openapi.test.js` (12 → 13)
+- New artifacts: `.ai/gpt/alfred-memory-gpt.json`,
+  `.ai/docs/custom-gpt-deploy.md`
+- `regression-gates.json`: totals 228 → 244, memory-server-console-handlers
+  81 → 97
+- `releases/release-0.4.1.{md,json}`, observability trace
+  `release-0.4.1.json`

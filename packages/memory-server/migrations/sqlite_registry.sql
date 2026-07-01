@@ -264,3 +264,22 @@ CREATE INDEX IF NOT EXISTS memory_embeddings_tenant_idx
 
 CREATE INDEX IF NOT EXISTS memory_embeddings_model_idx
   ON memory_embeddings(model);
+
+-- =============================================================================
+-- v0.4.1: Custom GPT Action rate limit attempts
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS action_attempts (
+  id              TEXT PRIMARY KEY,
+  api_key_hash    TEXT NOT NULL,
+  attempted_at    TEXT NOT NULL,
+  endpoint        TEXT,
+  method          TEXT,
+  result          TEXT NOT NULL,
+  error_code      TEXT
+);
+
+CREATE INDEX IF NOT EXISTS action_attempts_key_time_idx
+  ON action_attempts (api_key_hash, attempted_at);
+
+CREATE INDEX IF NOT EXISTS action_attempts_time_idx
+  ON action_attempts (attempted_at);
