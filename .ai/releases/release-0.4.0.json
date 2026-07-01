@@ -1,0 +1,91 @@
+{
+  "id": "release-0.4.0",
+  "version": "0.4.0",
+  "candidate": "alfred-saas-production-0.4.0",
+  "owner": "orchestrator",
+  "status": "complete",
+  "scope": "production-ready-saas",
+  "previous_release": "release-0.3.1",
+  "includes": [
+    "v0.4.0-captcha",
+    "v0.4.0-email-verification",
+    "v0.4.0-ci-postgres-isolation",
+    "v0.4.0-key-recovery",
+    "v0.4.0-semantic-search",
+    "regression-gates-split"
+  ],
+  "required_validators": [
+    "validate:policies",
+    "validate:release-0.4.0"
+  ],
+  "totals": {
+    "tests": 228,
+    "gates": 17,
+    "policy_checks": 12,
+    "package_test_suites": 6,
+    "new_tests_added": 65,
+    "new_gates_added": 1,
+    "provider_calls": 0
+  },
+  "new_endpoints": [
+    {
+      "method": "POST",
+      "path": "/console/api/recover",
+      "auth": "none",
+      "rate_limit": "3 per IP per hour",
+      "purpose": "Forgot-my-key: issue one-shot recovery token; emailed if SMTP configured"
+    },
+    {
+      "method": "GET",
+      "path": "/console/api/recover",
+      "auth": "token in query",
+      "rate_limit": "3 per IP per hour",
+      "purpose": "Consume recovery token: revoke old API key, issue new one"
+    },
+    {
+      "method": "GET",
+      "path": "/console/api/verify",
+      "auth": "token in query",
+      "rate_limit": "implicit (24h expiry)",
+      "purpose": "Mark tenant email_verified; emit first API key on success"
+    }
+  ],
+  "new_search_modes": ["semantic", "keyword", "hybrid"],
+  "opt_in_modules": {
+    "captcha": {
+      "env": ["ALFRED_TURNSTILE_SITE_KEY", "ALFRED_TURNSTILE_SECRET_KEY"],
+      "default": "off",
+      "provider_calls": 0,
+      "external_endpoint": "challenges.cloudflare.com (server-to-server, no API key, no per-request cost)"
+    },
+    "email": {
+      "env": ["ALFRED_SMTP_HOST", "ALFRED_SMTP_PORT", "ALFRED_SMTP_USER", "ALFRED_SMTP_PASSWORD", "ALFRED_SMTP_FROM"],
+      "default": "off (no-op sender; tokens still issued and stored)",
+      "provider_calls": 0
+    },
+    "embeddings": {
+      "env": [],
+      "default": "on (lazy-loaded, 22MB weight downloaded once and cached locally)",
+      "fallback_when_unavailable": "keyword search",
+      "provider_calls": 0,
+      "model": "@xenova/transformers + Xenova/all-MiniLM-L6-v2 (MIT, 384-dim)"
+    }
+  },
+  "new_kinds_allowed_via_web": ["human_agent", "hybrid_with_human"],
+  "new_kinds_rejected_via_web": ["coding_agent_only", "server_managed"],
+  "policy_overrides": [],
+  "provider_calls_allowed": 0,
+  "baseline_update_requires_human_approval": true,
+  "harness_config_writes_require_human_approval": true,
+  "commit_policy": {
+    "validated_commit_source": "pending-at-commit-time",
+    "commit_source_recorded_in_trace": true,
+    "static_baseline_pins_commit": false
+  },
+  "artifact_manifest": {
+    "release_notes": ".ai/releases/release-0.4.0.md",
+    "roadmap": ".ai/roadmaps/0.4.0.json",
+    "regression_gates": ".ai/evals/regression-gates.json",
+    "trace": ".ai/observability/generated/release-0.4.0.json"
+  }
+}

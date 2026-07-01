@@ -44,3 +44,81 @@ See `README.md` for usage.
   Onboarding requires a shared Postgres cluster with schema-per-tenant
   isolation. Preserves the spirit of "one physical DB per tenant"
   while enabling operator-managed SaaS.
+
+## 0.4.0 — 2026-07-01
+
+Production-ready SaaS: CAPTCHA + email verification + CI-tested
+Postgres isolation + key recovery + local semantic search. **228 tests
+/ 17 release gates / 12 policy checks.** Zero provider calls.
+
+### Added
+
+- **Cloudflare Turnstile (CAPTCHA)** — opt-in anti-bot for
+  `POST /console/api/bootstrap`. Set `ALFRED_TURNSTILE_SITE_KEY` and
+  `ALFRED_TURNSTILE_SECRET_KEY` to enable. When unset, the endpoint
+  behaves exactly as in v0.3.1. Client sends the token in the
+  `X-Turnstile-Token` header (or `captcha_token` body field); the
+  server verifies via `challenges.cloudflare.com/turnstile/v0/siteverify`.
+
+- **Email verification** — opt-in via SMTP env vars
+  (`ALFRED_SMTP_HOST`, `ALFRED_SMTP_PORT`, `ALFRED_SMTP_USER`,
+  `ALFRED_SMTP_PASSWORD`, `ALFRED_SMTP_FROM`). When configured and the
+  signup form includes an `email` field, the server generates a 24h
+  single-use token and emails a magic link. `GET /console/api/verify`
+  marks the tenant as `email_verified`. Without SMTP, tokens are still
+  issued and stored, but the email send is a no-op (with a structured
+  log line).
+
+- **CI Postgres isolation** — `.github/workflows/ci-postgres.yml`
+  spins up a real `postgres:16-alpine` service and runs the new
+  `cross-tenant-isolation-postgres.test.mjs` against it. The test is
+  skipped in local unit runs (no `ALFRED_TEST_POSTGRES_URL`). PRs that
+  break cross-tenant isolation in real Postgres are blocked.
+
+- **Key recovery (forgot-my-key)** — `POST /console/api/recover` +
+  `GET /console/api/recover` flow. The user submits their email; the
+  server issues a one-shot recovery token (3 per IP per hour, audited
+  in the new `tenant_recoveries` table). On consume, the old API key
+  is revoked and a fresh `alk_...` key is issued and emailed.
+  Without SMTP, the request is rejected with `smtp_unconfigured` (we
+  never leak keys in the response body).
+
+- **Local semantic search** — `searchMemories` now accepts
+  `mode: "semantic" | "keyword" | "hybrid"`. The embedding model is
+  `@xenova/transformers` + `Xenova/all-MiniLM-L6-v2` (22MB, MIT,
+  384-dim), **runs locally, no network calls, no API keys, no
+  provider**. Vectors are stored in the new `memory_embeddings` table.
+  Lazy-loaded on first use; if the model is unavailable, the service
+  transparently falls back to keyword search.
+
+### Changed
+
+- **Regression gates** — the previous `memory-server-tests` gate (which
+  ran 6 test files in a single command but reported a single number)
+  has been split into two gates for clarity:
+  - `memory-server-core-handlers` (server + init + cli + registry-store
+    + migrate) — 47 tests
+  - `memory-server-console-handlers` (console surface: bootstrap,
+    verify, recover, semantic search, CAPTCHA, email) — 81 tests
+  Total: 228 tests / 17 gates. Run the same validator to confirm.
+
+- **Console web UI** — the signup form gained an email field, a
+  Turnstile widget (rendered only when configured), and a
+  "forgot my key" panel below the locked view that triggers the
+  recovery flow.
+
+### Files
+
+- New modules:
+  `packages/memory-server/src/bootstrap/{captcha-verifier,email-sender,verification,recovery}.js`,
+  `packages/memory-server/src/search/{embedder,semantic-index,search-service}.js`
+- New migrations: `006_email_verifications.sql`, `007_recoveries.sql`,
+  `008_memory_embeddings.sql` (with SQLite twins in
+  `migrations/sqlite_registry.sql`)
+- New tests: `cross-tenant-isolation-postgres.test.mjs` (opt-in real
+  Postgres); `console.test.mjs` grew from 16 → 81 tests
+- New workflows: `.github/workflows/ci-postgres.yml`
+- New eval datasets: `semantic-search.yml`, `key-recovery.yml`
+- `regression-gates.json`: 16 → 17 gates; totals stay 228
+- `releases/release-0.4.0.{md,json}`, observability trace
+  `release-0.4.0.json`

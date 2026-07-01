@@ -115,11 +115,15 @@
         <input id="signupName" placeholder="display name (e.g. my-mem)" style="flex: 1; background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace;" />
       </div>
       <div class="row" style="margin-bottom: 8px;">
+        <input id="signupEmail" type="email" placeholder="email (optional, for key recovery)" style="flex: 1; background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace;" />
+      </div>
+      <div class="row" style="margin-bottom: 8px;">
         <label class="small"><input type="radio" name="signupKind" value="human_agent" checked /> Human agent (ChatGPT, Claude, Gemini)</label>
       </div>
       <div class="row" style="margin-bottom: 12px;">
         <label class="small"><input type="radio" name="signupKind" value="hybrid_with_human" /> Hybrid (human + coding agents)</label>
       </div>
+      <div id="turnstileContainer" style="margin-bottom: 12px;"></div>
       <button onclick="signup()">Create my memory</button>
       <p class="small" style="margin-top: 8px;" id="signupHint">You'll get an API key immediately. Copy it; we don't store the secret.</p>
     </div>
@@ -131,6 +135,15 @@
         <button onclick="setKey()" style="margin-top: 8px;">Unlock</button>
       </div>
       <p class="small" style="margin-top: 8px;">Paste an API key from <code>alfred init</code> or <code>alfred keys issue</code>.</p>
+    </details>
+
+    <details style="margin-top: 16px;">
+      <summary>Forgot your API key?</summary>
+      <div style="margin-top: 8px;">
+        <input id="recoverEmail" type="email" placeholder="email used at signup" style="background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace; width: 100%;" />
+        <button onclick="requestRecovery()" style="margin-top: 8px;">Send recovery link</button>
+      </div>
+      <p class="small" style="margin-top: 8px;" id="recoverHint">If the email is registered, you'll get a magic link with a new key. The old key will be revoked.</p>
     </details>
   </div>
 
@@ -246,6 +259,26 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
 let API_KEY = "";
 let CURRENT_TENANT = "";
 
+function renderTurnstile() {
+  // If the server build injected a site key, render the Turnstile widget.
+  // The widget produces a token that the signup() function picks up.
+  const siteKey = window.ALFRED_TURNSTILE_SITE_KEY;
+  const container = document.getElementById("turnstileContainer");
+  if (!siteKey || !container) return;
+  const sc = document.createElement("script");
+  sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=alfredTurnstileOnload";
+  sc.async = true;
+  sc.defer = true;
+  document.head.appendChild(sc);
+  window.alfredTurnstileOnload = function () {
+    window.turnstile.render(container, {
+      sitekey: siteKey,
+      callback: function (token) { window.alfredTurnstileToken = token; },
+      "expired-callback": function () { window.alfredTurnstileToken = null; }
+    });
+  };
+}
+
 async function signup() {
   const name = document.getElementById("signupName").value.trim();
   const kindRadio = document.querySelector('input[name="signupKind"]:checked');
@@ -254,9 +287,13 @@ async function signup() {
   const hint = document.getElementById("signupHint");
   hint.textContent = "Creating tenant…";
   try {
+    const token = window.alfredTurnstileToken || null;
+    const headers = token ? { "x-turnstile-token": token } : {};
+    const emailValue = document.getElementById("signupEmail").value.trim() || null;
     const res = await api("/console/api/bootstrap", {
       method: "POST",
-      body: JSON.stringify({ display_name: name, kind })
+      headers,
+      body: JSON.stringify({ display_name: name, kind, turnstile_token: token, email: emailValue })
     });
     API_KEY = res.api_key;
     document.getElementById("apiStatus").textContent = "✓ unlocked";
@@ -276,6 +313,23 @@ async function signup() {
   }
 }
 
+async function requestRecovery() {
+  const emailEl = document.getElementById("recoverEmail");
+  const hint = document.getElementById("recoverHint");
+  const email = emailEl.value.trim();
+  if (!email) { hint.innerHTML = '<span style="color: var(--bad);">Enter the email you used at signup.</span>'; return; }
+  hint.textContent = "Sending recovery link…";
+  try {
+    await api("/console/api/recover", {
+      method: "POST",
+      body: JSON.stringify({ email })
+    });
+    hint.innerHTML = '<span class="ok">If the email is registered, a recovery link has been sent. Check your inbox.</span>';
+  } catch (err) {
+    hint.innerHTML = '<span style="color: var(--bad);">' + err.message + '</span>';
+  }
+}
+
 function showErrorInline(elementId, message) {
   const el = document.getElementById(elementId);
   el.innerHTML = '<span style="color: var(--bad);">' + message + '</span>';
@@ -290,6 +344,13 @@ function setKey() {
   document.getElementById("unlocked").style.display = "block";
   localStorage.setItem("alfred_api_key", API_KEY);
   loadAll();
+}
+
+// Render the Turnstile widget if a site key is configured.
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", renderTurnstile);
+} else {
+  renderTurnstile();
 }
 
 if (localStorage.getItem("alfred_api_key")) {

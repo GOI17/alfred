@@ -1,0 +1,80 @@
+# v0.4.0 Key Recovery (forgot-my-key) eval dataset
+# Validates the POST/GET /console/api/recover flow, the audit
+# trail, the rate limit, the key rotation (old key revoked,
+# new key issued), and the SMTP-unconfigured rejection.
+
+dataset:
+  id: key-recovery
+  version: 0.4.0
+  owner: developer
+  description: >
+    Test vectors for the forgot-my-key recovery flow. Confirms
+    one-shot tokens, 3-per-IP-per-hour rate limit, old key
+    revocation on consume, SMTP-required delivery, and that
+    the response never leaks the new key when SMTP is unset.
+
+vectors:
+  - id: recovery-request-issues-token
+    description: POST /console/api/recover returns 200 with delivery info
+    inputs:
+      smtp_configured: true
+    expected_status: 200
+    expected_response:
+      ok: true
+      delivery: email
+    side_effects:
+      - tenant_recoveries row created
+      - audit row created with ip + timestamp
+
+  - id: recovery-consume-rotates-key
+    description: GET with valid token revokes old key, issues new alk_ key
+    inputs:
+      token: valid
+    expected_status: 200
+    expected_response:
+      ok: true
+      api_key_prefix: "alk_"
+      api_key_length: 47
+    side_effects:
+      - old api_key marked revoked
+      - new api_key row inserted
+      - token row marked consumed
+
+  - id: recovery-token-replay-rejected
+    description: Reusing a consumed token returns 410
+    inputs:
+      token: already_consumed
+    expected_status: 410
+    expected_response:
+      ok: false
+      error: recovery_token_used
+
+  - id: recovery-token-expired
+    description: Tokens older than 24h return 410
+    inputs:
+      token: expired
+    expected_status: 410
+    expected_response:
+      ok: false
+      error: recovery_token_expired
+
+  - id: recovery-rate-limit
+    description: 4th request from same IP within 1h returns 429
+    inputs:
+      request_count_within_1h: 4
+    expected_status: 429
+    expected_response:
+      ok: false
+      error: rate_limited
+
+  - id: recovery-no-smtp-rejects
+    description: Without SMTP the request is rejected (we never leak keys)
+    inputs:
+      smtp_configured: false
+    expected_status: 503
+    expected_response:
+      ok: false
+      error: smtp_unconfigured
+    invariants:
+      - The response body does NOT contain api_key, alk_, or any
+        value matching /alk_[A-Za-z0-9_-]{20,}/.

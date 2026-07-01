@@ -372,6 +372,8 @@ export async function createSqliteRegistryStore({ dbPath, applyMigrations = true
     tenants: createTenantStoreContract(handle),
     users: createUserStoreContract(handle),
     bootstrap: createBootstrapAttemptContract(handle),
+    emailVerifications: createEmailVerificationContract(handle),
+    recoveries: createRecoveryContract(handle),
     rawHandle: handle
   };
 }
@@ -409,6 +411,106 @@ function createBootstrapAttemptContract(db) {
          ORDER BY attempted_at ASC LIMIT 1
       `).get(ip, since);
       return row ?? null;
+    }
+  };
+}
+
+// =============================================================================
+// tenant_email_verifications contract (v0.4.0)
+// =============================================================================
+function createEmailVerificationContract(db) {
+  return {
+    async createEmailVerification(input) {
+      const id = input.id ?? `emv_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+      db.prepare(`
+        INSERT INTO tenant_email_verifications (id, tenant_id, email, token, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id, input.tenant_id, input.email, input.token, input.expires_at, input.created_at ?? nowIso());
+      return { id };
+    },
+    async findEmailVerificationByToken(token) {
+      const row = db.prepare(`SELECT * FROM tenant_email_verifications WHERE token = ?`).get(token);
+      if (!row) return null;
+      return {
+        id: row.id,
+        tenant_id: row.tenant_id,
+        email: row.email,
+        token: row.token,
+        expires_at: row.expires_at,
+        used_at: row.used_at ?? null,
+        created_at: row.created_at
+      };
+    },
+    async markEmailVerificationUsed(id) {
+      db.prepare(`UPDATE tenant_email_verifications SET used_at = ? WHERE id = ?`).run(nowIso(), id);
+    }
+  };
+}
+
+// =============================================================================
+// tenant_recoveries contract (v0.4.0)
+// =============================================================================
+function createRecoveryContract(db) {
+  return {
+    async findTenantByEmail(email) {
+      // We don't have an email column on tenants yet (v0.4.0 keeps email
+      // only in the verification/recovery tables). The recovery flow
+      // uses the email from a previous verification, not from tenants.
+      // For now, return null; the caller will look up by joining verifications.
+      return null;
+    },
+    async findLatestVerificationForEmail(email) {
+      const row = db.prepare(`
+        SELECT * FROM tenant_email_verifications
+         WHERE email = ?
+         ORDER BY created_at DESC LIMIT 1
+      `).get(email);
+      if (!row) return null;
+      return {
+        id: row.id,
+        tenant_id: row.tenant_id,
+        email: row.email,
+        used_at: row.used_at
+      };
+    },
+    async createRecovery(input) {
+      const id = input.id ?? `rec_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+      db.prepare(`
+        INSERT INTO tenant_recoveries (id, tenant_id, email, token, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id, input.tenant_id, input.email, input.token, input.expires_at, input.created_at ?? nowIso());
+      return { id };
+    },
+    async findRecoveryByToken(token) {
+      const row = db.prepare(`SELECT * FROM tenant_recoveries WHERE token = ?`).get(token);
+      if (!row) return null;
+      return {
+        id: row.id,
+        tenant_id: row.tenant_id,
+        email: row.email,
+        token: row.token,
+        expires_at: row.expires_at,
+        used_at: row.used_at ?? null,
+        new_key_id: row.new_key_id ?? null,
+        old_key_id: row.old_key_id ?? null,
+        created_at: row.created_at
+      };
+    },
+    async markRecoveryUsed(id, { newKeyId, oldKeyId }) {
+      db.prepare(`UPDATE tenant_recoveries SET used_at = ?, new_key_id = ?, old_key_id = ? WHERE id = ?`)
+        .run(nowIso(), newKeyId ?? null, oldKeyId ?? null, id);
+    },
+    async findActiveKeyForTenant(tenantId) {
+      const row = db.prepare(`
+        SELECT * FROM tenant_api_keys
+         WHERE tenant_id = ? AND revoked_at IS NULL
+         ORDER BY created_at DESC LIMIT 1
+      `).get(tenantId);
+      if (!row) return null;
+      return { id: row.id, tenant_id: row.tenant_id, key_prefix: row.key_prefix, created_at: row.created_at };
+    },
+    async revokeApiKey(keyId) {
+      db.prepare(`UPDATE tenant_api_keys SET revoked_at = ? WHERE id = ?`).run(nowIso(), keyId);
     }
   };
 }

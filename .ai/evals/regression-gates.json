@@ -1,9 +1,9 @@
 {
-  "id": "regression-gates@0.3.0",
-  "version": "0.3.0",
+  "id": "regression-gates@0.4.0",
+  "version": "0.4.0",
   "owner": "qa",
   "status": "active",
-  "applies_to_release": "0.3.0",
+  "applies_to_release": "0.4.0",
   "gates": [
     {
       "id": "policy-docs-present",
@@ -69,18 +69,27 @@
       "blocked_on_failure": true
     },
     {
-      "id": "memory-server-tests",
-      "description": "Server handlers, init, CLI, migrate",
+      "id": "memory-server-core-handlers",
+      "description": "Server handlers, init, CLI, migrate, registry store (non-console surface)",
       "files": [
         "packages/memory-server/test/server.test.mjs",
         "packages/memory-server/test/init.test.mjs",
         "packages/memory-server/test/cli.test.mjs",
         "packages/memory-server/test/registry-sqlite-store.test.mjs",
-        "packages/memory-server/test/migrate-sqlite.test.mjs",
+        "packages/memory-server/test/migrate-sqlite.test.mjs"
+      ],
+      "command": "node --test packages/memory-server/test/{server,init,cli,registry-sqlite-store,migrate-sqlite}.test.mjs",
+      "expected_test_count": 47,
+      "blocked_on_failure": true
+    },
+    {
+      "id": "memory-server-console-handlers",
+      "description": "Console surface: bootstrap, verify, recover, semantic search, CAPTCHA, email",
+      "files": [
         "packages/memory-server/test/console.test.mjs"
       ],
-      "command": "node --test packages/memory-server/test/{server,init,cli,registry-sqlite-store,migrate-sqlite,console}.test.mjs",
-      "expected_test_count": 79,
+      "command": "node --test packages/memory-server/test/console.test.mjs",
+      "expected_test_count": 81,
       "blocked_on_failure": true
     },
     {
@@ -183,6 +192,6 @@
   ],
   "totals": {
     "files_validated": 5,
-    "tests_total": 226
+    "tests_total": 228
   }
 }

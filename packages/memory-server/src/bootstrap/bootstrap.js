@@ -65,6 +65,8 @@ export function createBootstrap({
   rateLimiter,
   schemaProvisioner,
   sharedUrl,                                // env: ALFRED_SAAS_DATABASE_URL
+  captchaVerifier = null,                   // optional: enables CAPTCHA when isEnabled()
+  verification = null,                      // optional: enables email verification when supplied
   now = () => new Date(),
   trace = () => {}
 } = {}) {
@@ -76,7 +78,7 @@ export function createBootstrap({
   return {
     isConfigured() { return Boolean(sharedUrl) && sharedUrl.startsWith("postgres"); },
 
-    async createTenantAndFirstKey({ ip, displayName, kind }) {
+    async createTenantAndFirstKey({ ip, displayName, kind, turnstileToken = null, email = null }) {
       if (!this.isConfigured()) {
         throw new BootstrapConfigError("ALFRED_SAAS_DATABASE_URL is not set. Bootstrap is disabled.");
       }
@@ -85,7 +87,22 @@ export function createBootstrap({
       const norm = normalize({ displayName, kind });
       if (!norm.valid) throw new BootstrapValidationError(norm.details);
 
-      // 2. Rate limit.
+      // Optional email validation (if provided).
+      if (email !== null && email !== undefined) {
+        if (typeof email !== "string" || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 320) {
+          throw new BootstrapValidationError([{ field: "email", message: "email must be a valid address (max 320 chars)." }]);
+        }
+      }
+
+      // 2. CAPTCHA (if enabled).
+      if (captchaVerifier && captchaVerifier.isEnabled()) {
+        const captchaResult = await captchaVerifier.verify({ token: turnstileToken, remoteIp: ip });
+        if (!captchaResult.ok) {
+          throw new BootstrapValidationError([{ field: "turnstile_token", message: "CAPTCHA verification failed: " + captchaResult.message }]);
+        }
+      }
+
+      // 3. Rate limit.
       const limit = await rateLimiter.check({ ip });
       if (!limit.allowed) throw new BootstrapRateLimitedError(limit.retryAfterMinutes);
 
@@ -134,6 +151,17 @@ export function createBootstrap({
         key_id: keyResult.key.id
       });
 
+      // If email was provided and verification is configured, send the magic link.
+      let email_verification = null;
+      if (email && verification) {
+        try {
+          email_verification = await verification.createVerification({ tenant_id: tenant.id, email });
+        } catch (err) {
+          // Email is best-effort; the user already has their key.
+          trace({ event: "tenant.bootstrap.email_failed", tenant_id: tenant.id, message: err.message });
+        }
+      }
+
       return {
         tenant: {
           id: tenant.id,
@@ -146,7 +174,10 @@ export function createBootstrap({
         },
         api_key: keyResult.apiKey,
         key_prefix: keyResult.key.key_prefix,
-        key_id: keyResult.key.id
+        key_id: keyResult.key.id,
+        email_verification: email_verification
+          ? { sent: email_verification.sent, skipped: !!email_verification.skipped, link: email_verification.link ?? null }
+          : null
       };
     }
   };

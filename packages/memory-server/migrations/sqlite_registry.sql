@@ -206,3 +206,61 @@ CREATE INDEX IF NOT EXISTS bootstrap_attempts_ip_time_idx
 
 CREATE INDEX IF NOT EXISTS bootstrap_attempts_time_idx
   ON bootstrap_attempts(attempted_at DESC);
+
+-- =============================================================================
+-- v0.4.0: Email verification tokens
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS tenant_email_verifications (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS tenant_email_verifications_tenant_idx
+  ON tenant_email_verifications(tenant_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS tenant_email_verifications_token_idx
+  ON tenant_email_verifications(token);
+
+-- =============================================================================
+-- v0.4.0: Forgot-my-key recovery tokens
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS tenant_recoveries (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  new_key_id TEXT,
+  old_key_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS tenant_recoveries_tenant_idx
+  ON tenant_recoveries(tenant_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS tenant_recoveries_token_idx
+  ON tenant_recoveries(token);
+
+-- =============================================================================
+-- v0.4.0: Memory embeddings (local model, semantic search)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS memory_embeddings (
+  memory_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  model TEXT NOT NULL,
+  dim INTEGER NOT NULL,
+  embedding BLOB NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS memory_embeddings_tenant_idx
+  ON memory_embeddings(tenant_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS memory_embeddings_model_idx
+  ON memory_embeddings(model);

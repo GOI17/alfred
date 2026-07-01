@@ -1,0 +1,79 @@
+# v0.4.0 Semantic Search eval dataset
+# Validates the local embedding-based semantic search service
+# (mode: semantic | keyword | hybrid). Zero provider calls; model
+# lazy-loaded; falls back to keyword if the model is unavailable.
+
+dataset:
+  id: semantic-search
+  version: 0.4.0
+  owner: developer
+  description: >
+    Test vectors for the search service. Confirms the mode switch
+    works end-to-end, the cosine similarity + RRF hybrid ranking
+    beats keyword-only, the embedder degrades to keyword when the
+    model is unavailable, and there is no provider call path.
+
+vectors:
+  - id: keyword-mode-default
+    description: Default mode returns keyword results
+    inputs:
+      mode: keyword
+      query: "auth bug"
+    expected:
+      mode_used: keyword
+      has_results: true
+      provider_calls: 0
+
+  - id: hybrid-mode-with-mock-embedder
+    description: Hybrid mode blends cosine + keyword via RRF
+    inputs:
+      mode: hybrid
+      query: "scrypt rotation"
+    expected:
+      mode_used: hybrid
+      ranking_blends:
+        - cosine_top_doc
+        - keyword_top_doc
+      provider_calls: 0
+
+  - id: semantic-mode-cosine
+    description: Pure semantic mode uses cosine similarity only
+    inputs:
+      mode: semantic
+      query: "tenant isolation"
+    expected:
+      mode_used: semantic
+      similarity_function: cosine
+      provider_calls: 0
+
+  - id: model-unavailable-fallback
+    description: When embedder init fails, service falls back to keyword
+    inputs:
+      mode: hybrid
+      embedder_throws: true
+    expected:
+      mode_used: keyword
+      fallback_reason: "embedder_unavailable"
+      provider_calls: 0
+
+  - id: no-results
+    description: Empty corpus returns empty results, no error
+    inputs:
+      mode: hybrid
+      query: "x"
+      corpus: []
+    expected:
+      has_results: false
+      provider_calls: 0
+
+  - id: local-model-only
+    description: Embedder never reaches the network for a known sentence
+    inputs:
+      mode: semantic
+      query: "hello world"
+    invariants:
+      - No outbound HTTP requests are made by the embedder.
+      - No env var named *_API_KEY is read by the embedder module.
+      - The import graph of embedder.js does not include any
+        "provider" / "openai" / "anthropic" / "gemini" / "cohere"
+        package.

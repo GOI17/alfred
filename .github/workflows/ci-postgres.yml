@@ -1,0 +1,47 @@
+name: ci-postgres
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/memory-server/**"
+      - "packages/memory/**"
+      - ".github/workflows/ci-postgres.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/memory-server/**"
+      - "packages/memory/**"
+      - ".github/workflows/ci-postgres.yml"
+
+jobs:
+  cross-tenant-isolation:
+    name: cross-tenant isolation (real Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: alfred
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: alfred_memory
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U alfred -d alfred_memory"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ALFRED_TEST_POSTGRES_URL: postgres://alfred:testpass@localhost:5432/alfred_memory
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pg
+        run: cd packages/memory-server && npm install pg@^8.13.0
+      - name: Run cross-tenant isolation (real Postgres)
+        run: node --test packages/memory-server/test/cross-tenant-isolation-postgres.test.mjs
+        env:
+          ALFRED_TEST_POSTGRES_URL: postgres://alfred:testpass@localhost:5432/alfred_memory

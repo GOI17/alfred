@@ -1,0 +1,147 @@
+{
+  "id": "roadmap-0.4.0",
+  "version": "roadmap-0.4.0@0.1.0",
+  "owner": "orchestrator",
+  "status": "active",
+  "release_target": "0.4.0",
+  "previous_release": "release-0.3.1",
+  "goal": "Production-ready SaaS: CAPTCHA + email verification + Postgres-CI isolation tests + key recovery + local embedding-based semantic search. Zero provider calls.",
+  "constraints": {
+    "local_first_for_compute": true,
+    "memory_persistence_local_or_remote": true,
+    "provider_calls_allowed": 0,
+    "core_harness_agnostic": true,
+    "permission_escalation_requires_human_approval": true,
+    "harness_config_writes_require_human_approval": true,
+    "baseline_updates_require_human_approval": true,
+    "human_agents_require_postgres": true,
+    "coding_agents_ask_backend_on_init": true,
+    "workspace_invariant_one_per_directory": true,
+    "tenant_isolation_isolated_db_per_tenant": true,
+    "email_optional_but_saas_recommended": true,
+    "captcha_optional_backward_compatible": true,
+    "embedding_model_runs_locally": true
+  },
+  "phases": [
+    {
+      "id": "phase-25-captcha",
+      "order": 0,
+      "owner": "developer",
+      "status": "pending",
+      "goal": "Integrate Cloudflare Turnstile (optional) into POST /console/api/bootstrap. When ALFRED_TURNSTILE_SITE_KEY + ALFRED_TURNSTILE_SECRET_KEY are set, the client must send X-Turnstile-Token and the server verifies it via siteverify. When unset, the endpoint behaves as in v0.3.1 (backward compatible).",
+      "scope": ["captcha", "anti-bot"],
+      "deliverables": [
+        "packages/memory-server/src/bootstrap/captcha-verifier.js",
+        "packages/memory-server/src/console-router.js (verify header when configured)",
+        "packages/console-web/src/index.html (Turnstile widget in signup form)",
+        "tests: captcha valid, captcha invalid, captcha off (backward compat)"
+      ],
+      "validation": ["validate:phase25"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-26-email-verification",
+      "order": 1,
+      "owner": "developer",
+      "status": "pending",
+      "goal": "Add optional email capture to bootstrap. If provided, server generates a verification token, stores it, and (when SMTP is configured) sends a magic link. The link marks the tenant as email_verified and emits the API key.",
+      "scope": ["email", "verification"],
+      "deliverables": [
+        "packages/memory-server/src/bootstrap/email-sender.js (nodemailer wrapper, no-op if unconfigured)",
+        "packages/memory-server/src/bootstrap/verification.js (token store + verify endpoint)",
+        "packages/memory-server/migrations/006_email_verifications.sql (tenant_email_verifications table)",
+        "packages/memory-server/src/console-router.js (GET /console/api/verify)",
+        "packages/console-web/src/index.html (email input in signup form)",
+        "tests: token valid, expired, reused, SMTP unconfigured (skip + log)"
+      ],
+      "validation": ["validate:phase26"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-27-ci-postgres-isolation",
+      "order": 2,
+      "owner": "qa",
+      "status": "pending",
+      "goal": "Add a CI workflow that runs the cross-tenant isolation test suite against a real Postgres cluster (via docker-compose). Block PRs that fail this test.",
+      "scope": ["ci", "isolation-tests"],
+      "deliverables": [
+        ".github/workflows/ci-postgres.yml (postgres:16-alpine service + run isolation test)",
+        "packages/memory-server/test/cross-tenant-isolation-postgres.test.mjs (real Postgres)",
+        "updated cross-tenant-isolation gate (existing 15 vectors + new real-Postgres vector)"
+      ],
+      "validation": ["validate:phase27"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-28-key-recovery",
+      "order": 3,
+      "owner": "developer",
+      "status": "pending",
+      "goal": "Add /console/api/recover (forgot-my-key) endpoint. User submits email, server generates a one-shot recovery token, sends a magic link with the new API key. Old key is revoked.",
+      "scope": ["recovery", "key-rotation"],
+      "deliverables": [
+        "packages/memory-server/src/bootstrap/recovery.js (token store + issue new key + revoke old)",
+        "packages/memory-server/migrations/007_recoveries.sql (tenant_recoveries table)",
+        "packages/memory-server/src/console-router.js (POST/GET /console/api/recover)",
+        "packages/console-web/src/index.html (forgot-my-key panel in locked view)",
+        "tests: token valid, expired, reused, rate limit 3/IP/hour, key rotation"
+      ],
+      "validation": ["validate:phase28"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-29-semantic-search",
+      "order": 4,
+      "owner": "developer",
+      "status": "pending",
+      "goal": "Add local embedding-based semantic search to the memory stores. Model: @xenova/transformers with Xenova/all-MiniLM-L6-v2 (22MB, MIT, 384-dim). Zero provider calls. searchMemories accepts mode: 'semantic' | 'keyword' | 'hybrid' (default hybrid).",
+      "scope": ["embeddings", "semantic-search"],
+      "deliverables": [
+        "packages/memory-server/src/search/embedder.js (transformers.js wrapper, lazy load)",
+        "packages/memory-server/src/search/semantic-index.js (cosine similarity + hybrid ranking)",
+        "packages/memory-server/migrations/008_memory_embeddings.sql (memory_embeddings table)",
+        "background worker: enqueue embedding on create/update",
+        "searchMemories extended with mode option",
+        "tests: cosine similarity, hybrid ranking, no-results, model unavailable (fallback to keyword)"
+      ],
+      "validation": ["validate:phase29"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "phase-30-release-0.4.0",
+      "order": 5,
+      "owner": "orchestrator",
+      "status": "pending",
+      "goal": "Cut 0.4.0 release candidate with full validation, new eval datasets, and reproducible CHANGELOG.",
+      "scope": ["release-candidate"],
+      "deliverables": [
+        "regression-gates.json updated with all new gates",
+        ".ai/evals/datasets/saas-bootstrap.yml extended",
+        ".ai/evals/datasets/semantic-search.yml new",
+        ".ai/evals/datasets/key-recovery.yml new",
+        "packages/memory/CHANGELOG.md 0.4.0 entry",
+        ".ai/releases/release-0.4.0.md + .json",
+        "scripts/validate-release-0.4.0.mjs"
+      ],
+      "validation": ["validate:release-0.4.0"],
+      "provider_calls_allowed": 0
+    }
+  ],
+  "entry_criteria": [
+    "release-0.3.1 is complete",
+    "ALFRED_SAAS_DATABASE_URL is documented in the README"
+  ],
+  "exit_criteria": [
+    "CAPTCHA is integrated and tested (off by default, on when configured)",
+    "Email verification is integrated and tested (off when SMTP unconfigured)",
+    "CI runs cross-tenant isolation against real Postgres",
+    "Forgot-my-key works end-to-end with email magic link",
+    "Semantic search works with the local model and falls back to keyword if model unavailable",
+    "release-0.4.0 is reproducible and fully gated"
+  ],
+  "non_goals_for_0_4_0": [
+    "Federated sync between agent instances (deferred to v0.5.0)",
+    "Hybrid offline cache (deferred to v0.5.0)",
+    "Multi-agent collaboration sessions (deferred to v0.5.0)"
+  ]
+}

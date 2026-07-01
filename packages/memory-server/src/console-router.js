@@ -18,6 +18,13 @@ import {
   createBootstrap,
   createSchemaProvisioner,
   createRateLimiter,
+  createCaptchaVerifier,
+  createEmailSender,
+  createVerification,
+  createRecovery,
+  RecoveryRateLimitedError,
+  RecoveryNotFoundError,
+  RecoveryValidationError,
   BootstrapValidationError,
   BootstrapConfigError,
   BootstrapRateLimitedError
@@ -145,13 +152,19 @@ export function createConsoleRouter({
   // v0.3.1 SaaS Web Onboarding
   const rateLimiter = registry ? createRateLimiter({ registry }) : null;
   const schemaProvisioner = createSchemaProvisioner({ pgClient: sharedUrl ? pgClientFromUrl : noopPgClient });
+  const captchaVerifier = createCaptchaVerifier();
+  const emailSender = createEmailSender();
+  const verification = registry ? createVerification({ registry, emailSender, baseUrl: process.env.ALFRED_PUBLIC_URL ?? "" }) : null;
+  const recovery = registry ? createRecovery({ registry, userService, emailSender, baseUrl: process.env.ALFRED_PUBLIC_URL ?? "" }) : null;
   const bootstrap = registry
     ? createBootstrap({
         tenantService,
         userService,
         rateLimiter,
         schemaProvisioner,
-        sharedUrl
+        sharedUrl,
+        captchaVerifier,
+        verification
       })
     : null;
 
@@ -247,6 +260,58 @@ export function createConsoleRouter({
       return html(res, 200, htmlText);
     }
 
+    // v0.4.0 API: forgot-my-key recovery (POST request, GET consume)
+    if (url.pathname === "/console/api/recover" && req.method === "POST") {
+      if (!recovery) return json(res, 503, { error: { code: "recovery_not_configured", message: "Recovery is not configured on this server." } });
+      let body = {};
+      try { body = await readJsonBody(req); }
+      catch (err) { return json(res, 400, { error: { code: "validation_error", message: err.message } }); }
+      const ip = clientIpFromReq(req);
+      try {
+        const result = await recovery.requestRecovery({ ip, email: body.email });
+        // Don't reveal whether the email exists: always 200 with a generic message.
+        return json(res, 200, { ok: true, message: "If the email is registered, a recovery link has been sent." });
+      } catch (err) {
+        if (err instanceof RecoveryValidationError) {
+          return json(res, 400, { error: { code: err.code, message: err.message, details: err.details } });
+        }
+        if (err instanceof RecoveryRateLimitedError) {
+          return json(res, 429, { error: { code: err.code, message: err.message, retry_after_minutes: err.retryAfterMinutes } });
+        }
+        return json(res, 500, { error: { code: "internal_error", message: err.message } });
+      }
+    }
+
+    if (url.pathname === "/console/api/recover" && req.method === "GET") {
+      if (!recovery) return json(res, 503, { error: { code: "recovery_not_configured", message: "Recovery is not configured on this server." } });
+      const token = url.searchParams.get("token");
+      const result = await recovery.consumeRecovery({ token });
+      if (!result) return json(res, 400, { error: { code: "invalid_token", message: "Recovery token is invalid." } });
+      if (result.expired) return json(res, 410, { error: { code: "token_expired", message: "Recovery token has expired." } });
+      return json(res, 200, {
+        ok: true,
+        tenant_id: result.tenant_id,
+        email: result.email,
+        api_key: result.api_key,
+        key_prefix: result.key_prefix,
+        key_id: result.key_id,
+        old_key_id: result.old_key_id,
+        consumed_at: result.consumed_at
+      });
+    }
+
+    // v0.4.0 API: email verification (consume a magic link token)
+    if (url.pathname === "/console/api/verify" && req.method === "GET") {
+      if (!verification) {
+        return json(res, 503, { error: { code: "verification_not_configured", message: "Email verification is not configured on this server." } });
+      }
+      const token = url.searchParams.get("token");
+      const result = await verification.consumeVerification(token);
+      if (!result) return json(res, 400, { error: { code: "invalid_token", message: "Verification token is invalid." } });
+      if (result.expired) return json(res, 410, { error: { code: "token_expired", message: "Verification token has expired." } });
+      return json(res, 200, { ok: true, tenant_id: result.tenant_id, email: result.email, verified_at: result.verified_at });
+    }
+
     // v0.3.1 API: bootstrap (signup without auth)
     if (url.pathname === "/console/api/bootstrap" && req.method === "POST") {
       if (!bootstrap) {
@@ -256,11 +321,17 @@ export function createConsoleRouter({
       try { body = await readJsonBody(req); }
       catch (err) { return json(res, 400, { error: { code: "validation_error", message: err.message } }); }
       const ip = clientIpFromReq(req);
+      // CAPTCHA token: prefer header, fall back to body field.
+      const turnstileToken = (typeof req.headers["x-turnstile-token"] === "string" && req.headers["x-turnstile-token"])
+        ? req.headers["x-turnstile-token"]
+        : (typeof body.turnstile_token === "string" ? body.turnstile_token : null);
       try {
         const result = await bootstrap.createTenantAndFirstKey({
           ip,
           displayName: body.display_name,
-          kind: body.kind
+          kind: body.kind,
+          turnstileToken,
+          email: typeof body.email === "string" ? body.email : null
         });
         // Record the successful attempt (best-effort; if rateLimiter is missing this is a no-op).
         try { await rateLimiter?.record({ ip, displayName: body.display_name, kind: body.kind, result: "success", tenantId: result.tenant.id }); } catch {}
