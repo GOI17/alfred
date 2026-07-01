@@ -1,9 +1,9 @@
 {
-  "id": "regression-gates@0.4.0",
-  "version": "0.4.0",
+  "id": "regression-gates@0.4.1",
+  "version": "0.4.1",
   "owner": "qa",
   "status": "active",
-  "applies_to_release": "0.4.0",
+  "applies_to_release": "0.4.1",
   "gates": [
     {
       "id": "policy-docs-present",
@@ -89,7 +89,7 @@
         "packages/memory-server/test/console.test.mjs"
       ],
       "command": "node --test packages/memory-server/test/console.test.mjs",
-      "expected_test_count": 81,
+      "expected_test_count": 97,
       "blocked_on_failure": true
     },
     {
@@ -192,6 +192,6 @@
   ],
   "totals": {
     "files_validated": 5,
-    "tests_total": 228
+    "tests_total": 244
   }
 }

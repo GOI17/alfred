@@ -374,7 +374,48 @@ export async function createSqliteRegistryStore({ dbPath, applyMigrations = true
     bootstrap: createBootstrapAttemptContract(handle),
     emailVerifications: createEmailVerificationContract(handle),
     recoveries: createRecoveryContract(handle),
+    actions: createActionAttemptContract(handle),
     rawHandle: handle
+  };
+}
+
+
+// =============================================================================
+// action_attempts contract (v0.4.1 Custom GPT Action rate limit)
+// =============================================================================
+function createActionAttemptContract(db) {
+  return {
+    async recordActionAttempt(input) {
+      const id = input.id ?? `aatt_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+      db.prepare(`
+        INSERT INTO action_attempts (id, api_key_hash, attempted_at, endpoint, method, result, error_code)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        input.api_key_hash,
+        input.attempted_at,
+        input.endpoint ?? null,
+        input.method ?? null,
+        input.result,
+        input.error_code ?? null
+      );
+      return { id };
+    },
+    async countActionAttempts({ apiKeyHash, since }) {
+      const row = db.prepare(`
+        SELECT COUNT(*) AS c FROM action_attempts
+         WHERE api_key_hash = ? AND attempted_at >= ?
+      `).get(apiKeyHash, since);
+      return row.c;
+    },
+    async oldestActionAttemptInWindow({ apiKeyHash, since }) {
+      const row = db.prepare(`
+        SELECT attempted_at FROM action_attempts
+         WHERE api_key_hash = ? AND attempted_at >= ?
+         ORDER BY attempted_at ASC LIMIT 1
+      `).get(apiKeyHash, since);
+      return row ?? null;
+    }
   };
 }
 

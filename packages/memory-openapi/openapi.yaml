@@ -195,6 +195,100 @@ components:
             total:
               type: integer
 
+    Agent:
+      type: object
+      required: [id, role, status]
+      properties:
+        id: { type: string }
+        role: { type: string, enum: [primary, specialist] }
+        permission_profile: { type: string }
+        status: { type: string, enum: [active, proposed, retired] }
+        phase: { type: string, nullable: true }
+        spec: { type: string }
+
+    AgentManifest:
+      type: object
+      required: [agents, count]
+      properties:
+        agents:
+          type: array
+          items: { $ref: '#/components/schemas/Agent' }
+        count: { type: integer }
+        source: { type: string, nullable: true }
+        error: { type: string, nullable: true }
+
+    Skill:
+      type: object
+      required: [id, name, description]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        triggers:
+          type: array
+          items: { type: string }
+        scope: { type: string }
+        source: { type: string }
+        allowed_agents:
+          type: array
+          items: { type: string }
+
+    SkillManifest:
+      type: object
+      required: [skills, count]
+      properties:
+        skills:
+          type: array
+          items: { $ref: '#/components/schemas/Skill' }
+        count: { type: integer }
+        source: { type: string, nullable: true }
+        error: { type: string, nullable: true }
+
+    PolicyCheckInput:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string }
+        target:
+          type: object
+          additionalProperties: true
+        context:
+          type: object
+          additionalProperties: true
+
+    PolicyCheckResult:
+      type: object
+      required: [allowed, reason, action]
+      properties:
+        allowed: { type: boolean }
+        reason: { type: string }
+        action: { type: string }
+
+    SearchInput:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string }
+        mode:
+          type: string
+          enum: [semantic, keyword, hybrid]
+          default: hybrid
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+
+    SearchResult:
+      type: object
+      required: [mode, results, provider_calls]
+      properties:
+        mode: { type: string, enum: [semantic, keyword, hybrid] }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/MemoryRecord' }
+        provider_calls: { type: integer }
+
 paths:
   /health:
     get:
@@ -439,6 +533,89 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: "Memory not found."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # -------- v0.4.1: Custom GPT surface --------
+  /agents/manifest:
+    get:
+      operationId: listAgents
+      summary: List available Alfred agents
+      description: "Returns the agent manifest from .ai/agents/registry.json. Public; no API key required."
+      responses:
+        '200':
+          description: "Agent manifest."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentManifest'
+
+  /skills/manifest:
+    get:
+      operationId: listSkills
+      summary: List available Alfred skills
+      description: "Returns the skill manifest from .ai/skills/registry.json. Public; no API key required."
+      responses:
+        '200':
+          description: "Skill manifest."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillManifest'
+
+  /policies/check:
+    post:
+      operationId: checkPolicy
+      summary: Check whether a proposed action is allowed
+      description: "Returns whether a proposed action is allowed under the current policy. Public; no API key required."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyCheckInput'
+      responses:
+        '200':
+          description: "Policy decision."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyCheckResult'
+
+  /search:
+    post:
+      operationId: searchMemoriesV2
+      summary: Search memories (semantic | keyword | hybrid)
+      description: "v0.4.1 search endpoint. mode: 'semantic' uses the local embedding model; 'keyword' uses the in-memory filter; 'hybrid' (default) blends both via reciprocal rank fusion. Zero provider calls."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchInput'
+      responses:
+        '200':
+          description: "Search results."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+        '400':
+          description: "Invalid query parameters."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: "Missing or invalid API key."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: "Action rate limit exceeded (100/min per API key)."
           content:
             application/json:
               schema:
