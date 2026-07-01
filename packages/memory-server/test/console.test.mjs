@@ -336,3 +336,272 @@ test("Console router does not require console-web at construction time", () => {
     createConsoleRouter({ userService, tenantService, config: {}, consoleDirOverride: "" });
   });
 });
+
+
+// ============================================================================
+// v0.3.1 SaaS Web Onboarding: POST /console/api/bootstrap
+// ============================================================================
+//
+// These tests exercise the bootstrap orchestrator with an in-memory registry
+// and an injected mock schema provisioner (so no real Postgres is needed).
+// The HTTP route is verified separately via a no-registry 503 test.
+
+import {
+  createBootstrap,
+  createRateLimiter,
+  createSchemaProvisioner
+} from "../src/bootstrap/index.js";
+
+async function makeServicesWithRegistry() {
+  const { createInMemoryTenantStore, createInMemoryUserStore, createTenantService, createUserService } = await import("../../memory/src/index.js");
+  const tenantStore = createInMemoryTenantStore();
+  const userStore = createInMemoryUserStore();
+  // Wire: every tenant added to tenantStore is also stubbed in userStore,
+  // so userService.provisionApiKey() finds it.
+  const _origCreate = tenantStore.createTenant.bind(tenantStore);
+  tenantStore.createTenant = async (input) => {
+    const t = await _origCreate(input);
+    await userStore.addTenantStub(t);
+    return t;
+  };
+  const tenantService = createTenantService({ store: tenantStore });
+  const userService = createUserService({ store: userStore });
+  const attempts = [];
+  const registry = {
+    async recordBootstrapAttempt(input) {
+      attempts.push(input);
+      return { id: input.id };
+    },
+    async countBootstrapAttempts({ ip, since }) {
+      return attempts.filter((a) => a.ip === ip && a.attempted_at >= since).length;
+    },
+    async oldestBootstrapAttemptInWindow({ ip, since }) {
+      const filtered = attempts.filter((a) => a.ip === ip && a.attempted_at >= since);
+      if (filtered.length === 0) return null;
+      return filtered.reduce((a, b) => a.attempted_at < b.attempted_at ? a : b);
+    }
+  };
+  return { tenantService, userService, registry, attempts };
+}
+
+const MOCK_PROVISIONER = {
+  async provision({ tenantId, sharedUrl }) {
+    return { schema: "tenant_" + tenantId.replace(/^usr_t_/, ""), connectionString: sharedUrl + "?options=-c search_path=tenant_" + tenantId };
+  }
+};
+
+test("createBootstrap with valid input returns tenant + alk_ key", async () => {
+  const { tenantService, userService, registry } = await makeServicesWithRegistry();
+  const bs = createBootstrap({
+    tenantService, userService,
+    rateLimiter: createRateLimiter({ registry }),
+    schemaProvisioner: MOCK_PROVISIONER,
+    sharedUrl: "postgres://localhost/alfred_saas"
+  });
+  const result = await bs.createTenantAndFirstKey({ ip: "1.2.3.4", displayName: "my-mem", kind: "human_agent" });
+  assert.equal(result.tenant.kind, "human_agent");
+  assert.equal(result.tenant.storage_backend, "postgres");
+  assert.ok(result.api_key.startsWith("alk_"));
+  assert.ok(result.key_prefix.startsWith("alk_"));
+  assert.match(result.tenant.id, /^usr_t_[a-f0-9]{32}$/);
+  // metadata may be a JSON string (SQLite) or object (in-memory); handle both.
+  const meta = typeof result.tenant.metadata === "string" ? JSON.parse(result.tenant.metadata) : result.tenant.metadata;
+  assert.equal(meta && meta.source, "web_bootstrap");
+});
+
+test("createBootstrap rejects empty display_name with validation_error", async () => {
+  const { tenantService, userService, registry } = await makeServicesWithRegistry();
+  const bs = createBootstrap({
+    tenantService, userService,
+    rateLimiter: createRateLimiter({ registry }),
+    schemaProvisioner: MOCK_PROVISIONER,
+    sharedUrl: "postgres://localhost/alfred_saas"
+  });
+  try {
+    await bs.createTenantAndFirstKey({ ip: "1.2.3.4", displayName: "", kind: "human_agent" });
+    assert.fail("should have thrown");
+  } catch (err) {
+    assert.equal(err.code, "validation_error");
+    assert.equal(err.status, 400);
+    assert.ok(err.details.find((d) => d.field === "display_name"));
+  }
+});
+
+test("createBootstrap rejects display_name with invalid chars", async () => {
+  const { tenantService, userService, registry } = await makeServicesWithRegistry();
+  const bs = createBootstrap({
+    tenantService, userService,
+    rateLimiter: createRateLimiter({ registry }),
+    schemaProvisioner: MOCK_PROVISIONER,
+    sharedUrl: "postgres://localhost/alfred_saas"
+  });
+  try {
+    await bs.createTenantAndFirstKey({ ip: "1.2.3.4", displayName: "bad<>name", kind: "human_agent" });
+    assert.fail("should have thrown");
+  } catch (err) {
+    assert.equal(err.code, "validation_error");
+  }
+});
+
+test("createBootstrap rejects kind=coding_agent_only", async () => {
+  const { tenantService, userService, registry } = await makeServicesWithRegistry();
+  const bs = createBootstrap({
+    tenantService, userService,
+    rateLimiter: createRateLimiter({ registry }),
+    schemaProvisioner: MOCK_PROVISIONER,
+    sharedUrl: "postgres://localhost/alfred_saas"
+  });
+  try {
+    await bs.createTenantAndFirstKey({ ip: "1.2.3.4", displayName: "x", kind: "coding_agent_only" });
+    assert.fail("should have thrown");
+  } catch (err) {
+    assert.equal(err.code, "validation_error");
+    assert.ok(err.details.find((d) => d.field === "kind"));
+  }
+});
+
+test("createBootstrap rejects kind=server_managed (operator-only)", async () => {
+  const { tenantService, userService, registry } = await makeServicesWithRegistry();
+  const bs = createBootstrap({
+    tenantService, userService,
+    rateLimiter: createRateLimiter({ registry }),
+    schemaProvisioner: MOCK_PROVISIONER,
+    sharedUrl: "postgres://localhost/alfred_saas"
+  });
+  try {
+    await bs.createTenantAndFirstKey({ ip: "1.2.3.4", displayName: "x", kind: "server_managed" });
+    assert.fail("should have thrown");
+  } catch (err) {
+    assert.equal(err.code, "validation_error");
+  }
+});
+
+test("createBootstrap returns saas_not_configured when sharedUrl is null", async () => {
+  const { tenantService, userService, registry } = await makeServicesWithRegistry();
+  const bs = createBootstrap({
+    tenantService, userService,
+    rateLimiter: createRateLimiter({ registry }),
+    schemaProvisioner: MOCK_PROVISIONER,
+    sharedUrl: null
+  });
+  try {
+    await bs.createTenantAndFirstKey({ ip: "1.2.3.4", displayName: "x", kind: "human_agent" });
+    assert.fail("should have thrown");
+  } catch (err) {
+    assert.equal(err.code, "saas_not_configured");
+    assert.equal(err.status, 503);
+  }
+});
+
+test("createBootstrap rate limits after 5 attempts in the window", async () => {
+  const { tenantService, userService, registry } = await makeServicesWithRegistry();
+  const bs = createBootstrap({
+    tenantService, userService,
+    rateLimiter: createRateLimiter({ registry }),
+    schemaProvisioner: MOCK_PROVISIONER,
+    sharedUrl: "postgres://localhost/alfred_saas"
+  });
+  for (let i = 0; i < 5; i += 1) {
+    const result = await bs.createTenantAndFirstKey({ ip: "9.9.9.9", displayName: "x" + i, kind: "human_agent" });
+    assert.ok(result.api_key);
+  }
+  try {
+    await bs.createTenantAndFirstKey({ ip: "9.9.9.9", displayName: "x6", kind: "human_agent" });
+    assert.fail("6th attempt should have been rate-limited");
+  } catch (err) {
+    assert.equal(err.code, "rate_limited");
+    assert.equal(err.status, 429);
+    assert.ok(err.retryAfterMinutes >= 1);
+  }
+});
+
+test("createBootstrap issues a key with alk_ prefix and 12-char public prefix", async () => {
+  const { tenantService, userService, registry } = await makeServicesWithRegistry();
+  const bs = createBootstrap({
+    tenantService, userService,
+    rateLimiter: createRateLimiter({ registry }),
+    schemaProvisioner: MOCK_PROVISIONER,
+    sharedUrl: "postgres://localhost/alfred_saas"
+  });
+  const result = await bs.createTenantAndFirstKey({ ip: "5.5.5.5", displayName: "alpha", kind: "hybrid_with_human" });
+  assert.ok(result.api_key.startsWith("alk_"));
+  assert.equal(result.key_prefix.length, 12);
+  assert.match(result.key_prefix, /^alk_[A-Za-z0-9_-]{8}$/);
+});
+
+test("schema provisioner builds tenant_<id> schema and search_path connection", async () => {
+  const provisioner = createSchemaProvisioner({ pgClient: async () => ({ query: async () => {}, end: async () => {} }) });
+  const schema = provisioner.schemaNameFor("usr_t_abc123abc123abc123abc123abc12345");
+  assert.equal(schema, "tenant_abc123abc123abc123abc123abc12345");
+  const conn = provisioner.buildTenantConnectionString("postgres://u:p@h/d", schema);
+  assert.ok(/search_path[=%]3[Dd]tenant_/.test(conn) || /search_path=tenant_/.test(decodeURIComponent(conn)), "expected search_path=tenant_ in " + conn);
+});
+
+test("schema provisioner rejects invalid tenant ids", async () => {
+  const provisioner = createSchemaProvisioner({ pgClient: async () => ({}) });
+  assert.throws(() => provisioner.schemaNameFor("not_a_real_id"));
+  assert.throws(() => provisioner.schemaNameFor("usr_t_zzz"));
+  assert.throws(() => provisioner.schemaNameFor(""));
+});
+
+test("schema provisioner requires a pgClient function", () => {
+  assert.throws(() => createSchemaProvisioner({}));
+  assert.throws(() => createSchemaProvisioner({ pgClient: "not a function" }));
+});
+
+test("rate limiter allows 5 attempts and blocks the 6th", async () => {
+  const { registry } = await makeServicesWithRegistry();
+  const rl = createRateLimiter({ registry });
+  for (let i = 0; i < 5; i += 1) {
+    const check = await rl.check({ ip: "1.1.1.1" });
+    assert.equal(check.allowed, true, "attempt " + i + " should be allowed");
+    await rl.record({ ip: "1.1.1.1", displayName: "x", kind: "human_agent", result: "success" });
+  }
+  const blocked = await rl.check({ ip: "1.1.1.1" });
+  assert.equal(blocked.allowed, false);
+  assert.equal(blocked.reason, "rate_limited");
+  assert.ok(blocked.retryAfterMinutes >= 1);
+});
+
+test("rate limiter counts only the specified IP", async () => {
+  const { registry } = await makeServicesWithRegistry();
+  const rl = createRateLimiter({ registry });
+  for (let i = 0; i < 5; i += 1) {
+    await rl.record({ ip: "1.1.1.1", displayName: "x", kind: "human_agent", result: "success" });
+  }
+  const other = await rl.check({ ip: "2.2.2.2" });
+  assert.equal(other.allowed, true);
+});
+
+test("rate limiter rejects unknown result", async () => {
+  const { registry } = await makeServicesWithRegistry();
+  const rl = createRateLimiter({ registry });
+  await assert.rejects(rl.record({ ip: "1.1.1.1", result: "made_up_result" }), /Invalid result/);
+});
+
+test("POST /console/api/bootstrap without registry returns 503 saas_not_configured", async () => {
+  const { createInMemoryTenantStore, createInMemoryUserStore, createTenantService, createUserService } = await import("../../memory/src/index.js");
+  const tenantService = createTenantService({ store: createInMemoryTenantStore() });
+  const userService = createUserService({ store: createInMemoryUserStore() });
+  const router = createConsoleRouter({
+    userService, tenantService, config: {}, consoleDirOverride: "",
+    sharedUrl: "postgres://localhost/alfred_saas"
+  });
+  const res = await invoke(router, makeReq({
+    method: "POST", url: "/console/api/bootstrap", body: { display_name: "x", kind: "human_agent" }
+  }));
+  assert.equal(res.statusCode, 503);
+  const body = JSON.parse(res.body);
+  assert.equal(body.error.code, "saas_not_configured");
+});
+
+test("console-web index.html contains the signup form and the bootstrap endpoint", () => {
+  const htmlPath = "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred/packages/console-web/src/index.html";
+  const htmlText = readFileSync(htmlPath, "utf8");
+  assert.match(htmlText, /signup\(\)/);
+  assert.match(htmlText, /\/console\/api\/bootstrap/);
+  assert.match(htmlText, /display_name/);
+  assert.match(htmlText, /human_agent/);
+  assert.match(htmlText, /hybrid_with_human/);
+  assert.match(htmlText, /No terminal\? No problem\./);
+});

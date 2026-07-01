@@ -14,6 +14,14 @@
 // Auth: every API endpoint requires an Authorization: Bearer alk_... header.
 
 import { readFileSync, existsSync, statSync } from "node:fs";
+import {
+  createBootstrap,
+  createSchemaProvisioner,
+  createRateLimiter,
+  BootstrapValidationError,
+  BootstrapConfigError,
+  BootstrapRateLimitedError
+} from "./bootstrap/index.js";
 import { dirname, resolve, join, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -49,6 +57,34 @@ function findConsoleIndex() {
     }
   }
   return null;
+}
+
+function clientIpFromReq(req) {
+  const xff = req.headers["x-forwarded-for"];
+  if (typeof xff === "string" && xff.length > 0) return xff.split(",")[0].trim();
+  const real = req.headers["x-real-ip"];
+  if (typeof real === "string" && real.length > 0) return real;
+  return req.socket?.remoteAddress ?? "unknown";
+}
+
+// Lazy import: avoid forcing pg as a hard dependency for tests that don't use bootstrap.
+let _pgModule = null;
+async function loadPg() {
+  if (_pgModule) return _pgModule;
+  try { _pgModule = await import("pg"); return _pgModule; }
+  catch { return null; }
+}
+
+async function pgClientFromUrl({ connectionString }) {
+  const pg = await loadPg();
+  if (!pg) throw new BootstrapConfigError("pg module not installed; ALFRED_SAAS_DATABASE_URL requires 'pg' in dependencies.");
+  const client = new pg.Client({ connectionString });
+  await client.connect();
+  return client;
+}
+
+async function noopPgClient() {
+  throw new BootstrapConfigError("Schema provisioner is not configured (no registry bound).");
 }
 
 function json(res, status, body) {
@@ -94,9 +130,30 @@ function notInstalledResponse(res, searchedPaths) {
   });
 }
 
-export function createConsoleRouter({ userService, tenantService, config, consoleDirOverride = null, consoleUrl = null } = {}) {
+export function createConsoleRouter({
+  userService,
+  tenantService,
+  config,
+  consoleDirOverride = null,
+  consoleUrl = null,
+  registry = null,                          // v0.3.1: needed for bootstrap_attempts
+  sharedUrl = process.env.ALFRED_SAAS_DATABASE_URL ?? null
+} = {}) {
   if (!userService) throw new TypeError("userService required");
   if (!tenantService) throw new TypeError("tenantService required");
+
+  // v0.3.1 SaaS Web Onboarding
+  const rateLimiter = registry ? createRateLimiter({ registry }) : null;
+  const schemaProvisioner = createSchemaProvisioner({ pgClient: sharedUrl ? pgClientFromUrl : noopPgClient });
+  const bootstrap = registry
+    ? createBootstrap({
+        tenantService,
+        userService,
+        rateLimiter,
+        schemaProvisioner,
+        sharedUrl
+      })
+    : null;
 
   // Resolve the index.html. Three modes, in priority order:
   // 1. consoleDirOverride (constructor arg) — explicit local path
@@ -188,6 +245,49 @@ export function createConsoleRouter({ userService, tenantService, config, consol
       // For MVP, return index.html for any unknown console path (SPA fallback).
       const htmlText = readFileSync(indexPath, "utf8");
       return html(res, 200, htmlText);
+    }
+
+    // v0.3.1 API: bootstrap (signup without auth)
+    if (url.pathname === "/console/api/bootstrap" && req.method === "POST") {
+      if (!bootstrap) {
+        return json(res, 503, { error: { code: "saas_not_configured", message: "Bootstrap is not configured on this server." } });
+      }
+      let body = {};
+      try { body = await readJsonBody(req); }
+      catch (err) { return json(res, 400, { error: { code: "validation_error", message: err.message } }); }
+      const ip = clientIpFromReq(req);
+      try {
+        const result = await bootstrap.createTenantAndFirstKey({
+          ip,
+          displayName: body.display_name,
+          kind: body.kind
+        });
+        // Record the successful attempt (best-effort; if rateLimiter is missing this is a no-op).
+        try { await rateLimiter?.record({ ip, displayName: body.display_name, kind: body.kind, result: "success", tenantId: result.tenant.id }); } catch {}
+        return json(res, 201, {
+          ok: true,
+          tenant: result.tenant,
+          api_key: result.api_key,
+          key_prefix: result.key_prefix,
+          key_id: result.key_id,
+          trace_event: "tenant.bootstrap"
+        });
+      } catch (err) {
+        if (err instanceof BootstrapValidationError) {
+          try { await rateLimiter?.record({ ip, displayName: body.display_name, kind: body.kind, result: "validation_error", errorCode: err.code }); } catch {}
+          return json(res, 400, { error: { code: err.code, message: err.message, details: err.details } });
+        }
+        if (err instanceof BootstrapConfigError) {
+          try { await rateLimiter?.record({ ip, displayName: body.display_name, kind: body.kind, result: "config_error", errorCode: err.code }); } catch {}
+          return json(res, 503, { error: { code: err.code, message: err.message } });
+        }
+        if (err instanceof BootstrapRateLimitedError) {
+          try { await rateLimiter?.record({ ip, displayName: body.display_name, kind: body.kind, result: "rate_limited", errorCode: err.code }); } catch {}
+          return json(res, 429, { error: { code: err.code, message: err.message, retry_after_minutes: err.retryAfterMinutes } });
+        }
+        try { await rateLimiter?.record({ ip, displayName: body.display_name, kind: body.kind, result: "internal_error", errorCode: err.code || "internal_error" }); } catch {}
+        return json(res, 500, { error: { code: "internal_error", message: err.message } });
+      }
     }
 
     // API: list tenants

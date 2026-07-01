@@ -80,7 +80,7 @@
         "packages/memory-server/test/console.test.mjs"
       ],
       "command": "node --test packages/memory-server/test/{server,init,cli,registry-sqlite-store,migrate-sqlite,console}.test.mjs",
-      "expected_test_count": 63,
+      "expected_test_count": 79,
       "blocked_on_failure": true
     },
     {
@@ -183,6 +183,6 @@
   ],
   "totals": {
     "files_validated": 5,
-    "tests_total": 210
+    "tests_total": 226
   }
 }

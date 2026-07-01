@@ -185,3 +185,24 @@ BEGIN
    WHERE id = OLD.id;
   DELETE FROM __tenants_update_buffer WHERE tenant_id = OLD.id;
 END;
+
+-- =============================================================================
+-- v0.3.1: SaaS Web Onboarding rate-limit state
+-- See ../000_alfred_registry.sql and ./005_saas_bootstrap.sql for context.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS bootstrap_attempts (
+  id TEXT PRIMARY KEY,
+  ip TEXT NOT NULL,
+  attempted_at TEXT NOT NULL,
+  display_name TEXT,
+  kind TEXT,
+  result TEXT NOT NULL CHECK (result IN ('success', 'validation_error', 'rate_limited', 'config_error', 'internal_error')),
+  tenant_id TEXT,
+  error_code TEXT
+);
+
+CREATE INDEX IF NOT EXISTS bootstrap_attempts_ip_time_idx
+  ON bootstrap_attempts(ip, attempted_at DESC);
+
+CREATE INDEX IF NOT EXISTS bootstrap_attempts_time_idx
+  ON bootstrap_attempts(attempted_at DESC);

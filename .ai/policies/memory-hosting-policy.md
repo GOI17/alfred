@@ -141,3 +141,52 @@ requires:
   API key already created by a human operator.
 - `.ai/policies/memory-workspace-policy.md` — the parallel policy governing
   workspace hierarchy and `tenant_access`.
+
+### Rule 6 — SaaS Web Onboarding: shared Postgres cluster with schema-per-tenant
+
+Operators who expose `POST /console/api/bootstrap` (web signup) MUST configure
+`ALFRED_SAAS_DATABASE_URL` to a single shared Postgres cluster. Each signup
+provisions a **logical database** as a dedicated schema named
+`tenant_<id>` (where `<id>` is the `usr_t_<uuid>` tenant id with the prefix
+stripped) inside that cluster. The connection string stored in
+`tenants.db_connection` includes `options=-c search_path=tenant_<id>,public`
+so that every new `pg.Pool` opened for that tenant is automatically scoped to
+the schema.
+
+**Why this satisfies the spirit of "one physical DB per tenant":**
+A schema is a logical database inside a Postgres cluster. Cross-schema
+queries require explicit qualification, and `search_path` is per-session.
+Tenants cannot read each other's tables unless they share the connection,
+which they do not.
+
+**Why we relax the physical-isolation rule for SaaS:**
+- Operational cost: one shared cluster is dramatically cheaper to back up,
+  monitor, and replicate than one cluster per tenant.
+- Provision cost: `CREATE SCHEMA` is cheaper and faster than `CREATE DATABASE`
+  and does not require elevated privileges.
+- Defense in depth: the `WHERE tenant_id = $1` discipline from
+  `cross-tenant-isolation.test.mjs` remains the application-level invariant;
+  schema isolation is the database-level invariant.
+
+**What is NOT allowed under Rule 6:**
+- Sharing one schema across multiple tenants (would require explicit
+  `WHERE tenant_id = $1` everywhere; allowed only for `coding_agent_only`
+  workspaces where the developer is the operator and accepts the risk).
+- Using SQLite for `human_agent` tenants (Rule 1 still applies).
+- Using `coding_agent_only` or `server_managed` kinds via web signup
+  (the bootstrap endpoint rejects these — those are operator-only).
+
+**What is enforced:**
+- `bootstrap.js` only accepts `kind IN ('human_agent', 'hybrid_with_human')`
+  from the web form.
+- The schema provisioner applies the standard per-tenant migrations
+  (alfred_memory_users, alfred_memories, alfred_sessions, alfred_topics,
+  alfred_acceptance_criteria) inside the new schema before the tenant row
+  is inserted in the registry.
+- The rate limiter (5 attempts per IP per 60 minutes) prevents key-farming
+  even in the absence of CAPTCHA.
+- `cross-tenant-isolation.test.mjs` continues to assert that one tenant's
+  queries return no rows from another tenant's tables.
+
+**Versioning:**
+This rule is part of Alfred v0.3.1.

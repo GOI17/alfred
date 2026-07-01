@@ -85,7 +85,12 @@ export async function run(argv = [], env = process.env) {
   const consoleOpts = {};
   if (env.ALFRED_CONSOLE_URL) consoleOpts.consoleUrl = env.ALFRED_CONSOLE_URL;
   if (env.ALFRED_CONSOLE_DIR) consoleOpts.consoleDirOverride = env.ALFRED_CONSOLE_DIR;
-  const consoleRouter = createConsoleRouter({ userService, tenantService, config, ...consoleOpts });
+  const consoleRouter = createConsoleRouter({
+    userService, tenantService, config,
+    ...consoleOpts,
+    registry,
+    sharedUrl: process.env.ALFRED_SAAS_DATABASE_URL ?? null
+  });
   const app = createApp({
     tenantService,
     memoryService: null,  // unused; we route per-tenant

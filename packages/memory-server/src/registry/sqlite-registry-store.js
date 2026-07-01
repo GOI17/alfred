@@ -371,8 +371,44 @@ export async function createSqliteRegistryStore({ dbPath, applyMigrations = true
     close() { try { handle.close(); } catch {} },
     tenants: createTenantStoreContract(handle),
     users: createUserStoreContract(handle),
+    bootstrap: createBootstrapAttemptContract(handle),
     rawHandle: handle
   };
 }
 
 export { applySchema as applySqliteRegistrySchema };
+
+// =============================================================================
+// bootstrap_attempts contract (v0.3.1 SaaS onboarding)
+// =============================================================================
+function createBootstrapAttemptContract(db) {
+  return {
+    async recordBootstrapAttempt(input) {
+      const id = input.id ?? `batt_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+      db.prepare(`
+        INSERT INTO bootstrap_attempts (id, ip, attempted_at, display_name, kind, result, tenant_id, error_code)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, input.ip, input.attempted_at,
+        input.display_name ?? null, input.kind ?? null,
+        input.result, input.tenant_id ?? null, input.error_code ?? null
+      );
+      return { id };
+    },
+    async countBootstrapAttempts({ ip, since }) {
+      const row = db.prepare(`
+        SELECT COUNT(*) AS c FROM bootstrap_attempts
+         WHERE ip = ? AND attempted_at >= ?
+      `).get(ip, since);
+      return row.c;
+    },
+    async oldestBootstrapAttemptInWindow({ ip, since }) {
+      const row = db.prepare(`
+        SELECT attempted_at FROM bootstrap_attempts
+         WHERE ip = ? AND attempted_at >= ?
+         ORDER BY attempted_at ASC LIMIT 1
+      `).get(ip, since);
+      return row ?? null;
+    }
+  };
+}

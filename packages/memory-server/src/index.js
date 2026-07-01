@@ -22,5 +22,17 @@ export {
   defaultRegistryPath
 } from "./registry/store-factory.js";
 
+// v0.3.1 SaaS Web Onboarding
+export {
+  createBootstrap,
+  createSchemaProvisioner,
+  createRateLimiter,
+  BootstrapValidationError,
+  BootstrapConfigError,
+  BootstrapRateLimitedError,
+  BOOTSTRAP_KINDS,
+  DEFAULT_TENANT_MIGRATIONS
+} from "./bootstrap/index.js";
+
 // Web console router (sub-path /console)
 export { createConsoleRouter } from "./console-router.js";

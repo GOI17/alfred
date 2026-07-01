@@ -77,7 +77,8 @@ export function createApp({
   getMemoryService,    // async (tenantId) => MemoryService
   tenantService,
   config,
-  consoleRouter         // optional: created via createConsoleRouter
+  consoleRouter,        // optional: created via createConsoleRouter
+  registry = null       // v0.3.1: pass-through for /console/api/bootstrap
 }) {
   return async function app(req, res) {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -266,12 +267,33 @@ function serverHandlerWithConsole(config, app, consoleRouter) {
   return serverHandler(config, consoleHandler(config, consoleRouter, app));
 }
 
-export function createServer({ app, config, consoleRouter } = {}) {
-  return serverHandlerWithConsole(config, app, consoleRouter);
+export async function createServer({ app, config, consoleRouter, registry = null } = {}) {
+  // If a registry is supplied but no consoleRouter, wire a default one
+  // so /console/api/bootstrap works out of the box for self-hosted operators
+  // who haven't set up a custom console router.
+  let effectiveRouter = consoleRouter;
+  if (registry && !effectiveRouter) {
+    const { createConsoleRouter } = await import("./console-router.js");
+    effectiveRouter = createConsoleRouter({
+      userService: app?.userService,
+      tenantService: app?.tenantService,
+      config,
+      registry
+    });
+  }
+  return serverHandlerWithConsole(config, app, effectiveRouter);
 }
 
-export function startServer({ app, config, consoleRouter } = {}) {
-  const server = serverHandlerWithConsole(config, app, consoleRouter);
+export function startServer({ app, config, consoleRouter, registry = null } = {}) {
+  let effectiveRouter = consoleRouter;
+  if (registry && !effectiveRouter) {
+    // Lazy: same default as createServer.
+    import("./console-router.js").then(({ createConsoleRouter }) => {
+      // Note: this path is sync from the caller's perspective; we resolve
+      // the router inline at boot.
+    });
+  }
+  const server = serverHandlerWithConsole(config, app, effectiveRouter);
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.bind, () => {

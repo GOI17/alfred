@@ -1,0 +1,104 @@
+# v0.3.1 SaaS Web Onboarding eval dataset
+# Validates the policy + behavior of POST /console/api/bootstrap and the
+# schema-per-tenant isolation guarantee.
+
+dataset:
+  id: saas-bootstrap
+  version: 0.3.1
+  owner: core
+  description: >
+    Negative and positive test vectors for the SaaS Web Onboarding
+    flow. Verifies that web signup creates a tenant with proper schema
+    isolation, the rate limit is enforced, the API key prefix is
+    correct, and kinds restricted to operators cannot be requested
+    via the public endpoint.
+
+vectors:
+  - id: bootstrap-valid-human-agent
+    description: Valid signup with kind=human_agent returns 201 + alk_ key
+    expected_status: 201
+    expected_response:
+      ok: true
+      tenant.kind: human_agent
+      tenant.storage_backend: postgres
+      api_key_prefix: "alk_"
+      api_key_length: 47        # "alk_" + 43 base64url chars
+    validates:
+      - Rule 6: SaaS Web Onboarding
+      - schema-per-tenant isolation
+
+  - id: bootstrap-valid-hybrid
+    description: Valid signup with kind=hybrid_with_human returns 201
+    expected_status: 201
+    expected_response:
+      ok: true
+      tenant.kind: hybrid_with_human
+    validates:
+      - Rule 6
+
+  - id: bootstrap-rejects-coding-agent-only
+    description: kind=coding_agent_only is rejected with 400
+    expected_status: 400
+    expected_error_code: validation_error
+    validates:
+      - Web signup restricted to human + hybrid kinds
+
+  - id: bootstrap-rejects-server-managed
+    description: kind=server_managed is rejected (operator-only)
+    expected_status: 400
+    expected_error_code: validation_error
+    validates:
+      - Web signup restricted to human + hybrid kinds
+      - server_managed tenants are operator-only
+
+  - id: bootstrap-rejects-empty-display-name
+    description: Empty display_name is rejected with 400
+    expected_status: 400
+    expected_error_code: validation_error
+
+  - id: bootstrap-rejects-invalid-display-name-chars
+    description: display_name with special chars is rejected
+    input: { display_name: "bad<>name", kind: "human_agent" }
+    expected_status: 400
+    expected_error_code: validation_error
+
+  - id: bootstrap-rate-limits-at-5-per-hour
+    description: 6th attempt from same IP within 60 minutes returns 429
+    setup: 5 successful or failed attempts
+    expected_status: 429
+    expected_error_code: rate_limited
+    expected_response_includes:
+      - retry_after_minutes
+
+  - id: bootstrap-503-when-saas-not-configured
+    description: ALFRED_SAAS_DATABASE_URL not set returns 503
+    expected_status: 503
+    expected_error_code: saas_not_configured
+
+  - id: schema-isolation-cross-tenant
+    description: One tenant's schema cannot see another tenant's tables
+    setup: bootstrap two tenants (A, B)
+    action: query A's memory table for B's tenant_id
+    expected: 0 rows
+    validates:
+      - Rule 6 schema isolation
+      - cross-tenant-isolation.test.mjs
+
+  - id: bootstrap-records-trace-event
+    description: Successful bootstrap emits tenant.bootstrap trace event
+    expected_trace_events:
+      - tenant.bootstrap
+    expected_trace_payload:
+      tenant_id: "usr_t_"
+      schema: "tenant_"
+      key_id: "key_"
+
+  - id: bootstrap-records-rate-limit-attempt
+    description: Every bootstrap attempt is recorded in bootstrap_attempts
+    expected_table: bootstrap_attempts
+    expected_columns:
+      - ip
+      - attempted_at
+      - result
+      - tenant_id (on success)
+      - error_code (on failure)

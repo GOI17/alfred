@@ -1,0 +1,24 @@
+{
+  "event": "release_candidate_validated",
+  "release": "0.3.1",
+  "validated_commit_source": "pending",
+  "timestamp_utc": "2026-07-01",
+  "gates_passed": 16,
+  "gates_total": 16,
+  "tests_total": 226,
+  "policy_checks": 12,
+  "provider_calls": 0,
+  "phase": "v0.3.1-saas-web-onboarding",
+  "scope": "POST /console/api/bootstrap (web signup without terminal)",
+  "key_artifacts": [
+    "packages/memory-server/src/bootstrap/{bootstrap,schema-provisioner,rate-limiter,index}.js",
+    "packages/memory-server/migrations/005_saas_bootstrap.sql",
+    "packages/memory-server/src/console-router.js (bootstrap route)",
+    "packages/memory-server/src/server.js (registry pass-through)",
+    "packages/console-web/src/index.html (signup panel)",
+    ".ai/policies/memory-hosting-policy.md (Rule 6)",
+    ".ai/evals/datasets/saas-bootstrap.yml",
+    "packages/memory/CHANGELOG.md (0.3.1 entry)"
+  ],
+  "result": "pass"
+}

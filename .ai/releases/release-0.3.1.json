@@ -1,0 +1,59 @@
+{
+  "id": "release-0.3.1",
+  "version": "0.3.1",
+  "candidate": "alfred-saas-bootstrap-0.3.1",
+  "owner": "orchestrator",
+  "status": "complete",
+  "scope": "saas-web-onboarding",
+  "previous_release": "release-0.3.0",
+  "includes": [
+    "v0.3.1-saas-bootstrap",
+    "memory-hosting-policy-rule-6",
+    "schema-per-tenant-isolation"
+  ],
+  "required_validators": [
+    "validate:policies",
+    "validate:release-0.3.0"
+  ],
+  "totals": {
+    "tests": 226,
+    "gates": 16,
+    "policy_checks": 12,
+    "package_test_suites": 6,
+    "new_tests_added": 16,
+    "provider_calls": 0
+  },
+  "new_endpoints": [
+    {
+      "method": "POST",
+      "path": "/console/api/bootstrap",
+      "auth": "none",
+      "rate_limit": "5 per IP per 60 minutes",
+      "purpose": "Web signup without terminal; creates tenant + first key"
+    }
+  ],
+  "new_kinds_allowed_via_web": ["human_agent", "hybrid_with_human"],
+  "new_kinds_rejected_via_web": ["coding_agent_only", "server_managed"],
+  "policy_overrides": [
+    {
+      "file": ".ai/policies/memory-hosting-policy.md",
+      "rule": "Rule 6 (NEW)",
+      "summary": "SaaS Web Onboarding: shared Postgres cluster with schema-per-tenant isolation",
+      "approved_by_human": true
+    }
+  ],
+  "provider_calls_allowed": 0,
+  "baseline_update_requires_human_approval": true,
+  "harness_config_writes_require_human_approval": true,
+  "commit_policy": {
+    "validated_commit_source": "pending-at-commit-time",
+    "commit_source_recorded_in_trace": true,
+    "static_baseline_pins_commit": false
+  },
+  "artifact_manifest": {
+    "release_notes": ".ai/releases/release-0.3.1.md",
+    "roadmap": ".ai/roadmaps/0.3.0.json",
+    "regression_gates": ".ai/evals/regression-gates.json",
+    "trace": ".ai/observability/generated/release-0.3.1.json"
+  }
+}

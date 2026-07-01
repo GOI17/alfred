@@ -108,8 +108,30 @@
   <div id="locked" class="panel">
     <h2>Welcome</h2>
     <p class="hint">This console manages API keys and connected services for your Alfred Memory install.</p>
-    <p class="hint">Paste an API key from <code>alfred init</code> or <code>alfred keys issue</code> above and click <strong>Unlock</strong>.</p>
-    <p class="hint">Don't have one yet? On a fresh install, run <code>alfred init --profile=web --name my-mem</code> in a terminal.</p>
+
+    <div id="signupBlock">
+      <p class="hint"><strong>No terminal? No problem.</strong> Create a free tenant in 10 seconds.</p>
+      <div class="row" style="margin-bottom: 8px;">
+        <input id="signupName" placeholder="display name (e.g. my-mem)" style="flex: 1; background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace;" />
+      </div>
+      <div class="row" style="margin-bottom: 8px;">
+        <label class="small"><input type="radio" name="signupKind" value="human_agent" checked /> Human agent (ChatGPT, Claude, Gemini)</label>
+      </div>
+      <div class="row" style="margin-bottom: 12px;">
+        <label class="small"><input type="radio" name="signupKind" value="hybrid_with_human" /> Hybrid (human + coding agents)</label>
+      </div>
+      <button onclick="signup()">Create my memory</button>
+      <p class="small" style="margin-top: 8px;" id="signupHint">You'll get an API key immediately. Copy it; we don't store the secret.</p>
+    </div>
+
+    <details style="margin-top: 16px;">
+      <summary>Already have an API key?</summary>
+      <div style="margin-top: 8px;">
+        <input id="apiKey" type="password" placeholder="alk_..." style="background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace; width: 100%;" />
+        <button onclick="setKey()" style="margin-top: 8px;">Unlock</button>
+      </div>
+      <p class="small" style="margin-top: 8px;">Paste an API key from <code>alfred init</code> or <code>alfred keys issue</code>.</p>
+    </details>
   </div>
 
   <div id="unlocked" style="display: none;">
@@ -223,6 +245,41 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
 <script>
 let API_KEY = "";
 let CURRENT_TENANT = "";
+
+async function signup() {
+  const name = document.getElementById("signupName").value.trim();
+  const kindRadio = document.querySelector('input[name="signupKind"]:checked');
+  const kind = kindRadio ? kindRadio.value : "human_agent";
+  if (!name) { showErrorInline("signupHint", "Pick a display name first."); return; }
+  const hint = document.getElementById("signupHint");
+  hint.textContent = "Creating tenant…";
+  try {
+    const res = await api("/console/api/bootstrap", {
+      method: "POST",
+      body: JSON.stringify({ display_name: name, kind })
+    });
+    API_KEY = res.api_key;
+    document.getElementById("apiStatus").textContent = "✓ unlocked";
+    document.getElementById("locked").style.display = "none";
+    document.getElementById("unlocked").style.display = "block";
+    localStorage.setItem("alfred_api_key", API_KEY);
+    // Show the freshly-issued key in a banner so the user can copy it.
+    document.getElementById("newKeyBody").innerHTML =
+      '<div class="panel" style="background: #1a2a1a; border-color: var(--good);">' +
+      '<strong class="ok">Welcome! Your new API key for tenant ' + res.tenant.id + '</strong><br>' +
+      '<div class="key-display">' + res.api_key + '</div>' +
+      '<div class="small">Copy this key now. It will not be shown again. Schema: <code>' + (res.tenant.db_connection || "").split("search_path=")[1] + '</code></div>' +
+      '</div>';
+    loadAll();
+  } catch (err) {
+    hint.innerHTML = '<span style="color: var(--bad);">' + err.message + '</span>';
+  }
+}
+
+function showErrorInline(elementId, message) {
+  const el = document.getElementById(elementId);
+  el.innerHTML = '<span style="color: var(--bad);">' + message + '</span>';
+}
 
 function setKey() {
   const input = document.getElementById("apiKey");
