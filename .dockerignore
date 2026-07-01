@@ -1,0 +1,64 @@
+# Build artifacts
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/.cache
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.circleci
+.travis.yml
+
+# Local config / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# IDE
+.vscode
+.idea
+*.swp
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Coverage
+coverage
+.nyc_output
+
+# Test artifacts
+**/test
+**/tests
+**/*.test.mjs
+**/*.test.js
+**/*.test.mts
+**/*.spec.*
+
+# Release docs (keep build small)
+.ai/releases
+.ai/observability
+
+# v0.4.1 deployment docs are not needed in the image
+# BUT the openapi-router reads two specific files at runtime for
+# /agents/manifest and /skills/manifest. They're tiny and have no secrets.
+# We exclude .ai/ broadly, then re-include those two files.
+.ai
+!.ai/agents/registry.json
+!.ai/skills/registry.json
+
+# Roadmap drafts
+**/*.draft.md
+**/*.draft.json

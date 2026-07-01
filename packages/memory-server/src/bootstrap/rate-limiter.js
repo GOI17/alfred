@@ -28,10 +28,15 @@ function minutesBetween(a, b) {
 
 export function createRateLimiter({ registry, clock = () => Date.now() } = {}) {
   if (!registry) throw new TypeError("createRateLimiter requires a registry");
-  if (typeof registry.recordBootstrapAttempt !== "function") {
-    throw new TypeError("registry must implement recordBootstrapAttempt(input)");
+  // Accept either flat or nested-under-`bootstrap` contract (registry shape
+  // varies by version: pre-v0.3.1 had flat, v0.3.1+ scopes them under .bootstrap).
+  const bootstrapNs = (typeof registry.recordBootstrapAttempt === "function" && typeof registry.countBootstrapAttempts === "function")
+    ? registry
+    : registry.bootstrap;
+  if (!bootstrapNs || typeof bootstrapNs.recordBootstrapAttempt !== "function") {
+    throw new TypeError("registry must implement recordBootstrapAttempt(input) (top-level or under .bootstrap)");
   }
-  if (typeof registry.countBootstrapAttempts !== "function") {
+  if (typeof bootstrapNs.countBootstrapAttempts !== "function") {
     throw new TypeError("registry must implement countBootstrapAttempts({ ip, since })");
   }
 
@@ -44,10 +49,10 @@ export function createRateLimiter({ registry, clock = () => Date.now() } = {}) {
         return { allowed: false, reason: "ip_missing" };
       }
       const since = new Date(clock() - WINDOW_MS).toISOString();
-      const count = await registry.countBootstrapAttempts({ ip, since });
+      const count = await bootstrapNs.countBootstrapAttempts({ ip, since });
       if (count >= MAX_ATTEMPTS) {
         // Find the oldest attempt in the window to compute retry_after.
-        const oldest = await registry.oldestBootstrapAttemptInWindow({ ip, since });
+        const oldest = await bootstrapNs.oldestBootstrapAttemptInWindow({ ip, since });
         const retryAfter = oldest ? minutesBetween(new Date(clock() + WINDOW_MS).toISOString(), oldest.attempted_at) : 60;
         return { allowed: false, reason: "rate_limited", retryAfterMinutes: Math.max(1, retryAfter) };
       }
@@ -58,7 +63,7 @@ export function createRateLimiter({ registry, clock = () => Date.now() } = {}) {
       if (!VALID_RESULTS.has(result)) {
         throw new TypeError(`Invalid result: ${result}`);
       }
-      await registry.recordBootstrapAttempt({
+      await bootstrapNs.recordBootstrapAttempt({
         id: `batt_${randomUUID().replace(/-/g, "")}`,
         ip,
         attempted_at: nowIso(),

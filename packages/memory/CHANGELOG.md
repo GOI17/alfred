@@ -197,3 +197,85 @@ policy engine (that's v0.5.0).
   81 → 97
 - `releases/release-0.4.1.{md,json}`, observability trace
   `release-0.4.1.json`
+
+## 0.4.1.1 — 2026-07-01
+
+Fly.io deployment path. Internal patch, no test changes. Validates
+17/17 gates and ships a turnkey Docker + Fly.io deploy.
+
+### Added
+
+- **`Dockerfile`** — single-stage Node 22 image (required for
+  `node:sqlite`), non-root user (`alfred` uid 1001), 248MB final size.
+  The image runs `migrate-on-boot.mjs` then `serve` on port 8080.
+  No external npm dependencies; the server uses only Node.js built-ins.
+
+- **`fly.toml`** — production Fly.io config: 256MB shared-cpu-1x,
+  auto-stop/auto-start (free tier), persistent volume for SQLite at
+  `/app/data`, HTTP health checks every 30s, force HTTPS, automatic
+  TLS via Fly edge.
+
+- **`migrate-on-boot.mjs`** — idempotent schema bootstrap. On every
+  container start it: (1) ensures `/app/data` exists, (2) applies
+  `sqlite_registry.sql` to the registry, (3) optionally applies
+  `005-009_action_attempts.sql` to the Postgres SaaS DB if
+  `ALFRED_SAAS_DATABASE_URL` is set.
+
+- **`.dockerignore`** — keeps the build context small (excludes
+  `node_modules`, `.git`, `**/test`, `.ai/releases`, `.ai/docs`).
+  Explicitly re-includes the two registry files the openapi-router
+  reads at runtime.
+
+- **`.github/workflows/deploy-fly.yml`** — CI/CD: validate policies +
+  run `validate:release-0.4.1` + check Dockerfile syntax on every
+  push to `main`, then `flyctl deploy --remote-only` and smoke-test
+  the new release with `GET /health`. Opt-in via the `FLY_API_TOKEN`
+  GitHub secret.
+
+- **`.ai/docs/fly-deploy.md`** — 12-step deploy guide for operators:
+  install flyctl, create app, attach Postgres, create volume, set
+  secrets, deploy, verify, custom domain, observability, backup,
+  scale, teardown.
+
+### Fixed (discovered while smoke-testing the Docker image)
+
+- `createServer` in `packages/memory-server/src/server.js` was
+  `async` and returned a Promise. The Docker image crashed at boot
+  with `server.listen is not a function`. Made it sync so it returns
+  an `http.Server` instance. Also updated `serve.mjs` to pass
+  `config`, `consoleRouter`, and `registry` to `createServer`.
+
+- `createRateLimiter` in
+  `packages/memory-server/src/bootstrap/rate-limiter.js` crashed at
+  boot with `registry must implement recordBootstrapAttempt(input)`
+  when the registry exposes the contract nested under `.bootstrap`
+  (v0.3.1+) instead of flat. Now accepts both shapes, mirroring
+  `createActionRateLimiter` (added in v0.4.1).
+
+- `createServer` was passed `{ app }` only, dropping `config` and
+  the console router. `serverHandler` then threw
+  `Cannot read properties of undefined (reading 'mode')`. Fixed by
+  wiring all four arguments through.
+
+### Validated
+
+- `docker build` succeeds in 3.5s locally.
+- `docker run` smoke test against the image:
+  - `GET /health` → `{"status":"ok","mode":"local"}`
+  - `GET /agents/manifest` → 6 agents
+  - `GET /skills/manifest` → 2 skills
+  - `POST /policies/check` (forbidden) → `allowed: false, reason: forbidden_action`
+  - `POST /policies/check` (allowed) → `allowed: true`
+  - `GET /memories` without auth → 401
+- `validate:release-0.4.1` → 17/17 gates PASS (244 tests)
+- Image size: 248MB
+
+### Files
+
+- New: `Dockerfile`, `fly.toml`, `.dockerignore`,
+  `packages/memory-server/scripts/migrate-on-boot.mjs`,
+  `.github/workflows/deploy-fly.yml`, `.ai/docs/fly-deploy.md`
+- Changed: `packages/memory-server/src/server.js`
+  (createServer sync), `packages/memory-server/scripts/serve.mjs`
+  (passes config + consoleRouter), `packages/memory-server/src/bootstrap/rate-limiter.js`
+  (accepts nested contract)

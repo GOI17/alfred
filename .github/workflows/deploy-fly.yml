@@ -1,0 +1,92 @@
+name: deploy-fly
+
+# Deploys Alfred Memory to Fly.io on every push to main.
+# Required secrets (set at https://github.com/GOI17/alfred/settings/secrets/actions):
+#   FLY_API_TOKEN        — from `flyctl auth token` (one-time)
+#
+# This workflow is opt-in. To enable it, push a commit that touches
+# packages/memory-server/** or this file. To pause deploys, add `[skip deploy]`
+# to the commit message body.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/memory-server/**"
+      - "scripts/**"
+      - "Dockerfile"
+      - "fly.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/deploy-fly.yml"
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Fly.io app name (defaults to value in fly.toml)"
+        required: false
+        default: ""
+
+concurrency:
+  group: deploy-fly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.0.0 --activate
+          pnpm install --frozen-lockfile
+      - name: Validate policies
+        run: node scripts/validate-policies.mjs
+      - name: Validate release 0.4.1
+        run: node scripts/validate-release-0.4.1.mjs
+      - name: Check Dockerfile syntax
+        run: docker buildx build --check -f Dockerfile .
+
+  deploy:
+    name: deploy
+    needs: test
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.app != '')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Deploy
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          APP="${{ github.event.inputs.app }}"
+          if [ -z "$APP" ]; then
+            # Default: read the app name from fly.toml.
+            APP=$(grep -E '^app\s*=' fly.toml | head -1 | sed -E 's/^app\s*=\s*"([^"]+)".*/\1/')
+          fi
+          echo "Deploying to $APP"
+          flyctl deploy --remote-only --app "$APP"
+      - name: Smoke test
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          APP=$(grep -E '^app\s*=' fly.toml | head -1 | sed -E 's/^app\s*=\s*"([^"]+)".*/\1/')
+          URL="https://${APP}.fly.dev/health"
+          echo "GET $URL"
+          sleep 5  # let the new release settle
+          for i in 1 2 3 4 5; do
+            BODY=$(curl -fsS "$URL" || echo "")
+            if echo "$BODY" | grep -q '"status":"ok"'; then
+              echo "OK: $BODY"
+              exit 0
+            fi
+            echo "Retry $i…"
+            sleep 5
+          done
+          echo "Smoke test failed: $URL did not return ok within 25s"
+          exit 1
