@@ -167,6 +167,7 @@ export function buildCodexAdapterReadiness({ root }) {
   };
 }
 
+
 export function buildCodexStableRuntime({ root }) {
   const readiness = buildCodexAdapterReadiness({ root });
 
@@ -210,6 +211,7 @@ export function buildCodexIntegrationPreview({ root }) {
     provider_calls: 0
   };
 }
+
 
 export function buildCodexInstallPreview({ root, outputDir = ".ai/generated/codex-install" }) {
   const kernel = loadArchitectureKernel(root);

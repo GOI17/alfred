@@ -9,7 +9,9 @@
   "provider_calls": 0,
   "trace_event": "runtime_hardening_evaluated",
   "reproducibility": {
+
     "runtime_entrypoint": "packages/pi-adapter/src/runtime.js#buildPiStableRuntime + packages/opencode-adapter/src/runtime.js#buildOpencodeStableRuntime + packages/codex-adapter/src/runtime.js#buildCodexStableRuntime",
+
     "validation_script": "scripts/validate-history.mjs phase8",
     "contract": ".ai/runtime/phase-8-runtime-hardening.json",
     "fixture_hash": "phase-8-runtime-hardening-fixture-v1"

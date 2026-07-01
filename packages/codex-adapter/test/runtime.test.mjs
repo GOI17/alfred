@@ -8,8 +8,10 @@ import {
   buildCodexAdapterPreview,
   buildCodexAdapterReadiness,
   buildCodexInstallPreview,
+
   buildCodexIntegrationPreview,
   buildCodexStableRuntime,
+
   writeCodexInstallPreview
 } from "../src/runtime.js";
 
@@ -62,6 +64,7 @@ test("codex readiness proves Alfred invariants without provider calls", () => {
   assert.equal(readiness.provider_calls, 0);
 });
 
+
 test("codex stable runtime and integration preview expose required adapter contract", () => {
   const stable = buildCodexStableRuntime({ root });
   assert.equal(stable.status, "stable");
@@ -76,6 +79,7 @@ test("codex stable runtime and integration preview expose required adapter contr
   assert.equal(preview.writes_harness_config_by_default, false);
   assert.equal(preview.human_approval_required_before_write, true);
 });
+
 
 test("writeCodexInstallPreview writes only preview files under requested output dir", () => {
   const outputDir = `.ai/generated/test-codex-install-${process.pid}`;

@@ -36,12 +36,14 @@ function readSourceText(root, relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8").trim();
 }
 
+
 function quoteMarkdownSource(sourceSpec) {
   return sourceSpec
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n");
 }
+
 
 function buildAgentFileContent({ root, agent }) {
   const mode = agent.id === "orchestrator" ? "primary" : "subagent";
@@ -58,9 +60,11 @@ You are Alfred's ${toTitle(agent.id)} agent.
 
 Load project instructions from AGENTS.md and Alfred source-of-truth files under .ai/.
 
+
 Alfred source agent spec (${agent.spec}), quoted to avoid nested frontmatter parsing:
 
 ${quoteMarkdownSource(sourceSpec)}
+
 
 Rules:
 - Preserve Alfred's local-first provider policy.

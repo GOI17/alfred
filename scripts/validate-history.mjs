@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+
 import {
   createTraceEvent,
   evaluateAdapterGeneration,
@@ -24,6 +25,7 @@ import {
   loadEvalBaselines,
   runEvalRunner
 } from "../packages/evals/src/index.js";
+
 
 const root = process.cwd();
 
@@ -59,15 +61,18 @@ function assertCoreBoundary() {
   }
 
   const coreSource = fs.readFileSync(path.join(root, "packages/core/src/index.js"), "utf8");
+
   if (
     coreSource.includes("pi-adapter") ||
     coreSource.includes("opencode-adapter") ||
     coreSource.includes("vscode-adapter") ||
     coreSource.includes("codex-adapter")
   ) {
+
     fail("packages/core must not import adapter packages");
   }
 }
+
 
 function writeJsonAtomic(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -75,6 +80,7 @@ function writeJsonAtomic(filePath, value) {
   fs.writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`);
   fs.renameSync(temporaryPath, filePath);
 }
+
 
 function assertManifestPaths() {
   const manifest = readJson(".ai/manifest.json");
@@ -116,6 +122,7 @@ function assertPermissionPolicy() {
 }
 
 function refreshGeneratedTraceIfNeeded(selectedPhases) {
+
   if (selectedPhases.includes("phase-4-security-enforcement")) {
     const traceOutputPath = path.join(root, ".ai/observability/generated/phase-4-permission-enforcement.json");
     const result = runPiSecuritySpike({ root, traceOutputPath });
@@ -271,6 +278,7 @@ function buildPreviewOnlyHarness(harness) {
     human_approval_required_before_write: true,
     provider_calls: 0
   };
+
 }
 
 const target = process.argv[2] ?? "all";

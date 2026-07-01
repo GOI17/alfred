@@ -1,6 +1,8 @@
 # Release 0.3.0: Alfred Memory Multi-Tenant, Self-Hosted
 
+
 Production-ready v0.3.0. **210 tests passing across 16 release gates.**
+
 
 ## What's new in v0.3.0
 
@@ -83,10 +85,12 @@ detail. Zero deps. Or `--json` for a snapshot dump.
 | `gemini-adapter/contract.test.mjs` | 10 |
 | `console/dashboard.test.mjs` | 3 |
 | `console-web/build.test.mjs` | 10 |
+
 | `core/kernel.test.mjs` | 2 |
 | `opencode-adapter/runtime.test.mjs` | 4 |
 | `codex-adapter/runtime.test.mjs` | 6 |
 | **Total** | **210** |
+
 
 ## Install
 
