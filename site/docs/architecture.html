@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Architecture — Alfred Docs</title>
+  <link rel="stylesheet" href="/alfred/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+        <span class="brand-mark">A</span><span class="brand-name">Alfred</span>
+        <span class="brand-tag">agent operations runtime</span>
+      </a>
+      <nav class="nav-links">
+        <a href="/alfred/"+(m.group(1) or "")>Home</a>
+        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
+        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
+        <a href="/alfred/memory/">Memory Console</a>
+        <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <h6>Getting started</h6>
+      <a href="/alfred/docs/index.html">Overview</a>
+      <a href="/alfred/docs/install.html">Install Alfred</a>
+      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
+      <a href="/alfred/docs/configuration.html">Configuration</a>
+      <h6>Concepts</h6>
+      <a href="/alfred/docs/architecture.html" class="active">Architecture</a>
+      <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
+      <a href="/alfred/docs/skills.html">Skills</a>
+      <a href="/alfred/docs/memory.html">Memory &amp; persistence</a>
+      <a href="/alfred/docs/security.html">Security model</a>
+      <h6>Operations</h6>
+      <a href="/alfred/docs/evals.html">Evals &amp; baselines</a>
+      <a href="/alfred/docs/tracing.html">Tracing &amp; observability</a>
+      <a href="/alfred/docs/permissions.html">Permissions &amp; approval</a>
+      <h6>Harnesses</h6>
+      <a href="/alfred/docs/harnesses-pi.html">Pi</a>
+      <a href="/alfred/docs/harnesses-opencode.html">opencode</a>
+      <a href="/alfred/docs/harnesses-codex.html">Codex</a>
+      <a href="/alfred/docs/harnesses-claude.html">Claude</a>
+      <a href="/alfred/docs/harnesses-vscode.html">VSCode</a>
+    </aside>
+
+    <main class="docs-main">
+      <h1>Architecture</h1>
+      <p class="doc-lead">
+        Alfred is shaped by three constraints: a harness-agnostic core,
+        deny-by-default security, and evals-as-gate. This page explains
+        why it is built the way it is, and what that means for your
+        agents and skills.
+      </p>
+
+      <h2 id="hexagonal">Hexagonal architecture</h2>
+      <p>
+        The codebase is split into a <strong>core</strong> and a set of
+        <strong>adapters</strong>. The rule is enforced by the build, not
+        by convention:
+      </p>
+      <ul>
+        <li><code>packages/core</code> imports nothing from
+          <code>packages/*-adapter</code>.</li>
+        <li>Adapters depend on core. They never redefine domain rules.</li>
+        <li>The boundary is checked by
+          <code>scripts/validate-policies.mjs</code> in CI.</li>
+      </ul>
+
+      <h2 id="ddd">Domain-driven design</h2>
+      <p>
+        The domain lives in <code>.ai/domain/model.md</code>. Entities,
+        value objects, use cases, and ports are written in plain markdown
+        so the agents themselves can read them.
+      </p>
+      <p>The vocabulary is fixed:</p>
+      <ul>
+        <li><strong>Agent</strong> &mdash; a role with a mode
+          (<code>primary</code> or <code>subagent</code>).</li>
+        <li><strong>Skill</strong> &mdash; lazy-loaded instructions keyed
+          by trigger.</li>
+        <li><strong>Harness</strong> &mdash; the runtime that hosts the
+          agent (Pi, opencode, Codex, ...).</li>
+        <li><strong>PermissionPolicy</strong> &mdash; deny-by-default,
+          protected paths, destructive commands.</li>
+        <li><strong>TraceEvent</strong> &mdash; the atomic unit of
+          observability.</li>
+        <li><strong>EvalCase</strong> / <strong>Baseline</strong> &mdash;
+          the regression gate.</li>
+        <li><strong>TemporaryAgent</strong> &mdash; a subagent with a
+          lifecycle, never promoted without human approval.</li>
+      </ul>
+
+      <h2 id="kernel">The architecture kernel</h2>
+      <p>
+        Every agent reads the same kernel file at the top of its prompt.
+        The kernel pins the rules the LLM cannot negotiate:
+      </p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">kernel</span>
+        </div>
+<pre><span class="c"># Alfred kernel (excerpt)</span>
+<span class="k">1.</span> Local-first. Deterministic local work before any provider call.
+<span class="k">2.</span> Deny by default. Protected paths require human approval.
+<span class="k">3.</span> No self-escalation. Agents do not broaden their own permissions.
+<span class="k">4.</span> Trace everything. Emit a TraceEvent per operation.
+<span class="k">5.</span> Evals gate everything. Run regression suite before declaring done.
+<span class="k">6.</span> Skills are lazy. Activate by trigger, never by file presence.
+<span class="k">7.</span> Specialists are temporary. Promotion requires a human.
+</pre>
+      </div>
+
+      <h2 id="package-layout">Package layout</h2>
+      <table class="matrix">
+        <thead>
+          <tr><th>Package</th><th>Role</th><th>Imports from core</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>packages/core</code></td>
+            <td>Domain, use cases, ports, policies. Harness-agnostic.</td>
+            <td>&mdash;</td>
+          </tr>
+          <tr>
+            <td><code>packages/pi-adapter</code></td>
+            <td>First-class Pi runtime.</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>packages/opencode-adapter</code></td>
+            <td>opencode translation spike.</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>packages/codex-adapter</code></td>
+            <td>Codex custom agents + repo skills.</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>packages/memory-server</code></td>
+            <td>Vendor-agnostic memory API (SQLite or Postgres).</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>packages/evals</code></td>
+            <td>Eval runner, baselines, reports.</td>
+            <td>yes</td>
+          </tr>
+          <tr>
+            <td><code>packages/console-web</code></td>
+            <td>Web console for tenants, keys, and copy-paste snippets.</td>
+            <td>via memory-client</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="trace">Everything is a trace</h2>
+      <p>
+        Every meaningful operation writes a <code>TraceEvent</code> into
+        <code>.ai/observability/generated/</code>. The trace log is the
+        source of truth for debugging, replaying, and reviewing
+        agent behavior.
+      </p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">.ai/observability/generated/2026-06-30.jsonl</span>
+        </div>
+<pre>{<span class="s">"ts"</span>:<span class="s">"2026-06-30T18:02:11Z"</span>,<span class="s">"kind"</span>:<span class="s">"provider.request"</span>,<span class="s">"agent"</span>:<span class="s">"developer"</span>,<span class="s">"decision"</span>:<span class="s">"local-only"</span>,<span class="s">"avoided_cost_usd"</span>:<span class="n">0.002</span>}
+{<span class="s">"ts"</span>:<span class="s">"2026-06-30T18:02:14Z"</span>,<span class="s">"kind"</span>:<span class="s">"permission.request"</span>,<span class="s">"path"</span>:<span class="s">".ai/policies/security.md"</span>,<span class="s">"decision"</span>:<span class="s">"deny"</span>,<span class="s">"actor"</span>:<span class="s">"human"</span>}
+{<span class="s">"ts"</span>:<span class="s">"2026-06-30T18:02:18Z"</span>,<span class="s">"kind"</span>:<span class="s">"eval.run"</span>,<span class="s">"suite"</span>:<span class="s">"default"</span>,<span class="s">"passed"</span>:<span class="n">14</span>,<span class="s">"failed"</span>:<span class="n">0</span>,<span class="s">"vs_baseline"</span>:<span class="s">"regression-safe"</span>}
+</pre>
+      </div>
+
+      <h2 id="local-first">Local-first in practice</h2>
+      <p>
+        Before any provider call, Alfred's
+        <code>ProviderRequestPolicy</code> runs a deterministic checklist:
+      </p>
+      <ol>
+        <li>Can a local capability answer this?</li>
+        <li>Can preprocessing reduce the payload?</li>
+        <li>What is the estimated token / cost impact?</li>
+        <li>Emit <code>local-only</code>, <code>hybrid</code>, or
+          <code>provider</code>.</li>
+        <li>Trace the decision, including avoided cost.</li>
+      </ol>
+
+      <h2 id="security">Security, summarized</h2>
+      <ul>
+        <li>Deny by default. Allowlists are explicit and minimal.</li>
+        <li>Protected paths (<code>.ai/</code>, <code>.opencode/</code>,
+          <code>harnesses/</code>) require human approval.</li>
+        <li>Destructive commands (<code>rm -rf</code>,
+          <code>git reset --hard</code>, ...) require human approval.</li>
+        <li>Skills cannot override security policy. Only a human can.</li>
+        <li>Adapters enforce policy. They do not own it.</li>
+      </ul>
+
+      <div class="doc-callout">
+        <strong>Next step:</strong>
+        <a href="/alfred/docs/agents.html">Agents &amp; subagents</a> to see the panel
+        in detail, or <a href="/alfred/docs/security.html">Security model</a> for the
+        full policy reference.
+      </div>
+    </main>
+
+    <aside class="docs-toc" aria-label="On this page">
+      <h6>On this page</h6>
+      <a href="#hexagonal">Hexagonal</a>
+      <a href="#ddd">DDD</a>
+      <a href="#kernel">Kernel</a>
+      <a href="#package-layout">Packages</a>
+      <a href="#trace">Tracing</a>
+      <a href="#local-first">Local-first</a>
+      <a href="#security">Security</a>
+    </aside>
+  </div>
+</body>
+</html>

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Memory Console — Alfred</title>
+  <meta name="description" content="Manage API keys, tenants, and connected services for your self-hosted Alfred Memory install." />
+  <link rel="stylesheet" href="/alfred/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
+  <style>
+    /* The console app lives at /alfred/memory/app/ and ships its own styles. */
+    .console-frame {
+      display: block;
+      width: 100%;
+      height: 820px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #0f1115;
+      box-shadow: var(--shadow);
+    }
+    .config-block {
+      background: var(--code-bg);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin: 14px 0;
+      overflow-x: auto;
+    }
+    .config-block code { color: var(--code-fg); font-size: 13.5px; line-height: 1.7; }
+    .config-block .c { color: var(--code-comment); font-style: italic; }
+    .config-block .k { color: var(--code-keyword); }
+    .config-block .s { color: var(--code-string); }
+    .config-block .p { color: var(--accent); }
+    .config-block .n { color: var(--code-num); }
+    .config-block .f { color: var(--code-fn); }
+  </style>
+</head>
+<body>
+  <!-- ==================== NAV ==================== -->
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/alfred/">
+        <span class="brand-mark">A</span>
+        <span class="brand-name">Alfred</span>
+        <span class="brand-tag">memory console</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="/alfred/">Home</a>
+        <a href="/alfred/#pillars">Pillars</a>
+        <a href="/alfred/#harnesses">Harnesses</a>
+        <a href="/alfred/docs/">Docs</a>
+        <a href="/alfred/memory/" style="color:var(--fg)">Memory Console</a>
+        <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
+    </div>
+  </header>
+
+  <!-- ==================== HERO ==================== -->
+  <section class="hero" style="padding: 72px 24px 36px;">
+    <div class="hero-inner" style="text-align:left; max-width:1080px;">
+      <span class="eyebrow">self-hosted · static · api-key manager</span>
+      <h1 style="font-size: clamp(32px, 5vw, 48px); margin-bottom: 12px;">
+        Alfred <span class="grad">Memory Console</span>
+      </h1>
+      <p class="lead" style="text-align:left; max-width: 720px; margin: 0 0 22px;">
+        The web admin for your self-hosted Alfred Memory server.
+        Create tenants, issue and rotate API keys, and copy-paste
+        connection snippets for every supported harness &mdash; all
+        from a single static page that talks to your server over
+        <code>/console/api/*</code>.
+      </p>
+      <div class="hero-cta" style="justify-content:flex-start;">
+        <a class="btn primary" href="#open">Open console &darr;</a>
+        <a class="btn secondary" href="/alfred/docs/memory.html">Memory docs</a>
+        <a class="btn secondary" href="#configure">Configure the API base</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CONFIGURE ==================== -->
+  <section class="block" id="configure" style="padding-top: 36px;">
+    <div class="container">
+      <div class="section-head" style="text-align:left; margin-bottom: 24px;">
+        <h2 style="font-size: 28px; text-align:left;">1. Point the console at your server</h2>
+        <p style="text-align:left; margin-left: 0; max-width: 760px;">
+          The console is a static SPA. The only thing it needs is the
+          URL of your <code>alfred serve</code> instance. Set it as a
+          build-time env var and re-deploy <code>memory/</code>.
+        </p>
+      </div>
+
+      <div class="config-block"><code><span class="c"># build the console with a real API base</span>
+<span class="f">cd</span> packages/console-web
+<span class="k">ALFRED_API_BASE</span>=<span class="s">"https://alfred.example.com"</span> <span class="f">npm</span> run build
+
+<span class="c"># output is dist/index.html — copy to your Pages tree:</span>
+<span class="f">mkdir</span> -p /alfred/memory/app
+<span class="f">cp</span> dist/index.html /alfred/memory/app/index.html
+</code></div>
+
+      <div class="doc-callout warn">
+        <strong>CORS.</strong> Your <code>alfred serve</code> instance
+        must allow this origin via
+        <code>ALFRED_MEMORY_ALLOWED_ORIGINS=https://goi17.github.io</code>,
+        or the browser will block the API calls.
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== OPEN ==================== -->
+  <section class="block" id="open" style="padding-top: 36px;">
+    <div class="container">
+      <div class="section-head" style="text-align:left; margin-bottom: 24px;">
+        <h2 style="font-size: 28px; text-align:left;">2. Open the console</h2>
+        <p style="text-align:left; max-width: 760px;">
+          Paste your <code>alk_...</code> key in the top-right input
+          and press <strong>Unlock</strong>. Your key is stored only in
+          this browser's <code>localStorage</code> &mdash; it never
+          leaves your machine.
+        </p>
+      </div>
+
+      <p style="margin: 0 0 14px;">
+        <a class="btn primary" href="/alfred/memory/app/">Launch console in full page &rarr;</a>
+      </p>
+
+      <!-- Inline preview of the SPA. The iframe is sandboxed to scripts
+           only and only renders same-origin pages. -->
+      <iframe
+        class="console-frame"
+        src="/alfred/memory/app/"
+        title="Alfred Memory Console"
+        loading="lazy"
+        referrerpolicy="no-referrer"
+        sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+
+      <p style="margin-top: 14px; color: var(--fg-3); font-size: 13px;">
+        Preview runs in an isolated iframe. For daily use, open the
+        <a href="/alfred/memory/app/">console in its own tab</a>.
+      </p>
+    </div>
+  </section>
+
+  <!-- ==================== FEATURES ==================== -->
+  <section class="block" id="features">
+    <div class="container">
+      <div class="section-head">
+        <h2>What the console does</h2>
+        <p>Everything that used to need a terminal, in a single page.</p>
+      </div>
+
+      <div class="pillars">
+        <article class="pillar">
+          <div class="icon">01</div>
+          <h3>Tenants</h3>
+          <p>List, create, and inspect tenants &mdash; see the kind
+            (human / coding / hybrid / server) and the storage backend
+            (SQLite vs Postgres) at a glance.</p>
+        </article>
+        <article class="pillar">
+          <div class="icon">02</div>
+          <h3>API keys</h3>
+          <p>Issue a new key, rotate an old one, label it for the
+            device that owns it, and revoke it the moment you suspect
+            a leak. Show and hide revoked keys per tenant.</p>
+        </article>
+        <article class="pillar">
+          <div class="icon">03</div>
+          <h3>Connection snippets</h3>
+          <p>For every tenant, copy the exact <code>curl</code>,
+            Codex/OpenAPI JSON, Claude MCP config, or Gemini extension
+            blob to connect a service in one paste.</p>
+        </article>
+        <article class="pillar">
+          <div class="icon">04</div>
+          <h3>Self-serve signup</h3>
+          <p>No terminal? Create a free tenant from the browser and
+            start storing memories in 10 seconds. Optional email
+            enables key recovery.</p>
+        </article>
+        <article class="pillar">
+          <div class="icon">05</div>
+          <h3>Bootstrap &amp; recovery</h3>
+          <p>Lost every key? The console can bootstrap a new admin
+            tenant or recover a key via the email you registered
+            &mdash; against your server, not ours.</p>
+        </article>
+        <article class="pillar">
+          <div class="icon">06</div>
+          <h3>100% static</h3>
+          <p>No server, no DB, no telemetry. The console is a single
+            HTML file. Host it on Pages, Vercel, Netlify, or any
+            static host. Your keys never reach a third party.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-col">
+        <h5>Alfred</h5>
+        <p style="margin:0;color:var(--fg-3);font-size:14px;max-width:280px">
+          Local-first, harness-agnostic agent operations.
+          Open source under the MIT license.
+        </p>
+      </div>
+      <div class="footer-col">
+        <h5>Apps</h5>
+        <ul>
+          <li><a href="/alfred/memory/">Memory Console</a></li>
+          <li><a href="/alfred/memory/app/">Open console</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h5>Docs</h5>
+        <ul>
+          <li><a href="/alfred/docs/">Overview</a></li>
+          <li><a href="/alfred/docs/install.html">Install</a></li>
+          <li><a href="/alfred/docs/memory.html">Memory</a></li>
+          <li><a href="/alfred/docs/security.html">Security</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h5>Project</h5>
+        <ul>
+          <li><a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/GOI17/alfred/issues" rel="noopener">Issues</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Alfred. Operated locally.</span>
+      <span>Theme: Kanagawa / Darcula</span>
+    </div>
+  </footer>
+</body>
+</html>

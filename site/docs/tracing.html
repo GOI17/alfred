@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tracing & observability — Alfred Docs</title>
+  <link rel="stylesheet" href="/alfred/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+        <span class="brand-mark">A</span><span class="brand-name">Alfred</span>
+        <span class="brand-tag">agent operations runtime</span>
+      </a>
+      <nav class="nav-links">
+        <a href="/alfred/"+(m.group(1) or "")>Home</a>
+        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
+        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
+        <a href="/alfred/memory/">Memory Console</a>
+        <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <aside class="docs-sidebar">
+      <h6>Getting started</h6>
+      <a href="/alfred/docs/index.html">Overview</a>
+      <a href="/alfred/docs/install.html">Install Alfred</a>
+      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
+      <a href="/alfred/docs/configuration.html">Configuration</a>
+      <h6>Concepts</h6>
+      <a href="/alfred/docs/architecture.html">Architecture</a>
+      <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
+      <a href="/alfred/docs/skills.html">Skills</a>
+      <a href="/alfred/docs/memory.html">Memory &amp; persistence</a>
+      <a href="/alfred/docs/security.html">Security model</a>
+      <h6>Operations</h6>
+      <a href="/alfred/docs/evals.html">Evals &amp; baselines</a>
+      <a href="/alfred/docs/tracing.html" class="active">Tracing &amp; observability</a>
+      <a href="/alfred/docs/permissions.html">Permissions &amp; approval</a>
+      <h6>Harnesses</h6>
+      <a href="/alfred/docs/harnesses-pi.html">Pi</a>
+      <a href="/alfred/docs/harnesses-opencode.html">opencode</a>
+      <a href="/alfred/docs/harnesses-codex.html">Codex</a>
+      <a href="/alfred/docs/harnesses-claude.html">Claude</a>
+      <a href="/alfred/docs/harnesses-vscode.html">VSCode</a>
+    </aside>
+
+    <main class="docs-main">
+      <h1>Tracing &amp; observability</h1>
+      <p class="doc-lead">
+        Every meaningful operation writes a <code>TraceEvent</code> to
+        <code>.ai/observability/generated/</code>. The trace log is the
+        source of truth for debugging, replay, and review.
+      </p>
+
+      <h2 id="event-shape">Event shape</h2>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">TraceEvent</span>
+        </div>
+<pre>{
+  <span class="s">"trace_id"</span>: <span class="s">"tr_2f9a..."</span>,
+  <span class="s">"ts"</span>: <span class="s">"2026-06-30T18:02:11.123Z"</span>,
+  <span class="s">"kind"</span>: <span class="s">"provider.request"</span>,
+  <span class="s">"actor"</span>: <span class="s">"developer"</span>,
+  <span class="s">"tenant"</span>: <span class="s">"my-project"</span>,
+  <span class="s">"decision"</span>: <span class="s">"local-only"</span>,
+  <span class="s">"payload"</span>: { <span class="s">"avoided_cost_usd"</span>: <span class="n">0.002</span> }
+}
+</pre>
+      </div>
+
+      <h2 id="kinds">Event kinds</h2>
+      <table class="matrix">
+        <thead>
+          <tr><th>Kind</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>provider.request</code></td>
+            <td>An LLM call was considered or made.</td>
+          </tr>
+          <tr>
+            <td><code>provider.avoided</code></td>
+            <td>A provider call was skipped because local work handled it.</td>
+          </tr>
+          <tr>
+            <td><code>permission.request</code></td>
+            <td>An agent asked to read or write a protected path.</td>
+          </tr>
+          <tr>
+            <td><code>permission.decision</code></td>
+            <td>A human approved or denied an escalation.</td>
+          </tr>
+          <tr>
+            <td><code>eval.run</code></td>
+            <td>An eval case was executed; status + baseline delta.</td>
+          </tr>
+          <tr>
+            <td><code>skill.activated</code></td>
+            <td>A skill was lazy-loaded by trigger.</td>
+          </tr>
+          <tr>
+            <td><code>specialist.spawn</code></td>
+            <td>A temporary subagent came online.</td>
+          </tr>
+          <tr>
+            <td><code>specialist.retire</code></td>
+            <td>A temporary subagent went offline.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="tail">Tail &amp; filter</h2>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">trace</span>
+        </div>
+<pre><span class="f">alfred</span> trace tail                      <span class="c"># live tail last 50 events</span>
+<span class="f">alfred</span> trace tail --kind provider     <span class="c"># filter by kind</span>
+<span class="f">alfred</span> trace tail --actor developer   <span class="c"># filter by agent</span>
+<span class="f">alfred</span> trace grep avoid_cost          <span class="c"># search payload fields</span>
+</pre>
+      </div>
+
+      <h2 id="replay">Reproducibility</h2>
+      <p>
+        A trace includes the prompt version, the model assignment, the
+        skill set, the config snapshot, and the seed of any randomized
+        eval. Given the trace, you can replay the run byte-for-byte.
+      </p>
+    </main>
+
+    <aside class="docs-toc">
+      <h6>On this page</h6>
+      <a href="#event-shape">Event shape</a>
+      <a href="#kinds">Kinds</a>
+      <a href="#tail">Tail &amp; filter</a>
+      <a href="#replay">Replay</a>
+    </aside>
+  </div>
+</body>
+</html>

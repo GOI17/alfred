@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Permissions & approval — Alfred Docs</title>
+  <link rel="stylesheet" href="/alfred/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+        <span class="brand-mark">A</span><span class="brand-name">Alfred</span>
+        <span class="brand-tag">agent operations runtime</span>
+      </a>
+      <nav class="nav-links">
+        <a href="/alfred/"+(m.group(1) or "")>Home</a>
+        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
+        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
+        <a href="/alfred/memory/">Memory Console</a>
+        <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <aside class="docs-sidebar">
+      <h6>Getting started</h6>
+      <a href="/alfred/docs/index.html">Overview</a>
+      <a href="/alfred/docs/install.html">Install Alfred</a>
+      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
+      <a href="/alfred/docs/configuration.html">Configuration</a>
+      <h6>Concepts</h6>
+      <a href="/alfred/docs/architecture.html">Architecture</a>
+      <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
+      <a href="/alfred/docs/skills.html">Skills</a>
+      <a href="/alfred/docs/memory.html">Memory &amp; persistence</a>
+      <a href="/alfred/docs/security.html">Security model</a>
+      <h6>Operations</h6>
+      <a href="/alfred/docs/evals.html">Evals &amp; baselines</a>
+      <a href="/alfred/docs/tracing.html">Tracing &amp; observability</a>
+      <a href="/alfred/docs/permissions.html" class="active">Permissions &amp; approval</a>
+      <h6>Harnesses</h6>
+      <a href="/alfred/docs/harnesses-pi.html">Pi</a>
+      <a href="/alfred/docs/harnesses-opencode.html">opencode</a>
+      <a href="/alfred/docs/harnesses-codex.html">Codex</a>
+      <a href="/alfred/docs/harnesses-claude.html">Claude</a>
+      <a href="/alfred/docs/harnesses-vscode.html">VSCode</a>
+    </aside>
+
+    <main class="docs-main">
+      <h1>Permissions &amp; approval</h1>
+      <p class="doc-lead">
+        Every privileged action passes through
+        <code>PermissionEvaluation</code>. The policy is deny-by-default
+        and human-in-the-loop.
+      </p>
+
+      <h2 id="evaluate">Evaluation</h2>
+      <p>A request is evaluated against:</p>
+      <ol>
+        <li>Protected path rules (<code>ProtectedPathRule</code>)</li>
+        <li>Destructive command rules (<code>DestructiveCommandRule</code>)</li>
+        <li>Per-tenant allowlist / blocklist</li>
+        <li>Per-agent capability grants</li>
+      </ol>
+      <p>The first match wins. No match means <strong>deny</strong>.</p>
+
+      <h2 id="approve">Approval</h2>
+      <p>When a request is denied, the agent may request approval:</p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">approve</span>
+        </div>
+<pre><span class="c"># Inline approval for a single command</span>
+<span class="f">alfred</span> approve <span class="s">"rm -rf build/"</span> --reason=<span class="s">"clean stale build"</span> --ttl=10m
+
+<span class="c"># Pre-approve a protected path for a session</span>
+<span class="f">alfred</span> approve path .ai/evals/cases/ --session
+</pre>
+      </div>
+      <p>
+        All approvals write a <code>permission.decision</code> trace
+        event with <code>actor: human</code>. TTLs are enforced.
+      </p>
+
+      <h2 id="scope">Scopes</h2>
+      <table class="matrix">
+        <thead>
+          <tr><th>Scope</th><th>Effect</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>--once</code></td>
+            <td>One-time use, expires after the action.</td>
+          </tr>
+          <tr>
+            <td><code>--ttl</code></td>
+            <td>Valid for N minutes after the decision.</td>
+          </tr>
+          <tr>
+            <td><code>--session</code></td>
+            <td>Valid until the current agent session ends.</td>
+          </tr>
+          <tr>
+            <td><code>--permanent</code></td>
+            <td>Persisted to <code>.ai/policies/</code>. Reviewer
+              sign-off required.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="audit">Audit</h2>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">audit</span>
+        </div>
+<pre><span class="f">alfred</span> audit list --since=<span class="s">"24h"</span>
+<span class="f">alfred</span> audit show tr_2f9a...
+</pre>
+      </div>
+    </main>
+
+    <aside class="docs-toc">
+      <h6>On this page</h6>
+      <a href="#evaluate">Evaluation</a>
+      <a href="#approve">Approval</a>
+      <a href="#scope">Scopes</a>
+      <a href="#audit">Audit</a>
+    </aside>
+  </div>
+</body>
+</html>

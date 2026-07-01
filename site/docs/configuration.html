@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Configuration — Alfred Docs</title>
+  <link rel="stylesheet" href="/alfred/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+        <span class="brand-mark">A</span><span class="brand-name">Alfred</span>
+        <span class="brand-tag">agent operations runtime</span>
+      </a>
+      <nav class="nav-links">
+        <a href="/alfred/"+(m.group(1) or "")>Home</a>
+        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
+        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
+        <a href="/alfred/memory/">Memory Console</a>
+        <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="/alfred/docs/quickstart.html">Quickstart &rarr;</a>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <h6>Getting started</h6>
+      <a href="/alfred/docs/index.html">Overview</a>
+      <a href="/alfred/docs/install.html">Install Alfred</a>
+      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
+      <a href="/alfred/docs/configuration.html" class="active">Configuration</a>
+      <h6>Concepts</h6>
+      <a href="/alfred/docs/architecture.html">Architecture</a>
+      <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
+      <a href="/alfred/docs/skills.html">Skills</a>
+      <a href="/alfred/docs/memory.html">Memory &amp; persistence</a>
+      <a href="/alfred/docs/security.html">Security model</a>
+      <h6>Operations</h6>
+      <a href="/alfred/docs/evals.html">Evals &amp; baselines</a>
+      <a href="/alfred/docs/tracing.html">Tracing &amp; observability</a>
+      <a href="/alfred/docs/permissions.html">Permissions &amp; approval</a>
+      <h6>Harnesses</h6>
+      <a href="/alfred/docs/harnesses-pi.html">Pi</a>
+      <a href="/alfred/docs/harnesses-opencode.html">opencode</a>
+      <a href="/alfred/docs/harnesses-codex.html">Codex</a>
+      <a href="/alfred/docs/harnesses-claude.html">Claude</a>
+      <a href="/alfred/docs/harnesses-vscode.html">VSCode</a>
+    </aside>
+
+    <main class="docs-main">
+      <h1>Configuration</h1>
+      <p class="doc-lead">
+        Alfred reads one config file per project: <code>.alfred/config.json</code>.
+        The schema is small, versioned, and additive &mdash; new fields never
+        break old configs.
+      </p>
+
+      <h2 id="init">Initialize a workspace</h2>
+      <p>From your project root:</p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">alfred init</span>
+        </div>
+<pre><span class="f">alfred</span> init --profile=coding --name=my-project
+</pre>
+      </div>
+      <p>
+        This writes <code>.alfred/config.json</code>, a starter
+        <code>AGENTS.md</code>, and a trace event into
+        <code>.ai/observability/generated/</code>.
+      </p>
+
+      <h2 id="schema">Schema</h2>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">.alfred/config.json</span>
+        </div>
+<pre>{
+  <span class="s">"schema"</span>: <span class="s">"alfred.config/v1"</span>,
+  <span class="s">"tenant"</span>: <span class="s">"my-project"</span>,
+  <span class="s">"profile"</span>: <span class="s">"coding"</span>,
+
+  <span class="s">"model"</span>: {
+    <span class="s">"primary"</span>: <span class="s">"claude-sonnet-4.6"</span>,
+    <span class="s">"fallback"</span>: [<span class="s">"gpt-4o-mini"</span>],
+    <span class="s">"assignment"</span>: <span class="s">"user-owned"</span>
+  },
+
+  <span class="s">"policy"</span>: {
+    <span class="s">"default"</span>: <span class="s">"deny"</span>,
+    <span class="s">"protected_paths"</span>: [<span class="s">".ai/"</span>, <span class="s">".opencode/"</span>, <span class="s">"harnesses/"</span>],
+    <span class="s">"destructive_commands"</span>: [<span class="s">"rm -rf"</span>, <span class="s">"git reset --hard"</span>],
+    <span class="s">"approval"</span>: <span class="s">"human"</span>
+  },
+
+  <span class="s">"memory"</span>: {
+    <span class="s">"hosting"</span>: <span class="s">"coding"</span>,
+    <span class="s">"store"</span>: <span class="s">"sqlite"</span>,
+    <span class="s">"path"</span>: <span class="s">"~/.alfred/tenants/my-project.sqlite"</span>
+  },
+
+  <span class="s">"evals"</span>: {
+    <span class="s">"baseline"</span>: <span class="s">".ai/evals/baselines/main.json"</span>,
+    <span class="s">"gates"</span>: <span class="s">".ai/evals/regression-gates.json"</span>,
+    <span class="s">"auto_compare"</span>: <span class="k">true</span>
+  },
+
+  <span class="s">"harnesses"</span>: {
+    <span class="s">"primary"</span>: <span class="s">"opencode"</span>,
+    <span class="s">"targets"</span>: [<span class="s">"opencode"</span>, <span class="s">"codex"</span>, <span class="s">"pi"</span>]
+  }
+}
+</pre>
+      </div>
+
+      <h2 id="model">Model assignment</h2>
+      <p>
+        <strong>You own your model.</strong> Alfred does not hardcode a
+        provider or a model name. Set <code>model.primary</code> to whatever
+        string your adapter expects, and <code>model.fallback</code> to a
+        chain Alfred will try on rate limits.
+      </p>
+      <div class="doc-callout">
+        <strong>Tip.</strong> The same config can ship a Sonnet primary
+        and a small local model fallback for cheap evals. Alfred will
+        never call the fallback for tasks the primary should handle.
+      </div>
+
+      <h2 id="policy">Policy</h2>
+      <p>
+        <code>policy.default</code> is always <code>"deny"</code>. Every
+        protected path, every destructive command, and every permission
+        change requires a human approval trace event.
+      </p>
+      <p>
+        Add a path or command to escalate the gate, never to lower it.
+        Alfred will not let a subagent remove <code>protected_paths</code>
+        even if the prompt asks nicely.
+      </p>
+
+      <h2 id="memory-hosting">Memory hosting</h2>
+      <p>Three modes, chosen at init time:</p>
+      <table class="matrix">
+        <thead>
+          <tr><th>Mode</th><th>Store</th><th>Use case</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>coding</code></td>
+            <td>SQLite</td>
+            <td>Local dev, single user, no network.</td>
+          </tr>
+          <tr>
+            <td><code>web</code></td>
+            <td>Postgres</td>
+            <td>Memory shared with ChatGPT / Claude / Gemini.</td>
+          </tr>
+          <tr>
+            <td><code>self-hosted</code></td>
+            <td>Postgres + TLS</td>
+            <td>Production, multi-machine, HTTPS.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Switching modes is a one-shot migration: <code>alfred migrate
+        --to=postgres --url=...</code>. Alfred emits a trace event for
+        every row moved.
+      </p>
+
+      <h2 id="env">Environment variables</h2>
+      <p>
+        Sensitive values never live in <code>config.json</code>. Use env
+        vars; Alfred reads them at startup.
+      </p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">env</span>
+        </div>
+<pre><span class="c"># Required</span>
+<span class="k">export</span> <span class="o">ALFRED_TENANT</span>=my-project
+<span class="k">export</span> <span class="o">ALFRED_API_KEY</span>=alk_...
+
+<span class="c"># Optional</span>
+<span class="k">export</span> <span class="o">ALFRED_MEMORY_DB</span>=postgres://user:pass@host/db?sslmode=require
+<span class="k">export</span> <span class="o">ALFRED_CONSOLE_URL</span>=https://alfred-console.example.com
+<span class="k">export</span> <span class="o">ALFRED_LOG_LEVEL</span>=info
+</pre>
+      </div>
+
+      <h2 id="validate">Validate the config</h2>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">validate</span>
+        </div>
+<pre><span class="f">alfred</span> config validate         <span class="c"># schema check</span>
+<span class="f">alfred</span> config show --effective <span class="c"># merged view (config + env + defaults)</span>
+</pre>
+      </div>
+
+      <div class="doc-callout">
+        <strong>Next step:</strong>
+        <a href="/alfred/docs/agents.html">Agents &amp; subagents</a> to meet the
+        panel &mdash; or <a href="/alfred/docs/evals.html">Evals &amp; baselines</a>
+        to wire your first regression suite.
+      </div>
+    </main>
+
+    <aside class="docs-toc" aria-label="On this page">
+      <h6>On this page</h6>
+      <a href="#init">Initialize</a>
+      <a href="#schema">Schema</a>
+      <a href="#model">Model</a>
+      <a href="#policy">Policy</a>
+      <a href="#memory-hosting">Memory hosting</a>
+      <a href="#env">Env vars</a>
+      <a href="#validate">Validate</a>
+    </aside>
+  </div>
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Docs — Alfred</title>
+  <meta name="description" content="Alfred documentation: install, configure, architecture, agents, evals, and harness adapters." />
+  <link rel="stylesheet" href="/alfred/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+        <span class="brand-mark">A</span>
+        <span class="brand-name">Alfred</span>
+        <span class="brand-tag">agent operations runtime</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="/alfred/"+(m.group(1) or "")>Home</a>
+        <a href="/alfred/"+(m.group(1) or "")>Problem</a>
+        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
+        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
+        <a href="/alfred/memory/">Memory Console</a>
+        <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <!-- ============= SIDEBAR ============= -->
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <h6>Getting started</h6>
+      <a href="/alfred/docs/index.html" class="active">Overview</a>
+      <a href="/alfred/docs/install.html">Install Alfred</a>
+      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
+      <a href="/alfred/docs/configuration.html">Configuration</a>
+
+      <h6>Concepts</h6>
+      <a href="/alfred/docs/architecture.html">Architecture</a>
+      <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
+      <a href="/alfred/docs/skills.html">Skills</a>
+      <a href="/alfred/docs/memory.html">Memory &amp; persistence</a>
+      <a href="/alfred/docs/security.html">Security model</a>
+
+      <h6>Operations</h6>
+      <a href="/alfred/docs/evals.html">Evals &amp; baselines</a>
+      <a href="/alfred/docs/tracing.html">Tracing &amp; observability</a>
+      <a href="/alfred/docs/permissions.html">Permissions &amp; approval</a>
+
+      <h6>Harnesses</h6>
+      <a href="/alfred/docs/harnesses-pi.html">Pi</a>
+      <a href="/alfred/docs/harnesses-opencode.html">opencode</a>
+      <a href="/alfred/docs/harnesses-codex.html">Codex</a>
+      <a href="/alfred/docs/harnesses-claude.html">Claude</a>
+      <a href="/alfred/docs/harnesses-vscode.html">VSCode</a>
+    </aside>
+
+    <!-- ============= MAIN ============= -->
+    <main class="docs-main">
+      <h1>Alfred documentation</h1>
+      <p class="doc-lead">
+        Everything you need to install Alfred, configure a workspace, design
+        agents and skills, and run a regression suite that catches prompt
+        drift before it ships.
+      </p>
+
+      <h2 id="what">What is Alfred?</h2>
+      <p>
+        Alfred is a local-first <strong>agent operations runtime</strong>.
+        It does not write your agents for you. It does not pick your model.
+        It does, however, handle everything around the agent that
+        humans and teams keep reinventing: permission policy, eval gating,
+        harness portability, skill loading, trace events, and baseline
+        comparison.
+      </p>
+      <p>
+        The runtime is split into a <strong>harness-agnostic core</strong>
+        (<code>packages/core</code>) and a family of <strong>adapters</strong>
+        that compile the same source-of-truth into each runtime's dialect.
+        Pi is the first-class adapter. opencode, Codex, Claude, VSCode, and
+        others are portability targets.
+      </p>
+
+      <div class="doc-callout">
+        <strong>New here?</strong> Start with
+        <a href="/alfred/docs/install.html">Install Alfred</a> &rarr; you'll be running
+        the eval suite in under five minutes. Then read
+        <a href="/alfred/docs/architecture.html">Architecture</a> to understand why it
+        is shaped the way it is.
+      </div>
+
+      <h2 id="quick-paths">Pick a path</h2>
+
+      <h3 id="path-install">I just want to install it</h3>
+      <p>
+        One <code>curl | sh</code>. No manual git clone. The installer
+        detects your active harness, generates a preview, and waits for
+        human approval before writing harness config.
+      </p>
+      <p><a href="/alfred/docs/install.html">Read the install guide &rarr;</a></p>
+
+      <h3 id="path-configure">I want to configure my workspace</h3>
+      <p>
+        <code>alfred init</code> writes a <code>.alfred/config.json</code>
+        in your project. From there you can pin the model, set the
+        permission policy, register tenants, and wire skills.
+      </p>
+      <p><a href="/alfred/docs/configuration.html">See the configuration reference &rarr;</a></p>
+
+      <h3 id="path-architect">I want to understand the architecture</h3>
+      <p>
+        Hexagonal architecture + DDD. The core never imports an adapter.
+        Adapters never redefine domain rules. The boundary is enforced by
+        the build itself.
+      </p>
+      <p><a href="/alfred/docs/architecture.html">Read the architecture overview &rarr;</a></p>
+
+      <h3 id="path-evals">I want to set up evals &amp; baselines</h3>
+      <p>
+        Every agent, skill, and policy change must run an eval suite and
+        compare against a baseline. Improvements are accepted on numbers.
+      </p>
+      <p><a href="/alfred/docs/evals.html">Set up your first eval &rarr;</a></p>
+
+      <h2 id="principles">Three principles, in order</h2>
+      <ol>
+        <li>
+          <strong>Local-first.</strong> If deterministic local work can solve
+          it, a provider is never called. Avoided calls are traced too.
+        </li>
+        <li>
+          <strong>Deny by default.</strong> No agent may broaden its own
+          permissions. Escalation is a human decision, recorded as a trace
+          event.
+        </li>
+        <li>
+          <strong>Evals gate everything.</strong> No prompt, agent, skill,
+          or policy change ships without a regression-safe eval pass.
+        </li>
+      </ol>
+
+      <h2 id="next">Where to go next</h2>
+      <ul>
+        <li><a href="/alfred/docs/install.html">Install Alfred</a> &mdash; the one-liner.</li>
+        <li><a href="/alfred/docs/quickstart.html">5-minute quickstart</a> &mdash; from zero to first eval.</li>
+        <li><a href="/alfred/docs/architecture.html">Architecture</a> &mdash; why it is shaped this way.</li>
+        <li><a href="/alfred/docs/agents.html">Agents &amp; subagents</a> &mdash; the six-agent panel.</li>
+        <li><a href="/alfred/docs/evals.html">Evals &amp; baselines</a> &mdash; regression-safe prompts.</li>
+      </ul>
+    </main>
+
+    <!-- ============= TOC ============= -->
+    <aside class="docs-toc" aria-label="On this page">
+      <h6>On this page</h6>
+      <a href="#what">What is Alfred?</a>
+      <a href="#quick-paths">Pick a path</a>
+      <a href="#path-install">Install it</a>
+      <a href="#path-configure">Configure</a>
+      <a href="#path-architect">Architecture</a>
+      <a href="#path-evals">Evals</a>
+      <a href="#principles">Principles</a>
+      <a href="#next">Where to go next</a>
+    </aside>
+  </div>
+</body>
+</html>

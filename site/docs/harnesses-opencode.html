@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>opencode adapter — Alfred Docs</title>
+  <link rel="stylesheet" href="/alfred/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+        <span class="brand-mark">A</span><span class="brand-name">Alfred</span>
+        <span class="brand-tag">agent operations runtime</span>
+      </a>
+      <nav class="nav-links">
+        <a href="/alfred/"+(m.group(1) or "")>Home</a>
+        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
+        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
+        <a href="/alfred/memory/">Memory Console</a>
+        <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <aside class="docs-sidebar">
+      <h6>Getting started</h6>
+      <a href="/alfred/docs/index.html">Overview</a>
+      <a href="/alfred/docs/install.html">Install Alfred</a>
+      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
+      <a href="/alfred/docs/configuration.html">Configuration</a>
+      <h6>Concepts</h6>
+      <a href="/alfred/docs/architecture.html">Architecture</a>
+      <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
+      <a href="/alfred/docs/skills.html">Skills</a>
+      <a href="/alfred/docs/memory.html">Memory &amp; persistence</a>
+      <a href="/alfred/docs/security.html">Security model</a>
+      <h6>Operations</h6>
+      <a href="/alfred/docs/evals.html">Evals &amp; baselines</a>
+      <a href="/alfred/docs/tracing.html">Tracing &amp; observability</a>
+      <a href="/alfred/docs/permissions.html">Permissions &amp; approval</a>
+      <h6>Harnesses</h6>
+      <a href="/alfred/docs/harnesses-pi.html">Pi</a>
+      <a href="/alfred/docs/harnesses-opencode.html" class="active">opencode</a>
+      <a href="/alfred/docs/harnesses-codex.html">Codex</a>
+      <a href="/alfred/docs/harnesses-claude.html">Claude</a>
+      <a href="/alfred/docs/harnesses-vscode.html">VSCode</a>
+    </aside>
+
+    <main class="docs-main">
+      <h1>opencode adapter</h1>
+      <p class="doc-lead">
+        Status, install flow, configuration surface, and known
+        limitations of Alfred's opencode adapter.
+      </p>
+
+      <h2 id="status">Status</h2>
+      <p>
+        Adapter status: <code>executable-translation-spike</code> &mdash; compiles the same source-of-truth into <code>.opencode/</code>.
+      </p>
+      <p>
+        Source package: <code>packages/opencode-adapter</code>.
+      </p>
+
+      <h2 id="install">Install flow</h2>
+      <ol>
+        <li>Run the installer. Alfred detects the active harness.</li>
+        <li>Review the preview &mdash; it lists every file Alfred will
+          write.</li>
+        <li>Approve. Alfred writes the config and prints a summary.</li>
+        <li><strong>Restart opencode</strong> so the panel is registered.</li>
+      </ol>
+
+      <h2 id="config">Configuration surface</h2>
+      <p>The opencode adapter reads <code>.alfred/config.json</code> and:</p>
+      <ul>
+        <li>Generates the agent panel under <code>.opencode/agent/</code>.</li>
+        <li>Materializes skills under <code>.opencode/skill/</code> with the
+          same triggers.</li>
+        <li>Applies the permission policy unchanged.</li>
+      </ul>
+
+      <h2 id="limitations">Known limitations</h2>
+      <ul>
+        <li>Configuration is loaded at startup &mdash; always restart
+          opencode after <code>alfred init</code>.</li>
+        <li>Protected paths under the harness's own config directory
+          require <code>--force</code> + human approval.</li>
+        <li>Some opencode-specific features (e.g. provider-specific
+          hotkeys) are not yet mapped to Alfred primitives.</li>
+      </ul>
+
+      <div class="doc-callout">
+        <strong>Need something missing?</strong> Open an issue at
+        <a href="https://github.com/GOI17/alfred/issues" rel="noopener">github.com/GOI17/alfred/issues</a>
+        with the <code>adapter:opencode</code> label.
+      </div>
+    </main>
+
+    <aside class="docs-toc">
+      <h6>On this page</h6>
+      <a href="#status">Status</a>
+      <a href="#install">Install</a>
+      <a href="#config">Config surface</a>
+      <a href="#limitations">Limitations</a>
+    </aside>
+  </div>
+</body>
+</html>

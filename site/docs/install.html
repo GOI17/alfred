@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Install Alfred — Alfred Docs</title>
+  <link rel="stylesheet" href="/alfred/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+        <span class="brand-mark">A</span><span class="brand-name">Alfred</span>
+        <span class="brand-tag">agent operations runtime</span>
+      </a>
+      <nav class="nav-links">
+        <a href="/alfred/"+(m.group(1) or "")>Home</a>
+        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
+        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
+        <a href="/alfred/memory/">Memory Console</a>
+        <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="/alfred/docs/quickstart.html">Quickstart &rarr;</a>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <h6>Getting started</h6>
+      <a href="/alfred/docs/index.html">Overview</a>
+      <a href="/alfred/docs/install.html" class="active">Install Alfred</a>
+      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
+      <a href="/alfred/docs/configuration.html">Configuration</a>
+      <h6>Concepts</h6>
+      <a href="/alfred/docs/architecture.html">Architecture</a>
+      <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
+      <a href="/alfred/docs/skills.html">Skills</a>
+      <a href="/alfred/docs/memory.html">Memory &amp; persistence</a>
+      <a href="/alfred/docs/security.html">Security model</a>
+      <h6>Operations</h6>
+      <a href="/alfred/docs/evals.html">Evals &amp; baselines</a>
+      <a href="/alfred/docs/tracing.html">Tracing &amp; observability</a>
+      <a href="/alfred/docs/permissions.html">Permissions &amp; approval</a>
+      <h6>Harnesses</h6>
+      <a href="/alfred/docs/harnesses-pi.html">Pi</a>
+      <a href="/alfred/docs/harnesses-opencode.html">opencode</a>
+      <a href="/alfred/docs/harnesses-codex.html">Codex</a>
+      <a href="/alfred/docs/harnesses-claude.html">Claude</a>
+      <a href="/alfred/docs/harnesses-vscode.html">VSCode</a>
+    </aside>
+
+    <main class="docs-main">
+      <h1>Install Alfred</h1>
+      <p class="doc-lead">
+        One curl. The installer detects your active harness, generates a
+        preview, and writes harness config only after explicit human
+        approval. No manual git clone.
+      </p>
+
+      <div class="doc-callout warn">
+        <strong>Heads up.</strong> The installer is <em>agent-driven</em>.
+        It only works through an AI agent. The shell script is fetched by
+        the agent, dry-run by default, and waits for your sign-off.
+      </div>
+
+      <h2 id="requirements">Requirements</h2>
+      <ul>
+        <li>Node.js <strong>22+</strong> (<code>node -v</code>)</li>
+        <li>pnpm 10+ <em>(optional)</em> &mdash; only for monorepo development</li>
+        <li>One of: opencode, Pi, Codex, Claude, VSCode</li>
+        <li>macOS, Linux, or WSL2</li>
+      </ul>
+
+      <h2 id="profiles">Choose a profile</h2>
+      <p>
+        Alfred supports three install profiles. Pick one.
+      </p>
+      <table class="matrix">
+        <thead>
+          <tr><th>Profile</th><th>What it does</th><th>What you need</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>coding</code></td>
+            <td>Use Alfred from a coding agent. Local SQLite, no network.</td>
+            <td>Nothing extra.</td>
+          </tr>
+          <tr>
+            <td><code>web</code></td>
+            <td>Use Alfred Memory from ChatGPT / Claude / Gemini.</td>
+            <td>Postgres URL (Neon, Supabase, Render free tier).</td>
+          </tr>
+          <tr>
+            <td><code>both</code></td>
+            <td>Use Alfred from coding agents and web UIs.</td>
+            <td>Postgres URL.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 id="coding">Option A &mdash; coding profile (no database)</h2>
+      <p>The fastest path. Perfect for trying Alfred.</p>
+      <div class="terminal" aria-label="Install Alfred coding profile">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">zsh &mdash; install</span>
+        </div>
+<pre><span class="c"># Install</span>
+<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --profile=coding --name=acme
+
+<span class="c"># Initialize in your project</span>
+<span class="f">cd</span> ~/code/my-project
+<span class="f">alfred</span> init --profile=coding --name=my-project
+
+<span class="c"># Run the eval suite</span>
+<span class="f">alfred</span> evals run --compare-baseline
+</pre>
+      </div>
+      <p>
+        A SQLite file is created at <code>~/.alfred/tenants/acme.sqlite</code>.
+        Nothing is uploaded anywhere. The API key is printed once &mdash;
+        save it to your password manager.
+      </p>
+
+      <h2 id="web">Option B &mdash; web profile (Postgres)</h2>
+      <p>Use Alfred Memory from ChatGPT, Claude, or Gemini.</p>
+      <ol>
+        <li>Create a free Postgres database (Neon / Supabase / Render).</li>
+        <li>Copy the connection string &mdash; it looks like
+          <code>postgres://user:pass@host/db?sslmode=require</code>.</li>
+        <li>Run the installer. It will prompt for the URL.</li>
+      </ol>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">zsh &mdash; install (web)</span>
+        </div>
+<pre><span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --profile=web --name=my-mem
+</pre>
+      </div>
+
+      <h2 id="approve">Approve, then write</h2>
+      <p>
+        Alfred never writes harness config without your approval. When the
+        installer finishes detection, it prints a preview like:
+      </p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">preview</span>
+        </div>
+<pre><span class="c"># Alfred install preview</span>
+Harness detected : <span class="k">opencode</span>
+Adapter status   : <span class="k">executable-translation-spike</span>
+Files to write   : <span class="n">7</span>
+  + .opencode/agent/orchestrator.md
+  + .opencode/agent/developer.md
+  + .opencode/agent/qa.md
+  + .opencode/skill/architecture-docs.md
+  + .opencode/skill/typescript-project.md
+  + .opencode/config.json
+  + AGENTS.md <span class="c">(merge)</span>
+
+Apply changes? <span class="p">[y/N]</span>
+</pre>
+      </div>
+      <p>
+        Review the list, type <code>y</code>, and the files land. If you say
+        <code>N</code>, nothing is written and the preview is discarded.
+      </p>
+
+      <h2 id="verify">Verify the install</h2>
+      <p>Three commands should pass:</p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">verify</span>
+        </div>
+<pre><span class="f">alfred</span> --version        <span class="c"># prints 0.4.0</span>
+<span class="f">alfred</span> doctor         <span class="c"># checks node, pnpm, harness, key</span>
+<span class="f">alfred</span> evals list     <span class="c"># shows the regression suite</span>
+</pre>
+      </div>
+
+      <h2 id="uninstall">Uninstall</h2>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">uninstall</span>
+        </div>
+<pre><span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/uninstall.sh <span class="p">|</span> sh
+</pre>
+      </div>
+      <p>
+        The uninstaller removes the installed package tree, never touches
+        your project files, and asks before deleting the SQLite database.
+      </p>
+
+      <div class="doc-callout">
+        <strong>Next step:</strong>
+        <a href="/alfred/docs/configuration.html">Configuration</a> to wire your model,
+        permission policy, and tenants &mdash; or
+        <a href="/alfred/docs/quickstart.html">5-minute quickstart</a> to ship your
+        first eval.
+      </div>
+    </main>
+
+    <aside class="docs-toc" aria-label="On this page">
+      <h6>On this page</h6>
+      <a href="#requirements">Requirements</a>
+      <a href="#profiles">Profiles</a>
+      <a href="#coding">Coding profile</a>
+      <a href="#web">Web profile</a>
+      <a href="#approve">Approve &amp; write</a>
+      <a href="#verify">Verify</a>
+      <a href="#uninstall">Uninstall</a>
+    </aside>
+  </div>
+</body>
+</html>

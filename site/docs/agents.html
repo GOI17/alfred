@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agents & subagents — Alfred Docs</title>
+  <link rel="stylesheet" href="/alfred/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+        <span class="brand-mark">A</span><span class="brand-name">Alfred</span>
+        <span class="brand-tag">agent operations runtime</span>
+      </a>
+      <nav class="nav-links">
+        <a href="/alfred/"+(m.group(1) or "")>Home</a>
+        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
+        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
+        <a href="/alfred/memory/">Memory Console</a>
+        <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <h6>Getting started</h6>
+      <a href="/alfred/docs/index.html">Overview</a>
+      <a href="/alfred/docs/install.html">Install Alfred</a>
+      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
+      <a href="/alfred/docs/configuration.html">Configuration</a>
+      <h6>Concepts</h6>
+      <a href="/alfred/docs/architecture.html">Architecture</a>
+      <a href="/alfred/docs/agents.html" class="active">Agents &amp; subagents</a>
+      <a href="/alfred/docs/skills.html">Skills</a>
+      <a href="/alfred/docs/memory.html">Memory &amp; persistence</a>
+      <a href="/alfred/docs/security.html">Security model</a>
+      <h6>Operations</h6>
+      <a href="/alfred/docs/evals.html">Evals &amp; baselines</a>
+      <a href="/alfred/docs/tracing.html">Tracing &amp; observability</a>
+      <a href="/alfred/docs/permissions.html">Permissions &amp; approval</a>
+      <h6>Harnesses</h6>
+      <a href="/alfred/docs/harnesses-pi.html">Pi</a>
+      <a href="/alfred/docs/harnesses-opencode.html">opencode</a>
+      <a href="/alfred/docs/harnesses-codex.html">Codex</a>
+      <a href="/alfred/docs/harnesses-claude.html">Claude</a>
+      <a href="/alfred/docs/harnesses-vscode.html">VSCode</a>
+    </aside>
+
+    <main class="docs-main">
+      <h1>Agents &amp; subagents</h1>
+      <p class="doc-lead">
+        Alfred ships with one <strong>primary</strong> agent and five
+        <strong>subagents</strong>. Each has a single responsibility, a
+        declared mode, and a deterministic scope. Source-of-truth lives
+        in <code>.ai/agents/</code>.
+      </p>
+
+      <h2 id="panel">The panel</h2>
+
+      <h3 id="orchestrator">orchestrator <span style="color:var(--fg-3);font-weight:500">— primary</span></h3>
+      <p>
+        The only primary agent. Loads the architecture kernel, classifies
+        incoming tasks, and delegates to subagents. Owns the trace stream
+        and the eval gate.
+      </p>
+      <ul>
+        <li><strong>Inputs:</strong> user prompt, kernel, project signals.</li>
+        <li><strong>Outputs:</strong> task classification, delegation
+          decision, final synthesis.</li>
+        <li><strong>May not:</strong> modify <code>AGENTS.md</code>,
+          broaden its own permissions, or skip evals.</li>
+      </ul>
+
+      <h3 id="developer">developer <span style="color:var(--fg-3);font-weight:500">— subagent</span></h3>
+      <p>
+        Coding tasks inside the architecture kernel. Reads and writes
+        code, skills, and adapters. Always diffs before committing.
+      </p>
+
+      <h3 id="qa">qa <span style="color:var(--fg-3);font-weight:500">— subagent</span></h3>
+      <p>
+        Authors eval cases, runs the eval runner, owns the baseline file,
+        blocks regressions. Never declares a change done without a
+        <code>regression-safe</code> eval result.
+      </p>
+
+      <h3 id="librarian">librarian <span style="color:var(--fg-3);font-weight:500">— subagent</span></h3>
+      <p>
+        Owns <code>AGENTS.md</code>, <code>docs/</code>, and skill
+        activation. Lazy-loads skills by trigger and project signal.
+      </p>
+
+      <h3 id="architect">architect <span style="color:var(--fg-3);font-weight:500">— subagent</span></h3>
+      <p>
+        DDD boundaries and hexagonal ports. Refuses PRs that leak adapter
+        imports into <code>packages/core</code> or that weaken the
+        kernel invariants.
+      </p>
+
+      <h3 id="reviewer">reviewer <span style="color:var(--fg-3);font-weight:500">— subagent</span></h3>
+      <p>
+        Policy enforcement and release readiness. Compares every change
+        against a baseline. Signs off releases.
+      </p>
+
+      <h2 id="temporary">Temporary specialists</h2>
+      <p>
+        Beyond the panel, the orchestrator can spawn <strong>temporary
+        subagents</strong> for one-off jobs: write a migration, generate
+        fixtures, run a single benchmark. Temporary agents:
+      </p>
+      <ul>
+        <li>Are scoped to a single <code>TaskClassification</code>.</li>
+        <li>Retire when the task is done.</li>
+        <li>Cannot promote themselves to permanent agents.</li>
+        <li>Require a human approval trace to be reused.</li>
+      </ul>
+
+      <div class="doc-callout warn">
+        <strong>Promotion requires a human.</strong> A temporary agent
+        that proves useful becomes a candidate. A human reviews the
+        trace, the evals, and the prompt diff, then either merges it
+        into <code>.ai/agents/</code> or lets it retire.
+      </div>
+
+      <h2 id="authoring">Authoring a new permanent agent</h2>
+      <ol>
+        <li>Add a spec under <code>.ai/agents/&lt;name&gt;.md</code> with
+          frontmatter: <code>id</code>, <code>mode</code> (primary /
+          subagent), <code>description</code>, <code>owner</code>.</li>
+        <li>Run <code>alfred adapter build &lt;harness&gt; --preview</code>
+          to see the generated agent file.</li>
+        <li>Run <code>alfred evals run --compare-baseline</code>. All
+          existing evals must remain <code>regression-safe</code>.</li>
+        <li>Author at least one new eval case in
+          <code>.ai/evals/cases/</code> that exercises the new agent.</li>
+        <li>Open a PR. The <strong>architect</strong> and
+          <strong>reviewer</strong> subagents will validate.</li>
+      </ol>
+    </main>
+
+    <aside class="docs-toc" aria-label="On this page">
+      <h6>On this page</h6>
+      <a href="#panel">The panel</a>
+      <a href="#orchestrator">orchestrator</a>
+      <a href="#developer">developer</a>
+      <a href="#qa">qa</a>
+      <a href="#librarian">librarian</a>
+      <a href="#architect">architect</a>
+      <a href="#reviewer">reviewer</a>
+      <a href="#temporary">Temporary specialists</a>
+      <a href="#authoring">Authoring</a>
+    </aside>
+  </div>
+</body>
+</html>

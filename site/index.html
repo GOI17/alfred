@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alfred — Agent operations runtime for coding harnesses</title>
+  <meta name="description" content="Alfred is a local-first, harness-agnostic operations system for designing, testing, evaluating, securing, and porting agents, subagents, and skills across AI coding harnesses." />
+  <link rel="stylesheet" href="/alfred/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
+</head>
+<body>
+  <!-- ==================== NAV ==================== -->
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+        <span class="brand-mark">A</span>
+        <span class="brand-name">Alfred</span>
+        <span class="brand-tag">agent operations runtime</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="/alfred/#problem">Problem</a>
+        <a href="/alfred/#pillars">Pillars</a>
+        <a href="/alfred/#architecture">Architecture</a>
+        <a href="/alfred/#harnesses">Harnesses</a>
+        <a href="/alfred/docs/index.html">Docs</a>
+        <a href="/alfred/memory/">Memory Console</a>
+        <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="/alfred/docs/index.html">Get started &rarr;</a>
+    </div>
+  </header>
+
+  <!-- ==================== HERO ==================== -->
+  <section class="hero">
+    <div class="hero-inner">
+      <span class="eyebrow">v0.4.0 · local-first · harness-agnostic</span>
+      <h1>The operations runtime for <span class="grad">AI coding agents</span>.</h1>
+      <p class="lead">
+        Alfred handles the operational burden so humans focus on decisions.
+        Design, test, evaluate, secure, and port agents, subagents, and skills
+        across every major AI coding harness — from a single, model-readable core.
+      </p>
+      <div class="hero-cta">
+        <a class="btn primary" href="/alfred/docs/index.html">Read the docs &rarr;</a>
+        <a class="btn secondary" href="/alfred/docs/install.html">Install Alfred</a>
+        <a class="btn secondary" href="https://github.com/GOI17/alfred" rel="noopener">View on GitHub</a>
+      </div>
+
+      <div class="terminal" aria-label="Install Alfred">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">~/projects/alfred-workspace — zsh</span>
+        </div>
+<pre><span class="c"># Install Alfred into a new workspace</span>
+<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --profile=coding --name=acme
+
+<span class="c"># Initialize Alfred in your project</span>
+<span class="f">cd</span> ~/code/my-project
+<span class="f">alfred</span> init --profile=coding --name=my-project
+
+<span class="c"># Run the eval suite against the baseline</span>
+<span class="f">alfred</span> evals run --compare-baseline
+
+<span class="c"># Build the harness adapter (opencode, pi, codex, ...)</span>
+<span class="f">alfred</span> adapter build opencode --preview --out .ai/generated/opencode-install
+</pre>
+      </div>
+
+      <div class="uses">
+        <p class="uses-label">Runs locally against your favorite harness</p>
+        <div class="uses-row">
+          <span>opencode</span>
+          <span>Pi</span>
+          <span>Codex</span>
+          <span>Claude</span>
+          <span>VSCode</span>
+          <span>Kiro</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== PROBLEM ==================== -->
+  <section class="block" id="problem">
+    <div class="container">
+      <div class="section-head">
+        <h2>Agents are easy to write. Hard to operate.</h2>
+        <p>
+          The first agent demo is always a triumph. The second week is
+          permission sprawl, drift between harnesses, silent regressions,
+          and a graveyard of half-finished skills. Alfred is the runtime
+          layer that makes the second week boring — in a good way.
+        </p>
+      </div>
+
+      <div class="problem-grid">
+        <article class="problem">
+          <span class="tag">Drift</span>
+          <h3>Same agent, five harnesses, five dialects</h3>
+          <p>
+            Pi, opencode, Codex, Claude, and VSCode each have their own agent
+            spec, their own skill format, and their own opinion about
+            permissions. Porting means rewriting the same logic over and over.
+          </p>
+        </article>
+        <article class="problem">
+          <span class="tag">Token burn</span>
+          <h3>Paying an LLM to do arithmetic</h3>
+          <p>
+            Agents route every task to a provider, even when a local regex,
+            file lookup, or eval can answer the question. Costs balloon and
+            latency goes through the roof for deterministic work.
+          </p>
+        </article>
+        <article class="problem">
+          <span class="tag">Security</span>
+          <h3>Prompt-injected privilege escalation</h3>
+          <p>
+            Agents self-modify, broaden their own permissions, and read
+            protected paths because a tool "happened" to return a friendly
+            suggestion. There is no deny-by-default surface.
+          </p>
+        </article>
+        <article class="problem">
+          <span class="tag">No regression gate</span>
+          <h3>"It used to work" is not a test suite</h3>
+          <p>
+            Prompt tweaks ship on vibes. A single line change in a system
+            prompt can silently break seven evals, but you have no baseline
+            and no gate to catch it.
+          </p>
+        </article>
+        <article class="problem">
+          <span class="tag">Skill chaos</span>
+          <h3>Skills everywhere, triggered by nothing</h3>
+          <p>
+            Skills get bolted on. Nobody knows when they load. Some load
+            eagerly and burn context, some never load because nothing routes
+            to them.
+          </p>
+        </article>
+        <article class="problem">
+          <span class="tag">No memory</span>
+          <h3>Every session starts at zero</h3>
+          <p>
+            Decisions, conventions, and gotchas disappear the moment the
+            session ends. The next agent makes the same mistake you already
+            solved last Tuesday.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== PILLARS ==================== -->
+  <section class="block" id="pillars">
+    <div class="container">
+      <div class="section-head">
+        <h2>Eight pillars, one runtime</h2>
+        <p>
+          Alfred is opinionated about the operational layer and quiet about
+          everything else. Bring your own model, your own harness, your own
+          workflows. We handle the rest.
+        </p>
+      </div>
+
+      <div class="pillars">
+        <article class="pillar">
+          <div class="icon">01</div>
+          <h3>Hexagonal + DDD</h3>
+          <p>
+            A harness-agnostic core with adapters as ports. Core never imports
+            an adapter. Adapters never redefine domain rules.
+          </p>
+        </article>
+        <article class="pillar">
+          <div class="icon">02</div>
+          <h3>Pi-first adapter</h3>
+          <p>
+            Pi is the first-class runtime. The Pi adapter ships as the
+            reference implementation; everything else is a translation spike.
+          </p>
+        </article>
+        <article class="pillar">
+          <div class="icon">03</div>
+          <h3>TDD for agents</h3>
+          <p>
+            Every agent, subagent, skill, and policy change must run an eval
+            suite. Improvements are accepted on numbers, not vibes.
+          </p>
+        </article>
+        <article class="pillar">
+          <div class="icon">04</div>
+          <h3>Granular permissions</h3>
+          <p>
+            Deny by default. No agent may broaden its own permissions.
+            Escalation requires an explicit human trace event.
+          </p>
+        </article>
+        <article class="pillar">
+          <div class="icon">05</div>
+          <h3>Lazy-loaded skills</h3>
+          <p>
+            Skills activate by trigger and project signal, not by file
+            presence. Cold context stays small; hot context stays relevant.
+          </p>
+        </article>
+        <article class="pillar">
+          <div class="icon">06</div>
+          <h3>Specialist lifecycle</h3>
+          <p>
+            Temporary subagents come, do one job, and retire. Promotion to a
+            permanent agent requires an explicit human decision.
+          </p>
+        </article>
+        <article class="pillar">
+          <div class="icon">07</div>
+          <h3>Evals + observability</h3>
+          <p>
+            Every operation emits a trace event. Baselines gate regressions.
+            Replays are reproducible from the trace log alone.
+          </p>
+        </article>
+        <article class="pillar">
+          <div class="icon">08</div>
+          <h3>Local-first + token economy</h3>
+          <p>
+            If deterministic local work can solve it, a provider is never
+            called. Avoided calls are traced too, with the cost they would
+            have incurred.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== ARCHITECTURE ==================== -->
+  <section class="block" id="architecture">
+    <div class="container">
+      <div class="section-head">
+        <h2>One core. Many adapters. Zero leaks.</h2>
+        <p>
+          The <code>packages/core</code> boundary is enforced by the build
+          itself. Adapters depend on core; core does not know adapters exist.
+        </p>
+      </div>
+
+      <div class="split">
+        <div>
+          <h3>Six agents, one coordinator</h3>
+          <p>
+            Alfred ships with one primary agent (the orchestrator) and a
+            panel of subagents. Each has a single responsibility, an explicit
+            mode, and a deterministic scope.
+          </p>
+          <ul>
+            <li><strong>orchestrator</strong> · primary · coordinates the panel, loads the kernel</li>
+            <li><strong>developer</strong> · subagent · coding tasks, follows the architecture kernel</li>
+            <li><strong>qa</strong> · subagent · writes and runs evals, designs regression coverage</li>
+            <li><strong>librarian</strong> · subagent · owns documentation, lazy-loads skills</li>
+            <li><strong>architect</strong> · subagent · DDD boundaries, hexagonal ports</li>
+            <li><strong>reviewer</strong> · subagent · policy enforcement, baseline comparisons</li>
+          </ul>
+        </div>
+
+        <div class="agents">
+          <div class="agent">
+            <h4>orchestrator <span class="badge">primary</span></h4>
+            <p>Coordinates the panel. Loads the kernel. Owns the trace stream.</p>
+          </div>
+          <div class="agent mode-sub">
+            <h4>developer <span class="badge">sub</span></h4>
+            <p>Implements code, skills, and adapters within the kernel.</p>
+          </div>
+          <div class="agent mode-sub">
+            <h4>qa <span class="badge">sub</span></h4>
+            <p>Designs eval cases, runs the runner, owns the baseline.</p>
+          </div>
+          <div class="agent mode-sub">
+            <h4>librarian <span class="badge">sub</span></h4>
+            <p>Curates documentation. Lazy-loads skills by trigger.</p>
+          </div>
+          <div class="agent mode-sub">
+            <h4>architect <span class="badge">sub</span></h4>
+            <p>Owns the domain model. Guards the hexagonal boundary.</p>
+          </div>
+          <div class="agent mode-sub">
+            <h4>reviewer <span class="badge">sub</span></h4>
+            <p>Enforces policy, blocks regressions, signs off releases.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== HARNESSES ==================== -->
+  <section class="block" id="harnesses">
+    <div class="container">
+      <div class="section-head">
+        <h2>Same agent, every harness</h2>
+        <p>
+          Alfred is harness-agnostic. Adapters compile the same
+          <code>.ai/</code> source-of-truth into the dialect each runtime
+          expects. Pi is executable; the rest are translation spikes or
+          compatibility contracts.
+        </p>
+      </div>
+
+      <table class="matrix" aria-label="Harness compatibility matrix">
+        <thead>
+          <tr>
+            <th>Harness</th>
+            <th>Adapter status</th>
+            <th>Source package</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Pi</td>
+            <td><span class="status spike">executable spike</span></td>
+            <td><code>packages/pi-adapter</code></td>
+          </tr>
+          <tr>
+            <td>opencode</td>
+            <td><span class="status spike">executable translation spike</span></td>
+            <td><code>packages/opencode-adapter</code></td>
+          </tr>
+          <tr>
+            <td>Codex</td>
+            <td><span class="status executable">executable</span></td>
+            <td><code>packages/codex-adapter</code></td>
+          </tr>
+          <tr>
+            <td>Claude</td>
+            <td><span class="status contract">compatibility contract</span></td>
+            <td><code>packages/anthropic-adapter</code></td>
+          </tr>
+          <tr>
+            <td>VSCode</td>
+            <td><span class="status contract">compatibility contract</span></td>
+            <td><code>packages/vscode-adapter</code></td>
+          </tr>
+          <tr>
+            <td>ChatGPT / Gemini</td>
+            <td><span class="status contract">compatibility contract</span></td>
+            <td><code>packages/chatgpt-adapter</code> · <code>packages/gemini-adapter</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== CTA ==================== -->
+  <section class="block cta">
+    <div class="container">
+      <h2>Stop rewriting agents. Start operating them.</h2>
+      <p>
+        Install Alfred into a new workspace in under a minute, or read the
+        architecture overview before you commit.
+      </p>
+      <div class="hero-cta">
+        <a class="btn primary" href="/alfred/docs/install.html">Install Alfred</a>
+        <a class="btn secondary" href="/alfred/docs/architecture.html">Read the architecture</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-col">
+        <h5>Alfred</h5>
+        <p style="margin:0;color:var(--fg-3);font-size:14px;max-width:280px">
+          Local-first, harness-agnostic agent operations.
+          Open source under the MIT license.
+        </p>
+      </div>
+      <div class="footer-col">
+        <h5>Apps</h5>
+        <ul>
+          <li><a href="/alfred/memory/">Memory Console</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h5>Docs</h5>
+        <ul>
+          <li><a href="/alfred/docs/index.html">Overview</a></li>
+          <li><a href="/alfred/docs/install.html">Install</a></li>
+          <li><a href="/alfred/docs/architecture.html">Architecture</a></li>
+          <li><a href="/alfred/docs/agents.html">Agents</a></li>
+          <li><a href="/alfred/docs/evals.html">Evals &amp; baselines</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h5>Project</h5>
+        <ul>
+          <li><a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/GOI17/alfred/releases" rel="noopener">Releases</a></li>
+          <li><a href="https://github.com/GOI17/alfred/blob/main/AGENTS.md" rel="noopener">AGENTS.md</a></li>
+          <li><a href="https://github.com/GOI17/alfred/issues" rel="noopener">Issues</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h5>Harnesses</h5>
+        <ul>
+          <li><a href="/alfred/docs/harnesses-pi.html">Pi</a></li>
+          <li><a href="/alfred/docs/harnesses-opencode.html">opencode</a></li>
+          <li><a href="/alfred/docs/harnesses-codex.html">Codex</a></li>
+          <li><a href="/alfred/docs/harnesses-claude.html">Claude</a></li>
+          <li><a href="/alfred/docs/harnesses-vscode.html">VSCode</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Alfred. Operated locally.</span>
+      <span>Theme: Kanagawa / Darcula</span>
+    </div>
+  </footer>
+</body>
+</html>

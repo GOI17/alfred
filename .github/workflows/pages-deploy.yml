@@ -1,0 +1,100 @@
+name: pages-deploy
+
+# Builds and deploys the static Pages site to goi17.github.io/alfred/.
+#
+# Layout served at https://goi17.github.io/alfred/:
+#
+#   /                 -> site/index.html        (landing)
+#   /assets/*         -> site/assets/*          (CSS, favicon)
+#   /docs/*           -> site/docs/*            (documentation)
+#   /memory/          -> site/memory/index.html (memory console landing)
+#   /memory/app/      -> built console-web SPA  (API-key manager)
+#
+# All internal links in the landing / docs are already absolute under
+# /alfred/, so the build is a plain copy: no template, no per-page
+# rendering, no bundler.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "packages/console-web/**"
+      - ".github/workflows/pages-deploy.yml"
+  workflow_dispatch:
+    inputs:
+      alfred_api_base:
+        description: "Alfred Memory Server URL (where the memory console should point)"
+        required: false
+        default: "http://localhost:3000"
+
+# Allow only one concurrent deploy; cancel in-flight runs on a new push.
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build site + console
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # -- 1. console-web (memory API-key manager) -------------------------
+      - name: Build memory console
+        working-directory: packages/console-web
+        env:
+          ALFRED_API_BASE: ${{ github.event.inputs.alfred_api_base || format('https://{0}.github.io/alfred/memory/app', github.repository_owner) }}
+        run: |
+          npm run build
+          mkdir -p ../../site/memory/app
+          cp dist/index.html ../../site/memory/app/index.html
+          touch dist/.nojekyll   # Pages: skip Jekyll so /alfred/ serves raw
+          echo "ALFRED_API_BASE=$ALFRED_API_BASE"
+
+      # -- 2. landing + docs -----------------------------------------------
+      - name: Verify landing HTML
+        run: |
+          set -e
+          test -f site/index.html
+          test -f site/assets/styles.css
+          test -f site/docs/index.html
+          test -f site/memory/index.html
+          test -f site/memory/app/index.html
+          echo "site tree OK"
+          find site -type f -name '*.html' | sort
+
+      - name: Touch .nojekyll at site root
+        run: touch site/.nojekyll
+
+      # -- 3. deploy --------------------------------------------------------
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Pages deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Landing: ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Memory: ${{ steps.deployment.outputs.page_url }}memory/" >> $GITHUB_STEP_SUMMARY
+          echo "- Console: ${{ steps.deployment.outputs.page_url }}memory/app/" >> $GITHUB_STEP_SUMMARY
