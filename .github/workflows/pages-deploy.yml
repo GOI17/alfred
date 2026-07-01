@@ -33,13 +33,14 @@ concurrency:
   group: pages-deploy
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 jobs:
   build:
     name: build site + console
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
