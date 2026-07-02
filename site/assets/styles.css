@@ -627,14 +627,7 @@ footer {
   margin: 0 auto;
   min-height: calc(100vh - 60px);
 }
-@media (max-width: 1080px) {
-  .docs-layout { grid-template-columns: 240px minmax(0, 1fr); }
-  .docs-toc { display: none; }
-}
-@media (max-width: 720px) {
-  .docs-layout { grid-template-columns: 1fr; }
-  .docs-sidebar { display: none; }
-}
+
 
 .docs-sidebar {
   border-right: 1px solid var(--line);
@@ -752,11 +745,179 @@ footer {
 }
 .docs-toc a:hover { color: var(--accent); }
 
-/* small responsive tweaks */
+
+
+/* ============================================================
+   Responsive layer
+   Breakpoints:
+     >= 1100px  - desktop (default)
+     <= 1100px  - tablet landscape  (collapse docs TOC, tighten nav)
+     <= 880px   - tablet portrait   (single-column split, drop brand-tag)
+     <= 720px   - large phone       (collapse docs sidebar, wrap nav)
+     <= 540px   - phone             (hide nav-links, minimal nav)
+     <= 380px   - small phone       (tighter padding, smaller type)
+   ============================================================ */
+
+/* Prevent horizontal scroll from the matrix or terminal */
+html, body { overflow-x: hidden; }
+
+/* Make images, code blocks, and pre elements scale down */
+img, svg, video { max-width: 100%; height: auto; }
+
+/* Long words in headings / paragraphs shouldn't blow out the layout */
+h1, h2, h3, h4, h5, h6, p, li, td, th {
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+}
+
+/* Code that doesn't break would overflow on narrow screens */
+.docs-main code, .terminal pre, .docs-main pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* The status matrix: turn it into a card list on mobile so columns
+   don't squash. We use a data-label approach: each <th> is duplicated
+   in <td> via CSS, but we don't have that markup. Use a simpler
+   scroller: the table becomes a horizontally scrollable block on
+   mobile. */
+.matrix { display: table; }
+.matrix-wrapper {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ----------------- <= 1100px: tablet landscape ------------------- */
+@media (max-width: 1100px) {
+  .docs-layout { grid-template-columns: 240px minmax(0, 1fr); }
+  .docs-toc    { display: none; }
+  .nav-inner   { gap: 18px; }
+  .nav-links   { gap: 16px; font-size: 13px; }
+  .footer-inner { grid-template-columns: 1.4fr repeat(2, 1fr); }
+}
+
+/* ----------------- <= 880px: tablet portrait --------------------- */
+@media (max-width: 880px) {
+  .split        { grid-template-columns: 1fr; }
+  .brand-tag    { display: none; }
+  .nav-links    { gap: 14px; font-size: 13px; }
+  .nav-cta      { padding: 7px 10px; font-size: 12px; }
+  .hero h1      { font-size: clamp(30px, 7vw, 48px); }
+  .hero p.lead  { font-size: 16px; }
+  .section-head h2 { font-size: clamp(24px, 4vw, 32px); }
+  .docs-main    { padding: 28px 24px 72px; }
+  .docs-main h1 { font-size: 28px; }
+  .docs-main h2 { font-size: 20px; }
+  .terminal pre { font-size: 12.5px; padding: 16px 18px; }
+  .agents       { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+}
+
+/* ----------------- <= 720px: large phone ------------------------- */
+@media (max-width: 720px) {
+  .nav-inner {
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    row-gap: 10px;
+  }
+  .brand       { flex: 1 1 auto; }
+  .nav-cta     { order: 2; }
+  .nav-links {
+    order: 3;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    margin-left: 0;
+    padding-top: 4px;
+    border-top: 1px solid var(--line);
+  }
+  .nav-links a { font-size: 13px; }
+
+  .docs-layout { grid-template-columns: 1fr; }
+  .docs-sidebar {
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    padding: 16px 14px;
+  }
+  .docs-sidebar h6:first-child { margin-top: 0; }
+
+  .hero        { padding: 56px 18px 40px; }
+  section.block { padding: 56px 18px; }
+  .container   { max-width: 100%; }
+  .footer-inner {
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  /* Matrix: on mobile let it scroll horizontally rather than squashing */
+  .matrix-wrapper { margin: 0 -18px; padding: 0 18px; }
+  .matrix { min-width: 480px; }
+
+  /* Hero CTA buttons: full-width stack */
+  .hero-cta { width: 100%; }
+  .hero-cta .btn { flex: 1 1 100%; justify-content: center; }
+}
+
+/* ----------------- <= 540px: phone ------------------------------- */
 @media (max-width: 540px) {
-  .nav-links { display: none; }
-  .brand-tag { display: none; }
-  .hero { padding: 64px 16px 48px; }
-  section.block { padding: 56px 16px; }
-  .docs-main { padding: 24px 18px 64px; }
+  /* Hide secondary nav links; brand + cta only.
+     Memory Console + GitHub are reachable from the footer. */
+  .nav-links   { display: none; }
+  .brand-tag   { display: none; }
+  .nav-cta     { margin-left: auto; }
+
+  .nav-inner   { padding: 12px 14px; }
+
+  .hero        { padding: 48px 16px 36px; }
+  .hero h1     { font-size: clamp(28px, 9vw, 36px); }
+  .hero p.lead { font-size: 15px; }
+  section.block { padding: 48px 16px; }
+  .section-head { margin-bottom: 32px; }
+
+  .terminal-bar { padding: 8px 12px; }
+  .terminal-bar .title { font-size: 11px; }
+  .terminal pre { font-size: 12px; padding: 14px 14px; line-height: 1.6; }
+
+  .pillar,
+  .problem     { padding: 18px; }
+  .pillar h3,
+  .problem h3  { font-size: 16px; }
+
+  .footer-inner { grid-template-columns: 1fr; }
+  .docs-main    { padding: 20px 16px 56px; }
+  .docs-main h1 { font-size: 24px; }
+  .docs-main h2 { font-size: 18px; }
+
+  .doc-callout  { padding: 12px 14px; font-size: 13.5px; }
+
+  /* Eyebrow tighter */
+  .eyebrow     { font-size: 11px; padding: 3px 8px; }
+
+  /* CTA section: tighter h2 */
+  .cta h2      { font-size: 22px; }
+}
+
+/* ----------------- <= 380px: small phone ------------------------- */
+@media (max-width: 380px) {
+  .brand-mark   { width: 24px; height: 24px; font-size: 12px; }
+  .brand-name   { font-size: 15px; }
+  .nav-cta      { padding: 6px 10px; font-size: 12px; }
+  .hero h1      { font-size: 26px; }
+  .terminal pre { font-size: 11.5px; }
+  .pillar,
+  .problem      { padding: 16px; }
+}
+
+/* ----------------- >= 1100px: re-show the docs TOC -------------- */
+@media (min-width: 1101px) {
+  .docs-layout { grid-template-columns: 260px minmax(0, 1fr) 240px; }
+  .docs-toc    { display: block; }
 }
