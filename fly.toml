@@ -20,7 +20,7 @@
 # this file: bump `memory_mb`, change `min_machines_running` to 1, and add a
 # `[[vm]] size = "shared-cpu-1x"` line.
 
-app = "alfred-memory"   # CHANGE THIS to your app name
+app = "alfred-labs-memory"
 primary_region = "gru"  # São Paulo. Alternatives: eze (Buenos Aires), iad (Virginia)
 
 [build]
@@ -43,7 +43,7 @@ primary_region = "gru"  # São Paulo. Alternatives: eze (Buenos Aires), iad (Vir
   # The data directory needs to be a Fly volume for SQLite to survive restarts.
   # See [mounts] below. If you want to skip the volume (you'll lose data on
   # every restart), comment out the [mounts] block.
-  ALFRED_PUBLIC_URL = "https://alfred-memory.fly.dev"  # CHANGE if you have a custom domain
+  ALFRED_PUBLIC_URL = "https://alfred-labs-memory.fly.dev"  # CHANGE if you have a custom domain
 
 # -----------------------------------------------------------------------------
 # Persistent volume for the SQLite registry. Free tier includes 1GB.
