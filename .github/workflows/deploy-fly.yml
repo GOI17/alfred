@@ -35,16 +35,22 @@ jobs:
   test:
     name: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      - name: Install
+          node-version: "24"
+      - name: Validate Node syntax
+        # Alfred Memory v0.4.1.1 has zero external npm dependencies. There is
+        # no pnpm-lock.yaml, so we skip pnpm install and instead run a syntax
+        # check on every script + src file. If a future version adds external
+        # deps, restore the pnpm install block (see git history).
         run: |
-          corepack enable
-          corepack prepare pnpm@10.0.0 --activate
-          pnpm install --frozen-lockfile
+          set -e
+          for f in $(find packages scripts -name '*.mjs' -o -name '*.js' 2>/dev/null); do
+            node --check "$f" || { echo "syntax error in $f"; exit 1; }
+          done
       - name: Validate policies
         run: node scripts/validate-policies.mjs
       - name: Validate release 0.4.1
@@ -57,6 +63,7 @@ jobs:
     needs: test
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.app != '')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master

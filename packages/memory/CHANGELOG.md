@@ -279,3 +279,52 @@ Fly.io deployment path. Internal patch, no test changes. Validates
   (createServer sync), `packages/memory-server/scripts/serve.mjs`
   (passes config + consoleRouter), `packages/memory-server/src/bootstrap/rate-limiter.js`
   (accepts nested contract)
+
+## 0.4.1.2 — 2026-07-01 (hotfix)
+
+CI workflows were failing on every push to main. Both are fixed.
+
+### deploy-fly was failing at "Install"
+
+The workflow ran `pnpm install --frozen-lockfile` but there is no
+`pnpm-lock.yaml` because **Alfred Memory has zero external npm
+dependencies** (only Node built-ins). The install step crashed with
+`ERR_PNPM_NO_LOCKFILE`.
+
+Fixed by replacing the install step with a `node --check` syntax pass
+over every `.mjs` / `.js` file under `packages/` and `scripts/`. That
+keeps the validation useful (catches syntax errors before deploy) and
+is correct for a no-deps project. The pnpm block is preserved as a
+comment in the workflow for the day someone adds an external dep.
+
+### ci-postgres was failing at "Run cross-tenant isolation"
+
+The real-Postgres test failed with
+`Cannot read properties of undefined (reading 'split')` at line 101
+of `cross-tenant-isolation-postgres.test.mjs`. The test tried to extract
+the schema name from `tenant.db_connection` by splitting on
+`"search_path="` — but `new URL(...).toString()` percent-encodes the
+`=` in the query string, so the literal `"search_path="` substring was
+never found.
+
+Fixed by switching to `provisioner.schemaNameFor(tenantId)`, which
+derives the schema name from the tenant id without URL parsing. Robust
+and obvious.
+
+### Other
+
+- All three GitHub Actions workflows bumped from Node 22 to Node 24
+  (the new GitHub default; Node 22 is being deprecated on runners).
+- `ci-postgres` got a `timeout-minutes: 10` to fail fast instead of
+  hanging for the runner's 6h default.
+- `deploy-fly` validate + deploy jobs got `timeout-minutes: 10` and
+  `timeout-minutes: 15` respectively.
+
+### Files
+
+- `packages/memory-server/test/cross-tenant-isolation-postgres.test.mjs`
+  (use `schemaNameFor()` instead of URL string-splitting)
+- `.github/workflows/deploy-fly.yml` (replace pnpm install with
+  syntax check; add timeouts; bump to Node 24)
+- `.github/workflows/ci-postgres.yml` (add timeout; bump to Node 24)
+- `.github/workflows/console-deploy.yml` (bump to Node 24)

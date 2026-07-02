@@ -96,9 +96,13 @@ test("cross-tenant isolation: tenant A's rows are invisible from tenant B's sche
 
   assert.equal(result.rows.length, 0, "Tenant A's memory leaked into Tenant B's schema");
 
-  // Cleanup: drop both schemas.
+  // Cleanup: drop both schemas. Use the provisioner's schemaNameFor() to derive
+  // the schema name from each tenant id, not a string-parse of the connection
+  // URL (which is percent-encoded by URL.toString()).
   const cleanup = await getPgClient();
-  await cleanup.query(`DROP SCHEMA IF EXISTS "${a.tenant.db_connection.split("search_path=")[1].split(",")[0]}" CASCADE`);
-  await cleanup.query(`DROP SCHEMA IF EXISTS "${b.tenant.db_connection.split("search_path=")[1].split(",")[0]}" CASCADE`);
+  const schemaA = provisioner.schemaNameFor(a.tenant.id);
+  const schemaB = provisioner.schemaNameFor(b.tenant.id);
+  await cleanup.query(`DROP SCHEMA IF EXISTS "${schemaA}" CASCADE`);
+  await cleanup.query(`DROP SCHEMA IF EXISTS "${schemaB}" CASCADE`);
   await cleanup.end();
 });
