@@ -547,6 +547,13 @@ section.block {
 .status.contract::before { background: var(--yellow); }
 .status.spike::before { background: var(--accent); }
 
+/* Harness-matrix status states (Kanagawa palette) */
+.status.no-compatible::before { background: var(--red); }
+.status.planeado::before      { background: var(--yellow); }
+.status.progreso::before      { background: var(--accent-4); }
+.status.probando::before      { background: var(--accent); box-shadow: 0 0 8px rgba(126,156,216,.4); }
+.status.compatible::before    { background: var(--green); box-shadow: 0 0 8px rgba(152,187,108,.5); }
+
 /* ---------- CTA / Quote ---------- */
 .cta {
   text-align: center;
