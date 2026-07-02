@@ -131,3 +131,5 @@ site/
     └── app/
         └── index.html      ← built console-web SPA
 ```
+
+<!-- refreshed: 2026-07-02T01:20:29Z -->
