@@ -2,7 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 
 const { createConsoleRouter } = await import("../src/console-router.js");
@@ -62,12 +63,15 @@ async function invoke(handler, req) {
 
 test("GET /console returns 200 with text/html", async () => {
   const { tenantService, userService } = makeServices();
-  // Resolve the console-web dist from the workspace root.
-  const { existsSync } = await import("node:fs");
-  const { resolve } = await import("node:path");
-  const consoleDist = resolve("/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred", "packages/console-web/dist");
-  assert.ok(existsSync(consoleDist + "/index.html"), "console-web must be built: run \"npm run build\" in packages/console-web");
-  const router = createConsoleRouter({ userService, tenantService, config: {}, consoleDirOverride: consoleDist });
+  // Use a hermetic fake dist (no dependency on a built packages/console-web/dist).
+  // mkdtempSync is imported at the top of the file from node:fs; tmpdir from node:os; join from node:path.
+  // The router expects the dir to end with "dist" (it appends "index.html" only then).
+  // We rename the tmp dir accordingly.
+  const tmp = mkdtempSync(join(tmpdir(), "alfred-console-"));
+  const fakeDist = tmp + "/dist";
+  mkdirSync(fakeDist);
+  writeFileSync(join(fakeDist, "index.html"), "<!doctype html><html><head><title>test</title></head><body>" + "<p>alfred memory — fake html for tests</p>".repeat(20) + "</body></html>");
+  const router = createConsoleRouter({ userService, tenantService, config: {}, consoleDirOverride: fakeDist });
   const res = await invoke(router, makeReq({ url: "/console" }));
   assert.equal(res.statusCode, 200);
   assert.match(res.headers["content-type"] || "", /text\/html/);
@@ -173,7 +177,7 @@ test("OPTIONS preflight sets CORS headers", async () => {
 });
 
 test("console index.html exists in source tree", () => {
-  const path = "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred/packages/console-web/src/index.html";
+  const path = join(makeProjectRoot(), "packages/console-web/src/index.html");
   assert.ok(existsSync(path), "index.html must exist at " + path);
   const text = readFileSync(path, "utf8");
   assert.match(text, /<title>Alfred Memory/);
@@ -184,7 +188,7 @@ test("console index.html exists in source tree", () => {
 });
 
 test("console index.html contains explanation for non-technical users", () => {
-  const path = "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred/packages/console-web/src/index.html";
+  const path = join(makeProjectRoot(), "packages/console-web/src/index.html");
   const text = readFileSync(path, "utf8");
   // Non-technical copy: "Welcome", "Paste an API key", "connected services"
   assert.match(text, /Welcome/);
@@ -605,7 +609,7 @@ test("POST /console/api/bootstrap without registry returns 503 saas_not_configur
 });
 
 test("console-web index.html contains the signup form and the bootstrap endpoint", () => {
-  const htmlPath = "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred/packages/console-web/src/index.html";
+  const htmlPath = join(makeProjectRoot(), "packages/console-web/src/index.html");
   const htmlText = readFileSync(htmlPath, "utf8");
   assert.match(htmlText, /signup\(\)/);
   assert.match(htmlText, /\/console\/api\/bootstrap/);
@@ -745,7 +749,7 @@ test("createBootstrap skips captcha when verifier is null (backward compat)", as
 });
 
 test("console-web index.html includes the Turnstile widget and site key wiring", () => {
-  const htmlPath = "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred/packages/console-web/src/index.html";
+  const htmlPath = join(makeProjectRoot(), "packages/console-web/src/index.html");
   const htmlText = readFileSync(htmlPath, "utf8");
   assert.match(htmlText, /renderTurnstile/);
   assert.match(htmlText, /ALFRED_TURNSTILE_SITE_KEY/);
@@ -916,7 +920,7 @@ test("createBootstrap rejects invalid email with validation_error", async () => 
 });
 
 test("console-web index.html includes the email field in the signup form", () => {
-  const htmlPath = "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred/packages/console-web/src/index.html";
+  const htmlPath = join(makeProjectRoot(), "packages/console-web/src/index.html");
   const htmlText = readFileSync(htmlPath, "utf8");
   assert.match(htmlText, /signupEmail/);
   assert.match(htmlText, /email.*optional.*key recovery/);
@@ -932,7 +936,7 @@ test("console-web index.html includes the email field in the signup form", () =>
 // test file exists, references the env var, and uses pg.
 
 test("ci-postgres.yml exists and runs the isolation test", () => {
-  const wf = "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred/.github/workflows/ci-postgres.yml";
+  const wf = join(makeProjectRoot(), ".github/workflows/ci-postgres.yml");
   const t = readFileSync(wf, "utf8");
   assert.match(t, /cross-tenant-isolation-postgres\.test\.mjs/);
   assert.match(t, /postgres:16-alpine/);
@@ -940,7 +944,7 @@ test("ci-postgres.yml exists and runs the isolation test", () => {
 });
 
 test("cross-tenant-isolation-postgres test file exists and is opt-in", () => {
-  const t = "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred/packages/memory-server/test/cross-tenant-isolation-postgres.test.mjs";
+  const t = join(makeProjectRoot(), "packages/memory-server/test/cross-tenant-isolation-postgres.test.mjs");
   const src = readFileSync(t, "utf8");
   assert.match(src, /ALFRED_TEST_POSTGRES_URL/);
   assert.match(src, /skip: SHOULD_RUN/);
@@ -1114,7 +1118,7 @@ test("createRecovery.consumeRecovery marks expired tokens", async () => {
 });
 
 test("console-web index.html includes the forgot-my-key panel", () => {
-  const htmlPath = "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred/packages/console-web/src/index.html";
+  const htmlPath = join(makeProjectRoot(), "packages/console-web/src/index.html");
   const htmlText = readFileSync(htmlPath, "utf8");
   assert.match(htmlText, /requestRecovery/);
   assert.match(htmlText, /recoverEmail/);
@@ -1258,9 +1262,9 @@ const { createOpenapiRouter } = await import("../src/openapi-router.js");
 const { createActionRateLimiter } = await import("../src/bootstrap/action-rate-limiter.js");
 const { createSqliteRegistryStore } = await import("../src/registry/sqlite-registry-store.js");
 function makeProjectRoot() {
-  // Project root is the repo root; the router will read .ai/agents/registry.json
-  // and .ai/skills/registry.json from there. For tests we point at the real root.
-  return resolve("/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred");
+  // Project root = parent of packages/, i.e. two levels up from the test file.
+  // Computed from import.meta.url so it works on every checkout location and OS.
+  return resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 }
 
 async function makeOpenapiRegistry() {
