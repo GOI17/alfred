@@ -1,0 +1,55 @@
+{
+  "id": "release-0.4.1.3",
+  "version": "0.4.1.3",
+  "candidate": "alfred-ci-test-portability-0.4.1.3",
+  "owner": "qa",
+  "status": "complete",
+  "scope": "ci-test-portability",
+  "previous_release": "release-0.4.1.2",
+  "includes": [
+    "v0.4.1.3-portable-project-root",
+    "v0.4.1.3-hermetic-fake-dist"
+  ],
+  "required_validators": [
+    "validate:policies",
+    "validate:release-0.4.1"
+  ],
+  "totals": {
+    "tests": 244,
+    "gates": 17,
+    "policy_checks": 12,
+    "package_test_suites": 6,
+    "new_tests_added": 0,
+    "new_gates_added": 0,
+    "provider_calls": 0
+  },
+  "bug_fixed": {
+    "id": "ci-macos-path-hardcode",
+    "description": "packages/memory-server/test/console.test.mjs had 8 hardcoded /Users/josegilbertoolivasibarra/... paths. CI on Linux failed existsSync() for /console (needs dist/index.html) and 7 other tests that read console-web/src/index.html.",
+    "discovered_in": "v0.4.1.2 hotfix push (CI run 28557676069)",
+    "fix_commits": ["v0.4.1.3"]
+  },
+  "files_changed": [
+    "packages/memory-server/test/console.test.mjs (portable paths + hermetic fake dist)",
+    "packages/memory/CHANGELOG.md (0.4.1.3 entry)"
+  ],
+  "new_files": [
+    ".ai/releases/release-0.4.1.3.md",
+    ".ai/releases/release-0.4.1.3.json",
+    ".ai/observability/generated/release-0.4.1.3.json"
+  ],
+  "policy_overrides": [],
+  "provider_calls_allowed": 0,
+  "baseline_update_requires_human_approval": true,
+  "harness_config_writes_require_human_approval": true,
+  "commit_policy": {
+    "validated_commit_source": "pending-at-commit-time",
+    "commit_source_recorded_in_trace": true,
+    "static_baseline_pins_commit": false
+  },
+  "artifact_manifest": {
+    "release_notes": ".ai/releases/release-0.4.1.3.md",
+    "regression_gates": ".ai/evals/regression-gates.json",
+    "trace": ".ai/observability/generated/release-0.4.1.3.json"
+  }
+}

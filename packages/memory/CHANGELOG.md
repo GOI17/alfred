@@ -328,3 +328,34 @@ and obvious.
   syntax check; add timeouts; bump to Node 24)
 - `.github/workflows/ci-postgres.yml` (add timeout; bump to Node 24)
 - `.github/workflows/console-deploy.yml` (bump to Node 24)
+
+## 0.4.1.3 — 2026-07-01 (CI fixup follow-up)
+
+The v0.4.1.2 hotfix did not actually land in CI. The `memory-server-console-handlers`
+gate still failed on the first post-hotfix push because the test file
+`packages/memory-server/test/console.test.mjs` had hardcoded macOS paths like
+`/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred/...`
+that don't exist in the Linux GitHub Actions runner.
+
+This release fixes that, and a related hermeticity issue, by:
+
+1. **Replacing the hardcoded macOS paths with `import.meta.url`-derived paths.**
+   `makeProjectRoot()` now returns
+   `resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')`,
+   which works on every checkout location and every OS. 8 call sites in
+   `console.test.mjs` updated.
+
+2. **Replacing the dist existence check with a hermetic fake dist.**
+   The "GET /console returns 200" test previously called
+   `existsSync(/Users/.../packages/console-web/dist/index.html)`,
+   which required a built console-web even for an unrelated test.
+   Now the test creates a temp dir with a fake `index.html` and passes
+   it via `consoleDirOverride`. No external build dependency.
+
+3. **No source or behavior changes.** Pure test-portability fix.
+   `node --test packages/memory-server/test/console.test.mjs` goes
+   from 97/97 passing locally to 97/97 passing in CI.
+
+### Files
+
+- `packages/memory-server/test/console.test.mjs` (portable paths + hermetic dist)
