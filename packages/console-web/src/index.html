@@ -33,17 +33,6 @@
     }
     .brand { font-weight: 600; letter-spacing: 0.4px; }
     .brand .dot { color: var(--accent); }
-    .api { display: flex; align-items: center; gap: 8px; }
-    .api input {
-      background: #0d0f13; color: var(--text);
-      border: 1px solid var(--border); border-radius: 6px;
-      padding: 6px 10px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
-      width: 280px;
-    }
-    .api button, .btn {
-      background: var(--accent); color: #0b1015; border: 0; cursor: pointer;
-      padding: 6px 12px; border-radius: 6px; font: 13px/1.5 inherit; font-weight: 500;
-    }
     .btn.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
     .btn.danger { background: var(--bad); color: #1b0a0a; }
     .container { max-width: 1080px; margin: 0 auto; padding: 24px; }
@@ -91,11 +80,6 @@
 
 <div class="topbar">
   <div class="brand">Alfred <span class="dot">·</span> Memory Console</div>
-  <div class="api">
-    <input id="apiKey" type="password" placeholder="alk_..." />
-    <button onclick="setKey()">Unlock</button>
-    <span id="apiStatus" class="small"></span>
-  </div>
 </div>
 
 <div class="container">
