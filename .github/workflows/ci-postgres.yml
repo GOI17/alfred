@@ -18,6 +18,7 @@ jobs:
   cross-tenant-isolation:
     name: cross-tenant isolation (real Postgres)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16-alpine
@@ -38,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
       - name: Install pg
         run: cd packages/memory-server && npm install pg@^8.13.0
       - name: Run cross-tenant isolation (real Postgres)

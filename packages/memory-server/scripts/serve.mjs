@@ -109,7 +109,7 @@ export async function run(argv = [], env = process.env) {
     registry
   });
 
-  const server = createServer({ app });
+  const server = createServer({ app, config, consoleRouter, registry });
   await new Promise((resolve, reject) => {
     if (config.mode === "self-hosted") {
       try {

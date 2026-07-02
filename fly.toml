@@ -1,0 +1,98 @@
+# fly.toml — Alfred Memory v0.4.1 production configuration.
+# Docs: https://fly.io/docs/reference/configuration/
+#
+# To deploy for the first time:
+#   1. Install flyctl: https://fly.io/docs/hands-on/install-flyctl/
+#   2. Sign up:        flyctl auth signup
+#   3. Create the app: flyctl launch --no-deploy
+#      (it will pick up this file as-is; you only need to confirm app name + region)
+#   4. Create Postgres (free tier, 3GB):
+#        flyctl postgres create --name alfred-db --region gru
+#        flyctl postgres attach alfred-db
+#   5. Set the SaaS database (separate DB, created by the bootstrap flow):
+#        flyctl postgres connect alfred-db -- -c "CREATE DATABASE alfred_saas;"
+#   6. Set secrets (see .ai/docs/fly-deploy.md for the full list):
+#        flyctl secrets set ALFRED_MEMORY_HOSTING=self-hosted ...
+#   7. Deploy:
+#        flyctl deploy
+#
+# Free tier defaults are tuned for 0-100 users. When you hit the limits, edit
+# this file: bump `memory_mb`, change `min_machines_running` to 1, and add a
+# `[[vm]] size = "shared-cpu-1x"` line.
+
+app = "alfred-memory"   # CHANGE THIS to your app name
+primary_region = "gru"  # São Paulo. Alternatives: eze (Buenos Aires), iad (Virginia)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  # Run migrations before swapping to the new release. The script is
+  # idempotent (CREATE IF NOT EXISTS), so running it on every deploy is safe.
+  release_command = "node packages/memory-server/scripts/migrate-on-boot.mjs"
+  # Don't wait for health checks to pass before running release_command.
+  wait_timeout = "60s"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  ALFRED_MEMORY_PORT = "8080"
+  ALFRED_MEMORY_BIND = "0.0.0.0"
+  # The registry SQLite DB lives in /app/data on the persistent volume.
+  ALFRED_MEMORY_REGISTRY = "/app/data/registry.sqlite"
+  # The data directory needs to be a Fly volume for SQLite to survive restarts.
+  # See [mounts] below. If you want to skip the volume (you'll lose data on
+  # every restart), comment out the [mounts] block.
+  ALFRED_PUBLIC_URL = "https://alfred-memory.fly.dev"  # CHANGE if you have a custom domain
+
+# -----------------------------------------------------------------------------
+# Persistent volume for the SQLite registry. Free tier includes 1GB.
+# Required for SQLite to survive VM restarts. The volume is created on first
+# deploy with `flyctl volumes create alfred_data --size 1`.
+# -----------------------------------------------------------------------------
+[mounts]
+  source = "alfred_data"
+  destination = "/app/data"
+
+# -----------------------------------------------------------------------------
+# HTTP service. Fly's edge terminates TLS; we serve plain HTTP on PORT.
+# -----------------------------------------------------------------------------
+[[services]]
+  protocol = "tcp"
+  internal_port = 8080
+  auto_stop_machines = "stop"      # free tier: stop when idle
+  auto_start_machines = true        # free tier: wake on first request
+  min_machines_running = 0          # free tier: allow full stop
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true              # redirect to HTTPS
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]      # Fly edge handles TLS; we speak plain HTTP
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+    protocol = "http"
+    tls = false
+    restart_limit = 3
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 250
+    soft_limit = 200
+
+# -----------------------------------------------------------------------------
+# VM size. Free tier = shared-cpu-1x with 256MB. Bump when you grow.
+# -----------------------------------------------------------------------------
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
+  # size = "shared-cpu-1x"  # uncomment when you outgrow the free tier

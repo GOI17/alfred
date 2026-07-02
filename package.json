@@ -1,7 +1,7 @@
 {
   "name": "alfred",
   "private": true,
-  "version": "0.4.1",
+  "version": "0.4.1.1",
   "description": "Alfred handles the operational burden so humans focus on decisions.",
   "packageManager": "pnpm@10.0.0",
   "scripts": {

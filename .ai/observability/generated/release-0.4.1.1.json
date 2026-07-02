@@ -1,0 +1,26 @@
+{
+  "event": "release_candidate_validated",
+  "release": "0.4.1.1",
+  "validated_commit_source": "pending",
+  "timestamp_utc": "2026-07-01",
+  "gates_passed": 17,
+  "gates_total": 17,
+  "tests_total": 244,
+  "policy_checks": 12,
+  "provider_calls": 0,
+  "phase": "v0.4.1.1-fly-deploy",
+  "scope": "Docker + Fly.io deployment path. Internal patch, no test changes. 248MB single-stage image on Node 22.",
+  "key_artifacts": [
+    "Dockerfile (single-stage, Node 22, non-root, 248MB)",
+    "fly.toml (free-tier-tuned, persistent volume, HTTP health checks, force HTTPS)",
+    "packages/memory-server/scripts/migrate-on-boot.mjs (idempotent schema bootstrap)",
+    ".dockerignore (small build context, allows the two registry files)",
+    ".github/workflows/deploy-fly.yml (CI: validate + deploy + smoke test)",
+    ".ai/docs/fly-deploy.md (12-step operator guide)",
+    "packages/memory-server/src/server.js (createServer made sync)",
+    "packages/memory-server/scripts/serve.mjs (passes config + consoleRouter)",
+    "packages/memory-server/src/bootstrap/rate-limiter.js (accepts nested contract)",
+    "packages/memory/CHANGELOG.md (0.4.1.1 entry)"
+  ],
+  "result": "pass"
+}

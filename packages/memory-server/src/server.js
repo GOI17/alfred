@@ -280,21 +280,11 @@ function serverHandlerWithConsole(config, app, consoleRouter) {
   return serverHandler(config, consoleHandler(config, consoleRouter, app));
 }
 
-export async function createServer({ app, config, consoleRouter, registry = null } = {}) {
-  // If a registry is supplied but no consoleRouter, wire a default one
-  // so /console/api/bootstrap works out of the box for self-hosted operators
-  // who haven't set up a custom console router.
-  let effectiveRouter = consoleRouter;
-  if (registry && !effectiveRouter) {
-    const { createConsoleRouter } = await import("./console-router.js");
-    effectiveRouter = createConsoleRouter({
-      userService: app?.userService,
-      tenantService: app?.tenantService,
-      config,
-      registry
-    });
-  }
-  return serverHandlerWithConsole(config, app, effectiveRouter);
+export function createServer({ app, config, consoleRouter, registry = null } = {}) {
+  // createServer is intentionally sync. Console router wiring is the
+  // caller's responsibility (pass consoleRouter explicitly) because the
+  // console-router module is async-imported at the top of serve.mjs anyway.
+  return serverHandlerWithConsole(config, app, consoleRouter);
 }
 
 export function startServer({ app, config, consoleRouter, registry = null } = {}) {
