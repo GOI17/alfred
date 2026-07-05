@@ -44,6 +44,11 @@
 - MvpReleasePlan
 - MvpReleaseGate
 - InstallManagementInstructions
+- RuntimeProfile
+- MachineCapability
+- ProfileActivationPlan
+- ProfileSecretScan
+- InstallComponentManifest
 
 ## Value Objects
 
@@ -88,6 +93,11 @@
 - InstallTrace
 - ArtifactType
 - InstallValidationResult
+- RuntimeProfileId
+- MachineCapabilityReport
+- ProfileOverlay
+- ComponentId
+- SuiteEdition
 
 ## Use Cases
 
@@ -149,6 +159,12 @@
 - EvaluateInstallOperation
 - EmitInstallTrace
 - ValidateInstallPath
+- InitializeProfileRepository
+- DetectMachineCapabilities
+- MaterializeRuntimeProfile
+- ActivateRuntimeProfile
+- ScanProfileSecrets
+- BuildSuiteInstallPlan
 
 ## Ports
 
@@ -177,6 +193,10 @@
 - RuntimeHardeningStore
 - MvpReleasePlanStore
 - InstallManagementStore
+- RuntimeProfileStore
+- MachineCapabilityProbe
+- ProfileActivationSink
+- InstallComponentStore
 
 ## Phase 7: Harness Portability
 
@@ -447,3 +467,53 @@ Use cases:
 Ports:
 
 - `InstallManagementStore`: reads install management instructions and generated install trace events.
+
+## Runtime Profiles: GOI17/agents Integration
+
+Entities:
+
+- `RuntimeProfile`: named execution context for the same agent/harness, such as `work`, `personal`, or a client-specific profile.
+- `MachineCapability`: deterministic local observation of PATH entries, executable availability, providers, models, and plugins.
+- `ProfileActivationPlan`: preview of how Alfred will materialize `profiles/<profile>/<agent>` plus `profiles.local/<profile>/<agent>` into a live harness config.
+- `ProfileSecretScan`: policy result that blocks tracked profile defaults from carrying literal secrets.
+
+Value objects:
+
+- `ProfileOverlay`: machine-private overrides stored under ignored `profiles.local/`.
+- `MachineCapabilityReport`: local-only report of missing executables, providers, models, and plugins.
+- `RuntimeProfileId`: stable profile identifier validated as a simple directory name.
+
+Use cases:
+
+- `InitializeProfileRepository`: create the canonical `profiles/` and ignored `profiles.local/` layout.
+- `DetectMachineCapabilities`: inspect local PATH/provider/model/plugin availability before activation.
+- `MaterializeRuntimeProfile`: merge tracked defaults with local overlays, preserving local overrides.
+- `ActivateRuntimeProfile`: symlink or otherwise activate `~/.config/<agent>` only after preview/approval gates.
+- `ScanProfileSecrets`: block likely literal secrets in tracked JSON/JSONC profile files while allowing placeholders that resolve locally.
+
+Ports:
+
+- `RuntimeProfileStore`: reads/writes profile defaults and local overlays.
+- `MachineCapabilityProbe`: observes machine-local capabilities without provider calls.
+- `ProfileActivationSink`: performs live harness config activation after approval.
+
+Boundary rule: runtime profiles are harness-agnostic at the planning layer. Harness-specific file shapes remain adapter-owned; `packages/profile-manager` may activate profile directories, but it must not redefine opencode/Codex agent semantics.
+
+## Suite Installer Direction
+
+Entities:
+
+- `InstallComponentManifest`: source-of-truth component catalog for installing Alfred by edition or by component.
+
+Value objects:
+
+- `SuiteEdition`: install target such as `coding`, `memory`, or `full`.
+- `ComponentId`: stable identifier for an installable component such as `profile-manager` or `memory-server`.
+
+Use cases:
+
+- `BuildSuiteInstallPlan`: resolve requested edition/components into ordered packages, required configuration, protected writes, and validation commands.
+
+Ports:
+
+- `InstallComponentStore`: loads `.ai/install/components.json`.

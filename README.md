@@ -20,6 +20,7 @@ You are an AI agent working in an Alfred workspace. Start here to find your next
 |------|-------------|
 | Create new agent | `.ai/instructions/agent-creation.md` |
 | Install / update artifacts | `.ai/instructions/install-management.md` |
+| Manage runtime profiles | `packages/profile-manager/README.md` |
 | Run tests or evals | `packages/evals/README.md` |
 | Understand architecture | `docs/architecture/000-project-charter.md` |
 | Add a skill | `.ai/instructions/skill-creation.md` |
@@ -38,6 +39,7 @@ You are an AI agent working in an Alfred workspace. Start here to find your next
 packages/
 ├── core/        # Domain, use cases, ports, policies (harness-agnostic)
 ├── memory/      # Vendor-agnostic persistent memory MVP
+├── profile-manager/ # Runtime profiles for PATH/provider/model/plugin portability
 ├── pi-adapter/  # Pi.dev runtime integration
 ├── opencode-adapter/ # opencode runtime integration
 ├── codex-adapter/    # Codex custom agents + repo skills preview
@@ -45,6 +47,7 @@ packages/
 └── evals/            # Eval runner, baselines, reports
 
 .ai/
+├── install/        # Suite component manifest for installer UX
 ├── instructions/   # Agent-readable task instructions
 ├── harnesses/      # Harness specs and compatibility matrix
 ├── execution/      # Phase-based task execution order

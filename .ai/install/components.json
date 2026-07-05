@@ -1,0 +1,168 @@
+{
+  "id": "alfred-install-components",
+  "version": "suite-installer@0.1.0",
+  "owner": "core",
+  "status": "draft",
+  "purpose": "Model Alfred installation as a suite of components instead of treating Alfred Memory as the whole product.",
+  "provider_calls_allowed": 0,
+  "editions": [
+    {
+      "id": "coding",
+      "description": "Install Alfred for coding harnesses with profiles, agents, skills, adapters, and eval gates; Memory remains optional.",
+      "components": ["core", "agents", "skills", "profile-manager", "opencode-adapter", "codex-adapter", "evals"]
+    },
+    {
+      "id": "memory",
+      "description": "Install Alfred Memory only for cross-tool persistence and external AI actions/MCP integrations.",
+      "components": ["memory", "memory-server", "memory-client", "memory-mcp", "memory-openapi", "chatgpt-adapter", "anthropic-adapter", "gemini-adapter", "console", "console-web"]
+    },
+    {
+      "id": "full",
+      "description": "Install the full Alfred operations suite.",
+      "components": ["core", "agents", "skills", "profile-manager", "opencode-adapter", "codex-adapter", "evals", "memory", "memory-server", "memory-client", "memory-mcp", "memory-openapi", "chatgpt-adapter", "anthropic-adapter", "gemini-adapter", "console", "console-web"]
+    }
+  ],
+  "components": [
+    {
+      "id": "core",
+      "package": "packages/core",
+      "kind": "domain",
+      "requires_configuration": false,
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "agents",
+      "source": ".ai/agents",
+      "kind": "source-of-truth",
+      "requires_configuration": false,
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "skills",
+      "source": ".ai/skills",
+      "kind": "source-of-truth",
+      "requires_configuration": false,
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "profile-manager",
+      "package": "packages/profile-manager",
+      "kind": "runtime-profile-management",
+      "source_repo": "https://github.com/GOI17/agents",
+      "requires_configuration": true,
+      "configuration": ["profile repository path", "profile name", "agent/harness", "machine-local provider/model/plugin overlay"],
+      "protected_writes": ["~/.config/<agent>"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "opencode-adapter",
+      "package": "packages/opencode-adapter",
+      "kind": "harness-adapter",
+      "requires_configuration": true,
+      "configuration": ["preview output path", "human approval before live .opencode writes"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "codex-adapter",
+      "package": "packages/codex-adapter",
+      "kind": "harness-adapter",
+      "requires_configuration": true,
+      "configuration": ["preview output path", "human approval before live .codex/.agents writes"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "evals",
+      "package": "packages/evals",
+      "kind": "quality-gate",
+      "requires_configuration": false,
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "memory",
+      "package": "packages/memory",
+      "kind": "memory-domain",
+      "requires_configuration": true,
+      "configuration": ["tenant", "storage backend"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "memory-server",
+      "package": "packages/memory-server",
+      "kind": "memory-runtime",
+      "requires_configuration": true,
+      "configuration": ["registry path", "tenant API key", "database connection"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "memory-client",
+      "package": "packages/memory-client",
+      "kind": "memory-client",
+      "requires_configuration": true,
+      "configuration": ["Memory API URL", "API key"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "memory-mcp",
+      "package": "packages/memory-mcp",
+      "kind": "mcp-adapter",
+      "requires_configuration": true,
+      "configuration": ["MCP client config", "Memory API URL", "API key"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "memory-openapi",
+      "package": "packages/memory-openapi",
+      "kind": "openapi-schema",
+      "requires_configuration": true,
+      "configuration": ["public HTTPS URL", "Actions authentication"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "chatgpt-adapter",
+      "package": "packages/chatgpt-adapter",
+      "kind": "external-ai-adapter",
+      "requires_configuration": true,
+      "configuration": ["OpenAPI import", "Bearer API key"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "anthropic-adapter",
+      "package": "packages/anthropic-adapter",
+      "kind": "external-ai-adapter",
+      "requires_configuration": true,
+      "configuration": ["Claude Desktop MCP config", "API key"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "gemini-adapter",
+      "package": "packages/gemini-adapter",
+      "kind": "external-ai-adapter",
+      "requires_configuration": true,
+      "configuration": ["OpenAPI import", "x-api-key"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "console",
+      "package": "packages/console",
+      "kind": "operator-ui",
+      "requires_configuration": true,
+      "configuration": ["registry path"],
+      "provider_calls_allowed": 0
+    },
+    {
+      "id": "console-web",
+      "package": "packages/console-web",
+      "kind": "operator-ui",
+      "requires_configuration": true,
+      "configuration": ["Memory API URL"],
+      "provider_calls_allowed": 0
+    }
+  ],
+  "installer_ux_principles": [
+    "Show an install plan before writing any harness config.",
+    "Install by edition or component; do not imply Memory equals Alfred.",
+    "Detect local machine capabilities before choosing provider/model/plugin activation.",
+    "Record avoided provider calls and deterministic local decisions in trace events.",
+    "Require explicit human approval for protected or live harness config writes."
+  ]
+}

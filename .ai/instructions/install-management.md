@@ -145,6 +145,41 @@ Every operation must emit a trace object matching `createInstallTrace`:
 | `target_already_exists` | The target file already exists during install. | Use `--force` to overwrite, or target a different path. |
 | `target_not_found` | The target file does not exist during update or uninstall. | Verify the path and retry. |
 
+
+## Suite Installer Direction (Draft)
+
+The current installer history conflated Alfred with specific slices: root `install.sh` previously described a Pi agent install, while `scripts/shell/install.sh` focused on Alfred Memory. The next installer UX must install **Alfred as a suite** by edition or by component.
+
+Source of truth: `.ai/install/components.json`.
+
+### Editions
+
+| Edition | Purpose | Core components |
+|---|---|---|
+| `coding` | Coding harness operations without requiring Memory. | core, agents, skills, profile-manager, opencode/codex adapters, evals |
+| `memory` | Alfred Memory only. | memory packages, external AI adapters, console |
+| `full` | Whole Alfred operations system. | coding + memory components |
+
+### Required UX
+
+1. Parse `--edition=<coding|memory|full>` or repeated `--component=<id>`.
+2. Load `.ai/install/components.json`.
+3. Build a deterministic install plan showing packages, required configuration, protected writes, and validations.
+4. Run local capability detection before profile activation.
+5. Keep Memory setup under Memory components; do not present Memory as the whole Alfred install.
+6. Preview harness writes first, then require human approval for live config activation.
+7. Emit trace events for both provider calls avoided and installer operations.
+
+### Profile Manager Component
+
+`packages/profile-manager` is the first new suite component. It integrates `GOI17/agents` / `agent-switcher` as Alfred runtime profiles:
+
+- shared defaults: `profiles/<profile>/<agent>/`;
+- private machine overlays: `profiles.local/<profile>/<agent>/`;
+- local-only capability reports for PATH, providers, models, and plugins;
+- tracked secret scanning before materialization;
+- activation by `~/.config/<agent>` symlink after preview/approval gates.
+
 ## Validation Checklist
 
 Before marking an install/update/uninstall operation as complete:

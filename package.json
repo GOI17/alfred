@@ -12,8 +12,8 @@
     "server:check": "cd packages/memory-server && node --check src/server.js && node --check src/init.js && node --check src/index.js && node --check src/registry/sqlite-registry-store.js && node --check src/registry/store-factory.js && node --check src/migrate/sqlite-migrator.js && for f in scripts/*.mjs; do node --check \"$f\" || exit 1; done",
     "chatgpt:test": "node packages/chatgpt-adapter/test/contract.test.mjs",
     "chatgpt:check": "cd packages/chatgpt-adapter && node --check src/bridge.mjs && node -e \"JSON.parse(require('fs').readFileSync('openapi.json','utf8'))\"",
-    "test": "npm run core:test && npm run memory:test && npm run server:test && npm run chatgpt:test && npm run opencode:test && npm run codex:test && node scripts/validate-policies.mjs && node scripts/validate-release-0.4.1.mjs",
-    "check": "npm run core:check && npm run memory:check && npm run server:check && npm run chatgpt:check && npm run opencode:check && npm run codex:check",
+    "test": "npm run core:test && npm run profile-manager:test && npm run memory:test && npm run server:test && npm run chatgpt:test && npm run opencode:test && npm run codex:test && node scripts/validate-policies.mjs && node scripts/validate-release-0.4.1.mjs",
+    "check": "npm run core:check && npm run profile-manager:check && npm run memory:check && npm run server:check && npm run chatgpt:check && npm run opencode:check && npm run codex:check",
     "validate:phase1": "node scripts/validate-history.mjs phase1",
     "validate:phase2": "node scripts/validate-history.mjs phase2",
     "validate:phase3": "node scripts/validate-history.mjs phase3",
@@ -42,6 +42,8 @@
     "core:check": "cd packages/core && npm run check",
     "core:test": "cd packages/core && npm test",
     "validate:release-0.4.0": "node scripts/validate-release-0.4.0.mjs",
-    "validate:release-0.4.1": "node scripts/validate-release-0.4.1.mjs"
+    "validate:release-0.4.1": "node scripts/validate-release-0.4.1.mjs",
+    "profile-manager:check": "cd packages/profile-manager && npm run check",
+    "profile-manager:test": "cd packages/profile-manager && npm test"
   }
 }

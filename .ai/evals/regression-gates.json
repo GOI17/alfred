@@ -168,6 +168,17 @@
       "blocked_on_failure": true
     },
     {
+      "id": "profile-manager-tests",
+      "description": "Runtime profile manager preserves GOI17/agents profile switching, secret scanning, and local machine capability planning",
+      "files": [
+        "packages/profile-manager/src/index.js",
+        "packages/profile-manager/test/profile-manager.test.mjs"
+      ],
+      "command": "node --test packages/profile-manager/test/profile-manager.test.mjs",
+      "expected_test_count": 6,
+      "blocked_on_failure": true
+    },
+    {
       "id": "opencode-agent-adapter-contract",
       "description": "opencode Alfred agents use current project agent paths and preview-only install artifacts",
       "files": [
@@ -192,6 +203,6 @@
   ],
   "totals": {
     "files_validated": 5,
-    "tests_total": 244
+    "tests_total": 250
   }
 }
