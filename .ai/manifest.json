@@ -34,7 +34,9 @@
     "memory_hosting_policy": ".ai/policies/memory-hosting-policy.md",
     "memory_workspace_policy": ".ai/policies/memory-workspace-policy.md",
     "roadmap_0_3_0_md": ".ai/roadmaps/0.3.0.md",
-    "roadmap_0_3_0_json": ".ai/roadmaps/0.3.0.json"
+    "roadmap_0_3_0_json": ".ai/roadmaps/0.3.0.json",
+    "install_components": ".ai/install/components.json",
+    "profile_manager_package": "packages/profile-manager"
   },
   "pillars": [
     "Hexagonal Architecture + DDD",

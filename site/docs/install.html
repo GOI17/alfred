@@ -54,9 +54,10 @@
     <main class="docs-main">
       <h1>Install Alfred</h1>
       <p class="doc-lead">
-        One curl. The installer detects your active harness, generates a
-        preview, and writes harness config only after explicit human
-        approval. No manual git clone.
+        One curl. The installer is moving to a suite model: install the
+        coding edition, the Memory edition, or the full Alfred operations
+        system. Harness config is still previewed first and written only after
+        explicit human approval.
       </p>
 
       <div class="doc-callout warn">
@@ -73,59 +74,60 @@
         <li>macOS, Linux, or WSL2</li>
       </ul>
 
-      <h2 id="profiles">Choose a profile</h2>
+      <h2 id="profiles">Choose an edition</h2>
       <p>
-        Alfred supports three install profiles. Pick one.
+        Alfred installs as a suite of components. Pick the edition that matches
+        the operational surface you need.
       </p>
       <table class="matrix">
         <thead>
-          <tr><th>Profile</th><th>What it does</th><th>What you need</th></tr>
+          <tr><th>Edition</th><th>What it installs</th><th>What you need</th></tr>
         </thead>
         <tbody>
           <tr>
             <td><code>coding</code></td>
-            <td>Use Alfred from a coding agent. Local SQLite, no network.</td>
-            <td>Nothing extra.</td>
+            <td>Core, agents, skills, runtime profiles, opencode/Codex adapters, eval gates.</td>
+            <td>Node 22+ and your coding harness.</td>
           </tr>
           <tr>
-            <td><code>web</code></td>
-            <td>Use Alfred Memory from ChatGPT / Claude / Gemini.</td>
-            <td>Postgres URL (Neon, Supabase, Render free tier).</td>
+            <td><code>memory</code></td>
+            <td>Alfred Memory, server/client/MCP/OpenAPI, external AI adapters, console.</td>
+            <td>SQLite for local coding agents or Postgres for human/web agents.</td>
           </tr>
           <tr>
-            <td><code>both</code></td>
-            <td>Use Alfred from coding agents and web UIs.</td>
-            <td>Postgres URL.</td>
+            <td><code>full</code></td>
+            <td>The complete Alfred operations system: coding + Memory components.</td>
+            <td>Node 22+, harness, and Memory storage configuration.</td>
           </tr>
         </tbody>
       </table>
 
-      <h2 id="coding">Option A &mdash; coding profile (no database)</h2>
-      <p>The fastest path. Perfect for trying Alfred.</p>
+      <h2 id="coding">Option A &mdash; coding edition</h2>
+      <p>The fastest path. Perfect for coding harness operations without forcing Memory setup.</p>
       <div class="terminal" aria-label="Install Alfred coding profile">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">zsh &mdash; install</span>
         </div>
 <pre><span class="c"># Install</span>
-<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --profile=coding --name=acme
+<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme
 
-<span class="c"># Initialize in your project</span>
-<span class="f">cd</span> ~/code/my-project
-<span class="f">alfred</span> init --profile=coding --name=my-project
+<span class="c"># Initialize and inspect runtime profiles</span>
+<span class="f">alfred-profile</span> init --repo ~/.alfred/profiles
+<span class="f">alfred-profile</span> plan --repo ~/.alfred/profiles --profile=work --agent=opencode
 
 <span class="c"># Run the eval suite</span>
 <span class="f">alfred</span> evals run --compare-baseline
 </pre>
       </div>
       <p>
-        A SQLite file is created at <code>~/.alfred/tenants/acme.sqlite</code>.
-        Nothing is uploaded anywhere. The API key is printed once &mdash;
-        save it to your password manager.
+        The coding edition includes <code>packages/profile-manager</code> so the
+        same agent can have separate <code>work</code>, <code>personal</code>, or
+        client profiles across machines without hand-editing harness config.
       </p>
 
-      <h2 id="web">Option B &mdash; web profile (Postgres)</h2>
-      <p>Use Alfred Memory from ChatGPT, Claude, or Gemini.</p>
+      <h2 id="web">Option B &mdash; Memory edition</h2>
+      <p>Use Alfred Memory from ChatGPT, Claude, Gemini, or coding agents.</p>
       <ol>
         <li>Create a free Postgres database (Neon / Supabase / Render).</li>
         <li>Copy the connection string &mdash; it looks like
@@ -137,7 +139,7 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">zsh &mdash; install (web)</span>
         </div>
-<pre><span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --profile=web --name=my-mem
+<pre><span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=memory --name=my-mem
 </pre>
       </div>
 
@@ -155,12 +157,12 @@
 Harness detected : <span class="k">opencode</span>
 Adapter status   : <span class="k">executable-translation-spike</span>
 Files to write   : <span class="n">7</span>
-  + .opencode/agent/orchestrator.md
-  + .opencode/agent/developer.md
-  + .opencode/agent/qa.md
-  + .opencode/skill/architecture-docs.md
-  + .opencode/skill/typescript-project.md
-  + .opencode/config.json
+  + .opencode/agents/orchestrator.md
+  + .opencode/agents/developer.md
+  + .opencode/agents/qa.md
+  + .opencode/skills/architecture-docs/SKILL.md
+  + .opencode/skills/typescript-project/SKILL.md
+  + opencode.json
   + AGENTS.md <span class="c">(merge)</span>
 
 Apply changes? <span class="p">[y/N]</span>
@@ -210,9 +212,9 @@ Apply changes? <span class="p">[y/N]</span>
     <aside class="docs-toc" aria-label="On this page">
       <h6>On this page</h6>
       <a href="#requirements">Requirements</a>
-      <a href="#profiles">Profiles</a>
-      <a href="#coding">Coding profile</a>
-      <a href="#web">Web profile</a>
+      <a href="#profiles">Editions</a>
+      <a href="#coding">Coding edition</a>
+      <a href="#web">Memory edition</a>
       <a href="#approve">Approve &amp; write</a>
       <a href="#verify">Verify</a>
       <a href="#uninstall">Uninstall</a>

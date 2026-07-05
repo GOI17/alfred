@@ -26,8 +26,10 @@ Alfred is a local-first agent operations runtime. It designs, tests, evaluates, 
 
 ```
 packages/
-├── core/           # Harness-agnostic business logic, no adapter imports
-├── pi-adapter/      # First-party Pi harness adapter
+├── core/             # Harness-agnostic business logic, no adapter imports
+├── profile-manager/  # Runtime profiles from GOI17/agents: PATH/provider/model/plugin portability
+├── pi-adapter/       # First-party Pi harness adapter
+├── codex-adapter/    # Codex custom agents + repo skills preview
 └── opencode-adapter/ # opencode harness adapter (translation spike)
 ```
 
@@ -39,7 +41,7 @@ packages/
 | opencode | `executable-translation-spike` | `packages/opencode-adapter/` |
 | VSCode | `compatibility-contract` | Design doc only |
 | Claude | `compatibility-contract` | Design doc only |
-| Codex | `compatibility-contract` | Design doc only |
+| Codex | `executable-translation-spike` | `packages/codex-adapter/` |
 | Kiro | `compatibility-contract` | Design doc only |
 
 ## Agents
@@ -77,7 +79,18 @@ Model selection happens at runtime via user configuration, not hardcoded in agen
 
 All privileged actions (file access, command execution, permission changes) are denied by default. Agents must explicitly request and receive approval before proceeding.
 
-### 5. Agent-Driven Install
+
+### 5. Runtime Profiles from GOI17/agents
+
+Alfred now includes `packages/profile-manager`, integrating the `GOI17/agents` / `agent-switcher` concept as a first-party runtime profile capability. Runtime profiles let the same agent/harness have separate `work`, `personal`, client, or machine-specific activations without asking users to manually reconcile PATH differences, enabled providers, available models, or plugins.
+
+Tracked profile defaults live in `profiles/`; private machine overlays live in ignored `profiles.local/`. The manager scans tracked JSON/JSONC for likely literal secrets, supports local-only machine capability reports, materializes overlays, and activates `~/.config/<agent>` by symlink only after preview/approval gates. Harness-specific semantics remain adapter-owned.
+
+### 6. Suite Installer Direction
+
+The installer is being moved from a Memory-centered flow to a suite component model. `.ai/install/components.json` is the draft source of truth for install editions (`coding`, `memory`, `full`) and components. Memory is now modeled as one installable component family rather than the definition of Alfred itself.
+
+### 7. Agent-Driven Install
 
 Installation, update, and uninstall of Alfred artifacts is agent-driven via shell scripts fetched from GitHub:
 
@@ -178,7 +191,9 @@ scripts/                 # Development scripts
 
 packages/                 # Source code
 ├── core/                 # Harness-agnostic business logic
+├── profile-manager/      # Runtime profile planning and activation
 ├── pi-adapter/           # Pi harness adapter
+├── codex-adapter/        # Codex harness adapter
 └── opencode-adapter/     # opencode harness adapter
 ```
 
@@ -189,3 +204,5 @@ packages/                 # Source code
 - Pi Adapter: `packages/pi-adapter/src/runtime.js`
 - Compatibility Matrix: `.ai/harnesses/compatibility-matrix.json`
 - Install Instructions: `.ai/instructions/install-management.md`
+- Install Component Manifest: `.ai/install/components.json`
+- Runtime Profile Manager: `packages/profile-manager`
