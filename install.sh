@@ -1,334 +1,300 @@
 #!/bin/sh
-# Alfred Pi Agent Installation Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh
-# Or:    curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --path ./alfred-workspace
+# Alfred suite installer. Local-first, preview-first, no harness writes by default.
 #
-# This script installs only Pi agent files into a user workspace.
-# It does NOT install the full Alfred repository.
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=coding --name=acme
+#   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=full --name=acme --apply
+#   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --component=profile-manager --name=acme
+#
+# Safety:
+#   - Without --apply this prints an install plan only and writes no files.
+#   - It never installs Pi/opencode/Codex live harness config by default.
+#   - Unknown flags fail closed instead of being ignored.
 
 set -e
 
-VERSION="0.2.0"
-INSTALL_BASE="https://raw.githubusercontent.com/GOI17/alfred/main"
-DRY_RUN=false
+VERSION="0.4.1.1"
+REPO_URL="https://github.com/GOI17/alfred.git"
+DEFAULT_BRANCH="main"
+NODE_MIN="22"
+
+EDITION="coding"
+NAME="default"
 TARGET_PATH=""
+HARNESS="auto"
+APPLY=false
+NO_CLONE=false
+COMPONENTS=""
 
-# --- Helper Functions ---
+log() { printf '[alfred-install] %s\n' "$*"; }
+err() { printf '[alfred-install][error] %s\n' "$*" 1>&2; exit 1; }
 
-logger() {
-  echo "[pi-install] $1"
+usage() {
+  sed -n '2,36p' "$0"
+  cat <<'USAGE'
+
+Flags:
+  --edition=<coding|memory|full>  Suite edition to plan/install. Default: coding.
+  --component=<id>                Install one component. Repeatable. Overrides edition list in the plan.
+  --name=<name>                   Human-readable install/context name. Default: default.
+  --path=<dir>                    Install repo path when --apply is used. Default: ~/.alfred/installs/<name>.
+  --harness=<auto|opencode|codex|pi|none>
+                                  Harness to preview. Default: auto-detect only.
+  --apply                         Apply safe suite install steps. Without this, preview only.
+  --dry-run                       Alias for preview-only mode.
+  --no-clone                      With --apply, reuse an existing repo at --path.
+  --help                          Show help.
+
+Examples:
+  install.sh --edition=coding --name=acme
+  install.sh --edition=coding --name=acme --harness=opencode --apply
+  install.sh --component=profile-manager --name=work-laptop
+USAGE
 }
 
-write_trace() {
-  target="$1"
-  operation="$2"
-  status="$3"
-  error_code="$4"
+append_component() {
+  if [ -z "$COMPONENTS" ]; then
+    COMPONENTS="$1"
+  else
+    COMPONENTS="$COMPONENTS,$1"
+  fi
+}
 
-  trace_dir="${target}/.alfred/observability"
-  mkdir -p "$trace_dir"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --edition=*) EDITION="${1#*=}"; shift ;;
+    --edition) [ "$#" -ge 2 ] || err "Missing value after --edition"; EDITION="$2"; shift 2 ;;
+    --component=*) append_component "${1#*=}"; shift ;;
+    --component) [ "$#" -ge 2 ] || err "Missing value after --component"; append_component "$2"; shift 2 ;;
+    --name=*) NAME="${1#*=}"; shift ;;
+    --name) [ "$#" -ge 2 ] || err "Missing value after --name"; NAME="$2"; shift 2 ;;
+    --path=*) TARGET_PATH="${1#*=}"; shift ;;
+    --path) [ "$#" -ge 2 ] || err "Missing value after --path"; TARGET_PATH="$2"; shift 2 ;;
+    --harness=*) HARNESS="${1#*=}"; shift ;;
+    --harness) [ "$#" -ge 2 ] || err "Missing value after --harness"; HARNESS="$2"; shift 2 ;;
+    --apply) APPLY=true; shift ;;
+    --dry-run) APPLY=false; shift ;;
+    --no-clone) NO_CLONE=true; shift ;;
+    --profile|--profile=*) err "--profile is legacy and no longer selects the Alfred suite install shape. Use --edition=coding, --edition=memory, or --edition=full." ;;
+    --start-server|--registry|--registry=*|--cwd|--cwd=*|--db-connection|--db-connection=*)
+      err "$1 belongs to the old Memory-only installer flow. Use --edition=memory after the suite installer lands, or run the memory CLI from an installed Alfred repo."
+      ;;
+    --help|-h) usage; exit 0 ;;
+    --*) err "Unknown flag: $1 (use --help)" ;;
+    *) err "Unexpected positional argument: $1 (use --path=<dir> for install path)" ;;
+  esac
+done
 
-  timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.%NZ")
+case "$EDITION" in
+  coding|memory|full) ;;
+  *) err "Unknown edition: $EDITION (use coding, memory, or full)" ;;
+esac
 
-  # Atomic write using temp file
-  trace_file="${trace_dir}/install-trace.json"
-  temp_file="${trace_file}.${$}.tmp"
+case "$HARNESS" in
+  auto|opencode|codex|pi|none) ;;
+  *) err "Unknown harness: $HARNESS (use auto, opencode, codex, pi, or none)" ;;
+esac
 
-  cat > "$temp_file" << EOF
+case "$NAME" in
+  ""|*/*|*\\*|*..*) err "--name must be a simple identifier, got: $NAME" ;;
+esac
+
+if [ -z "$TARGET_PATH" ]; then
+  TARGET_PATH="$HOME/.alfred/installs/$NAME"
+fi
+
+case "$TARGET_PATH" in
+  ""|"/") err "Install path cannot be empty or root" ;;
+  *"/.ai"|*"/.ai/"*|*"/.opencode"|*"/.opencode/"*|*"/harnesses"|*"/harnesses/"*)
+    err "Install path contains a protected segment (.ai, .opencode, harnesses): $TARGET_PATH"
+    ;;
+esac
+
+node_status="missing"
+node_major=""
+if command -v node >/dev/null 2>&1; then
+  node_version="$(node -v 2>/dev/null || true)"
+  node_major="$(printf '%s' "$node_version" | sed -E 's/^v([0-9]+).*/\1/')"
+  if [ "$node_major" -ge "$NODE_MIN" ] 2>/dev/null; then
+    node_status="ok:$node_version"
+  else
+    node_status="too_old:$node_version"
+  fi
+fi
+
+resolve_harness() {
+  if [ "$HARNESS" != "auto" ]; then
+    printf '%s' "$HARNESS"
+    return 0
+  fi
+  if [ -d ".opencode" ] || command -v opencode >/dev/null 2>&1; then
+    printf 'opencode'
+    return 0
+  fi
+  if [ -d ".codex" ] || [ -d ".agents" ] || [ -n "${CODEX_HOME:-}" ]; then
+    printf 'codex'
+    return 0
+  fi
+  printf 'none'
+}
+
+RESOLVED_HARNESS="$(resolve_harness)"
+
+edition_components() {
+  if [ -n "$COMPONENTS" ]; then
+    printf '%s' "$COMPONENTS"
+    return 0
+  fi
+  case "$EDITION" in
+    coding) printf 'core,agents,skills,profile-manager,opencode-adapter,codex-adapter,evals' ;;
+    memory) printf 'memory,memory-server,memory-client,memory-mcp,memory-openapi,chatgpt-adapter,anthropic-adapter,gemini-adapter,console,console-web' ;;
+    full) printf 'core,agents,skills,profile-manager,opencode-adapter,codex-adapter,evals,memory,memory-server,memory-client,memory-mcp,memory-openapi,chatgpt-adapter,anthropic-adapter,gemini-adapter,console,console-web' ;;
+  esac
+}
+
+COMPONENT_PLAN="$(edition_components)"
+
+cat <<EOFPLAN
+==============================================================
+ALFRED SUITE INSTALL PREVIEW
+==============================================================
+Version:        $VERSION
+Edition:        $EDITION
+Name:           $NAME
+Target path:    $TARGET_PATH
+Harness:        $RESOLVED_HARNESS
+Components:     $COMPONENT_PLAN
+Node:           $node_status
+Provider calls: 0
+
+What --name means:
+  A local human-readable install/context identifier. It is used to derive
+  the default install path (~/.alfred/installs/$NAME) and label traces.
+
+Safety:
+  - This installer does not install Pi by default.
+  - This installer does not write live opencode/Codex/Pi harness config.
+  - Harness-specific files must be generated as previews and applied only
+    after explicit human approval.
+EOFPLAN
+
+if [ "$APPLY" != true ]; then
+  cat <<EOFNEXT
+
+No files were written. Preview-only mode is the default.
+To apply safe suite install steps, rerun with:
+  --apply
+
+Examples:
+  curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=$EDITION --name=$NAME --apply
+  curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=$EDITION --name=$NAME --harness=opencode --apply
+EOFNEXT
+  exit 0
+fi
+
+[ "$node_status" != "missing" ] || err "Node.js is required for --apply. Install Node $NODE_MIN+ first."
+case "$node_status" in
+  too_old:*) err "Node $node_status found, but Node $NODE_MIN+ is required." ;;
+esac
+
+parent_dir="$(dirname "$TARGET_PATH")"
+mkdir -p "$parent_dir"
+
+if [ "$NO_CLONE" = true ]; then
+  [ -d "$TARGET_PATH" ] || err "--no-clone requires an existing --path directory: $TARGET_PATH"
+  log "Reusing existing Alfred repo at $TARGET_PATH"
+else
+  if [ -d "$TARGET_PATH/.git" ]; then
+    log "Repo already exists at $TARGET_PATH; pulling latest fast-forward if possible."
+    (cd "$TARGET_PATH" && git pull --ff-only 2>/dev/null) || log "Skipping pull; repo may already be current or offline."
+  else
+    if [ -e "$TARGET_PATH" ]; then
+      err "Target path exists but is not an Alfred git repo: $TARGET_PATH"
+    fi
+    command -v git >/dev/null 2>&1 || err "git is required for --apply unless --no-clone is used."
+    log "Cloning Alfred into $TARGET_PATH"
+    git clone --depth 1 --branch "$DEFAULT_BRANCH" "$REPO_URL" "$TARGET_PATH" 2>/dev/null || git clone --depth 1 "$REPO_URL" "$TARGET_PATH"
+  fi
+fi
+
+PROFILE_REPO="$HOME/.alfred/runtime-profiles"
+case ",$COMPONENT_PLAN," in
+  *,profile-manager,*)
+    log "Initializing runtime profile repository at $PROFILE_REPO"
+    mkdir -p "$PROFILE_REPO/profiles" "$PROFILE_REPO/profiles.local"
+    if [ ! -f "$PROFILE_REPO/.gitignore" ]; then
+      printf 'profiles.local/\n.DS_Store\n' > "$PROFILE_REPO/.gitignore"
+    fi
+    if [ ! -f "$PROFILE_REPO/README.md" ]; then
+      printf '# Alfred Runtime Profiles\n\nShared defaults live in profiles/. Machine-private overlays live in profiles.local/.\n' > "$PROFILE_REPO/README.md"
+    fi
+    ;;
+esac
+
+case "$RESOLVED_HARNESS" in
+  opencode)
+    if [ -f "$TARGET_PATH/packages/opencode-adapter/src/cli.js" ]; then
+      log "Generating opencode preview under $TARGET_PATH/.ai/generated/opencode-install"
+      (cd "$TARGET_PATH" && node packages/opencode-adapter/src/cli.js --output .ai/generated/opencode-install >/dev/null)
+    else
+      log "opencode adapter preview skipped; package not found in installed repo."
+    fi
+    ;;
+  codex)
+    if [ -f "$TARGET_PATH/packages/codex-adapter/src/cli.js" ]; then
+      log "Generating Codex preview under $TARGET_PATH/.ai/generated/codex-install"
+      (cd "$TARGET_PATH" && node packages/codex-adapter/src/cli.js --output .ai/generated/codex-install >/dev/null)
+    else
+      log "Codex adapter preview skipped; package not found in installed repo."
+    fi
+    ;;
+  pi)
+    log "Pi selected. No live Pi files are written by the suite installer. Use adapter previews and approval flow."
+    ;;
+  none)
+    log "No harness selected/detected. Suite repo installed; harness previews skipped."
+    ;;
+esac
+
+TRACE_DIR="$HOME/.alfred/observability"
+mkdir -p "$TRACE_DIR"
+TRACE_FILE="$TRACE_DIR/install-trace.json"
+TRACE_TMP="$TRACE_FILE.$$ .tmp"
+TRACE_TMP="$(printf '%s' "$TRACE_TMP" | tr -d ' ')"
+cat > "$TRACE_TMP" <<EOFTRACE
 {
-  "trace_id": "phase-13-pi-agent-install-management",
-  "timestamp": "${timestamp}",
+  "trace_id": "suite-install",
+  "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
   "event": "install_management_operation",
-  "actor": "pi-install",
+  "actor": "alfred-suite-install",
   "data": {
-    "operation": "${operation}",
-    "target_path": "${target}",
-    "status": "${status}",
-    "error_code": ${error_code:+"\"${error_code}\""}${error_code:-null},
+    "operation": "install",
+    "edition": "$EDITION",
+    "name": "$NAME",
+    "target_path": "$TARGET_PATH",
+    "harness": "$RESOLVED_HARNESS",
+    "components": "$COMPONENT_PLAN",
+    "status": "pass",
     "human_approval": true,
     "provider_calls": 0
   }
 }
-EOF
-  mv "$temp_file" "$trace_file"
-}
+EOFTRACE
+mv "$TRACE_TMP" "$TRACE_FILE"
 
-validate_path() {
-  path="$1"
+cat <<EOFDONE
 
-  # Check if path is empty
-  if [ -z "$path" ]; then
-    echo "error:installation_path_empty"
-    return 1
-  fi
+==============================================================
+ALFRED SUITE INSTALL APPLIED
+==============================================================
+Repository:      $TARGET_PATH
+Profile repo:    $PROFILE_REPO
+Trace:           $TRACE_FILE
+Harness:         $RESOLVED_HARNESS
+Provider calls:  0
 
-  # Check if path is root
-  if [ "$path" = "/" ]; then
-    echo "error:installation_path_is_root"
-    return 1
-  fi
-
-  # Check for protected segments using case-insensitive match
-  case "$path" in
-    *".ai/"*)     echo "error:installation_path_protected"; return 1 ;;
-    *".opencode/"*) echo "error:installation_path_protected"; return 1 ;;
-    *"/harnesses/"*) echo "error:installation_path_protected"; return 1 ;;
-    *".ai"*)      echo "error:installation_path_protected"; return 1 ;;
-    *".opencode"*) echo "error:installation_path_protected"; return 1 ;;
-    *"harnesses"*) echo "error:installation_path_protected"; return 1 ;;
-  esac
-
-  # Check if directory exists and is writable
-  if [ -e "$path" ]; then
-    if [ ! -d "$path" ]; then
-      echo "error:installation_path_not_directory"
-      return 1
-    fi
-    if [ ! -w "$path" ]; then
-      echo "error:installation_path_not_writable"
-      return 1
-    fi
-  else
-    # Directory doesn't exist, check if parent is writable
-    parent=$(dirname "$path")
-    if [ ! -w "$parent" ]; then
-      echo "error:installation_path_parent_not_writable"
-      return 1
-    fi
-  fi
-
-  echo "ok"
-  return 0
-}
-
-# --- Argument Parsing ---
-
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --path)
-      TARGET_PATH="$2"
-      shift 2
-      ;;
-    --dry-run)
-      DRY_RUN=true
-      shift
-      ;;
-    -h|--help)
-      echo "Usage: $0 [--path <directory>] [--dry-run]"
-      echo "  --path    Installation target directory (default: current directory)"
-      echo "  --dry-run Preview operation without making changes"
-      exit 0
-      ;;
-    *)
-      # If not a flag, treat as positional path argument
-      if [ -z "$TARGET_PATH" ] && [ "${1#-}" = "$1" ]; then
-        TARGET_PATH="$1"
-      fi
-      shift
-      ;;
-  esac
-done
-
-# Default to current directory if no path specified
-if [ -z "$TARGET_PATH" ]; then
-  TARGET_PATH="."
-fi
-
-# --- Path Validation ---
-
-logger "Validating installation path: ${TARGET_PATH}"
-
-validation_result=$(validate_path "$TARGET_PATH")
-if [ $? -ne 0 ]; then
-  case "$validation_result" in
-    error:installation_path_is_root)
-      logger "ERROR: Installation path cannot be root (/)."
-      logger "Use a user workspace path like ./alfred or ~/projects/alfred"
-      exit 1
-      ;;
-    error:installation_path_protected)
-      logger "ERROR: Installation path contains protected segments (.ai/, .opencode/, harnesses/)."
-      logger "Cannot install into Alfred system directories."
-      exit 1
-      ;;
-    error:installation_path_not_directory)
-      logger "ERROR: Installation path exists but is not a directory."
-      exit 1
-      ;;
-    error:installation_path_not_writable)
-      logger "ERROR: Installation path is not writable."
-      exit 1
-      ;;
-    error:installation_path_empty)
-      logger "ERROR: Installation path is empty."
-      exit 1
-      ;;
-    *)
-      logger "ERROR: Unknown validation error: $validation_result"
-      exit 1
-      ;;
-  esac
-fi
-
-logger "Path validation passed."
-
-# --- Dry Run Mode ---
-
-if [ "$DRY_RUN" = true ]; then
-  logger "DRY-RUN MODE: No files will be written."
-  logger "Would install to: ${TARGET_PATH}"
-  logger "Files to be downloaded from: ${INSTALL_BASE}/pi/${VERSION}"
-  exit 0
-fi
-
-# --- Installation ---
-
-logger "Installing Alfred Pi Agent to: ${TARGET_PATH}"
-
-# Create directory structure
-alfred_dir="${TARGET_PATH}/.alfred"
-agents_dir="${alfred_dir}/agents"
-skills_dir="${alfred_dir}/skills"
-adapter_dir="${alfred_dir}/pi-adapter"
-
-mkdir -p "$agents_dir"
-mkdir -p "$skills_dir"
-mkdir -p "$adapter_dir"
-
-# Track success for trace
-install_success=true
-error_code=null
-
-# Download and install AGENTS.md
-logger "Downloading AGENTS.md..."
-agents_md_tmp="${TARGET_PATH}/AGENTS.md.$$.tmp"
-if ! curl -fsSL "${INSTALL_BASE}/pi/${VERSION}/AGENTS.md" -o "$agents_md_tmp" 2>/dev/null; then
-  logger "WARNING: Could not download AGENTS.md, creating default..."
-  cat > "$agents_md_tmp" << 'EOF'
----
-description: Alfred orchestrator agent
----
-
-# Alfred Orchestrator
-
-You are Alfred's Orchestrator agent.
-
-Load project instructions from AGENTS.md and Alfred source-of-truth files under .ai/.
-
-Rules:
-- Preserve Alfred's local-first provider policy.
-- Do not broaden permissions.
-- Do not write harness config without explicit human approval.
-- Keep model assignment user-owned at runtime.
-You are powered by the model named minimax-m2.7. The exact model ID is ollama-cloud/minimax-m2.7
-EOF
-fi
-mv "$agents_md_tmp" "${TARGET_PATH}/AGENTS.md"
-
-# Download config.json
-logger "Downloading config.json..."
-config_tmp="${alfred_dir}/config.json.$$.tmp"
-if curl -fsSL "${INSTALL_BASE}/pi/${VERSION}/.alfred/config.json" -o "$config_tmp" 2>/dev/null; then
-  mv "$config_tmp" "${alfred_dir}/config.json"
-else
-  # Create default config
-  cat > "${alfred_dir}/config.json" << 'EOF'
-{
-  "harness": "pi",
-  "version": "0.2.0",
-  "capabilities": [
-    "primary_control",
-    "specialist_routing",
-    "lazy_skills",
-    "permission_enforcement",
-    "trace_emission",
-    "eval_execution",
-    "model_assignment",
-    "local_first"
-  ]
-}
-EOF
-fi
-
-# Download agent files
-logger "Downloading agent files..."
-for agent in orchestrator developer qa librarian architect reviewer; do
-  agent_tmp="${agents_dir}/${agent}.md.$$.tmp"
-  if curl -fsSL "${INSTALL_BASE}/pi/${VERSION}/.alfred/agents/${agent}.md" -o "$agent_tmp" 2>/dev/null; then
-    mv "$agent_tmp" "${agents_dir}/${agent}.md"
-    logger "  Installed ${agent}.md"
-  else
-    logger "  WARNING: Could not download ${agent}.md"
-  fi
-done
-
-# Download skills registry
-logger "Downloading skills registry..."
-registry_tmp="${skills_dir}/registry.json.$$.tmp"
-if curl -fsSL "${INSTALL_BASE}/pi/${VERSION}/.alfred/skills/registry.json" -o "$registry_tmp" 2>/dev/null; then
-  mv "$registry_tmp" "${skills_dir}/registry.json"
-else
-  # Create default registry
-  cat > "${skills_dir}/registry.json" << 'EOF'
-{
-  "skills": [],
-  "policy": {
-    "loading": "lazy",
-    "default": "available",
-    "scope": "task-specific",
-    "load_bodies_globally": false
-  }
-}
-EOF
-fi
-
-# Download pi-adapter files
-logger "Downloading pi-adapter files..."
-for file in runtime.js cli.js package.json README.md; do
-  adapter_tmp="${adapter_dir}/${file}.$$.tmp"
-  if curl -fsSL "${INSTALL_BASE}/pi/${VERSION}/.alfred/pi-adapter/${file}" -o "$adapter_tmp" 2>/dev/null; then
-    mv "$adapter_tmp" "${adapter_dir}/${file}"
-    logger "  Installed ${file}"
-  fi
-done
-
-# Create README in target path
-cat > "${TARGET_PATH}/README.md" << 'EOF'
-# Alfred Pi Agent Workspace
-
-This workspace has Alfred Pi agent installed.
-
-## Structure
-
-- `AGENTS.md` - Orchestrator agent instructions
-- `.alfred/` - Alfred configuration and artifacts
-  - `config.json` - Pi harness configuration
-  - `agents/` - Agent specifications
-  - `skills/` - Skill manifests
-  - `pi-adapter/` - Pi adapter files
-
-## Updating
-
-To update to the latest version:
-```
-curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/update.sh | sh
-```
-
-## Uninstalling
-
-To remove Alfred from this workspace:
-```
-curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/uninstall.sh | sh
-```
-EOF
-
-# --- Finalization ---
-
-logger "Installation complete."
-logger "Installed to: ${TARGET_PATH}"
-
-# Emit trace
-write_trace "$TARGET_PATH" "install" "pass" "$error_code"
-
-logger "Trace written to: ${TARGET_PATH}/.alfred/observability/install-trace.json"
-logger "Restart your harness to activate the installation."
+Next steps:
+  - Review generated harness previews before copying anything live.
+  - Runtime profile commands live in: $TARGET_PATH/packages/profile-manager
+  - Install docs: $TARGET_PATH/site/docs/install.html
+EOFDONE

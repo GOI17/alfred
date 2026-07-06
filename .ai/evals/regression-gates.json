@@ -168,6 +168,17 @@
       "blocked_on_failure": true
     },
     {
+      "id": "suite-installer-contract",
+      "description": "Root install.sh is suite-aware, preview-first, rejects legacy flags, and does not install Pi by default",
+      "files": [
+        "install.sh",
+        "scripts/validate-suite-installer.mjs",
+        ".ai/install/components.json"
+      ],
+      "command": "node scripts/validate-suite-installer.mjs",
+      "blocked_on_failure": true
+    },
+    {
       "id": "profile-manager-tests",
       "description": "Runtime profile manager preserves GOI17/agents profile switching, secret scanning, and local machine capability planning",
       "files": [
