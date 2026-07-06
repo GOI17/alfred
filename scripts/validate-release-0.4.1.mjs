@@ -32,7 +32,7 @@ for (const gate of gates.gates) {
   const proc = spawnSync(gate.command, { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8", shell: true });
   const out = (proc.stdout || "") + (proc.stderr || "");
   const match = out.match(/tests\s+(\d+)/) || out.match(/ℹ tests\s+(\d+)/);
-  const testCount = match ? Number(match[1]) : -1;
+  const testCount = match ? Number(match[1]) : undefined;
   const ok = proc.status === 0 && (gate.expected_test_count === undefined || testCount === gate.expected_test_count);
   results.push({ id: gate.id, ok, tests: testCount, expected: gate.expected_test_count });
   process.stderr.write(out.split("\n").slice(-5).join("\n") + "\n");

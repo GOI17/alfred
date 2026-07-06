@@ -52,13 +52,16 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">~/projects/alfred-workspace — zsh</span>
         </div>
-<pre><span class="c"># Install the coding edition of the Alfred suite</span>
+<pre><span class="c"># Preview the coding edition of the Alfred suite (writes no files)</span>
 <span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme
 
 <span class="c"># Create runtime profiles for the same agent on different machines</span>
 <span class="f">alfred-profile</span> init --repo ~/.alfred/profiles
 <span class="f">alfred-profile</span> plan --repo ~/.alfred/profiles --profile=work --agent=opencode
 <span class="f">alfred-profile</span> switch --repo ~/.alfred/profiles --profile=work --agent=opencode --dry-run
+
+<span class="c"># Apply only after reviewing the plan</span>
+<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme --apply
 
 <span class="c"># Build harness previews before live config writes</span>
 <span class="f">alfred</span> adapter build opencode --preview --out .ai/generated/opencode-install

@@ -109,8 +109,11 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">zsh &mdash; install</span>
         </div>
-<pre><span class="c"># Install</span>
+<pre><span class="c"># Preview install plan; writes no files</span>
 <span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme
+
+<span class="c"># Apply only after reviewing the preview</span>
+<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme --apply
 
 <span class="c"># Initialize and inspect runtime profiles</span>
 <span class="f">alfred-profile</span> init --repo ~/.alfred/profiles
@@ -139,7 +142,8 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">zsh &mdash; install (web)</span>
         </div>
-<pre><span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=memory --name=my-mem
+<pre><span class="c"># Preview Memory edition first</span>
+<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=memory --name=my-mem
 </pre>
       </div>
 
@@ -169,8 +173,9 @@ Apply changes? <span class="p">[y/N]</span>
 </pre>
       </div>
       <p>
-        Review the list, type <code>y</code>, and the files land. If you say
-        <code>N</code>, nothing is written and the preview is discarded.
+        Review the list first. The root installer writes no files unless you
+        rerun with <code>--apply</code>; harness config still remains preview-only
+        until a human explicitly copies or applies those generated artifacts.
       </p>
 
       <h2 id="verify">Verify the install</h2>
