@@ -54,16 +54,15 @@
     <main class="docs-main">
       <h1>Install Alfred</h1>
       <p class="doc-lead">
-        One curl. The installer is moving to a suite model: install the
-        coding edition, the Memory edition, or the full Alfred operations
-        system. Harness config is still previewed first and written only after
-        explicit human approval.
+        One curl opens a guided, human-first installer. The TUI explains the
+        edition, harness, runtime profile, Memory setup, name, and preview/apply
+        choices before Alfred writes anything.
       </p>
 
       <div class="doc-callout warn">
-        <strong>Heads up.</strong> The installer is <em>agent-driven</em>.
-        It only works through an AI agent. The shell script is fetched by
-        the agent, dry-run by default, and waits for your sign-off.
+        <strong>Preview first.</strong> The default path writes no files. Use
+        flags only for automation after the choices are already known; live
+        harness config still requires explicit human approval.
       </div>
 
       <h2 id="requirements">Requirements</h2>
@@ -76,8 +75,9 @@
 
       <h2 id="profiles">Choose an edition</h2>
       <p>
-        Alfred installs as a suite of components. Pick the edition that matches
-        the operational surface you need.
+        For human installs, start with the guided flow:
+        <code>curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh</code>.
+        The installer still accepts flags for automation and CI.
       </p>
       <table class="matrix">
         <thead>
@@ -109,11 +109,11 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">zsh &mdash; install</span>
         </div>
-<pre><span class="c"># Preview install plan; writes no files</span>
-<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme
+<pre><span class="c"># Guided human-first install; starts preview-first</span>
+<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh
 
-<span class="c"># Apply only after reviewing the preview</span>
-<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme --apply
+<span class="c"># Automation fallback when choices are already known</span>
+<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme --harness=none --apply
 
 <span class="c"># Initialize and inspect runtime profiles</span>
 <span class="f">alfred-profile</span> init --repo ~/.alfred/profiles
@@ -135,15 +135,15 @@
         <li>Create a free Postgres database (Neon / Supabase / Render).</li>
         <li>Copy the connection string &mdash; it looks like
           <code>postgres://user:pass@host/db?sslmode=require</code>.</li>
-        <li>Run the installer. It will prompt for the URL.</li>
+        <li>Run the guided installer and choose the Memory edition. Pick Postgres for shared/human/web memory, or decide later for a first preview.</li>
       </ol>
       <div class="terminal">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">zsh &mdash; install (web)</span>
         </div>
-<pre><span class="c"># Preview Memory edition first</span>
-<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=memory --name=my-mem
+<pre><span class="c"># Guided install: choose Memory or full in the TUI</span>
+<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh
 </pre>
       </div>
 
@@ -174,7 +174,7 @@ Apply changes? <span class="p">[y/N]</span>
       </div>
       <p>
         Review the list first. The root installer writes no files unless you
-        rerun with <code>--apply</code>; harness config still remains preview-only
+        choose apply in the TUI or pass <code>--apply</code> in automation; harness config still remains preview-only
         until a human explicitly copies or applies those generated artifacts.
       </p>
 

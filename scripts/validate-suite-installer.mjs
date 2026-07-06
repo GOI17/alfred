@@ -16,7 +16,12 @@ mkdirSync(cwd, { recursive: true });
 function run(args, options = {}) {
   return spawnSync("sh", [installSh, ...args], {
     cwd: options.cwd ?? cwd,
-    env: { ...process.env, HOME: home, PATH: process.env.PATH ?? "" },
+    env: {
+      ...process.env,
+      HOME: home,
+      PATH: process.env.PATH ?? "",
+      ...(options.env ?? {})
+    },
     encoding: "utf8"
   });
 }
@@ -32,8 +37,48 @@ try {
   assert.match(preview.stdout, /Name:\s+acme/);
   assert.match(preview.stdout, /No files were written/);
   assert.doesNotMatch(preview.stdout, /Installing Alfred Pi Agent/);
+  assert.match(preview.stdout, /TUI used:\s+false/);
   assert.equal(existsSync(join(cwd, "AGENTS.md")), false, "preview must not create AGENTS.md");
   assert.equal(existsSync(join(cwd, ".alfred")), false, "preview must not create .alfred in cwd");
+
+  const tuiFull = run([], {
+    env: {
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_TUI_INPUT: "3\n5\n1\n3\nacme\nn"
+    }
+  });
+  const tuiFullOutput = `${tuiFull.stdout}\n${tuiFull.stderr}`;
+  assert.equal(tuiFull.status, 0, tuiFull.stderr);
+  assert.match(tuiFullOutput, /ALFRED HUMAN-FIRST INSTALLER/);
+  assert.match(tuiFullOutput, /Choose an edition/);
+  assert.match(tuiFullOutput, /coding\s+\(recommended for agent work\)/);
+  assert.match(tuiFullOutput, /memory/);
+  assert.match(tuiFullOutput, /full/);
+  assert.match(tuiFullOutput, /Choose a harness target/);
+  assert.match(tuiFullOutput, /Choose a runtime profile strategy/);
+  assert.match(tuiFullOutput, /Choose a Memory setup strategy/);
+  assert.match(tuiFullOutput, /--name is a local human-readable install\/context identifier/);
+  assert.match(tuiFullOutput, /ALFRED SUITE INSTALL PREVIEW/);
+  assert.match(tuiFullOutput, /Edition:\s+full/);
+  assert.match(tuiFullOutput, /Harness:\s+none/);
+  assert.match(tuiFullOutput, /Profile:\s+runtime-profiles/);
+  assert.match(tuiFullOutput, /Memory setup:\s+postgres/);
+  assert.match(tuiFullOutput, /Name:\s+acme/);
+  assert.match(tuiFullOutput, /TUI used:\s+true/);
+  assert.match(tuiFullOutput, /No files were written/);
+  assert.equal(existsSync(join(home, ".alfred")), false, "TUI preview must not create ~/.alfred");
+
+  const tuiDecideLater = run([], {
+    env: {
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_TUI_INPUT: "1\n5\n2\nwork-laptop\nn"
+    }
+  });
+  assert.equal(tuiDecideLater.status, 0, tuiDecideLater.stderr);
+  assert.match(tuiDecideLater.stdout, /Edition:\s+coding/);
+  assert.match(tuiDecideLater.stdout, /Profile:\s+decide-later/);
+  assert.match(tuiDecideLater.stdout, /Components:\s+core,agents,skills,opencode-adapter,codex-adapter,evals/);
+  assert.doesNotMatch(tuiDecideLater.stdout, /Components:.*profile-manager/);
 
   const legacy = run(["--profile=coding", "--name=acme"]);
   assert.notEqual(legacy.status, 0);

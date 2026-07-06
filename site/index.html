@@ -52,16 +52,19 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">~/projects/alfred-workspace — zsh</span>
         </div>
-<pre><span class="c"># Preview the coding edition of the Alfred suite (writes no files)</span>
-<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme
+<pre><span class="c"># Start the guided human-first installer</span>
+<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh
+
+<span class="c"># The TUI explains the tradeoffs before anything is written</span>
+Choose an edition: coding / memory / full
+Choose a harness: auto / opencode / codex / pi / none
+Choose profiles: runtime profiles / decide later
+Apply safe suite install steps now? <span class="p">[y/N]</span>
 
 <span class="c"># Create runtime profiles for the same agent on different machines</span>
 <span class="f">alfred-profile</span> init --repo ~/.alfred/profiles
 <span class="f">alfred-profile</span> plan --repo ~/.alfred/profiles --profile=work --agent=opencode
 <span class="f">alfred-profile</span> switch --repo ~/.alfred/profiles --profile=work --agent=opencode --dry-run
-
-<span class="c"># Apply only after reviewing the plan</span>
-<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme --apply
 
 <span class="c"># Build harness previews before live config writes</span>
 <span class="f">alfred</span> adapter build opencode --preview --out .ai/generated/opencode-install
@@ -402,8 +405,8 @@
     <div class="container">
       <h2>Stop rewriting agents. Start operating them.</h2>
       <p>
-        Install Alfred by edition, activate a runtime profile for your current
-        machine, or read the architecture overview before you commit.
+        Open the guided installer, choose the edition/harness/profile strategy with
+        explanations, or read the architecture overview before you commit.
       </p>
       <div class="hero-cta">
         <a class="btn primary" href="/alfred/docs/install.html">Install Alfred</a>
