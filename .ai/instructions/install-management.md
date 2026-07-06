@@ -1,7 +1,7 @@
 ---
 id: instructions/install-management
 model_assigned: false
-description: Agent-driven instructions for installing, updating, and uninstalling Alfred artifacts into a user workspace. No manual installation, no TUI.
+description: Instructions for Alfred install/update/uninstall, including suite TUI and agent-driven harness previews.
 phase: phase-13-install-management
 author: core
 ---
@@ -10,7 +10,7 @@ author: core
 
 ## Purpose
 
-Provide deterministic, reproducible instructions for **agent-driven** installation, update, and uninstall of Alfred artifacts (agents, skills, adapters) into a user workspace. All operations are executed by an AI agent, never by manual user action.
+Provide deterministic, reproducible instructions for Alfred installation, update, and uninstall. The root `install.sh` is the human-first suite installer; adapter-driven harness artifact writes remain preview-first and approval-gated.
 
 ## Critical Rule
 
@@ -24,9 +24,13 @@ Provide deterministic, reproducible instructions for **agent-driven** installati
 
 ## Modes
 
-### Mode 1: Agent-Driven Initial Install (Only Mode)
+### Mode 0: Human-First Suite Install
 
-The ONLY supported installation mode. Used when:
+Use for humans installing Alfred itself. Run `curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh` without advanced flags so the TUI can explain edition, harness, runtime profiles, Memory setup, name, and preview/apply. Use `--edition`, `--name`, `--harness`, and `--apply` only for automation after decisions are known.
+
+### Mode 1: Agent-Driven Harness Artifact Install
+
+Used when:
 - User provides a URL to an Alfred artifact
 - User requests installation via natural language
 - No manual git clone is permitted
@@ -49,11 +53,11 @@ Process:
 5. **Dry-run first**: when uncertain, run `--dry-run` first to preview the operation without side effects.
 6. **Atomic writes**: all file writes must use a temporary file + `fs.renameSync` pattern.
 7. **Harness-aware previews**: initial install must detect the harness and generate the correct preview using the adapter package, not install the full Alfred repo.
-8. **No manual installation**: installation via TUI, CLI manual commands, or user git clone is not supported. All installation is agent-driven.
+8. **No manual live harness writes**: the suite TUI is supported for humans, but live harness config writes still require preview and explicit human approval.
 
 ## Install Operations
 
-### Agent-Driven Install (Mode 1 - Only Mode)
+### Agent-Driven Harness Artifact Install (Mode 1)
 
 When to use:
 - User provides a URL like "install this https://github.com/GOI17/alfred"
@@ -162,13 +166,15 @@ Source of truth: `.ai/install/components.json`.
 
 ### Required UX
 
-1. Parse `--edition=<coding|memory|full>` or repeated `--component=<id>`.
-2. Load `.ai/install/components.json`.
-3. Build a deterministic install plan showing packages, required configuration, protected writes, and validations.
-4. Run local capability detection before profile activation.
-5. Keep Memory setup under Memory components; do not present Memory as the whole Alfred install.
-6. Preview harness writes first, then require human approval for live config activation.
-7. Emit trace events for both provider calls avoided and installer operations.
+1. Open a guided TUI by default for interactive human installs without advanced flags.
+2. Explain why to choose each edition, harness target, profile strategy, Memory setup, and preview/apply mode.
+3. Parse `--edition=<coding|memory|full>` or repeated `--component=<id>` for automation and CI.
+4. Load `.ai/install/components.json`.
+5. Build a deterministic install plan showing packages, required configuration, protected writes, and validations.
+6. Run local capability detection before profile activation.
+7. Keep Memory setup under Memory components; do not present Memory as the whole Alfred install.
+8. Preview harness writes first, then require human approval for live config activation.
+9. Emit trace events for both provider calls avoided and installer operations.
 
 ### Profile Manager Component
 

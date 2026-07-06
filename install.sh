@@ -2,12 +2,13 @@
 # Alfred suite installer. Local-first, preview-first, no harness writes by default.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=coding --name=acme
+#   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh
 #   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=full --name=acme --apply
 #   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --component=profile-manager --name=acme
 #
 # Safety:
 #   - Without --apply this prints an install plan only and writes no files.
+#   - Without advanced flags and with a TTY, this opens a guided TUI.
 #   - It never installs Pi/opencode/Codex live harness config by default.
 #   - Unknown flags fail closed instead of being ignored.
 
@@ -25,6 +26,11 @@ HARNESS="auto"
 APPLY=false
 NO_CLONE=false
 COMPONENTS=""
+PROFILE_STRATEGY="runtime-profiles"
+MEMORY_SETUP="not-selected"
+SKIP_PROFILE_MANAGER=false
+HAD_ARGS=false
+TUI_USED=false
 
 log() { printf '[alfred-install] %s\n' "$*"; }
 err() { printf '[alfred-install][error] %s\n' "$*" 1>&2; exit 1; }
@@ -46,6 +52,7 @@ Flags:
   --help                          Show help.
 
 Examples:
+  install.sh
   install.sh --edition=coding --name=acme
   install.sh --edition=coding --name=acme --harness=opencode --apply
   install.sh --component=profile-manager --name=work-laptop
@@ -59,6 +66,10 @@ append_component() {
     COMPONENTS="$COMPONENTS,$1"
   fi
 }
+
+if [ "$#" -gt 0 ]; then
+  HAD_ARGS=true
+fi
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -84,6 +95,193 @@ while [ "$#" -gt 0 ]; do
     *) err "Unexpected positional argument: $1 (use --path=<dir> for install path)" ;;
   esac
 done
+
+
+tui_ask() {
+  prompt="$1"
+  default_value="$2"
+  if [ -n "${ALFRED_INSTALL_TUI_INPUT:-}" ]; then
+    answer="$(printf '%s\n' "$ALFRED_INSTALL_TUI_INPUT" | sed -n "${ALFRED_INSTALL_TUI_LINE:-1}p")"
+    ALFRED_INSTALL_TUI_LINE=$(( ${ALFRED_INSTALL_TUI_LINE:-1} + 1 ))
+    export ALFRED_INSTALL_TUI_LINE
+    printf '%s%s\n' "$prompt" "$answer" 1>&2
+  elif [ -r /dev/tty ]; then
+    printf '%s' "$prompt" > /dev/tty
+    IFS= read -r answer < /dev/tty || answer=""
+  else
+    answer=""
+  fi
+  if [ -z "$answer" ]; then
+    TUI_ANSWER="$default_value"
+  else
+    TUI_ANSWER="$answer"
+  fi
+}
+
+
+print_tui_header() {
+  cat <<'EOFTUI'
+==============================================================
+ALFRED HUMAN-FIRST INSTALLER
+==============================================================
+Guided, preview-first, and safe to exit before anything is written.
+EOFTUI
+}
+
+tui_choose_edition() {
+  cat <<'EOFEDITION'
+
+Choose an edition:
+  1) coding  (recommended for agent work)
+     Core, agents, skills, runtime profiles, adapters, evals. No Memory DB.
+  2) memory
+     Alfred Memory, API/MCP/OpenAPI, console, and external AI adapters.
+  3) full
+     Complete Alfred operations suite: coding + Memory together.
+EOFEDITION
+  tui_ask 'Edition [1=coding, 2=memory, 3=full, default 1]: ' '1'
+  choice="$TUI_ANSWER"
+  case "$choice" in
+    1|coding) EDITION="coding" ;;
+    2|memory) EDITION="memory" ;;
+    3|full) EDITION="full" ;;
+    *) err "Unknown TUI edition choice: $choice" ;;
+  esac
+}
+
+detected_harness_reason() {
+  if [ -d ".opencode" ] || command -v opencode >/dev/null 2>&1; then
+    printf 'opencode detected from .opencode/ or opencode on PATH'
+    return 0
+  fi
+  if [ -d ".codex" ] || [ -d ".agents" ] || [ -n "${CODEX_HOME:-}" ]; then
+    printf 'Codex detected from .codex/.agents or CODEX_HOME'
+    return 0
+  fi
+  printf 'no harness detected; choose none to decide later'
+}
+
+tui_choose_harness() {
+  reason="$(detected_harness_reason)"
+  cat <<EOFHARNESS
+
+Choose a harness target:
+  1) auto
+     Let Alfred detect the best target. Current signal: $reason.
+  2) opencode
+     For opencode projects; generates opencode previews only.
+  3) codex
+     For Codex custom agents/skills; generates Codex previews only.
+  4) pi
+     For Pi targets; live Pi config is still never written by default.
+  5) none / decide later
+     Plan the suite without harness-specific previews.
+EOFHARNESS
+  tui_ask 'Harness [1=auto, 2=opencode, 3=codex, 4=pi, 5=none, default 1]: ' '1'
+  choice="$TUI_ANSWER"
+  case "$choice" in
+    1|auto) HARNESS="auto" ;;
+    2|opencode) HARNESS="opencode" ;;
+    3|codex) HARNESS="codex" ;;
+    4|pi) HARNESS="pi" ;;
+    5|none|decide-later) HARNESS="none" ;;
+    *) err "Unknown TUI harness choice: $choice" ;;
+  esac
+}
+
+tui_choose_name() {
+  cat <<'EOFNAME'
+
+Choose a name:
+  --name is a local human-readable install/context identifier.
+  It labels traces and derives the default path: ~/.alfred/installs/<name>
+Examples: acme, work-laptop, personal, client-alpha
+EOFNAME
+  tui_ask 'Name [default acme]: ' 'acme'
+  NAME="$TUI_ANSWER"
+}
+
+tui_choose_profile_strategy() {
+  case "$EDITION" in
+    coding|full) ;;
+    *) PROFILE_STRATEGY="not-needed-for-memory-edition"; return 0 ;;
+  esac
+  cat <<'EOFPROFILE'
+
+Choose a runtime profile strategy:
+  1) runtime profiles (recommended)
+     Use shared defaults plus machine-private overlays for PATH/provider/model/plugin drift.
+  2) decide later
+     Skip profile initialization and configure harnesses manually later.
+EOFPROFILE
+  tui_ask 'Profile strategy [1=runtime profiles, 2=decide later, default 1]: ' '1'
+  choice="$TUI_ANSWER"
+  case "$choice" in
+    1|runtime|runtime-profiles) PROFILE_STRATEGY="runtime-profiles"; SKIP_PROFILE_MANAGER=false ;;
+    2|later|none|decide-later) PROFILE_STRATEGY="decide-later"; SKIP_PROFILE_MANAGER=true ;;
+    *) err "Unknown TUI profile strategy choice: $choice" ;;
+  esac
+}
+
+tui_choose_memory_setup() {
+  case "$EDITION" in
+    memory|full) ;;
+    *) MEMORY_SETUP="not-needed-for-coding-edition"; return 0 ;;
+  esac
+  cat <<'EOFMEMORY'
+
+Choose a Memory setup strategy:
+  1) decide later (recommended for first install)
+     Plan/install without choosing storage yet.
+  2) local SQLite
+     Good for coding-agent-only local development on one machine.
+  3) Postgres
+     Required for human/web agents, external AI shared memory, or multiple machines.
+EOFMEMORY
+  tui_ask 'Memory setup [1=decide later, 2=local SQLite, 3=Postgres, default 1]: ' '1'
+  choice="$TUI_ANSWER"
+  case "$choice" in
+    1|later|decide-later) MEMORY_SETUP="decide-later" ;;
+    2|sqlite|local|local-sqlite) MEMORY_SETUP="local-sqlite" ;;
+    3|postgres|pg) MEMORY_SETUP="postgres" ;;
+    *) err "Unknown TUI Memory setup choice: $choice" ;;
+  esac
+}
+
+tui_confirm_apply() {
+  cat <<'EOFAPPLY'
+
+Safety choice:
+  Preview mode writes no files and is the safest first run.
+  Apply can clone/reuse the repo and initialize local profile folders.
+  Live harness config is still not written by default.
+EOFAPPLY
+  tui_ask 'Apply safe suite install steps now? [y/N]: ' 'n'
+  choice="$TUI_ANSWER"
+  case "$choice" in
+    y|Y|yes|YES) APPLY=true ;;
+    *) APPLY=false ;;
+  esac
+}
+
+run_tui_if_available() {
+  if [ "$HAD_ARGS" = true ] && [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ]; then
+    return 0
+  fi
+  if [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ] && [ ! -r /dev/tty ]; then
+    return 0
+  fi
+  TUI_USED=true
+  print_tui_header
+  tui_choose_edition
+  tui_choose_harness
+  tui_choose_profile_strategy
+  tui_choose_memory_setup
+  tui_choose_name
+  tui_confirm_apply
+}
+
+run_tui_if_available
 
 case "$EDITION" in
   coding|memory|full) ;;
@@ -145,10 +343,12 @@ edition_components() {
     printf '%s' "$COMPONENTS"
     return 0
   fi
-  case "$EDITION" in
-    coding) printf 'core,agents,skills,profile-manager,opencode-adapter,codex-adapter,evals' ;;
-    memory) printf 'memory,memory-server,memory-client,memory-mcp,memory-openapi,chatgpt-adapter,anthropic-adapter,gemini-adapter,console,console-web' ;;
-    full) printf 'core,agents,skills,profile-manager,opencode-adapter,codex-adapter,evals,memory,memory-server,memory-client,memory-mcp,memory-openapi,chatgpt-adapter,anthropic-adapter,gemini-adapter,console,console-web' ;;
+  case "$EDITION:$SKIP_PROFILE_MANAGER" in
+    coding:true) printf 'core,agents,skills,opencode-adapter,codex-adapter,evals' ;;
+    coding:*) printf 'core,agents,skills,profile-manager,opencode-adapter,codex-adapter,evals' ;;
+    memory:*) printf 'memory,memory-server,memory-client,memory-mcp,memory-openapi,chatgpt-adapter,anthropic-adapter,gemini-adapter,console,console-web' ;;
+    full:true) printf 'core,agents,skills,opencode-adapter,codex-adapter,evals,memory,memory-server,memory-client,memory-mcp,memory-openapi,chatgpt-adapter,anthropic-adapter,gemini-adapter,console,console-web' ;;
+    full:*) printf 'core,agents,skills,profile-manager,opencode-adapter,codex-adapter,evals,memory,memory-server,memory-client,memory-mcp,memory-openapi,chatgpt-adapter,anthropic-adapter,gemini-adapter,console,console-web' ;;
   esac
 }
 
@@ -163,9 +363,12 @@ Edition:        $EDITION
 Name:           $NAME
 Target path:    $TARGET_PATH
 Harness:        $RESOLVED_HARNESS
+Profile:        $PROFILE_STRATEGY
+Memory setup:   $MEMORY_SETUP
 Components:     $COMPONENT_PLAN
 Node:           $node_status
 Provider calls: 0
+TUI used:       $TUI_USED
 
 What --name means:
   A local human-readable install/context identifier. It is used to derive
@@ -179,6 +382,17 @@ Safety:
 EOFPLAN
 
 if [ "$APPLY" != true ]; then
+  if [ "$TUI_USED" = true ]; then
+    cat <<EOFNEXT
+
+No files were written. Preview-only mode is the default.
+To apply safe suite install steps, rerun the guided installer and choose apply:
+  curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh
+
+Automation fallback when the decisions are already known:
+  curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=$EDITION --name=$NAME --harness=$HARNESS --apply
+EOFNEXT
+  else
   cat <<EOFNEXT
 
 No files were written. Preview-only mode is the default.
@@ -189,6 +403,7 @@ Examples:
   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=$EDITION --name=$NAME --apply
   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=$EDITION --name=$NAME --harness=opencode --apply
 EOFNEXT
+  fi
   exit 0
 fi
 
@@ -273,6 +488,8 @@ cat > "$TRACE_TMP" <<EOFTRACE
     "name": "$NAME",
     "target_path": "$TARGET_PATH",
     "harness": "$RESOLVED_HARNESS",
+    "profile_strategy": "$PROFILE_STRATEGY",
+    "memory_setup": "$MEMORY_SETUP",
     "components": "$COMPONENT_PLAN",
     "status": "pass",
     "human_approval": true,
