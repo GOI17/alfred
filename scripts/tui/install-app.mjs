@@ -7,11 +7,10 @@ const editions = [
   { value: "full", label: "Full", help: "Complete operations suite: coding + Memory." }
 ];
 const harnesses = [
-  { value: "auto", label: "Auto", help: "Detect opencode/Codex when possible." },
   { value: "opencode", label: "opencode", help: "Generate opencode preview artifacts." },
-  { value: "codex", label: "Codex", help: "Generate Codex custom agent previews." },
-  { value: "pi", label: "Pi", help: "Target Pi previews; no live config writes." },
-  { value: "none", label: "None", help: "Install suite only, decide harness later." }
+  { value: "codex-cli", label: "Codex CLI", help: "Generate previews for Codex CLI custom agents." },
+  { value: "codex-app", label: "Codex App", help: "Generate previews for the Codex desktop/app surface." },
+  { value: "pi", label: "Pi", help: "Target Pi previews; no live config writes." }
 ];
 const memorySetups = [
   { value: "decide-later", label: "Decide later", help: "Recommended first run; no storage choice yet." },
@@ -21,7 +20,9 @@ const memorySetups = [
 
 const state = {
   edition: envChoice("ALFRED_INSTALL_CURRENT_EDITION", editions, "coding"),
-  harness: envChoice("ALFRED_INSTALL_CURRENT_HARNESS", harnesses, "auto"),
+  selectedHarnesses: initialHarnesses(),
+  harnessFocus: 0,
+  harnessStatus: parseHarnessStatus(),
   useProfiles: process.env.ALFRED_INSTALL_CURRENT_PROFILE !== "decide-later",
   memorySetup: envChoice("ALFRED_INSTALL_CURRENT_MEMORY", memorySetups, "decide-later"),
   name: process.env.ALFRED_INSTALL_CURRENT_NAME || "acme",
@@ -32,6 +33,44 @@ const state = {
   cancelled: false,
   message: "Use ↑/↓ to move, ←/→ to change, Space to toggle, Enter to review/apply. Mouse clicks work when supported."
 };
+
+function parseHarnessStatus() {
+  const raw = process.env.ALFRED_INSTALL_HARNESS_STATUS || "";
+  const map = new Map();
+  for (const entry of raw.split(",")) {
+    const [key, value] = entry.split("=");
+    if (key && value) map.set(key, value);
+  }
+  return map;
+}
+
+function initialHarnesses() {
+  const raw = process.env.ALFRED_INSTALL_CURRENT_HARNESS || "auto";
+  if (raw === "auto") {
+    const status = parseHarnessStatus();
+    const installed = harnesses.filter((harness) => status.get(harness.value) === "installed").map((harness) => harness.value);
+    return installed.length ? installed : [];
+  }
+  return parseHarnessList(raw);
+}
+
+function parseHarnessList(raw) {
+  const selected = [];
+  const add = (value) => {
+    if (harnesses.some((harness) => harness.value === value) && !selected.includes(value)) selected.push(value);
+  };
+  for (const value of String(raw).split(/[,+| ]+/).filter(Boolean)) {
+    if (value === "auto") {
+      for (const harness of initialHarnesses()) add(harness);
+    } else if (value === "codex") {
+      add("codex-cli");
+      add("codex-app");
+    } else if (value !== "none") {
+      add(value);
+    }
+  }
+  return selected;
+}
 
 function envChoice(name, options, fallback) {
   const value = process.env[name];
@@ -80,6 +119,20 @@ function renderCheckbox(title, checked, help, focused) {
   return `${focused ? "▶" : " "} ${title}\n   ${checked ? "☑" : "☐"} ${checked ? "Enabled" : "Disabled"}\n   ${dim(help)}`;
 }
 
+function renderHarnessMulti(focused) {
+  const lines = [`${focused ? "▶" : " "} Harness targets`];
+  lines.push("   Select one or more. Auto preselects installed harnesses.");
+  for (const [index, harness] of harnesses.entries()) {
+    const selected = state.selectedHarnesses.includes(harness.value);
+    const status = state.harnessStatus.get(harness.value) || "not-installed";
+    const cursor = focused && index === state.harnessFocus ? "›" : " ";
+    lines.push(`   ${cursor} ${selected ? "☑" : "☐"} ${harness.label} [${status}]`);
+  }
+  const active = harnesses[state.harnessFocus] || harnesses[0];
+  lines.push(`   ${dim(active.help)}`);
+  return lines.join("\n");
+}
+
 function renderInput(title, value, placeholder, focused) {
   const content = value || dim(placeholder);
   return `${focused ? "▶" : " "} ${title}\n   [ ${content}${focused ? "_" : ""} ]`;
@@ -103,7 +156,7 @@ function screen() {
   for (const [index, row] of list.entries()) {
     const focused = index === state.focus;
     if (row === "edition") blocks.push(renderRadio("Edition", editions, state.edition, focused));
-    if (row === "harness") blocks.push(renderRadio("Harness", harnesses, state.harness, focused));
+    if (row === "harness") blocks.push(renderHarnessMulti(focused));
     if (row === "profiles") blocks.push(renderCheckbox("Runtime profiles", state.useProfiles, "Use shared defaults plus machine-local overlays for PATH/provider/model/plugin drift.", focused));
     if (row === "memory") blocks.push(renderRadio("Memory setup", memorySetups, state.memorySetup, focused));
     if (row === "name") blocks.push(renderInput("Install name", state.name, "acme", focused));
@@ -121,7 +174,8 @@ function reviewLine() {
   const profile = state.edition === "memory" ? "not-needed-for-memory-edition" : state.useProfiles ? "runtime-profiles" : "decide-later";
   const memory = requiresMemory() ? state.memorySetup : "not-needed-for-coding-edition";
   const path = state.targetPath || `~/.alfred/installs/${state.name || "acme"}`;
-  return `${bold("Review:")} edition=${state.edition} · harness=${state.harness} · profiles=${profile} · memory=${memory} · name=${state.name || "acme"} · path=${path} · apply=${state.apply ? "yes" : "no"}`;
+  const selected = state.selectedHarnesses.length ? state.selectedHarnesses.join(",") : "none";
+  return `${bold("Review:")} edition=${state.edition} · harnesses=${selected} · profiles=${profile} · memory=${memory} · name=${state.name || "acme"} · path=${path} · apply=${state.apply ? "yes" : "no"}`;
 }
 
 function move(delta) {
@@ -132,15 +186,26 @@ function move(delta) {
 function change(delta) {
   const row = currentRow();
   if (row === "edition") state.edition = cycle(editions, state.edition, delta);
-  if (row === "harness") state.harness = cycle(harnesses, state.harness, delta);
+  if (row === "harness") state.harnessFocus = (state.harnessFocus + delta + harnesses.length) % harnesses.length;
   if (row === "memory") state.memorySetup = cycle(memorySetups, state.memorySetup, delta);
 }
 
 function toggleOrSubmit() {
   const row = currentRow();
   if (row === "profiles") state.useProfiles = !state.useProfiles;
+  else if (row === "harness") toggleHarness();
   else if (row === "apply") state.apply = !state.apply;
   else if (row === "submit") state.done = true;
+}
+
+function toggleHarness() {
+  const harness = harnesses[state.harnessFocus];
+  if (!harness) return;
+  if (state.selectedHarnesses.includes(harness.value)) {
+    state.selectedHarnesses = state.selectedHarnesses.filter((value) => value !== harness.value);
+  } else {
+    state.selectedHarnesses = [...state.selectedHarnesses, harness.value];
+  }
 }
 
 function inputText(text) {
@@ -180,7 +245,7 @@ function setValue(pair) {
   const key = pair.slice(0, index);
   const value = pair.slice(index + 1);
   if (key === "edition" && editions.some((option) => option.value === value)) state.edition = value;
-  if (key === "harness" && harnesses.some((option) => option.value === value)) state.harness = value;
+  if (key === "harness" || key === "harnesses") state.selectedHarnesses = parseHarnessList(value);
   if (key === "profiles") state.useProfiles = value !== "decide-later" && value !== "false";
   if (key === "memory" && memorySetups.some((option) => option.value === value)) state.memorySetup = value;
   if (key === "name") state.name = value;
@@ -223,9 +288,10 @@ function assignments() {
   const profile = state.edition === "memory" ? "not-needed-for-memory-edition" : state.useProfiles ? "runtime-profiles" : "decide-later";
   const memory = requiresMemory() ? state.memorySetup : "not-needed-for-coding-edition";
   const name = state.name.trim() || "acme";
+  const harnessSelection = state.selectedHarnesses.length ? state.selectedHarnesses.join(",") : "none";
   const lines = [
     `EDITION='${shellQuote(state.edition)}'`,
-    `HARNESS='${shellQuote(state.harness)}'`,
+    `HARNESS='${shellQuote(harnessSelection)}'`,
     `PROFILE_STRATEGY='${shellQuote(profile)}'`,
     `MEMORY_SETUP='${shellQuote(memory)}'`,
     `NAME='${shellQuote(name)}'`,

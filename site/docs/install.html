@@ -55,8 +55,8 @@
       <h1>Install Alfred</h1>
       <p class="doc-lead">
         One curl opens an app-like, human-first installer. Use arrow keys,
-        checkbox-style toggles, text inputs, and mouse clicks where supported
-        while Alfred explains every choice before writing anything.
+        checkbox-style toggles, text inputs, and mouse clicks where supported.
+        Harness choices show installed/not-installed status and support selecting multiple targets before Alfred writes anything.
       </p>
 
       <div class="doc-callout warn">
@@ -113,7 +113,7 @@
 <span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh
 
 <span class="c"># Automation fallback when choices are already known</span>
-<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme --harness=none --apply
+<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme --harness=opencode,codex-cli --apply
 
 <span class="c"># Initialize and inspect runtime profiles</span>
 <span class="f">alfred-profile</span> init --repo ~/.alfred/profiles

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -50,7 +50,7 @@ try {
       ALFRED_INSTALL_FORCE_TUI: "1",
       ALFRED_INSTALL_APP_TUI_RENDER: "1",
       ALFRED_INSTALL_APP_TUI_EVENTS:
-        "set:edition=full,set:harness=codex,set:profiles=true,set:memory=postgres,set:name=app-demo,set:apply=false,submit"
+        "set:edition=full,set:harnesses=opencode+codex-cli+codex-app,set:profiles=true,set:memory=postgres,set:name=app-demo,set:apply=false,submit"
     }
   });
   const appTuiOutput = `${appTuiPreview.stdout}\n${appTuiPreview.stderr}`;
@@ -59,11 +59,16 @@ try {
   assert.match(appTuiOutput, /app TUI/);
   assert.match(appTuiOutput, /Keyboard: ↑\/↓ move/);
   assert.match(appTuiOutput, /Mouse: click a section/);
+  assert.match(appTuiOutput, /opencode \[/);
+  assert.match(appTuiOutput, /Codex CLI \[/);
+  assert.match(appTuiOutput, /Codex App \[/);
+  assert.match(appTuiOutput, /Pi \[/);
   assert.match(appTuiOutput, /☑ Enabled/);
-  assert.match(appTuiOutput, /edition=full · harness=codex/);
+  assert.match(appTuiOutput, /edition=full · harnesses=opencode,codex-cli,codex-app/);
   assert.match(appTuiPreview.stdout, /ALFRED SUITE INSTALL PREVIEW/);
   assert.match(appTuiPreview.stdout, /Edition:\s+full/);
-  assert.match(appTuiPreview.stdout, /Harness:\s+codex/);
+  assert.match(appTuiPreview.stdout, /Harnesses:\s+opencode,codex-cli,codex-app/);
+  assert.match(appTuiPreview.stdout, /Detected:\s+opencode \[/);
   assert.match(appTuiPreview.stdout, /Profile:\s+runtime-profiles/);
   assert.match(appTuiPreview.stdout, /Memory setup:\s+postgres/);
   assert.match(appTuiPreview.stdout, /Name:\s+app-demo/);
@@ -75,13 +80,38 @@ try {
     cwd,
     env: {
       ...process.env,
-      ALFRED_INSTALL_APP_TUI_EVENTS: "mouse:1:13,submit"
+      ALFRED_INSTALL_HARNESS_STATUS: "opencode=not-installed,codex-cli=not-installed,codex-app=not-installed,pi=not-installed",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "mouse:1:9,submit"
     },
     encoding: "utf8"
   });
   assert.equal(appTuiMouseToggle.status, 0, appTuiMouseToggle.stderr);
-  assert.match(appTuiMouseToggle.stdout, /PROFILE_STRATEGY='decide-later'/);
+  assert.match(appTuiMouseToggle.stdout, /HARNESS='opencode'/);
   assert.match(appTuiMouseToggle.stdout, /TUI_MODE='app'/);
+
+  const multiFlagPreview = run(["--edition=coding", "--name=multi", "--harness=opencode,codex-cli,codex-app"]);
+  assert.equal(multiFlagPreview.status, 0, multiFlagPreview.stderr);
+  assert.match(multiFlagPreview.stdout, /Harnesses:\s+opencode,codex-cli,codex-app/);
+  assert.match(multiFlagPreview.stdout, /Detected:\s+opencode \[/);
+
+  const fakeBin = join(fixture, "fake-bin");
+  const fakeCodexApp = join(fixture, "Codex.app");
+  mkdirSync(fakeBin, { recursive: true });
+  mkdirSync(fakeCodexApp, { recursive: true });
+  writeFileSync(join(fakeBin, "opencode"), "#!/bin/sh\nexit 0\n");
+  chmodSync(join(fakeBin, "opencode"), 0o755);
+  const autoPreview = run(["--edition=coding", "--name=auto", "--harness=auto"], {
+    env: {
+      PATH: `${fakeBin}:/usr/bin:/bin`,
+      CODEX_APP_HOME: fakeCodexApp
+    }
+  });
+  assert.equal(autoPreview.status, 0, autoPreview.stderr);
+  assert.match(autoPreview.stdout, /Harnesses:\s+opencode,codex-app/);
+  assert.match(autoPreview.stdout, /opencode \[installed\]/);
+  assert.match(autoPreview.stdout, /codex-cli \[not-installed\]/);
+  assert.match(autoPreview.stdout, /codex-app \[installed\]/);
+  assert.match(autoPreview.stdout, /pi \[not-installed\]/);
 
   const tuiFull = run([], {
     env: {
@@ -102,7 +132,7 @@ try {
   assert.match(tuiFullOutput, /--name is a local human-readable install\/context identifier/);
   assert.match(tuiFullOutput, /ALFRED SUITE INSTALL PREVIEW/);
   assert.match(tuiFullOutput, /Edition:\s+full/);
-  assert.match(tuiFullOutput, /Harness:\s+none/);
+  assert.match(tuiFullOutput, /Harnesses:\s+none/);
   assert.match(tuiFullOutput, /Profile:\s+runtime-profiles/);
   assert.match(tuiFullOutput, /Memory setup:\s+postgres/);
   assert.match(tuiFullOutput, /Name:\s+acme/);
@@ -132,7 +162,7 @@ try {
 
   const target = join(fixture, "existing-alfred-repo");
   mkdirSync(target, { recursive: true });
-  const applied = run(["--edition=coding", "--name=acme", "--path", target, "--apply", "--no-clone", "--harness=none"]);
+  const applied = run(["--edition=coding", "--name=acme", "--path", target, "--apply", "--no-clone", "--harness=opencode,codex-cli"]);
   assert.equal(applied.status, 0, applied.stderr);
   assert.match(applied.stdout, /ALFRED SUITE INSTALL APPLIED/);
   assert.equal(existsSync(join(home, ".alfred", "runtime-profiles", "profiles")), true);
@@ -141,6 +171,8 @@ try {
   const trace = JSON.parse(readFileSync(join(home, ".alfred", "observability", "install-trace.json"), "utf8"));
   assert.equal(trace.actor, "alfred-suite-install");
   assert.equal(trace.data.edition, "coding");
+  assert.equal(trace.data.harnesses, "opencode,codex-cli");
+  assert.match(trace.data.harness_status, /opencode=/);
   assert.equal(trace.data.provider_calls, 0);
 
   console.log("suite installer validation ok: preview is default, legacy flags fail closed, and apply does not install Pi by default");
