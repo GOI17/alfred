@@ -243,6 +243,10 @@ done
 
 HARNESS_STATUS="$(detect_harness_status)"
 
+has_dev_tty() {
+  { : < /dev/tty > /dev/tty; } 2>/dev/null
+}
+
 tui_ask() {
   prompt="$1"
   default_value="$2"
@@ -251,7 +255,7 @@ tui_ask() {
     ALFRED_INSTALL_TUI_LINE=$(( ${ALFRED_INSTALL_TUI_LINE:-1} + 1 ))
     export ALFRED_INSTALL_TUI_LINE
     printf '%s%s\n' "$prompt" "$answer" 1>&2
-  elif [ -r /dev/tty ]; then
+  elif has_dev_tty; then
     printf '%s' "$prompt" > /dev/tty
     IFS= read -r answer < /dev/tty || answer=""
   else
@@ -278,7 +282,7 @@ run_app_tui_if_available() {
   if [ "$HAD_ARGS" = true ] && [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ]; then
     return 1
   fi
-  if [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ] && [ ! -r /dev/tty ]; then
+  if [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ] && ! has_dev_tty; then
     return 1
   fi
   command -v node >/dev/null 2>&1 || return 1
@@ -297,16 +301,49 @@ run_app_tui_if_available() {
   fi
 
   app_tui_out="${TMPDIR:-/tmp}/alfred-install-app-tui.$$.env"
-  if ALFRED_INSTALL_CURRENT_EDITION="$EDITION" \
-    ALFRED_INSTALL_CURRENT_HARNESS="$HARNESS" \
-    ALFRED_INSTALL_CURRENT_PROFILE="$PROFILE_STRATEGY" \
-    ALFRED_INSTALL_CURRENT_MEMORY="$MEMORY_SETUP" \
-    ALFRED_INSTALL_CURRENT_NAME="$NAME" \
-    ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH" \
-    ALFRED_INSTALL_CURRENT_APPLY="$APPLY" \
-    ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
-    node "$app_tui_script" > "$app_tui_out"
-  then
+  app_tui_status=1
+  if [ -n "${ALFRED_INSTALL_APP_TUI_EVENTS:-}${ALFRED_INSTALL_APP_TUI_SCRIPT:-}" ]; then
+    if ALFRED_INSTALL_CURRENT_EDITION="$EDITION" \
+      ALFRED_INSTALL_CURRENT_HARNESS="$HARNESS" \
+      ALFRED_INSTALL_CURRENT_PROFILE="$PROFILE_STRATEGY" \
+      ALFRED_INSTALL_CURRENT_MEMORY="$MEMORY_SETUP" \
+      ALFRED_INSTALL_CURRENT_NAME="$NAME" \
+      ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH" \
+      ALFRED_INSTALL_CURRENT_APPLY="$APPLY" \
+      ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
+      node "$app_tui_script" > "$app_tui_out"
+    then
+      app_tui_status=0
+    fi
+  elif has_dev_tty; then
+    if ALFRED_INSTALL_CURRENT_EDITION="$EDITION" \
+      ALFRED_INSTALL_CURRENT_HARNESS="$HARNESS" \
+      ALFRED_INSTALL_CURRENT_PROFILE="$PROFILE_STRATEGY" \
+      ALFRED_INSTALL_CURRENT_MEMORY="$MEMORY_SETUP" \
+      ALFRED_INSTALL_CURRENT_NAME="$NAME" \
+      ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH" \
+      ALFRED_INSTALL_CURRENT_APPLY="$APPLY" \
+      ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
+      ALFRED_INSTALL_APP_TUI_RESULT_FILE="$app_tui_out" \
+      node "$app_tui_script" < /dev/tty > /dev/tty
+    then
+      app_tui_status=0
+    fi
+  else
+    if ALFRED_INSTALL_CURRENT_EDITION="$EDITION" \
+      ALFRED_INSTALL_CURRENT_HARNESS="$HARNESS" \
+      ALFRED_INSTALL_CURRENT_PROFILE="$PROFILE_STRATEGY" \
+      ALFRED_INSTALL_CURRENT_MEMORY="$MEMORY_SETUP" \
+      ALFRED_INSTALL_CURRENT_NAME="$NAME" \
+      ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH" \
+      ALFRED_INSTALL_CURRENT_APPLY="$APPLY" \
+      ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
+      node "$app_tui_script" > "$app_tui_out"
+    then
+      app_tui_status=0
+    fi
+  fi
+  if [ "$app_tui_status" -eq 0 ] && [ -s "$app_tui_out" ]; then
     # shellcheck disable=SC1090
     . "$app_tui_out"
     rm -f "$app_tui_out" "$app_tui_tmp"
@@ -349,6 +386,32 @@ detected_harness_reason() {
   printf 'no harness detected; choose none to decide later'
 }
 
+map_tui_harness_choices() {
+  input="$1"
+  result=""
+  normalized="$(printf '%s' "$input" | tr '+| ' ',,,')"
+  old_ifs="$IFS"
+  IFS=","
+  for raw in $normalized; do
+    IFS="$old_ifs"
+    case "$raw" in
+      "" ) ;;
+      1|auto) result="$(append_csv_unique "$result" "auto")" ;;
+      2|opencode) result="$(append_csv_unique "$result" "opencode")" ;;
+      3|codex) result="$(append_csv_unique "$result" "codex")" ;;
+      4|pi) result="$(append_csv_unique "$result" "pi")" ;;
+      5|none|decide-later) result="$(append_csv_unique "$result" "none")" ;;
+      *) err "Unknown TUI harness choice: $raw" ;;
+    esac
+    IFS=","
+  done
+  IFS="$old_ifs"
+  if [ -z "$result" ]; then
+    result="auto"
+  fi
+  printf '%s' "$result"
+}
+
 tui_choose_harness() {
   reason="$(detected_harness_reason)"
   cat <<EOFHARNESS
@@ -365,18 +428,12 @@ Choose a harness target:
   5) none / decide later
      Plan the suite without harness-specific previews.
 
+You can select more than one with commas, for example: 2,3 for opencode + Codex.
 Detected: $(display_harness_status)
 EOFHARNESS
-  tui_ask 'Harness [1=auto, 2=opencode, 3=codex, 4=pi, 5=none, default 1]: ' '1'
+  tui_ask 'Harnesses [1=auto, 2=opencode, 3=codex, 4=pi, 5=none; comma-separated, default 1]: ' '1'
   choice="$TUI_ANSWER"
-  case "$choice" in
-    1|auto) HARNESS="auto" ;;
-    2|opencode) HARNESS="opencode" ;;
-    3|codex) HARNESS="codex" ;;
-    4|pi) HARNESS="pi" ;;
-    5|none|decide-later) HARNESS="none" ;;
-    *) err "Unknown TUI harness choice: $choice" ;;
-  esac
+  HARNESS="$(map_tui_harness_choices "$choice")"
 }
 
 tui_choose_name() {
@@ -458,7 +515,7 @@ run_tui_if_available() {
   if [ "$HAD_ARGS" = true ] && [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ]; then
     return 0
   fi
-  if [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ] && [ ! -r /dev/tty ]; then
+  if [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ] && ! has_dev_tty; then
     return 0
   fi
   TUI_USED=true

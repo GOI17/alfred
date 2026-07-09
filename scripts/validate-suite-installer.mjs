@@ -89,6 +89,23 @@ try {
   assert.match(appTuiMouseToggle.stdout, /HARNESS='opencode'/);
   assert.match(appTuiMouseToggle.stdout, /TUI_MODE='app'/);
 
+  const appTuiResultFile = join(fixture, "app-tui-result.env");
+  const appTuiResult = spawnSync("node", [appTui], {
+    cwd,
+    env: {
+      ...process.env,
+      ALFRED_INSTALL_APP_TUI_RESULT_FILE: appTuiResultFile,
+      ALFRED_INSTALL_APP_TUI_EVENTS: "set:edition=coding,set:harnesses=opencode+codex-cli,set:name=tty-result,submit"
+    },
+    encoding: "utf8"
+  });
+  assert.equal(appTuiResult.status, 0, appTuiResult.stderr);
+  assert.equal(appTuiResult.stdout, "");
+  const appTuiResultEnv = readFileSync(appTuiResultFile, "utf8");
+  assert.match(appTuiResultEnv, /HARNESS='opencode,codex-cli'/);
+  assert.match(appTuiResultEnv, /NAME='tty-result'/);
+  assert.match(appTuiResultEnv, /TUI_MODE='app'/);
+
   const multiFlagPreview = run(["--edition=coding", "--name=multi", "--harness=opencode,codex-cli,codex-app"]);
   assert.equal(multiFlagPreview.status, 0, multiFlagPreview.stderr);
   assert.match(multiFlagPreview.stdout, /Harnesses:\s+opencode,codex-cli,codex-app/);
@@ -139,6 +156,20 @@ try {
   assert.match(tuiFullOutput, /TUI used:\s+true/);
   assert.match(tuiFullOutput, /No files were written/);
   assert.equal(existsSync(join(home, ".alfred")), false, "TUI preview must not create ~/.alfred");
+
+  const tuiMultiHarness = run([], {
+    env: {
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_TUI_INPUT: "1\n2,3\n1\nmulti-text\nn"
+    }
+  });
+  const tuiMultiHarnessOutput = `${tuiMultiHarness.stdout}\n${tuiMultiHarness.stderr}`;
+  assert.equal(tuiMultiHarness.status, 0, tuiMultiHarness.stderr);
+  assert.match(tuiMultiHarnessOutput, /comma-separated/);
+  assert.match(tuiMultiHarness.stdout, /Edition:\s+coding/);
+  assert.match(tuiMultiHarness.stdout, /Harnesses:\s+opencode,codex-cli,codex-app/);
+  assert.match(tuiMultiHarness.stdout, /Name:\s+multi-text/);
+  assert.match(tuiMultiHarness.stdout, /TUI mode:\s+text/);
 
   const tuiDecideLater = run([], {
     env: {
