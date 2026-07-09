@@ -228,7 +228,11 @@ try {
     }
   });
   assert.equal(handoffCopy.status, 0, handoffCopy.stderr);
+  assert.match(handoffCopy.stdout, /ALFRED INSTALL COMPLETE/);
   assert.match(handoffCopy.stdout, /Final handoff choices:/);
+  assert.match(handoffCopy.stdout, /Project files:\s+Not copied yet/);
+  assert.match(handoffCopy.stdout, /<project>\/.ai\/generated\/alfred-install\/copy-demo/);
+  assert.doesNotMatch(handoffCopy.stdout, /Where files go and why:/);
   assert.match(handoffCopy.stdout, /Copied reviewable preview bundle:/);
   assert.match(handoffCopy.stdout, /This did not write live harness config/);
   assert.equal(

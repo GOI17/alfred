@@ -644,6 +644,35 @@ $(print_expected_preview_locations)
 EOFHANDOFF
 }
 
+pretty_path() {
+  path_value="$1"
+  case "$path_value" in
+    "$SOURCE_PROJECT_PATH") printf '<project>' ;;
+    "$SOURCE_PROJECT_PATH"/*) printf '<project>/%s' "${path_value#"$SOURCE_PROJECT_PATH"/}" ;;
+    "$HOME") printf '~' ;;
+    "$HOME"/*) printf '~/%s' "${path_value#"$HOME"/}" ;;
+    *) printf '%s' "$path_value" ;;
+  esac
+}
+
+write_handoff_summary() {
+  HANDOFF_SUMMARY_FILE="$TARGET_PATH/.ai/generated/install-handoff.txt"
+  mkdir -p "$(dirname "$HANDOFF_SUMMARY_FILE")"
+  {
+    printf 'Alfred install handoff\n'
+    printf '======================\n\n'
+    printf 'Project launched from: %s\n' "$SOURCE_PROJECT_PATH"
+    printf 'Alfred suite install:  %s\n' "$TARGET_PATH"
+    printf 'Runtime profiles:      %s\n' "$HOME/.alfred/runtime-profiles"
+    printf 'Trace:                 %s\n' "$HOME/.alfred/observability/install-trace.json"
+    printf 'Install docs:          %s\n\n' "$TARGET_PATH/site/docs/install.html"
+    printf 'Why outside the project by default:\n'
+    printf 'Alfred is preview-first. It keeps generated suite and harness artifacts under ~/.alfred so the installer does not unexpectedly mutate your project or write live opencode/Codex/Pi config.\n\n'
+    printf 'Generated preview locations:\n'
+    print_expected_preview_locations
+  } > "$HANDOFF_SUMMARY_FILE"
+}
+
 copy_generated_previews_to_project() {
   source_dir="$TARGET_PATH/.ai/generated"
   destination_dir="$SOURCE_PROJECT_PATH/.ai/generated/alfred-install/$NAME"
@@ -664,7 +693,7 @@ copy_generated_previews_to_project() {
     cat <<EOFCOPIED
 
 Copied reviewable preview bundle:
-  $destination_dir
+  $(pretty_path "$destination_dir")
 
 This did not write live harness config. Review the copied previews before moving
 individual files into .opencode, .codex, or any harness-specific live location.
@@ -674,17 +703,40 @@ EOFCOPIED
   fi
 }
 
-run_final_handoff() {
-  print_handoff_explanation
-  cat <<EOFCHOICES
+clear_for_guided_handoff() {
+  if [ "$TUI_USED" = true ] && [ -z "${ALFRED_INSTALL_HANDOFF_INPUT:-}" ] && has_dev_tty; then
+    printf '\033[H\033[2J'
+  fi
+}
+
+print_compact_final_handoff() {
+  audit_destination="$SOURCE_PROJECT_PATH/.ai/generated/alfred-install/$NAME"
+  cat <<EOFHANDOFF
+==============================================================
+ALFRED INSTALL COMPLETE
+==============================================================
+Status:         Applied safely
+Project files:  Not copied yet
+Alfred home:    $(pretty_path "$TARGET_PATH")
+Audit details:  $(pretty_path "$HANDOFF_SUMMARY_FILE")
+
+Why nothing moved into the project yet:
+  Alfred generated previews first so you can audit them before writing live
+  opencode/Codex/Pi files.
 
 Final handoff choices:
-  1) Keep everything in ~/.alfred for now (recommended until you audit).
-  2) Copy generated preview bundle into this project for audit:
-     $SOURCE_PROJECT_PATH/.ai/generated/alfred-install/$NAME
-  3) Exit/cancel here. Nothing else will be copied.
-EOFCHOICES
+  1) Keep everything in ~/.alfred for now. Safe default.
+  2) Copy preview bundle into this project for audit:
+     $(pretty_path "$audit_destination")
+  3) Exit without copying anything else.
+EOFHANDOFF
+}
+
+run_final_handoff() {
+  write_handoff_summary
   if [ "$TUI_USED" = true ] || [ -n "${ALFRED_INSTALL_HANDOFF_INPUT:-}" ]; then
+    clear_for_guided_handoff
+    print_compact_final_handoff
     handoff_ask 'Final handoff [1=keep, 2=copy previews to project for audit, 3=exit, default 1]: ' '1'
     case "$HANDOFF_ANSWER" in
       1|keep|"") printf '\nKeeping generated artifacts in ~/.alfred. No project files were copied.\n' ;;
@@ -693,6 +745,15 @@ EOFCHOICES
       *) err "Unknown final handoff choice: $HANDOFF_ANSWER" ;;
     esac
   else
+    print_handoff_explanation
+    cat <<EOFCHOICES
+
+Final handoff choices:
+  1) Keep everything in ~/.alfred for now (recommended until you audit).
+  2) Copy generated preview bundle into this project for audit:
+     $SOURCE_PROJECT_PATH/.ai/generated/alfred-install/$NAME
+  3) Exit/cancel here. Nothing else will be copied.
+EOFCHOICES
     cat <<EOFNONINTERACTIVE
 
 Non-interactive install: no project files were copied.
@@ -732,7 +793,9 @@ Safety:
     after explicit human approval.
 EOFPLAN
 
-print_handoff_explanation
+if [ "$APPLY" != true ] || [ "$TUI_USED" != true ]; then
+  print_handoff_explanation
+fi
 
 if [ "$APPLY" != true ]; then
   if [ "$TUI_USED" = true ]; then
@@ -866,7 +929,8 @@ cat > "$TRACE_TMP" <<EOFTRACE
 EOFTRACE
 mv "$TRACE_TMP" "$TRACE_FILE"
 
-cat <<EOFDONE
+if [ "$TUI_USED" != true ]; then
+  cat <<EOFDONE
 
 ==============================================================
 ALFRED SUITE INSTALL APPLIED
@@ -884,5 +948,6 @@ Next steps:
   - Runtime profile commands live in: $TARGET_PATH/packages/profile-manager
   - Install docs: $TARGET_PATH/site/docs/install.html
 EOFDONE
+fi
 
 run_final_handoff
