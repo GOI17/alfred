@@ -673,33 +673,67 @@ write_handoff_summary() {
   } > "$HANDOFF_SUMMARY_FILE"
 }
 
-copy_generated_previews_to_project() {
+apply_generated_directory() {
+  source_root="$1"
+  relative_dir="$2"
+  if [ -d "$source_root/$relative_dir" ]; then
+    mkdir -p "$SOURCE_PROJECT_PATH/$relative_dir"
+    cp -R "$source_root/$relative_dir/." "$SOURCE_PROJECT_PATH/$relative_dir/"
+    APPLIED_PROJECT_PATHS="${APPLIED_PROJECT_PATHS}
+  - $(pretty_path "$SOURCE_PROJECT_PATH/$relative_dir")"
+    APPLIED_ANY=true
+  fi
+}
+
+apply_opencode_preview_to_project() {
+  preview_dir="$TARGET_PATH/.ai/generated/opencode-install"
+  [ -d "$preview_dir" ] || return 0
+  apply_generated_directory "$preview_dir" ".opencode"
+  if [ -f "$preview_dir/opencode.json.preview" ]; then
+    cp "$preview_dir/opencode.json.preview" "$SOURCE_PROJECT_PATH/opencode.json"
+    APPLIED_PROJECT_PATHS="${APPLIED_PROJECT_PATHS}
+  - $(pretty_path "$SOURCE_PROJECT_PATH/opencode.json")"
+    APPLIED_ANY=true
+  fi
+}
+
+apply_codex_preview_to_project() {
+  preview_dir=""
+  for candidate in codex-cli-install codex-app-install codex-install; do
+    if [ -d "$TARGET_PATH/.ai/generated/$candidate" ]; then
+      preview_dir="$TARGET_PATH/.ai/generated/$candidate"
+      break
+    fi
+  done
+  [ -n "$preview_dir" ] || return 0
+  apply_generated_directory "$preview_dir" ".codex"
+  apply_generated_directory "$preview_dir" ".agents"
+}
+
+apply_selected_harness_files_to_project() {
   source_dir="$TARGET_PATH/.ai/generated"
-  destination_dir="$SOURCE_PROJECT_PATH/.ai/generated/alfred-install/$NAME"
+  APPLIED_PROJECT_PATHS=""
+  APPLIED_ANY=false
   if [ ! -d "$source_dir" ]; then
     log "No generated preview directory found at $source_dir"
     return 0
   fi
-  mkdir -p "$destination_dir"
-  copied=false
-  for generated_dir in opencode-install codex-install codex-cli-install codex-app-install; do
-    if [ -d "$source_dir/$generated_dir" ]; then
-      rm -rf "$destination_dir/$generated_dir"
-      cp -R "$source_dir/$generated_dir" "$destination_dir/"
-      copied=true
-    fi
-  done
-  if [ "$copied" = true ]; then
+  if contains_harness opencode; then
+    apply_opencode_preview_to_project
+  fi
+  if contains_harness codex-cli || contains_harness codex-app; then
+    apply_codex_preview_to_project
+  fi
+  if [ "$APPLIED_ANY" = true ]; then
     cat <<EOFCOPIED
 
-Copied reviewable preview bundle:
-  $(pretty_path "$destination_dir")
+Applied selected harness files into this project:
+$APPLIED_PROJECT_PATHS
 
-This did not write live harness config. Review the copied previews before moving
-individual files into .opencode, .codex, or any harness-specific live location.
+No global user-level harness config was written.
 EOFCOPIED
   else
-    log "No selected harness preview directories were available to copy."
+    log "No selected harness files were available to apply into the project."
   fi
 }
 
@@ -710,7 +744,6 @@ clear_for_guided_handoff() {
 }
 
 print_compact_final_handoff() {
-  audit_destination="$SOURCE_PROJECT_PATH/.ai/generated/alfred-install/$NAME"
   cat <<EOFHANDOFF
 ==============================================================
 ALFRED INSTALL COMPLETE
@@ -726,8 +759,7 @@ Why nothing moved into the project yet:
 
 Final handoff choices:
   1) Keep everything in ~/.alfred for now. Safe default.
-  2) Copy preview bundle into this project for audit:
-     $(pretty_path "$audit_destination")
+  2) Apply selected harness files into this project now.
   3) Exit without copying anything else.
 EOFHANDOFF
 }
@@ -737,10 +769,10 @@ run_final_handoff() {
   if [ "$TUI_USED" = true ] || [ -n "${ALFRED_INSTALL_HANDOFF_INPUT:-}" ]; then
     clear_for_guided_handoff
     print_compact_final_handoff
-    handoff_ask 'Final handoff [1=keep, 2=copy previews to project for audit, 3=exit, default 1]: ' '1'
+    handoff_ask 'Final handoff [1=keep, 2=apply files into project, 3=exit, default 1]: ' '1'
     case "$HANDOFF_ANSWER" in
       1|keep|"") printf '\nKeeping generated artifacts in ~/.alfred. No project files were copied.\n' ;;
-      2|copy|copy-previews) copy_generated_previews_to_project ;;
+      2|copy|apply|apply-files) apply_selected_harness_files_to_project ;;
       3|exit|cancel) printf '\nExiting after install. No project files were copied.\n' ;;
       *) err "Unknown final handoff choice: $HANDOFF_ANSWER" ;;
     esac
@@ -750,15 +782,14 @@ run_final_handoff() {
 
 Final handoff choices:
   1) Keep everything in ~/.alfred for now (recommended until you audit).
-  2) Copy generated preview bundle into this project for audit:
-     $SOURCE_PROJECT_PATH/.ai/generated/alfred-install/$NAME
+  2) Apply selected harness files into this project now.
   3) Exit/cancel here. Nothing else will be copied.
 EOFCHOICES
     cat <<EOFNONINTERACTIVE
 
 Non-interactive install: no project files were copied.
-To copy preview artifacts into the project for audit, rerun guided apply mode
-or copy from:
+To apply selected harness files into the project, rerun guided apply mode
+or copy from the generated previews:
   $TARGET_PATH/.ai/generated
 EOFNONINTERACTIVE
   fi
@@ -944,7 +975,7 @@ Provider calls:  0
 
 Next steps:
   - Audit generated harness previews before copying anything live.
-  - If you want project-local review files, choose the copy option below.
+  - If you want project-local harness files now, choose the apply option below.
   - Runtime profile commands live in: $TARGET_PATH/packages/profile-manager
   - Install docs: $TARGET_PATH/site/docs/install.html
 EOFDONE

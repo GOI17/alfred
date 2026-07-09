@@ -216,14 +216,19 @@ try {
 
   const handoffTarget = join(fixture, "handoff-alfred-repo");
   mkdirSync(join(handoffTarget, "packages", "opencode-adapter", "src"), { recursive: true });
+  mkdirSync(join(handoffTarget, "packages", "codex-adapter", "src"), { recursive: true });
   writeFileSync(
     join(handoffTarget, "packages", "opencode-adapter", "src", "cli.js"),
-    "const fs = require('fs'); const path = require('path'); const output = process.argv[process.argv.indexOf('--output') + 1]; fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'opencode.json.preview'), '{}\\n');\n"
+    "const fs = require('fs'); const path = require('path'); const output = process.argv[process.argv.indexOf('--output') + 1]; fs.mkdirSync(path.join(output, '.opencode', 'agents'), { recursive: true }); fs.writeFileSync(path.join(output, 'opencode.json.preview'), '{}\\n'); fs.writeFileSync(path.join(output, '.opencode', 'agents', 'orchestrator.md'), '# orchestrator\\n');\n"
+  );
+  writeFileSync(
+    join(handoffTarget, "packages", "codex-adapter", "src", "cli.js"),
+    "const fs = require('fs'); const path = require('path'); const output = process.argv[process.argv.indexOf('--output') + 1]; fs.mkdirSync(path.join(output, '.codex', 'agents'), { recursive: true }); fs.mkdirSync(path.join(output, '.agents', 'skills', 'typescript-project'), { recursive: true }); fs.writeFileSync(path.join(output, '.codex', 'agents', 'developer.toml'), 'name = \"developer\"\\n'); fs.writeFileSync(path.join(output, '.agents', 'skills', 'typescript-project', 'SKILL.md'), '# TypeScript\\n');\n"
   );
   const handoffCopy = run(["--no-clone"], {
     env: {
       ALFRED_INSTALL_FORCE_TUI: "1",
-      ALFRED_INSTALL_APP_TUI_EVENTS: `set:edition=coding,set:harnesses=opencode,set:profiles=true,set:name=copy-demo,set:path=${handoffTarget},set:apply=true,submit`,
+      ALFRED_INSTALL_APP_TUI_EVENTS: `set:edition=coding,set:harnesses=opencode+codex-cli,set:profiles=true,set:name=copy-demo,set:path=${handoffTarget},set:apply=true,submit`,
       ALFRED_INSTALL_HANDOFF_INPUT: "2"
     }
   });
@@ -231,14 +236,33 @@ try {
   assert.match(handoffCopy.stdout, /ALFRED INSTALL COMPLETE/);
   assert.match(handoffCopy.stdout, /Final handoff choices:/);
   assert.match(handoffCopy.stdout, /Project files:\s+Not copied yet/);
-  assert.match(handoffCopy.stdout, /<project>\/.ai\/generated\/alfred-install\/copy-demo/);
+  assert.match(handoffCopy.stdout, /Apply selected harness files into this project now/);
   assert.doesNotMatch(handoffCopy.stdout, /Where files go and why:/);
-  assert.match(handoffCopy.stdout, /Copied reviewable preview bundle:/);
-  assert.match(handoffCopy.stdout, /This did not write live harness config/);
+  assert.match(handoffCopy.stdout, /Applied selected harness files into this project:/);
+  assert.match(handoffCopy.stdout, /<project>\/.opencode/);
+  assert.match(handoffCopy.stdout, /<project>\/opencode.json/);
+  assert.match(handoffCopy.stdout, /<project>\/.codex/);
+  assert.match(handoffCopy.stdout, /<project>\/.agents/);
+  assert.match(handoffCopy.stdout, /No global user-level harness config was written/);
   assert.equal(
-    existsSync(join(cwd, ".ai", "generated", "alfred-install", "copy-demo", "opencode-install", "opencode.json.preview")),
+    existsSync(join(cwd, "opencode.json")),
     true,
-    "handoff copy should place generated previews under the project audit folder"
+    "handoff copy should place opencode config in the project final location"
+  );
+  assert.equal(
+    existsSync(join(cwd, ".opencode", "agents", "orchestrator.md")),
+    true,
+    "handoff copy should place opencode agents in the project final location"
+  );
+  assert.equal(
+    existsSync(join(cwd, ".codex", "agents", "developer.toml")),
+    true,
+    "handoff copy should place Codex agents in the project final location"
+  );
+  assert.equal(
+    existsSync(join(cwd, ".agents", "skills", "typescript-project", "SKILL.md")),
+    true,
+    "handoff copy should place Codex skills in the project final location"
   );
 
   console.log("suite installer validation ok: preview is default, legacy flags fail closed, and apply does not install Pi by default");
