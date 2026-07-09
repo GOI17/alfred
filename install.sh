@@ -27,6 +27,8 @@ EDITION="coding"
 NAME="default"
 TARGET_PATH=""
 HARNESS="auto"
+HARNESS_STATUS=""
+SELECTED_HARNESSES=""
 APPLY=false
 NO_CLONE=false
 COMPONENTS=""
@@ -49,8 +51,8 @@ Flags:
   --component=<id>                Install one component. Repeatable. Overrides edition list in the plan.
   --name=<name>                   Human-readable install/context name. Default: default.
   --path=<dir>                    Install repo path when --apply is used. Default: ~/.alfred/installs/<name>.
-  --harness=<auto|opencode|codex|pi|none>
-                                  Harness to preview. Default: auto-detect only.
+  --harness=<auto|opencode|codex-cli|codex-app|codex|pi|none>
+                                  Harness previews. Comma-repeatable. auto selects installed supported harnesses.
   --apply                         Apply safe suite install steps. Without this, preview only.
   --dry-run                       Alias for preview-only mode.
   --no-clone                      With --apply, reuse an existing repo at --path.
@@ -59,7 +61,7 @@ Flags:
 Examples:
   install.sh
   install.sh --edition=coding --name=acme
-  install.sh --edition=coding --name=acme --harness=opencode --apply
+  install.sh --edition=coding --name=acme --harness=opencode,codex-cli --apply
   install.sh --component=profile-manager --name=work-laptop
 USAGE
 }
@@ -70,6 +72,144 @@ append_component() {
   else
     COMPONENTS="$COMPONENTS,$1"
   fi
+}
+
+append_csv_unique() {
+  current="$1"
+  item="$2"
+  case ",$current," in
+    *",$item,"*) printf '%s' "$current" ;;
+    ",,") printf '%s' "$item" ;;
+    *) printf '%s,%s' "$current" "$item" ;;
+  esac
+}
+
+harness_installed() {
+  case "$1" in
+    opencode)
+      [ -d ".opencode" ] || command -v opencode >/dev/null 2>&1
+      ;;
+    codex-cli)
+      command -v codex >/dev/null 2>&1
+      ;;
+    codex-app)
+      [ -d "/Applications/Codex.app" ] || [ -d "$HOME/Applications/Codex.app" ] || [ -n "${CODEX_APP_HOME:-}" ]
+      ;;
+    pi)
+      command -v pi >/dev/null 2>&1 || [ -d "$HOME/.pi" ]
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+detect_harness_status() {
+  result=""
+  for id in opencode codex-cli codex-app pi; do
+    if harness_installed "$id"; then
+      state="installed"
+    else
+      state="not-installed"
+    fi
+    result="$(append_csv_unique "$result" "$id=$state")"
+  done
+  printf '%s' "$result"
+}
+
+installed_harnesses_from_status() {
+  result=""
+  old_ifs="$IFS"
+  IFS=","
+  for entry in $HARNESS_STATUS; do
+    IFS="$old_ifs"
+    id="${entry%%=*}"
+    state="${entry#*=}"
+    if [ "$state" = "installed" ]; then
+      result="$(append_csv_unique "$result" "$id")"
+    fi
+    IFS=","
+  done
+  IFS="$old_ifs"
+  if [ -z "$result" ]; then
+    result="none"
+  fi
+  printf '%s' "$result"
+}
+
+normalize_harness_selection() {
+  input="$1"
+  if [ "$input" = "auto" ]; then
+    installed_harnesses_from_status
+    return 0
+  fi
+  result=""
+  normalized="$(printf '%s' "$input" | tr '+ ' ',,')"
+  old_ifs="$IFS"
+  IFS=","
+  for raw in $normalized; do
+    IFS="$old_ifs"
+    case "$raw" in
+      "" ) ;;
+      none|decide-later) result="$(append_csv_unique "$result" "none")" ;;
+      opencode) result="$(append_csv_unique "$result" "opencode")" ;;
+      codex) result="$(append_csv_unique "$result" "codex-cli")"; result="$(append_csv_unique "$result" "codex-app")" ;;
+      codex-cli) result="$(append_csv_unique "$result" "codex-cli")" ;;
+      codex-app) result="$(append_csv_unique "$result" "codex-app")" ;;
+      pi) result="$(append_csv_unique "$result" "pi")" ;;
+      auto)
+        installed="$(installed_harnesses_from_status)"
+        old_ifs_auto="$IFS"
+        IFS=","
+        for installed_id in $installed; do
+          IFS="$old_ifs_auto"
+          result="$(append_csv_unique "$result" "$installed_id")"
+          IFS=","
+        done
+        IFS="$old_ifs_auto"
+        ;;
+      *) err "Unknown harness: $raw (use auto, opencode, codex-cli, codex-app, pi, or none)" ;;
+    esac
+    IFS=","
+  done
+  IFS="$old_ifs"
+  if [ -z "$result" ]; then
+    result="none"
+  fi
+  case ",$result," in
+    *,none,*)
+      if [ "$result" != "none" ]; then
+        err "--harness cannot combine none with other harnesses"
+      fi
+      ;;
+  esac
+  printf '%s' "$result"
+}
+
+display_harness_status() {
+  output=""
+  old_ifs="$IFS"
+  IFS=","
+  for entry in $HARNESS_STATUS; do
+    IFS="$old_ifs"
+    id="${entry%%=*}"
+    state="${entry#*=}"
+    if [ -z "$output" ]; then
+      output="$id [$state]"
+    else
+      output="$output, $id [$state]"
+    fi
+    IFS=","
+  done
+  IFS="$old_ifs"
+  printf '%s' "$output"
+}
+
+contains_harness() {
+  case ",$SELECTED_HARNESSES," in
+    *",$1,"*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 if [ "$#" -gt 0 ]; then
@@ -101,6 +241,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+HARNESS_STATUS="$(detect_harness_status)"
 
 tui_ask() {
   prompt="$1"
@@ -163,6 +304,7 @@ run_app_tui_if_available() {
     ALFRED_INSTALL_CURRENT_NAME="$NAME" \
     ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH" \
     ALFRED_INSTALL_CURRENT_APPLY="$APPLY" \
+    ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
     node "$app_tui_script" > "$app_tui_out"
   then
     # shellcheck disable=SC1090
@@ -213,15 +355,17 @@ tui_choose_harness() {
 
 Choose a harness target:
   1) auto
-     Let Alfred detect the best target. Current signal: $reason.
+     Select all installed supported harnesses. Current signal: $reason.
   2) opencode
      For opencode projects; generates opencode previews only.
   3) codex
-     For Codex custom agents/skills; generates Codex previews only.
+     For Codex CLI/App custom agents/skills; generates Codex previews.
   4) pi
      For Pi targets; live Pi config is still never written by default.
   5) none / decide later
      Plan the suite without harness-specific previews.
+
+Detected: $(display_harness_status)
 EOFHARNESS
   tui_ask 'Harness [1=auto, 2=opencode, 3=codex, 4=pi, 5=none, default 1]: ' '1'
   choice="$TUI_ANSWER"
@@ -335,10 +479,7 @@ case "$EDITION" in
   *) err "Unknown edition: $EDITION (use coding, memory, or full)" ;;
 esac
 
-case "$HARNESS" in
-  auto|opencode|codex|pi|none) ;;
-  *) err "Unknown harness: $HARNESS (use auto, opencode, codex, pi, or none)" ;;
-esac
+SELECTED_HARNESSES="$(normalize_harness_selection "$HARNESS")"
 
 case "$NAME" in
   ""|*/*|*\\*|*..*) err "--name must be a simple identifier, got: $NAME" ;;
@@ -367,24 +508,6 @@ if command -v node >/dev/null 2>&1; then
   fi
 fi
 
-resolve_harness() {
-  if [ "$HARNESS" != "auto" ]; then
-    printf '%s' "$HARNESS"
-    return 0
-  fi
-  if [ -d ".opencode" ] || command -v opencode >/dev/null 2>&1; then
-    printf 'opencode'
-    return 0
-  fi
-  if [ -d ".codex" ] || [ -d ".agents" ] || [ -n "${CODEX_HOME:-}" ]; then
-    printf 'codex'
-    return 0
-  fi
-  printf 'none'
-}
-
-RESOLVED_HARNESS="$(resolve_harness)"
-
 edition_components() {
   if [ -n "$COMPONENTS" ]; then
     printf '%s' "$COMPONENTS"
@@ -409,7 +532,8 @@ Version:        $VERSION
 Edition:        $EDITION
 Name:           $NAME
 Target path:    $TARGET_PATH
-Harness:        $RESOLVED_HARNESS
+Harnesses:      $SELECTED_HARNESSES
+Detected:       $(display_harness_status)
 Profile:        $PROFILE_STRATEGY
 Memory setup:   $MEMORY_SETUP
 Components:     $COMPONENT_PLAN
@@ -494,30 +618,39 @@ case ",$COMPONENT_PLAN," in
     ;;
 esac
 
-case "$RESOLVED_HARNESS" in
-  opencode)
-    if [ -f "$TARGET_PATH/packages/opencode-adapter/src/cli.js" ]; then
-      log "Generating opencode preview under $TARGET_PATH/.ai/generated/opencode-install"
-      (cd "$TARGET_PATH" && node packages/opencode-adapter/src/cli.js --output .ai/generated/opencode-install >/dev/null)
-    else
-      log "opencode adapter preview skipped; package not found in installed repo."
+if contains_harness opencode; then
+  if [ -f "$TARGET_PATH/packages/opencode-adapter/src/cli.js" ]; then
+    log "Generating opencode preview under $TARGET_PATH/.ai/generated/opencode-install"
+    (cd "$TARGET_PATH" && node packages/opencode-adapter/src/cli.js --output .ai/generated/opencode-install >/dev/null)
+  else
+    log "opencode adapter preview skipped; package not found in installed repo."
+  fi
+fi
+
+if contains_harness codex-cli || contains_harness codex-app; then
+  if [ -f "$TARGET_PATH/packages/codex-adapter/src/cli.js" ]; then
+    log "Generating shared Codex preview under $TARGET_PATH/.ai/generated/codex-install"
+    (cd "$TARGET_PATH" && node packages/codex-adapter/src/cli.js --output .ai/generated/codex-install >/dev/null)
+    if contains_harness codex-cli; then
+      log "Generating Codex CLI preview under $TARGET_PATH/.ai/generated/codex-cli-install"
+      (cd "$TARGET_PATH" && node packages/codex-adapter/src/cli.js --output .ai/generated/codex-cli-install >/dev/null)
     fi
-    ;;
-  codex)
-    if [ -f "$TARGET_PATH/packages/codex-adapter/src/cli.js" ]; then
-      log "Generating Codex preview under $TARGET_PATH/.ai/generated/codex-install"
-      (cd "$TARGET_PATH" && node packages/codex-adapter/src/cli.js --output .ai/generated/codex-install >/dev/null)
-    else
-      log "Codex adapter preview skipped; package not found in installed repo."
+    if contains_harness codex-app; then
+      log "Generating Codex App preview under $TARGET_PATH/.ai/generated/codex-app-install"
+      (cd "$TARGET_PATH" && node packages/codex-adapter/src/cli.js --output .ai/generated/codex-app-install >/dev/null)
     fi
-    ;;
-  pi)
-    log "Pi selected. No live Pi files are written by the suite installer. Use adapter previews and approval flow."
-    ;;
-  none)
-    log "No harness selected/detected. Suite repo installed; harness previews skipped."
-    ;;
-esac
+  else
+    log "Codex adapter preview skipped; package not found in installed repo."
+  fi
+fi
+
+if contains_harness pi; then
+  log "Pi selected. No live Pi files are written by the suite installer. Use adapter previews and approval flow."
+fi
+
+if [ "$SELECTED_HARNESSES" = "none" ]; then
+  log "No harness selected/detected. Suite repo installed; harness previews skipped."
+fi
 
 TRACE_DIR="$HOME/.alfred/observability"
 mkdir -p "$TRACE_DIR"
@@ -535,7 +668,9 @@ cat > "$TRACE_TMP" <<EOFTRACE
     "edition": "$EDITION",
     "name": "$NAME",
     "target_path": "$TARGET_PATH",
-    "harness": "$RESOLVED_HARNESS",
+    "harness": "$SELECTED_HARNESSES",
+    "harnesses": "$SELECTED_HARNESSES",
+    "harness_status": "$HARNESS_STATUS",
     "tui_mode": "$TUI_MODE",
     "profile_strategy": "$PROFILE_STRATEGY",
     "memory_setup": "$MEMORY_SETUP",
@@ -556,7 +691,8 @@ ALFRED SUITE INSTALL APPLIED
 Repository:      $TARGET_PATH
 Profile repo:    $PROFILE_REPO
 Trace:           $TRACE_FILE
-Harness:         $RESOLVED_HARNESS
+Harnesses:       $SELECTED_HARNESSES
+Detected:        $(display_harness_status)
 Provider calls:  0
 
 Next steps:
