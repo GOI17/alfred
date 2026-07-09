@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 
 const root = process.cwd();
 const installSh = resolve(root, "install.sh");
+const appTui = resolve(root, "scripts/tui/install-app.mjs");
 const fixture = mkdtempSync(join(tmpdir(), "alfred-suite-install-"));
 const home = join(fixture, "home");
 const cwd = join(fixture, "workspace");
@@ -29,6 +30,8 @@ function run(args, options = {}) {
 try {
   const syntax = spawnSync("sh", ["-n", installSh], { encoding: "utf8" });
   assert.equal(syntax.status, 0, syntax.stderr);
+  const appSyntax = spawnSync("node", ["--check", appTui], { encoding: "utf8" });
+  assert.equal(appSyntax.status, 0, appSyntax.stderr);
 
   const preview = run(["--edition=coding", "--name=acme"]);
   assert.equal(preview.status, 0, preview.stderr);
@@ -38,8 +41,47 @@ try {
   assert.match(preview.stdout, /No files were written/);
   assert.doesNotMatch(preview.stdout, /Installing Alfred Pi Agent/);
   assert.match(preview.stdout, /TUI used:\s+false/);
+  assert.match(preview.stdout, /TUI mode:\s+none/);
   assert.equal(existsSync(join(cwd, "AGENTS.md")), false, "preview must not create AGENTS.md");
   assert.equal(existsSync(join(cwd, ".alfred")), false, "preview must not create .alfred in cwd");
+
+  const appTuiPreview = run([], {
+    env: {
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_RENDER: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS:
+        "set:edition=full,set:harness=codex,set:profiles=true,set:memory=postgres,set:name=app-demo,set:apply=false,submit"
+    }
+  });
+  const appTuiOutput = `${appTuiPreview.stdout}\n${appTuiPreview.stderr}`;
+  assert.equal(appTuiPreview.status, 0, appTuiPreview.stderr);
+  assert.match(appTuiOutput, /Alfred installer/);
+  assert.match(appTuiOutput, /app TUI/);
+  assert.match(appTuiOutput, /Keyboard: ↑\/↓ move/);
+  assert.match(appTuiOutput, /Mouse: click a section/);
+  assert.match(appTuiOutput, /☑ Enabled/);
+  assert.match(appTuiOutput, /edition=full · harness=codex/);
+  assert.match(appTuiPreview.stdout, /ALFRED SUITE INSTALL PREVIEW/);
+  assert.match(appTuiPreview.stdout, /Edition:\s+full/);
+  assert.match(appTuiPreview.stdout, /Harness:\s+codex/);
+  assert.match(appTuiPreview.stdout, /Profile:\s+runtime-profiles/);
+  assert.match(appTuiPreview.stdout, /Memory setup:\s+postgres/);
+  assert.match(appTuiPreview.stdout, /Name:\s+app-demo/);
+  assert.match(appTuiPreview.stdout, /TUI used:\s+true/);
+  assert.match(appTuiPreview.stdout, /TUI mode:\s+app/);
+  assert.equal(existsSync(join(home, ".alfred")), false, "app TUI preview must not create ~/.alfred");
+
+  const appTuiMouseToggle = spawnSync("node", [appTui], {
+    cwd,
+    env: {
+      ...process.env,
+      ALFRED_INSTALL_APP_TUI_EVENTS: "mouse:1:13,submit"
+    },
+    encoding: "utf8"
+  });
+  assert.equal(appTuiMouseToggle.status, 0, appTuiMouseToggle.stderr);
+  assert.match(appTuiMouseToggle.stdout, /PROFILE_STRATEGY='decide-later'/);
+  assert.match(appTuiMouseToggle.stdout, /TUI_MODE='app'/);
 
   const tuiFull = run([], {
     env: {

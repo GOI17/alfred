@@ -8,7 +8,7 @@
 #
 # Safety:
 #   - Without --apply this prints an install plan only and writes no files.
-#   - Without advanced flags and with a TTY, this opens a guided TUI.
+#   - Without advanced flags and with a TTY, this opens an app-like guided TUI.
 #   - It never installs Pi/opencode/Codex live harness config by default.
 #   - Unknown flags fail closed instead of being ignored.
 
@@ -18,6 +18,10 @@ VERSION="0.4.1.1"
 REPO_URL="https://github.com/GOI17/alfred.git"
 DEFAULT_BRANCH="main"
 NODE_MIN="22"
+INSTALLER_DIR=""
+case "$0" in
+  */*) INSTALLER_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd)" || INSTALLER_DIR="" ;;
+esac
 
 EDITION="coding"
 NAME="default"
@@ -31,6 +35,7 @@ MEMORY_SETUP="not-selected"
 SKIP_PROFILE_MANAGER=false
 HAD_ARGS=false
 TUI_USED=false
+TUI_MODE="none"
 
 log() { printf '[alfred-install] %s\n' "$*"; }
 err() { printf '[alfred-install][error] %s\n' "$*" 1>&2; exit 1; }
@@ -126,6 +131,47 @@ ALFRED HUMAN-FIRST INSTALLER
 ==============================================================
 Guided, preview-first, and safe to exit before anything is written.
 EOFTUI
+}
+
+run_app_tui_if_available() {
+  if [ "$HAD_ARGS" = true ] && [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ]; then
+    return 1
+  fi
+  if [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ] && [ ! -r /dev/tty ]; then
+    return 1
+  fi
+  command -v node >/dev/null 2>&1 || return 1
+
+  app_tui_script=""
+  app_tui_tmp=""
+  if [ -n "$INSTALLER_DIR" ] && [ -f "$INSTALLER_DIR/scripts/tui/install-app.mjs" ]; then
+    app_tui_script="$INSTALLER_DIR/scripts/tui/install-app.mjs"
+  elif [ -f "./scripts/tui/install-app.mjs" ]; then
+    app_tui_script="./scripts/tui/install-app.mjs"
+  else
+    command -v curl >/dev/null 2>&1 || return 1
+    app_tui_tmp="${TMPDIR:-/tmp}/alfred-install-app-tui.$$.mjs"
+    curl -fsSL "https://raw.githubusercontent.com/GOI17/alfred/$DEFAULT_BRANCH/scripts/tui/install-app.mjs" -o "$app_tui_tmp" 2>/dev/null || return 1
+    app_tui_script="$app_tui_tmp"
+  fi
+
+  app_tui_out="${TMPDIR:-/tmp}/alfred-install-app-tui.$$.env"
+  if ALFRED_INSTALL_CURRENT_EDITION="$EDITION" \
+    ALFRED_INSTALL_CURRENT_HARNESS="$HARNESS" \
+    ALFRED_INSTALL_CURRENT_PROFILE="$PROFILE_STRATEGY" \
+    ALFRED_INSTALL_CURRENT_MEMORY="$MEMORY_SETUP" \
+    ALFRED_INSTALL_CURRENT_NAME="$NAME" \
+    ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH" \
+    ALFRED_INSTALL_CURRENT_APPLY="$APPLY" \
+    node "$app_tui_script" > "$app_tui_out"
+  then
+    # shellcheck disable=SC1090
+    . "$app_tui_out"
+    rm -f "$app_tui_out" "$app_tui_tmp"
+    return 0
+  fi
+  rm -f "$app_tui_out" "$app_tui_tmp"
+  return 1
 }
 
 tui_choose_edition() {
@@ -272,6 +318,7 @@ run_tui_if_available() {
     return 0
   fi
   TUI_USED=true
+  TUI_MODE="text"
   print_tui_header
   tui_choose_edition
   tui_choose_harness
@@ -281,7 +328,7 @@ run_tui_if_available() {
   tui_confirm_apply
 }
 
-run_tui_if_available
+run_app_tui_if_available || run_tui_if_available
 
 case "$EDITION" in
   coding|memory|full) ;;
@@ -369,6 +416,7 @@ Components:     $COMPONENT_PLAN
 Node:           $node_status
 Provider calls: 0
 TUI used:       $TUI_USED
+TUI mode:       $TUI_MODE
 
 What --name means:
   A local human-readable install/context identifier. It is used to derive
@@ -488,6 +536,7 @@ cat > "$TRACE_TMP" <<EOFTRACE
     "name": "$NAME",
     "target_path": "$TARGET_PATH",
     "harness": "$RESOLVED_HARNESS",
+    "tui_mode": "$TUI_MODE",
     "profile_strategy": "$PROFILE_STRATEGY",
     "memory_setup": "$MEMORY_SETUP",
     "components": "$COMPONENT_PLAN",
