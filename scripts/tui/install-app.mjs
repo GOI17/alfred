@@ -163,7 +163,7 @@ function screen() {
     if (row === "name") blocks.push(renderInput("Install name", state.name, "acme", focused));
     if (row === "targetPath") blocks.push(renderInput("Target path (optional)", state.targetPath, "~/.alfred/installs/<name>", focused));
     if (row === "apply") blocks.push(renderCheckbox("Apply safe suite steps now", state.apply, "Off = preview only. On = clone/reuse Alfred and generate previews; live harness config still requires approval.", focused));
-    if (row === "submit") blocks.push(`${focused ? "▶" : " "} ${bold("Review plan and continue")}\n   ${dim("Enter confirms these choices and returns to the installer plan.")}`);
+    if (row === "submit") blocks.push(`${focused ? "▶" : " "} ${bold("Review plan and continue")}\n   ${dim("Enter confirms these choices. After apply, Alfred shows file locations and asks what to copy, if anything.")}`);
     blocks.push("");
   }
   blocks.push(reviewLine());

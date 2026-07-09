@@ -39,6 +39,11 @@ try {
   assert.match(preview.stdout, /Edition:\s+coding/);
   assert.match(preview.stdout, /Name:\s+acme/);
   assert.match(preview.stdout, /No files were written/);
+  assert.match(preview.stdout, /Where files go and why:/);
+  assert.match(preview.stdout, /Project you launched from:/);
+  assert.match(preview.stdout, /Why outside the project by default:/);
+  assert.match(preview.stdout, /Expected generated preview locations after apply:/);
+  assert.match(preview.stdout, /Project modified: no\./);
   assert.doesNotMatch(preview.stdout, /Installing Alfred Pi Agent/);
   assert.match(preview.stdout, /TUI used:\s+false/);
   assert.match(preview.stdout, /TUI mode:\s+none/);
@@ -59,6 +64,7 @@ try {
   assert.match(appTuiOutput, /app TUI/);
   assert.match(appTuiOutput, /Keyboard: ↑\/↓ move/);
   assert.match(appTuiOutput, /Mouse: click a section/);
+  assert.match(appTuiOutput, /After apply, Alfred shows file locations/);
   assert.match(appTuiOutput, /opencode \[/);
   assert.match(appTuiOutput, /Codex CLI \[/);
   assert.match(appTuiOutput, /Codex App \[/);
@@ -196,6 +202,8 @@ try {
   const applied = run(["--edition=coding", "--name=acme", "--path", target, "--apply", "--no-clone", "--harness=opencode,codex-cli"]);
   assert.equal(applied.status, 0, applied.stderr);
   assert.match(applied.stdout, /ALFRED SUITE INSTALL APPLIED/);
+  assert.match(applied.stdout, /Final handoff choices:/);
+  assert.match(applied.stdout, /Non-interactive install: no project files were copied/);
   assert.equal(existsSync(join(home, ".alfred", "runtime-profiles", "profiles")), true);
   assert.equal(existsSync(join(home, ".alfred", "runtime-profiles", "profiles.local")), true);
   assert.equal(existsSync(join(home, ".alfred", "observability", "install-trace.json")), true);
@@ -205,6 +213,29 @@ try {
   assert.equal(trace.data.harnesses, "opencode,codex-cli");
   assert.match(trace.data.harness_status, /opencode=/);
   assert.equal(trace.data.provider_calls, 0);
+
+  const handoffTarget = join(fixture, "handoff-alfred-repo");
+  mkdirSync(join(handoffTarget, "packages", "opencode-adapter", "src"), { recursive: true });
+  writeFileSync(
+    join(handoffTarget, "packages", "opencode-adapter", "src", "cli.js"),
+    "const fs = require('fs'); const path = require('path'); const output = process.argv[process.argv.indexOf('--output') + 1]; fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, 'opencode.json.preview'), '{}\\n');\n"
+  );
+  const handoffCopy = run(["--no-clone"], {
+    env: {
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: `set:edition=coding,set:harnesses=opencode,set:profiles=true,set:name=copy-demo,set:path=${handoffTarget},set:apply=true,submit`,
+      ALFRED_INSTALL_HANDOFF_INPUT: "2"
+    }
+  });
+  assert.equal(handoffCopy.status, 0, handoffCopy.stderr);
+  assert.match(handoffCopy.stdout, /Final handoff choices:/);
+  assert.match(handoffCopy.stdout, /Copied reviewable preview bundle:/);
+  assert.match(handoffCopy.stdout, /This did not write live harness config/);
+  assert.equal(
+    existsSync(join(cwd, ".ai", "generated", "alfred-install", "copy-demo", "opencode-install", "opencode.json.preview")),
+    true,
+    "handoff copy should place generated previews under the project audit folder"
+  );
 
   console.log("suite installer validation ok: preview is default, legacy flags fail closed, and apply does not install Pi by default");
 } finally {

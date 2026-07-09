@@ -242,6 +242,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 HARNESS_STATUS="$(detect_harness_status)"
+SOURCE_PROJECT_PATH="$(pwd -P 2>/dev/null || pwd)"
 
 has_dev_tty() {
   { : < /dev/tty > /dev/tty; } 2>/dev/null
@@ -511,6 +512,25 @@ EOFAPPLY
   esac
 }
 
+handoff_ask() {
+  prompt="$1"
+  default_value="$2"
+  if [ -n "${ALFRED_INSTALL_HANDOFF_INPUT:-}" ]; then
+    answer="$ALFRED_INSTALL_HANDOFF_INPUT"
+    printf '%s%s\n' "$prompt" "$answer" 1>&2
+  elif has_dev_tty; then
+    printf '%s' "$prompt" > /dev/tty
+    IFS= read -r answer < /dev/tty || answer=""
+  else
+    answer=""
+  fi
+  if [ -z "$answer" ]; then
+    HANDOFF_ANSWER="$default_value"
+  else
+    HANDOFF_ANSWER="$answer"
+  fi
+}
+
 run_tui_if_available() {
   if [ "$HAD_ARGS" = true ] && [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ]; then
     return 0
@@ -581,6 +601,108 @@ edition_components() {
 
 COMPONENT_PLAN="$(edition_components)"
 
+print_expected_preview_locations() {
+  if [ "$SELECTED_HARNESSES" = "none" ]; then
+    printf '  - none selected; no harness preview directories expected\n'
+    return 0
+  fi
+  if contains_harness opencode; then
+    printf '  - opencode preview: %s/.ai/generated/opencode-install\n' "$TARGET_PATH"
+  fi
+  if contains_harness codex-cli || contains_harness codex-app; then
+    printf '  - shared Codex preview: %s/.ai/generated/codex-install\n' "$TARGET_PATH"
+  fi
+  if contains_harness codex-cli; then
+    printf '  - Codex CLI preview: %s/.ai/generated/codex-cli-install\n' "$TARGET_PATH"
+  fi
+  if contains_harness codex-app; then
+    printf '  - Codex App preview: %s/.ai/generated/codex-app-install\n' "$TARGET_PATH"
+  fi
+  if contains_harness pi; then
+    printf '  - Pi: no live Pi files are written by this installer\n'
+  fi
+}
+
+print_handoff_explanation() {
+  cat <<EOFHANDOFF
+
+Where files go and why:
+  - Project you launched from: $SOURCE_PROJECT_PATH
+  - Alfred suite install path: $TARGET_PATH
+  - Runtime profiles path:    $HOME/.alfred/runtime-profiles
+  - Trace path:               $HOME/.alfred/observability/install-trace.json
+  - Install docs:             $TARGET_PATH/site/docs/install.html
+
+Why outside the project by default:
+  Alfred is preview-first. It keeps generated suite and harness artifacts under
+  ~/.alfred so the installer does not unexpectedly mutate your project or write
+  live opencode/Codex/Pi config. You audit generated previews first, then decide
+  what should be copied into the project or into a live harness location.
+
+Expected generated preview locations after apply:
+$(print_expected_preview_locations)
+EOFHANDOFF
+}
+
+copy_generated_previews_to_project() {
+  source_dir="$TARGET_PATH/.ai/generated"
+  destination_dir="$SOURCE_PROJECT_PATH/.ai/generated/alfred-install/$NAME"
+  if [ ! -d "$source_dir" ]; then
+    log "No generated preview directory found at $source_dir"
+    return 0
+  fi
+  mkdir -p "$destination_dir"
+  copied=false
+  for generated_dir in opencode-install codex-install codex-cli-install codex-app-install; do
+    if [ -d "$source_dir/$generated_dir" ]; then
+      rm -rf "$destination_dir/$generated_dir"
+      cp -R "$source_dir/$generated_dir" "$destination_dir/"
+      copied=true
+    fi
+  done
+  if [ "$copied" = true ]; then
+    cat <<EOFCOPIED
+
+Copied reviewable preview bundle:
+  $destination_dir
+
+This did not write live harness config. Review the copied previews before moving
+individual files into .opencode, .codex, or any harness-specific live location.
+EOFCOPIED
+  else
+    log "No selected harness preview directories were available to copy."
+  fi
+}
+
+run_final_handoff() {
+  print_handoff_explanation
+  cat <<EOFCHOICES
+
+Final handoff choices:
+  1) Keep everything in ~/.alfred for now (recommended until you audit).
+  2) Copy generated preview bundle into this project for audit:
+     $SOURCE_PROJECT_PATH/.ai/generated/alfred-install/$NAME
+  3) Exit/cancel here. Nothing else will be copied.
+EOFCHOICES
+  if [ "$TUI_USED" = true ] || [ -n "${ALFRED_INSTALL_HANDOFF_INPUT:-}" ]; then
+    handoff_ask 'Final handoff [1=keep, 2=copy previews to project for audit, 3=exit, default 1]: ' '1'
+    case "$HANDOFF_ANSWER" in
+      1|keep|"") printf '\nKeeping generated artifacts in ~/.alfred. No project files were copied.\n' ;;
+      2|copy|copy-previews) copy_generated_previews_to_project ;;
+      3|exit|cancel) printf '\nExiting after install. No project files were copied.\n' ;;
+      *) err "Unknown final handoff choice: $HANDOFF_ANSWER" ;;
+    esac
+  else
+    cat <<EOFNONINTERACTIVE
+
+Non-interactive install: no project files were copied.
+To copy preview artifacts into the project for audit, rerun guided apply mode
+or copy from:
+  $TARGET_PATH/.ai/generated
+EOFNONINTERACTIVE
+  fi
+}
+
 cat <<EOFPLAN
 ==============================================================
 ALFRED SUITE INSTALL PREVIEW
@@ -610,11 +732,14 @@ Safety:
     after explicit human approval.
 EOFPLAN
 
+print_handoff_explanation
+
 if [ "$APPLY" != true ]; then
   if [ "$TUI_USED" = true ]; then
     cat <<EOFNEXT
 
 No files were written. Preview-only mode is the default.
+Project modified: no.
 To apply safe suite install steps, rerun the guided installer and choose apply:
   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh
 
@@ -625,6 +750,7 @@ EOFNEXT
   cat <<EOFNEXT
 
 No files were written. Preview-only mode is the default.
+Project modified: no.
 To apply safe suite install steps, rerun with:
   --apply
 
@@ -753,7 +879,10 @@ Detected:        $(display_harness_status)
 Provider calls:  0
 
 Next steps:
-  - Review generated harness previews before copying anything live.
+  - Audit generated harness previews before copying anything live.
+  - If you want project-local review files, choose the copy option below.
   - Runtime profile commands live in: $TARGET_PATH/packages/profile-manager
   - Install docs: $TARGET_PATH/site/docs/install.html
 EOFDONE
+
+run_final_handoff
