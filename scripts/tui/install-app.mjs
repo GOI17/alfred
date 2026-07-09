@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { writeFileSync } from "node:fs";
 import process from "node:process";
 
 const editions = [
@@ -263,21 +264,54 @@ function handleMouseToken(token) {
 
 function parseBytes(data) {
   const text = data.toString("utf8");
-  if (text === "\u0003" || text === "q") {
-    state.cancelled = true;
-    state.done = true;
-    return;
+  let index = 0;
+  while (index < text.length) {
+    const rest = text.slice(index);
+    const mouse = /^\x1b\[<(\d+);(\d+);(\d+)([mM])/.exec(rest);
+    if (mouse) {
+      handleMouseToken(`${mouse[2]}:${mouse[3]}`);
+      index += mouse[0].length;
+      continue;
+    }
+    if (rest.startsWith("\x1b[A")) {
+      handleToken("up");
+      index += 3;
+      continue;
+    }
+    if (rest.startsWith("\x1b[B")) {
+      handleToken("down");
+      index += 3;
+      continue;
+    }
+    if (rest.startsWith("\x1b[D")) {
+      handleToken("left");
+      index += 3;
+      continue;
+    }
+    if (rest.startsWith("\x1b[C")) {
+      handleToken("right");
+      index += 3;
+      continue;
+    }
+    const char = text[index];
+    if (char === "\u0003" || (char === "q" && currentRow() !== "name" && currentRow() !== "targetPath")) {
+      state.cancelled = true;
+      state.done = true;
+      return;
+    }
+    if (char === "\r" || char === "\n") handleToken("enter");
+    else if (char === " ") handleToken("space");
+    else if (char === "\u007f") handleToken("backspace");
+    else if (char === "\x1b") index = skipEscape(text, index) - 1;
+    else inputText(char);
+    index += 1;
   }
-  if (text === "\r" || text === "\n") return handleToken("enter");
-  if (text === " ") return handleToken("space");
-  if (text === "\u007f") return handleToken("backspace");
-  if (text === "\x1b[A") return handleToken("up");
-  if (text === "\x1b[B") return handleToken("down");
-  if (text === "\x1b[D") return handleToken("left");
-  if (text === "\x1b[C") return handleToken("right");
-  const mouse = /^\x1b\[<(\d+);(\d+);(\d+)([mM])$/.exec(text);
-  if (mouse) return handleMouseToken(`${mouse[2]}:${mouse[3]}`);
-  if (!text.startsWith("\x1b")) inputText(text);
+}
+
+function skipEscape(text, start) {
+  let index = start + 1;
+  while (index < text.length && !/[A-Za-z~]/.test(text[index])) index += 1;
+  return Math.min(index + 1, text.length);
 }
 
 function shellQuote(value) {
@@ -304,11 +338,21 @@ function assignments() {
   return `${lines.join("\n")}\n`;
 }
 
+function writeAssignments() {
+  const output = assignments();
+  const resultFile = process.env.ALFRED_INSTALL_APP_TUI_RESULT_FILE;
+  if (resultFile) {
+    writeFileSync(resultFile, output);
+  } else {
+    process.stdout.write(output);
+  }
+}
+
 function runPlayback() {
   const script = process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT || "";
   for (const token of script.split(/[,\n]+/).map((item) => item.trim()).filter(Boolean)) handleToken(token);
   if (process.env.ALFRED_INSTALL_APP_TUI_RENDER === "1") process.stderr.write(`${screen()}\n`);
-  process.stdout.write(assignments());
+  writeAssignments();
 }
 
 async function runInteractive() {
@@ -335,7 +379,7 @@ async function runInteractive() {
   stdin.setRawMode(false);
   stdin.pause();
   if (state.cancelled) process.exit(130);
-  process.stdout.write(assignments());
+  writeAssignments();
 }
 
 if (process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT) {
