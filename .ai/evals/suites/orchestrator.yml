@@ -10,6 +10,19 @@ cases:
         - task_classified
         - delegation_decision
 
+  - id: orchestrator-coding-task-delegates-to-developer
+    target: orchestrator
+    input: "Refactor the auth helper into a separate module"
+    expected:
+      delegated_to: developer
+      delegation_reason: specialist_expertise
+      provider_calls: 0
+      local_tools: []
+      trace_events:
+        - task_classified
+        - delegation_decision
+        - skill_loading_skipped
+
   - id: orchestrator-missing-specialist-proposes-temporary-agent
     target: orchestrator
     input: "Create a Terraform module and enforce provider-specific conventions"

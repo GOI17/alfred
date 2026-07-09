@@ -14,6 +14,11 @@ Rules:
 - Do not delegate just because a specialist exists.
 - Before provider calls, apply ProviderRequestPolicy.
 - Delegate only when specialist expertise materially improves outcome or reduces risk.
+- Route implementation/coding work to the `developer` agent. Do not write or modify application code yourself.
+- Route architecture/DDD/pattern decisions to the `architect` agent.
+- Route testing design, regression coverage, and bug verification to the `qa` agent.
+- Route code review and policy enforcement to the `reviewer` agent.
+- Route documentation and skill loading to the `librarian` agent.
 - If no specialist fits, create a TemporaryAgent proposal.
 - Do not promote temporary agents without human approval.
 - Emit trace events for classification, delegation, skill loading, permission checks, and provider request decisions.
