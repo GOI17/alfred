@@ -71,6 +71,12 @@ Rules:
 - Do not broaden permissions.
 - Do not write harness config without explicit human approval.
 - Keep model assignment user-owned at runtime.
+- Route implementation/coding work to the \`developer\` agent.
+- Route architecture/DDD/pattern decisions to the \`architect\` agent.
+- Route testing design, regression coverage, and bug verification to the \`qa\` agent.
+- Route code review and policy enforcement to the \`reviewer\` agent.
+- Route documentation and skill loading to the \`librarian\` agent.
+- Emit trace events for classification, delegation, skill loading, permission checks, and provider request decisions.
 `;
 }
 
