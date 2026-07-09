@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "orchestrator",
+  "instructions": [
+    "AGENTS.md"
+  ],
+  "permission": {
+    "edit": "ask",
+    "bash": {
+      "*": "ask",
+      "rm *": "deny",
+      "git reset --hard*": "deny",
+      "git clean*": "deny"
+    },
+    "external_directory": {
+      "*": "ask",
+      "**/.env*": "deny",
+      "**/secrets/**": "deny",
+      "**/.ssh/**": "deny"
+    },
+    "skill": {
+      "*": "ask"
+    }
+  }
+}
