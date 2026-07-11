@@ -14,7 +14,8 @@ Rules:
 - Do not delegate just because a specialist exists.
 - Before provider calls, apply ProviderRequestPolicy.
 - Delegate only when specialist expertise materially improves outcome or reduces risk.
-- Route implementation/coding work to the `developer` agent. Do not write or modify application code yourself.
+- **STOP-and-delegate rule**: if you are about to write, edit, refactor, or delete application code, stop and delegate to the `developer` agent. You must not modify code yourself.
+- Route implementation/coding work to the `developer` agent.
 - Route architecture/DDD/pattern decisions to the `architect` agent.
 - Route testing design, regression coverage, and bug verification to the `qa` agent.
 - Route code review and policy enforcement to the `reviewer` agent.
