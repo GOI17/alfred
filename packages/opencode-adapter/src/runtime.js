@@ -5,7 +5,8 @@ import {
   evaluateHarnessPortability,
   loadAgent,
   loadArchitectureKernel,
-  loadHarnessCompatibility
+  loadHarnessCompatibility,
+  resolveProjectIdentity
 } from "../../core/src/index.js";
 
 function writeJsonAtomic(filePath, value) {
@@ -309,9 +310,13 @@ export function buildOpencodeIntegrationPreview({ root }) {
   };
 }
 
-export function buildOpencodeInstallPreview({ root, outputDir = ".ai/generated/opencode-install" }) {
-  const kernel = loadArchitectureKernel(root);
-  const integration = buildOpencodeIntegrationPreview({ root });
+export function buildOpencodeInstallPreview({
+  root,
+  outputDir = ".ai/generated/opencode-install",
+  projectRoot = resolveProjectIdentity(root).project_root
+}) {
+  const kernel = loadArchitectureKernel(projectRoot);
+  const integration = buildOpencodeIntegrationPreview({ root: projectRoot });
   const relativeOutputDir = outputDir;
 
   return {
@@ -334,7 +339,7 @@ export function buildOpencodeInstallPreview({ root, outputDir = ".ai/generated/o
         path: `${relativeOutputDir}/.opencode/agents/${agent.id}.md`,
         install_path: `.opencode/agents/${agent.id}.md`,
         kind: "agent",
-        content: buildAgentFileContent({ root, agent })
+        content: buildAgentFileContent({ root: projectRoot, agent })
       })),
       ...kernel.skills.skills.map((skill) => ({
         path: `${relativeOutputDir}/.opencode/skills/${skill.id}/SKILL.md`,
@@ -347,8 +352,12 @@ export function buildOpencodeInstallPreview({ root, outputDir = ".ai/generated/o
   };
 }
 
-export function writeOpencodeInstallPreview({ root, outputDir = ".ai/generated/opencode-install" }) {
-  const preview = buildOpencodeInstallPreview({ root, outputDir });
+export function writeOpencodeInstallPreview({
+  root,
+  outputDir = ".ai/generated/opencode-install",
+  projectRoot = resolveProjectIdentity(root).project_root
+}) {
+  const preview = buildOpencodeInstallPreview({ root, outputDir, projectRoot });
   for (const file of preview.files) {
     writeTextAtomic(path.join(root, file.path), file.content);
   }

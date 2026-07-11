@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
+export { resolveProjectIdentity } from "./project-identity.js";
+
 export function readJson(root, relativePath) {
   return JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
 }
