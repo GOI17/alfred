@@ -118,7 +118,7 @@
         <input id="apiKey" type="password" placeholder="alk_..." style="background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace; width: 100%;" />
         <button onclick="setKey()" style="margin-top: 8px;">Unlock</button>
       </div>
-      <p class="small" style="margin-top: 8px;">Paste an API key from <code>alfred init</code> or <code>alfred keys issue</code>.</p>
+      <p class="small" style="margin-top: 8px;">Paste an API key issued by your Alfred Memory server.</p>
     </details>
 
     <details style="margin-top: 16px;">
@@ -222,10 +222,10 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
           <summary>Show steps</summary>
           <pre>
 1. cd into your project directory.
-2. Run: alfred init --profile=coding --name=&lt;project-name&gt;
+2. Use the guided installer to create or select a Memory tenant.
 3. This writes .alfred/config.json in cwd with your API key.
 4. The agent reads it on every session start.
-5. Run the server: alfred serve</pre>
+5. Run the Alfred Memory server for that tenant.</pre>
         </details>
       </div>
     </div>
@@ -385,7 +385,7 @@ async function loadTenants() {
   const sel = document.getElementById("keyTenant");
   sel.innerHTML = "";
   if (tenants.length === 0) {
-    document.getElementById("tenantsBody").innerHTML = '<div class="empty">No tenants yet. Run <code>alfred init</code> in a terminal to create one.</div>';
+    document.getElementById("tenantsBody").innerHTML = '<div class="empty">No tenants yet. Use the guided installer or Memory console bootstrap to create one.</div>';
     return;
   }
   let rows = "";

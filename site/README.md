@@ -115,7 +115,6 @@ site/
 ├── docs/
 │   ├── index.html
 │   ├── install.html
-│   ├── quickstart.html
 │   ├── configuration.html
 │   ├── architecture.html
 │   ├── agents.html

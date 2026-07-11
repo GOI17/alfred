@@ -10,14 +10,14 @@
 <body>
   <header class="nav">
     <div class="nav-inner">
-      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+      <a class="brand" href="/alfred/">
         <span class="brand-mark">A</span><span class="brand-name">Alfred</span>
         <span class="brand-tag">Alfred labs</span>
       </a>
       <nav class="nav-links">
-        <a href="/alfred/"+(m.group(1) or "")>Home</a>
-        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
-        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/">Home</a>
+        <a href="/alfred/#pillars">Pillars</a>
+        <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
         <a href="/alfred/memory/">Memory Console</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
@@ -31,7 +31,6 @@
       <h6>Getting started</h6>
       <a href="/alfred/docs/index.html">Overview</a>
       <a href="/alfred/docs/install.html">Install Alfred</a>
-      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
       <a href="/alfred/docs/configuration.html">Configuration</a>
       <h6>Concepts</h6>
       <a href="/alfred/docs/architecture.html">Architecture</a>
@@ -85,15 +84,14 @@
       </div>
 
       <h2 id="runner">Running the suite</h2>
+      <p>These commands are for contributors working inside the Alfred source repo.</p>
       <div class="terminal">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">evals</span>
         </div>
-<pre><span class="f">alfred</span> evals run                       <span class="c"># run all cases</span>
-<span class="f">alfred</span> evals run --case deny-rm-rf    <span class="c"># run one</span>
-<span class="f">alfred</span> evals run --compare-baseline  <span class="c"># diff against .ai/evals/baselines/main.json</span>
-<span class="f">alfred</span> evals list                     <span class="c"># list cases and their last status</span>
+<pre><span class="f">cd</span> packages/evals
+<span class="f">npm</span> run test                       <span class="c"># loads eval targets and checks provider_calls = 0</span>
 </pre>
       </div>
 
@@ -109,9 +107,8 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">baselines</span>
         </div>
-<pre><span class="f">alfred</span> evals baseline show         <span class="c"># current baseline summary</span>
-<span class="f">alfred</span> evals baseline propose      <span class="c"># generate a candidate (does NOT update)</span>
-<span class="f">alfred</span> evals baseline apply       <span class="c"># human-approval gated</span>
+<pre><span class="f">ls</span> .ai/evals/baselines          <span class="c"># current baseline files</span>
+<span class="f">node</span> scripts/validate-policies.mjs <span class="c"># one local regression gate</span>
 </pre>
       </div>
 

@@ -10,19 +10,19 @@
 <body>
   <header class="nav">
     <div class="nav-inner">
-      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+      <a class="brand" href="/alfred/">
         <span class="brand-mark">A</span><span class="brand-name">Alfred</span>
         <span class="brand-tag">Alfred labs</span>
       </a>
       <nav class="nav-links">
-        <a href="/alfred/"+(m.group(1) or "")>Home</a>
-        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
-        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/">Home</a>
+        <a href="/alfred/#pillars">Pillars</a>
+        <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
         <a href="/alfred/memory/">Memory Console</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
       </nav>
-      <a class="nav-cta" href="/alfred/docs/quickstart.html">Quickstart &rarr;</a>
+      <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
     </div>
   </header>
 
@@ -31,7 +31,6 @@
       <h6>Getting started</h6>
       <a href="/alfred/docs/index.html">Overview</a>
       <a href="/alfred/docs/install.html">Install Alfred</a>
-      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
       <a href="/alfred/docs/configuration.html" class="active">Configuration</a>
       <h6>Concepts</h6>
       <a href="/alfred/docs/architecture.html">Architecture</a>
@@ -54,9 +53,9 @@
     <main class="docs-main">
       <h1>Configuration</h1>
       <p class="doc-lead">
-        Alfred reads one config file per project: <code>.alfred/config.json</code>.
-        The schema is small, versioned, and additive &mdash; new fields never
-        break old configs.
+        Alfred keeps project config, model assignment, and profile overrides
+        separate. Project config stays in <code>.alfred/config.json</code>; user-owned
+        model assignment lives in <code>~/.alfred/models.json</code>.
       </p>
 
       <h2 id="init">Initialize a workspace</h2>
@@ -64,15 +63,14 @@
       <div class="terminal">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">alfred init</span>
+          <span class="title">guided installer</span>
         </div>
-<pre><span class="f">alfred</span> init --profile=coding --name=my-project
+<pre><span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh
 </pre>
       </div>
       <p>
-        This writes <code>.alfred/config.json</code>, a starter
-        <code>AGENTS.md</code>, and a trace event into
-        <code>.ai/observability/generated/</code>.
+        The TUI previews suite config, model defaults, and harness artifacts
+        before writing. It only applies files after explicit approval.
       </p>
 
       <h2 id="schema">Schema</h2>
@@ -85,12 +83,6 @@
   <span class="s">"schema"</span>: <span class="s">"alfred.config/v1"</span>,
   <span class="s">"tenant"</span>: <span class="s">"my-project"</span>,
   <span class="s">"profile"</span>: <span class="s">"coding"</span>,
-
-  <span class="s">"model"</span>: {
-    <span class="s">"primary"</span>: <span class="s">"claude-sonnet-4.6"</span>,
-    <span class="s">"fallback"</span>: [<span class="s">"gpt-4o-mini"</span>],
-    <span class="s">"assignment"</span>: <span class="s">"user-owned"</span>
-  },
 
   <span class="s">"policy"</span>: {
     <span class="s">"default"</span>: <span class="s">"deny"</span>,
@@ -122,15 +114,38 @@
       <h2 id="model">Model assignment</h2>
       <p>
         <strong>You own your model.</strong> Alfred does not hardcode a
-        provider or a model name. Set <code>model.primary</code> to whatever
-        string your adapter expects, and <code>model.fallback</code> to a
-        chain Alfred will try on rate limits.
+        provider or model name in agent specs. The installer previews
+        <code>~/.alfred/models.json</code> with per-agent primary models and a
+        global fallback chain. Individual agents may also define fallbacks, but
+        the current installer-generated defaults use the global chain.
       </p>
-      <div class="doc-callout">
-        <strong>Tip.</strong> The same config can ship a Sonnet primary
-        and a small local model fallback for cheap evals. Alfred will
-        never call the fallback for tasks the primary should handle.
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">~/.alfred/models.json</span>
+        </div>
+<pre>{
+  <span class="s">"*"</span>: {
+    <span class="s">"primary"</span>: <span class="s">"ollama/qwen2.5-coder:7b"</span>,
+    <span class="s">"fallbacks"</span>: [<span class="s">"openai/gpt-4.1-mini"</span>, <span class="s">"anthropic/claude-sonnet-4"</span>]
+  },
+  <span class="s">"orchestrator"</span>: { <span class="s">"primary"</span>: <span class="s">"anthropic/claude-sonnet-4"</span> },
+  <span class="s">"developer"</span>: { <span class="s">"primary"</span>: <span class="s">"anthropic/claude-sonnet-4"</span> },
+  <span class="s">"fallbacks"</span>: [<span class="s">"ollama/qwen2.5-coder:7b"</span>, <span class="s">"openai/gpt-4.1-mini"</span>, <span class="s">"anthropic/claude-sonnet-4"</span>]
+}</pre>
       </div>
+      <div class="doc-callout">
+        <strong>Tip.</strong> Profile overlays can specialize work/personal
+        machines, while harness adapters translate user-owned bindings into
+        their native config without changing agent specs.
+      </div>
+
+      <h2 id="compaction">Context compaction</h2>
+      <p>
+        Alfred triggers local-first context compaction around 35% of detected
+        model context. Local heuristics run first; provider-assisted summaries
+        require approval and emit <code>provider_request_reduced</code>.
+      </p>
 
       <h2 id="policy">Policy</h2>
       <p>
@@ -169,9 +184,8 @@
         </tbody>
       </table>
       <p>
-        Switching modes is a one-shot migration: <code>alfred migrate
-        --to=postgres --url=...</code>. Alfred emits a trace event for
-        every row moved.
+        Switching modes is a one-shot migration handled by Alfred Memory
+        tooling. Alfred emits a trace event for every row moved.
       </p>
 
       <h2 id="env">Environment variables</h2>
@@ -201,8 +215,8 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">validate</span>
         </div>
-<pre><span class="f">alfred</span> config validate         <span class="c"># schema check</span>
-<span class="f">alfred</span> config show --effective <span class="c"># merged view (config + env + defaults)</span>
+<pre><span class="f">node</span> scripts/validate-policies.mjs
+<span class="f">node</span> --test packages/core/test/kernel.test.mjs
 </pre>
       </div>
 
@@ -218,7 +232,8 @@
       <h6>On this page</h6>
       <a href="#init">Initialize</a>
       <a href="#schema">Schema</a>
-      <a href="#model">Model</a>
+      <a href="#model">Model assignment</a>
+      <a href="#compaction">Context compaction</a>
       <a href="#policy">Policy</a>
       <a href="#memory-hosting">Memory hosting</a>
       <a href="#env">Env vars</a>

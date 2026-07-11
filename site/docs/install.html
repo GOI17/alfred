@@ -10,19 +10,19 @@
 <body>
   <header class="nav">
     <div class="nav-inner">
-      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+      <a class="brand" href="/alfred/">
         <span class="brand-mark">A</span><span class="brand-name">Alfred</span>
         <span class="brand-tag">Alfred labs</span>
       </a>
       <nav class="nav-links">
-        <a href="/alfred/"+(m.group(1) or "")>Home</a>
-        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
-        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/">Home</a>
+        <a href="/alfred/#pillars">Pillars</a>
+        <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
         <a href="/alfred/memory/">Memory Console</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
       </nav>
-      <a class="nav-cta" href="/alfred/docs/quickstart.html">Quickstart &rarr;</a>
+      <a class="nav-cta" href="/alfred/docs/index.html">Docs &rarr;</a>
     </div>
   </header>
 
@@ -31,7 +31,6 @@
       <h6>Getting started</h6>
       <a href="/alfred/docs/index.html">Overview</a>
       <a href="/alfred/docs/install.html" class="active">Install Alfred</a>
-      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
       <a href="/alfred/docs/configuration.html">Configuration</a>
       <h6>Concepts</h6>
       <a href="/alfred/docs/architecture.html">Architecture</a>
@@ -115,12 +114,13 @@
 <span class="c"># Automation fallback when choices are already known</span>
 <span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme --harness=opencode,codex-cli --apply
 
-<span class="c"># Initialize and inspect runtime profiles</span>
-<span class="f">alfred-profile</span> init --repo ~/.alfred/profiles
-<span class="f">alfred-profile</span> plan --repo ~/.alfred/profiles --profile=work --agent=opencode
+<span class="c"># The TUI previews runtime profiles before activation</span>
+Profile strategy: runtime profiles / decide later
+Active profile : work / personal / custom
+Harness        : opencode
 
-<span class="c"># Run the eval suite</span>
-<span class="f">alfred</span> evals run --compare-baseline
+<span class="c"># The installer prints the validation plan for the selected edition</span>
+Validation     local capability checks · preview files · approval gates
 </pre>
       </div>
       <p>
@@ -128,6 +128,29 @@
         same agent can have separate <code>work</code>, <code>personal</code>, or
         client profiles across machines without hand-editing harness config.
       </p>
+
+      <h2 id="models">Model assignment during install</h2>
+      <p>
+        The installer detects available providers and local models without
+        calling a provider, then previews smart defaults for
+        <code>*</code>, <code>orchestrator</code>, <code>developer</code>, and
+        <code>temporary</code>. It writes <code>~/.alfred/models.json</code> only
+        when you explicitly accept the model defaults or apply the plan.
+      </p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">model preview</span>
+        </div>
+<pre><span class="c"># Smart model defaults are previewed first</span>
+Target path : <span class="k">~/.alfred/models.json</span>
+Wildcard   : <span class="k">ollama/qwen2.5-coder:7b</span>
+Developer  : <span class="k">anthropic/claude-sonnet-4</span>
+Fallbacks  : global chain, ordered local → cheap cloud → premium cloud
+
+Write model defaults? <span class="p">[y/N]</span>
+</pre>
+      </div>
 
       <h2 id="web">Option B &mdash; Memory edition</h2>
       <p>Use Alfred Memory from ChatGPT, Claude, Gemini, or coding agents.</p>
@@ -179,15 +202,15 @@ Apply changes? <span class="p">[y/N]</span>
       </p>
 
       <h2 id="verify">Verify the install</h2>
-      <p>Three commands should pass:</p>
+      <p>Use local checks instead of assuming a global CLI binary exists:</p>
       <div class="terminal">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">verify</span>
         </div>
-<pre><span class="f">alfred</span> --version        <span class="c"># prints 0.4.0</span>
-<span class="f">alfred</span> doctor         <span class="c"># checks node, pnpm, harness, key</span>
-<span class="f">alfred</span> evals list     <span class="c"># shows the regression suite</span>
+<pre><span class="f">node</span> -v                     <span class="c"># Node 22+</span>
+<span class="f">test</span> -f ~/.alfred/models.json <span class="c"># if model defaults were applied</span>
+<span class="f">test</span> -d ~/.alfred/installs/default <span class="c"># default suite install target</span>
 </pre>
       </div>
 
@@ -207,10 +230,8 @@ Apply changes? <span class="p">[y/N]</span>
 
       <div class="doc-callout">
         <strong>Next step:</strong>
-        <a href="/alfred/docs/configuration.html">Configuration</a> to wire your model,
-        permission policy, and tenants &mdash; or
-        <a href="/alfred/docs/quickstart.html">5-minute quickstart</a> to ship your
-        first eval.
+        <a href="/alfred/docs/configuration.html">Configuration</a> to review per-agent models,
+        permission policy, and tenants.
       </div>
     </main>
 
@@ -219,6 +240,7 @@ Apply changes? <span class="p">[y/N]</span>
       <a href="#requirements">Requirements</a>
       <a href="#profiles">Editions</a>
       <a href="#coding">Coding edition</a>
+      <a href="#models">Model assignment</a>
       <a href="#web">Memory edition</a>
       <a href="#approve">Approve &amp; write</a>
       <a href="#verify">Verify</a>

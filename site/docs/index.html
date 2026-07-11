@@ -11,16 +11,16 @@
 <body>
   <header class="nav">
     <div class="nav-inner">
-      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+      <a class="brand" href="/alfred/">
         <span class="brand-mark">A</span>
         <span class="brand-name">Alfred</span>
         <span class="brand-tag">Alfred labs</span>
       </a>
       <nav class="nav-links" aria-label="Primary">
-        <a href="/alfred/"+(m.group(1) or "")>Home</a>
-        <a href="/alfred/"+(m.group(1) or "")>Problem</a>
-        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
-        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/">Home</a>
+        <a href="/alfred/#problem">Problem</a>
+        <a href="/alfred/#pillars">Pillars</a>
+        <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
         <a href="/alfred/memory/">Memory Console</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
@@ -35,7 +35,6 @@
       <h6>Getting started</h6>
       <a href="/alfred/docs/index.html" class="active">Overview</a>
       <a href="/alfred/docs/install.html">Install Alfred</a>
-      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
       <a href="/alfred/docs/configuration.html">Configuration</a>
 
       <h6>Concepts</h6>
@@ -80,8 +79,9 @@
         The runtime is split into a <strong>harness-agnostic core</strong>
         (<code>packages/core</code>) and a family of <strong>adapters</strong>
         that compile the same source-of-truth into each runtime's dialect.
-        Pi is the first-class adapter. opencode, Codex, Claude, VSCode, and
-        others are portability targets.
+        opencode, Codex, and Pi have executable adapter previews. Claude,
+        VSCode, Kiro, and external AI surfaces are covered by compatibility
+        contracts or Memory integrations.
       </p>
 
       <div class="doc-callout">
@@ -104,8 +104,8 @@
 
       <h3 id="path-configure">I want to configure my workspace</h3>
       <p>
-        <code>alfred init</code> writes a <code>.alfred/config.json</code>
-        in your project. From there you can pin the model, set the
+        The guided installer previews project config and smart per-agent model
+        defaults in <code>~/.alfred/models.json</code>. From there you can set
         permission policy, register tenants, and wire skills.
       </p>
       <p><a href="/alfred/docs/configuration.html">See the configuration reference &rarr;</a></p>
@@ -145,7 +145,7 @@
       <h2 id="next">Where to go next</h2>
       <ul>
         <li><a href="/alfred/docs/install.html">Install Alfred</a> &mdash; the one-liner.</li>
-        <li><a href="/alfred/docs/quickstart.html">5-minute quickstart</a> &mdash; from zero to first eval.</li>
+        <li><a href="/alfred/docs/install.html">Install Alfred</a> &mdash; guided TUI with preview-first setup.</li>
         <li><a href="/alfred/docs/architecture.html">Architecture</a> &mdash; why it is shaped this way.</li>
         <li><a href="/alfred/docs/agents.html">Agents &amp; subagents</a> &mdash; the six-agent panel.</li>
         <li><a href="/alfred/docs/evals.html">Evals &amp; baselines</a> &mdash; regression-safe prompts.</li>
