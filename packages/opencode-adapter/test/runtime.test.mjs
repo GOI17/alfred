@@ -9,7 +9,8 @@ import { execFileSync } from "node:child_process";
 import {
   buildOpencodeAdapterPreview,
   buildOpencodeInstallPreview,
-  writeOpencodeInstallPreview
+  writeOpencodeInstallPreview,
+  runContextCompactionHook
 } from "../src/runtime.js";
 import { loadArchitectureKernel } from "../../core/src/index.js";
 
@@ -123,6 +124,30 @@ test("writeOpencodeInstallPreview writes only preview files under requested outp
   } finally {
     rmSync(join(root, outputDir), { recursive: true, force: true });
   }
+});
+
+test("opencode runtime compaction hook avoids provider calls below threshold", async () => {
+  const messages = Array.from({ length: 10 }, (_, index) => ({
+    role: index % 2 === 0 ? "user" : "assistant",
+    content: "short message"
+  }));
+  const result = await runContextCompactionHook({ root, messages });
+  assert.equal(result.compacted, false);
+  assert.equal(result.provider_calls, 0);
+  assert.equal(result.summary_messages.length, messages.length);
+});
+
+test("opencode runtime compaction hook emits trace above threshold and keeps provider_calls at 0", async () => {
+  const messages = Array.from({ length: 200 }, (_, index) => ({
+    role: index % 2 === 0 ? "user" : "assistant",
+    content: "x".repeat(4000)
+  }));
+  const result = await runContextCompactionHook({ root, messages });
+  assert.equal(result.compacted, true);
+  assert.equal(result.provider_calls, 0);
+  assert.ok(result.trace_events.includes("context_compaction_triggered"));
+  assert.ok(result.trace_events.includes("provider_request_avoided"));
+  assert.ok(result.summary_messages.length < messages.length);
 });
 
 test("buildOpencodeInstallPreview in worktree reads .ai/ source from project root", () => {
