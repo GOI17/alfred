@@ -1,0 +1,15 @@
+id: worktree-aware-install
+phase: phase-13-install-management
+cases:
+  - id: project-identity-resolves-worktree-root
+    input: Resolve the real project root for a git worktree workspace.
+    expected:
+      is_worktree: true
+      project_root_matches_main_worktree: true
+      provider_calls: 0
+  - id: opencode-install-preview-targets-project-root
+    input: Generate opencode install preview from a git worktree.
+    expected:
+      project_root_source: ".ai/"
+      target_dir: ".opencode"
+      provider_calls: 0
