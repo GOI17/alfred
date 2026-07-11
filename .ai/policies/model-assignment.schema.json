@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Alfred Model Assignment Policy",
   "type": "object",
-  "required": ["ownership", "agents", "fallback"],
+  "required": ["ownership", "models", "fallback", "installer"],
   "properties": {
     "ownership": {
       "type": "object",
@@ -13,17 +13,31 @@
       },
       "additionalProperties": false
     },
-    "agents": {
+    "models": {
       "type": "object",
-      "additionalProperties": {
-        "type": "object",
-        "required": ["primary", "fallbacks"],
-        "properties": {
-          "primary": { "type": "string" },
-          "fallbacks": { "type": "array", "items": { "type": "string" } }
+      "properties": {
+        "fallbacks": { "type": "array", "items": { "$ref": "#/$defs/modelId" } }
+      },
+      "patternProperties": {
+        "^(\\*|[A-Za-z0-9_-]+|temporary(?::[A-Za-z0-9_*.-]+)?)$": { "$ref": "#/$defs/modelEntry" }
+      },
+      "additionalProperties": false
+    },
+    "installer": {
+      "type": "object",
+      "required": ["target_path", "preview_first", "atomic_writes", "live_harness_config_writes", "provider_calls_allowed"],
+      "properties": {
+        "target_path": { "const": "~/.alfred/models.json" },
+        "preview_first": { "const": true },
+        "atomic_writes": { "const": true },
+        "live_harness_config_writes": { "const": false },
+        "trace_events": {
+          "type": "array",
+          "items": { "enum": ["model_assignment_configured", "model_assignment_resolved", "provider_request_avoided"] }
         },
-        "additionalProperties": false
-      }
+        "provider_calls_allowed": { "const": 0 }
+      },
+      "additionalProperties": false
     },
     "fallback": {
       "type": "object",
@@ -32,6 +46,17 @@
         "retries_before_switch": { "type": "integer", "minimum": 1, "maximum": 10 },
         "switch_on": { "type": "array", "items": { "type": "string" } },
         "on_all_models_failed": { "const": "explain_failure_to_user" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "modelId": { "type": "string", "minLength": 1 },
+    "modelEntry": {
+      "type": "object",
+      "properties": {
+        "primary": { "$ref": "#/$defs/modelId" },
+        "fallbacks": { "type": "array", "items": { "$ref": "#/$defs/modelId" } }
       },
       "additionalProperties": false
     }

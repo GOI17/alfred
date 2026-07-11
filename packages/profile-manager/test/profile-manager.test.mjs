@@ -9,6 +9,7 @@ import {
   buildProfileActivationPlan,
   buildProfileManagerComponent,
   detectMachineCapabilities,
+  detectMachineModels,
   initProfileRepository,
   materializeLocalProfile,
   scanSecretCandidates
@@ -130,6 +131,42 @@ test("machine capability report explains missing PATH/provider/model/plugin inpu
     assert.deepEqual(report.missing.plugins, ["jira"]);
     assert.equal(report.provider_calls, 0);
   });
+});
+
+test("detectMachineModels returns deterministic local-only model suggestions", () => {
+  const report = detectMachineModels({
+    env: {
+      OPENAI_API_KEY: "present",
+      GITHUB_COPILOT_TOKEN: "present",
+      ANTHROPIC_API_KEY: "present",
+      GEMINI_API_KEY: "present"
+    },
+    socketPaths: ["/tmp/ollama.sock"],
+    fileExists: (filePath) => filePath === "/tmp/ollama.sock"
+  });
+
+  assert.equal(report.status, "pass");
+  assert.deepEqual(report.suggestions, [
+    { provider: "ollama", model: "ollama/qwen2.5-coder:7b", source: "socket:/tmp/ollama.sock" },
+    { provider: "openai", model: "openai/gpt-4.1-mini", source: "env:OPENAI_API_KEY" },
+    { provider: "copilot", model: "copilot/gpt-4.1", source: "env:GITHUB_COPILOT_TOKEN" },
+    { provider: "anthropic", model: "anthropic/claude-sonnet-4", source: "env:ANTHROPIC_API_KEY" },
+    { provider: "gemini", model: "gemini/gemini-2.5-flash", source: "env:GEMINI_API_KEY" }
+  ]);
+  assert.equal(report.provider_calls, 0);
+});
+
+test("detectMachineModels prefers OLLAMA_HOST over socket probing", () => {
+  const report = detectMachineModels({
+    env: { OLLAMA_HOST: "http://127.0.0.1:11434" },
+    socketPaths: ["/tmp/ollama.sock"],
+    fileExists: () => true
+  });
+
+  assert.deepEqual(report.suggestions, [
+    { provider: "ollama", model: "ollama/qwen2.5-coder:7b", source: "env:OLLAMA_HOST" }
+  ]);
+  assert.equal(report.provider_calls, 0);
 });
 
 test("component descriptor records GOI17/agents integration boundary", () => {

@@ -362,6 +362,53 @@ export function detectMachineCapabilities({ pathEnv = process.env.PATH ?? "", pr
   };
 }
 
+function firstEnv(env, names) {
+  return names.find((name) => typeof env[name] === "string" && env[name].trim() !== "") ?? null;
+}
+
+function socketExists(filePath, fileExists) {
+  try {
+    return fileExists(filePath);
+  } catch {
+    return false;
+  }
+}
+
+export function detectMachineModels({
+  env = process.env,
+  homeDir = os.homedir(),
+  socketPaths = ["/var/run/ollama.sock", "/tmp/ollama.sock", path.join(homeDir, ".ollama", "ollama.sock")],
+  fileExists = fs.existsSync
+} = {}) {
+  const suggestions = [];
+  const add = (provider, model, source) => suggestions.push({ provider, model, source });
+
+  if (env.OLLAMA_HOST && env.OLLAMA_HOST.trim() !== "") {
+    add("ollama", "ollama/qwen2.5-coder:7b", "env:OLLAMA_HOST");
+  } else {
+    const ollamaSocket = socketPaths.find((socketPath) => socketExists(socketPath, fileExists));
+    if (ollamaSocket) add("ollama", "ollama/qwen2.5-coder:7b", `socket:${ollamaSocket}`);
+  }
+
+  const openaiEnv = firstEnv(env, ["OPENAI_API_KEY"]);
+  if (openaiEnv) add("openai", "openai/gpt-4.1-mini", `env:${openaiEnv}`);
+
+  const copilotEnv = firstEnv(env, ["GITHUB_COPILOT_TOKEN", "COPILOT_TOKEN"]);
+  if (copilotEnv) add("copilot", "copilot/gpt-4.1", `env:${copilotEnv}`);
+
+  const anthropicEnv = firstEnv(env, ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"]);
+  if (anthropicEnv) add("anthropic", "anthropic/claude-sonnet-4", `env:${anthropicEnv}`);
+
+  const geminiEnv = firstEnv(env, ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"]);
+  if (geminiEnv) add("gemini", "gemini/gemini-2.5-flash", `env:${geminiEnv}`);
+
+  return {
+    status: "pass",
+    suggestions,
+    provider_calls: 0
+  };
+}
+
 export function buildProfileActivationPlan({ repoPath, profile, agent, homeDir = os.homedir(), required = {}, capabilities = {} }) {
   const paths = profileRepoPaths({ repoPath, profile, agent, homeDir });
   const machine = detectMachineCapabilities({ ...capabilities, required });

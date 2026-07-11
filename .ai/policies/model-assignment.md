@@ -39,3 +39,6 @@ The user-facing failure must include:
 - Agent specs cannot name required model IDs.
 - Skills cannot override model assignment policy.
 - Temporary agents inherit the same user-owned model assignment rule.
+- Install/update may preview smart defaults from local-only provider detection, but must write only `~/.alfred/models.json` after an explicit apply/approval path.
+- Model assignment configuration must not write live harness config.
+- Provider-qualified IDs such as `anthropic/claude-sonnet-4` are opaque user-owned strings; core does not parse provider semantics from them.

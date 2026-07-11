@@ -11,11 +11,74 @@ VERSION="0.2.0"
 INSTALL_BASE="https://raw.githubusercontent.com/GOI17/alfred/main"
 DRY_RUN=false
 TARGET_PATH=""
+RECONFIGURE_MODELS=false
+ACCEPT_MODEL_DEFAULTS=false
 
 # --- Helper Functions ---
 
 logger() {
   echo "[pi-update] $1"
+}
+
+model_config_json() {
+  node --input-type=module <<'NODE'
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+const env = process.env;
+const home = os.homedir();
+const detected = [];
+const add = (provider, model, source) => detected.push({ provider, model, source });
+const firstEnv = (names) => names.find((name) => typeof env[name] === "string" && env[name].trim() !== "");
+if (env.OLLAMA_HOST && env.OLLAMA_HOST.trim() !== "") add("ollama", "ollama/qwen2.5-coder:7b", "env:OLLAMA_HOST");
+else {
+  const socket = ["/var/run/ollama.sock", "/tmp/ollama.sock", path.join(home, ".ollama", "ollama.sock")].find((candidate) => fs.existsSync(candidate));
+  if (socket) add("ollama", "ollama/qwen2.5-coder:7b", `socket:${socket}`);
+}
+const openai = firstEnv(["OPENAI_API_KEY"]);
+if (openai) add("openai", "openai/gpt-4.1-mini", `env:${openai}`);
+const copilot = firstEnv(["GITHUB_COPILOT_TOKEN", "COPILOT_TOKEN"]);
+if (copilot) add("copilot", "copilot/gpt-4.1", `env:${copilot}`);
+const anthropic = firstEnv(["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"]);
+if (anthropic) add("anthropic", "anthropic/claude-sonnet-4", `env:${anthropic}`);
+const gemini = firstEnv(["GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"]);
+if (gemini) add("gemini", "gemini/gemini-2.5-flash", `env:${gemini}`);
+const providerOrder = ["ollama", "openai", "gemini", "copilot", "anthropic"];
+const fallbacks = [...new Set(providerOrder.flatMap((provider) => detected.filter((item) => item.provider === provider).map((item) => item.model)))];
+const pick = (providers) => providers.map((provider) => detected.find((item) => item.provider === provider)).find(Boolean);
+const wildcard = pick(["ollama", "openai", "gemini", "copilot", "anthropic"]);
+const capable = pick(["anthropic", "openai", "copilot", "gemini", "ollama"]);
+const config = {};
+if (wildcard) config["*"] = { primary: wildcard.model, fallbacks: fallbacks.filter((model) => model !== wildcard.model) };
+if (capable && capable.model !== config["*"]?.primary) {
+  config.orchestrator = { primary: capable.model };
+  config.developer = { primary: capable.model };
+}
+config.fallbacks = fallbacks;
+console.log(JSON.stringify({ detected, config }, null, 2));
+NODE
+}
+
+preview_model_assignment() {
+  logger "Model assignment reconfiguration preview (no harness config writes):"
+  model_config_json
+  logger "Proposed target: $HOME/.alfred/models.json"
+  logger "Trace events: model_assignment_configured, provider_request_avoided (provider_calls=0)"
+}
+
+write_model_assignment() {
+  target="$HOME/.alfred/models.json"
+  trace_file="$HOME/.alfred/observability/model-assignment-trace.json"
+  mkdir -p "$(dirname "$target")" "$(dirname "$trace_file")"
+  tmp_file="${target}.$$.tmp"
+  trace_tmp="${trace_file}.$$.tmp"
+  model_config_json | node --input-type=module -e 'let input=""; process.stdin.on("data", c => input += c); process.stdin.on("end", () => { const preview = JSON.parse(input); process.stdout.write(JSON.stringify(preview.config, null, 2) + "\n"); });' > "$tmp_file"
+  mv "$tmp_file" "$target"
+  timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.%NZ")
+  printf '{\n  "trace_id": "model-assignment-configuration",\n  "timestamp": "%s",\n  "event": "model_assignment_configured",\n  "actor": "alfred-update",\n  "data": { "target_path": "%s", "action": "write", "provider_calls": 0 }\n}\n' "$timestamp" "$target" > "$trace_tmp"
+  mv "$trace_tmp" "$trace_file"
+  logger "Wrote model assignment config: $target"
 }
 
 write_trace() {
@@ -95,10 +158,20 @@ while [ $# -gt 0 ]; do
       DRY_RUN=true
       shift
       ;;
+    --reconfigure-models)
+      RECONFIGURE_MODELS=true
+      shift
+      ;;
+    --accept-model-defaults)
+      ACCEPT_MODEL_DEFAULTS=true
+      shift
+      ;;
     -h|--help)
-      echo "Usage: $0 [--path <directory>] [--dry-run]"
+      echo "Usage: $0 [--path <directory>] [--dry-run] [--reconfigure-models] [--accept-model-defaults]"
       echo "  --path    Update target directory (default: current directory)"
       echo "  --dry-run Preview operation without making changes"
+      echo "  --reconfigure-models Preview ~/.alfred/models.json reconfiguration"
+      echo "  --accept-model-defaults Write proposed ~/.alfred/models.json atomically"
       exit 0
       ;;
     *)
@@ -159,7 +232,19 @@ if [ "$DRY_RUN" = true ]; then
   logger "DRY-RUN MODE: No files will be modified."
   logger "Would update in: ${TARGET_PATH}"
   logger "Checking against: ${INSTALL_BASE}/pi/${VERSION}"
+  if [ "$RECONFIGURE_MODELS" = true ]; then
+    preview_model_assignment
+  fi
   exit 0
+fi
+
+if [ "$RECONFIGURE_MODELS" = true ]; then
+  preview_model_assignment
+  if [ "$ACCEPT_MODEL_DEFAULTS" = true ]; then
+    write_model_assignment
+  else
+    logger "Model assignment preview only. Add --accept-model-defaults to write ~/.alfred/models.json."
+  fi
 fi
 
 # --- Version Check and Update ---

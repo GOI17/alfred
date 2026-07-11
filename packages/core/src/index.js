@@ -8,6 +8,17 @@ export {
   summarizeWithHeuristics,
   compactContext
 } from "./context-compaction.js";
+export {
+  buildSmartModelDefaults,
+  isValidModelId,
+  resolveFallbacks,
+  resolveModelAssignment,
+  resolveTemporaryModel,
+  traceModelAssignmentConfigured,
+  traceModelResolution,
+  validateModelBinding,
+  validateModelsConfig
+} from "./model-assignment.js";
 
 export function readJson(root, relativePath) {
   return JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));

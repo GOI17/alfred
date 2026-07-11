@@ -9,6 +9,7 @@ import { execFileSync } from "node:child_process";
 import {
   buildOpencodeAdapterPreview,
   buildOpencodeInstallPreview,
+  buildOpencodeJsonPreview,
   writeOpencodeInstallPreview,
   runContextCompactionHook
 } from "../src/runtime.js";
@@ -93,11 +94,47 @@ test("opencode install preview maps files to installable opencode agent artifact
   const developer = agents.find((file) => file.install_path === ".opencode/agents/developer.md");
   assert.ok(developer);
   assert.match(developer.content, /Mission: implement scoped code changes under policy\./);
+  assert.match(developer.content, /model: "user-owned-runtime-configuration"/);
+  assert.doesNotMatch(developer.content, /anthropic\/claude|openai\/gpt|ollama\//);
 
   assert.match(developer.content, /Alfred source agent spec \(\.ai\/agents\/developer\.md\), quoted to avoid nested frontmatter parsing:/);
   assert.match(developer.content, /> Mission: implement scoped code changes under policy\./);
   assert.doesNotMatch(developer.content, /\n---\nid: developer\n/);
 
+});
+
+test("opencode config preview can include resolved per-agent model assignments", () => {
+  const config = buildOpencodeJsonPreview({
+    modelAssignments: [
+      {
+        agent_id: "developer",
+        primary: "anthropic/claude-sonnet-4",
+        fallbacks: ["openai/gpt-4.1-mini"],
+        provider_calls: 0
+      }
+    ]
+  });
+
+  assert.equal(config.model_assignment.source, "resolved-user-owned-bindings");
+  assert.deepEqual(config.model_assignment.agents.developer, {
+    primary: "anthropic/claude-sonnet-4",
+    fallbacks: ["openai/gpt-4.1-mini"],
+    source: "user-owned-runtime-configuration"
+  });
+});
+
+test("opencode install preview passes model assignments only to opencode.json preview", () => {
+  const preview = buildOpencodeInstallPreview({
+    root,
+    outputDir: ".ai/generated/test-opencode-install",
+    modelAssignments: [{ agent_id: "developer", primary: "openai/gpt-4.1-mini", fallbacks: [] }]
+  });
+  const config = JSON.parse(preview.files.find((file) => file.install_path === "opencode.json").content);
+  const developer = preview.files.find((file) => file.install_path === ".opencode/agents/developer.md");
+
+  assert.equal(config.model_assignment.agents.developer.primary, "openai/gpt-4.1-mini");
+  assert.match(developer.content, /model: "user-owned-runtime-configuration"/);
+  assert.doesNotMatch(developer.content, /openai\/gpt-4\.1-mini/);
 });
 
 test("opencode config preview keeps permission gates conservative", () => {
