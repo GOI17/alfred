@@ -3,31 +3,49 @@
     "agent_specs_may_pin_models": false,
     "assignment_owner": "user"
   },
-  "agents": {
+  "models": {
+    "*": {
+      "primary": "ollama/qwen2.5-coder:7b",
+      "fallbacks": ["openai/gpt-4.1-mini", "anthropic/claude-sonnet-4"]
+    },
     "orchestrator": {
-      "primary": "user-selected-orchestrator-model",
-      "fallbacks": ["user-selected-orchestrator-fallback-1", "user-selected-orchestrator-fallback-2"]
+      "primary": "anthropic/claude-sonnet-4",
+      "fallbacks": ["openai/gpt-4.1-mini"]
     },
     "developer": {
-      "primary": "user-selected-developer-model",
-      "fallbacks": ["user-selected-developer-fallback-1"]
+      "primary": "anthropic/claude-sonnet-4",
+      "fallbacks": ["openai/gpt-4.1-mini", "ollama/qwen2.5-coder:7b"]
     },
     "qa": {
-      "primary": "user-selected-qa-model",
-      "fallbacks": ["user-selected-qa-fallback-1"]
+      "fallbacks": ["openai/gpt-4.1-mini"]
     },
     "librarian": {
-      "primary": "user-selected-librarian-model",
+      "primary": "openai/gpt-4.1-mini",
       "fallbacks": []
     },
     "architect": {
-      "primary": "user-selected-architect-model",
-      "fallbacks": ["user-selected-architect-fallback-1"]
+      "primary": "anthropic/claude-sonnet-4",
+      "fallbacks": ["openai/gpt-4.1-mini"]
     },
     "reviewer": {
-      "primary": "user-selected-reviewer-model",
-      "fallbacks": ["user-selected-reviewer-fallback-1"]
-    }
+      "primary": "openai/gpt-4.1-mini",
+      "fallbacks": ["ollama/qwen2.5-coder:7b"]
+    },
+    "temporary": {
+      "fallbacks": ["openai/gpt-4.1-mini"]
+    },
+    "temporary:*": {
+      "primary": "openai/gpt-4.1-mini"
+    },
+    "fallbacks": ["ollama/qwen2.5-coder:7b", "openai/gpt-4.1-mini", "anthropic/claude-sonnet-4"]
+  },
+  "installer": {
+    "target_path": "~/.alfred/models.json",
+    "preview_first": true,
+    "atomic_writes": true,
+    "live_harness_config_writes": false,
+    "trace_events": ["model_assignment_configured", "provider_request_avoided"],
+    "provider_calls_allowed": 0
   },
   "fallback": {
     "retries_before_switch": 3,

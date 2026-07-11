@@ -55,6 +55,7 @@ function buildAgentFileContent({ root, agent }) {
   return `---
 description: Alfred ${toTitle(agent.id)} agent generated from .ai source of truth.
 mode: ${mode}
+model: "user-owned-runtime-configuration"
 permission:
   edit: ask
   bash: ask
@@ -117,8 +118,24 @@ Rules:
 `;
 }
 
-function buildOpencodeJsonPreview() {
-  return {
+function normalizeModelAssignments(modelAssignments = []) {
+  const entries = Array.isArray(modelAssignments) ? modelAssignments.map((assignment) => [assignment.agent_id, assignment]) : Object.entries(modelAssignments);
+  return Object.fromEntries(
+    entries
+      .filter(([agentId, assignment]) => agentId && assignment?.primary)
+      .map(([agentId, assignment]) => [
+        agentId,
+        {
+          primary: assignment.primary,
+          fallbacks: Array.isArray(assignment.fallbacks) ? assignment.fallbacks : [],
+          source: "user-owned-runtime-configuration"
+        }
+      ])
+  );
+}
+
+export function buildOpencodeJsonPreview({ modelAssignments = [] } = {}) {
+  const config = {
     $schema: "https://opencode.ai/config.json",
     default_agent: "orchestrator",
     instructions: ["AGENTS.md"],
@@ -141,6 +158,14 @@ function buildOpencodeJsonPreview() {
       }
     }
   };
+  const models = normalizeModelAssignments(modelAssignments);
+  if (Object.keys(models).length > 0) {
+    config.model_assignment = {
+      source: "resolved-user-owned-bindings",
+      agents: models
+    };
+  }
+  return config;
 }
 
 function writeTextAtomic(filePath, value) {
@@ -353,7 +378,8 @@ export function buildOpencodeIntegrationPreview({ root }) {
 export function buildOpencodeInstallPreview({
   root,
   outputDir = ".ai/generated/opencode-install",
-  projectRoot = resolveProjectIdentity(root).project_root
+  projectRoot = resolveProjectIdentity(root).project_root,
+  modelAssignments = []
 }) {
   const kernel = loadArchitectureKernel(projectRoot);
   const integration = buildOpencodeIntegrationPreview({ root: projectRoot });
@@ -373,7 +399,7 @@ export function buildOpencodeInstallPreview({
         path: `${relativeOutputDir}/opencode.json.preview`,
         install_path: "opencode.json",
         kind: "config",
-        content: `${JSON.stringify(buildOpencodeJsonPreview(), null, 2)}\n`
+        content: `${JSON.stringify(buildOpencodeJsonPreview({ modelAssignments }), null, 2)}\n`
       },
       ...kernel.agents.agents.map((agent) => ({
         path: `${relativeOutputDir}/.opencode/agents/${agent.id}.md`,

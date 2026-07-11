@@ -1,0 +1,136 @@
+cases:
+  - id: global-default-resolution
+    target: model-assignment-resolver
+    fixture: global-models-json
+    input:
+      agent_id: reviewer
+      global_config:
+        "*": { primary: "claude-sonnet-4", fallbacks: ["gpt-4.1"] }
+    expected:
+      primary: "claude-sonnet-4"
+      fallbacks: ["gpt-4.1"]
+      sources:
+        - global
+      provider_calls: 0
+
+  - id: agent-override-precedence
+    target: model-assignment-resolver
+    fixture: global-models-json
+    input:
+      agent_id: developer
+      global_config:
+        "*": { primary: "claude-sonnet-4", fallbacks: ["gpt-4.1"] }
+        developer: { primary: "claude-opus-4", fallbacks: ["claude-sonnet-4"] }
+    expected:
+      primary: "claude-opus-4"
+      fallbacks: ["claude-sonnet-4", "gpt-4.1"]
+      sources:
+        - global
+      provider_calls: 0
+
+  - id: temporary-inheritance
+    target: model-assignment-resolver
+    fixture: global-models-json
+    input:
+      agent_id: temporary
+      creator_agent_id: developer
+      global_config:
+        "*": { primary: "claude-sonnet-4", fallbacks: ["gpt-4.1"] }
+        developer: { primary: "claude-opus-4", fallbacks: ["local-llama"] }
+    expected:
+      primary: "claude-opus-4"
+      fallbacks: ["local-llama", "gpt-4.1"]
+      sources:
+        - temporary_inheritance
+      provider_calls: 0
+
+  - id: temporary-star-override
+    target: model-assignment-resolver
+    fixture: global-models-json
+    input:
+      agent_id: temporary
+      creator_agent_id: developer
+      global_config:
+        "*": { primary: "claude-sonnet-4", fallbacks: ["gpt-4.1"] }
+        developer: { primary: "claude-opus-4", fallbacks: ["local-llama"] }
+        "temporary:*": { primary: "claude-haiku", fallbacks: ["claude-sonnet-4"] }
+    expected:
+      primary: "claude-haiku"
+      fallbacks: ["claude-sonnet-4", "gpt-4.1"]
+      sources:
+        - global
+      provider_calls: 0
+
+  - id: fallback-chain-merge
+    target: model-assignment-resolver
+    fixture: global-models-json
+    input:
+      agent_id: developer
+      global_config:
+        "*": { primary: "claude-sonnet-4", fallbacks: ["gpt-4.1"] }
+        fallbacks: ["local-llama"]
+        developer: { primary: "claude-opus-4", fallbacks: ["claude-sonnet-4"] }
+    expected:
+      primary: "claude-opus-4"
+      fallbacks: ["claude-sonnet-4", "gpt-4.1", "local-llama"]
+      provider_calls: 0
+
+  - id: provider-calls-zero
+    target: model-assignment-resolver
+    fixture: no-network
+    input:
+      agent_id: qa
+      global_config:
+        "*": { primary: "claude-haiku", fallbacks: [] }
+    expected:
+      provider_calls: 0
+      trace_event: model_assignment_resolved
+
+  - id: provider-qualified-model-ids-opaque
+    target: model-assignment-resolver
+    fixture: global-models-json
+    input:
+      agent_id: architect
+      global_config:
+        "*": { primary: "anthropic/claude-sonnet-4", fallbacks: ["openai/gpt-4.1-mini", "ollama/qwen2.5-coder:7b"] }
+    expected:
+      primary: "anthropic/claude-sonnet-4"
+      fallbacks: ["openai/gpt-4.1-mini", "ollama/qwen2.5-coder:7b"]
+      provider_calls: 0
+
+  - id: installer-smart-defaults-local-first
+    target: model-assignment-installer-defaults
+    fixture: detected-machine-models
+    input:
+      detected_models:
+        - { provider: "ollama", model: "ollama/qwen2.5-coder:7b", source: "socket:/tmp/ollama.sock" }
+        - { provider: "openai", model: "openai/gpt-4.1-mini", source: "env:OPENAI_API_KEY" }
+        - { provider: "anthropic", model: "anthropic/claude-sonnet-4", source: "env:ANTHROPIC_API_KEY" }
+    expected:
+      config:
+        "*": { primary: "ollama/qwen2.5-coder:7b" }
+        orchestrator: { primary: "anthropic/claude-sonnet-4" }
+        developer: { primary: "anthropic/claude-sonnet-4" }
+      trace_event: model_assignment_configured
+      provider_calls: 0
+
+  - id: installer-preview-no-live-harness-write
+    target: shell-installer-model-preview
+    fixture: dry-run
+    input:
+      command: "scripts/shell/install.sh --dry-run"
+    expected:
+      proposed_target: "~/.alfred/models.json"
+      writes_harness_config_by_default: false
+      atomic_write_required_for_apply: true
+      provider_calls: 0
+
+  - id: update-reconfigure-models-dry-run
+    target: shell-update-model-preview
+    fixture: dry-run
+    input:
+      command: "scripts/shell/update.sh --dry-run --reconfigure-models"
+    expected:
+      trace_event: model_assignment_configured
+      writes_harness_config_by_default: false
+      provider_calls: 0
