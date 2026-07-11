@@ -23,6 +23,21 @@ cases:
         - delegation_decision
         - skill_loading_skipped
 
+  - id: orchestrator-coding-task-delegates-under-context-pressure
+    target: orchestrator
+    fixture: high-context-coding-prompt
+    input: "We have a 400-file TypeScript monorepo. The auth helper is duplicated in 12 packages. Refactor it into a single shared module and update all imports."
+    expected:
+      delegated_to: developer
+      delegation_reason: specialist_expertise
+      provider_calls: 0
+      local_tools: []
+      trace_events:
+        - task_classified
+        - delegation_decision
+        - skill_loading_skipped
+        - stop_and_delegate_triggered
+
   - id: orchestrator-missing-specialist-proposes-temporary-agent
     target: orchestrator
     input: "Create a Terraform module and enforce provider-specific conventions"
