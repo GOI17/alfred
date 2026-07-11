@@ -1,0 +1,21 @@
+id: handle-compaction
+phase: runtime-hardening
+owner: architect
+cases:
+  - id: local-only-compaction-at-threshold
+    target: context-compaction
+    input: messages-exceeding-35-percent-threshold
+    expected:
+      compacted: true
+      provider_calls: 0
+      trace_events:
+        - context_compaction_triggered
+        - provider_request_avoided
+  - id: provider-request-avoided-trace
+    target: provider-request-gate
+    input: long-context-without-approval
+    expected:
+      strategy: local-only
+      provider_calls: 0
+      trace_events:
+        - provider_request_avoided

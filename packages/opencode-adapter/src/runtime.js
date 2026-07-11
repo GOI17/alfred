@@ -1,12 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  compactContext,
   createTraceEvent,
+  detectContextUsage,
   evaluateHarnessPortability,
   loadAgent,
   loadArchitectureKernel,
   loadHarnessCompatibility,
-  resolveProjectIdentity
+  resolveProjectIdentity,
+  resolveThreshold
 } from "../../core/src/index.js";
 
 function writeJsonAtomic(filePath, value) {
@@ -266,6 +269,38 @@ export function buildOpencodeAdapterReadiness({ root }) {
   };
 }
 
+export async function runContextCompactionHook({ root, messages, mode = "local-only" }) {
+  const projectIdentity = resolveProjectIdentity(root);
+  const usage = detectContextUsage({ messages });
+  const threshold = resolveThreshold({ model_context: usage.model_context, projectIdentity });
+  const shouldCompact = usage.current_tokens >= threshold.threshold_tokens;
+
+  if (!shouldCompact) {
+    return {
+      compacted: false,
+      summary_messages: messages,
+      provider_calls: 0,
+      trace_events: []
+    };
+  }
+
+  const targetTokens = threshold.threshold_tokens;
+  const compaction = await compactContext({
+    messages,
+    targetTokens,
+    projectIdentity,
+    mode,
+    approval: false
+  });
+
+  return {
+    compacted: true,
+    summary_messages: compaction.summary_messages,
+    provider_calls: compaction.provider_calls,
+    trace_events: compaction.trace_events
+  };
+}
+
 export function buildOpencodeStableRuntime({ root }) {
   const readiness = buildOpencodeAdapterReadiness({ root });
 
@@ -275,7 +310,12 @@ export function buildOpencodeStableRuntime({ root }) {
     adapter_package: readiness.adapter_package,
     runtime_api: "packages/opencode-adapter/src/runtime.js#buildOpencodeStableRuntime",
     capabilities: readiness.validated_capabilities,
-    trace_events: ["provider_request_avoided", "harness_portability_evaluated", "adapter_artifact_previewed"],
+    trace_events: [
+      "provider_request_avoided",
+      "harness_portability_evaluated",
+      "adapter_artifact_previewed",
+      "context_compaction_triggered"
+    ],
     boundaries: {
       core_is_harness_agnostic: true,
       harness_config_writes_disabled_by_default: true,
