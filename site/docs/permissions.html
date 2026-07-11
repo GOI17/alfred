@@ -10,14 +10,14 @@
 <body>
   <header class="nav">
     <div class="nav-inner">
-      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+      <a class="brand" href="/alfred/">
         <span class="brand-mark">A</span><span class="brand-name">Alfred</span>
         <span class="brand-tag">Alfred labs</span>
       </a>
       <nav class="nav-links">
-        <a href="/alfred/"+(m.group(1) or "")>Home</a>
-        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
-        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/">Home</a>
+        <a href="/alfred/#pillars">Pillars</a>
+        <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
         <a href="/alfred/memory/">Memory Console</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
@@ -31,7 +31,6 @@
       <h6>Getting started</h6>
       <a href="/alfred/docs/index.html">Overview</a>
       <a href="/alfred/docs/install.html">Install Alfred</a>
-      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
       <a href="/alfred/docs/configuration.html">Configuration</a>
       <h6>Concepts</h6>
       <a href="/alfred/docs/architecture.html">Architecture</a>
@@ -76,11 +75,12 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">approve</span>
         </div>
-<pre><span class="c"># Inline approval for a single command</span>
-<span class="f">alfred</span> approve <span class="s">"rm -rf build/"</span> --reason=<span class="s">"clean stale build"</span> --ttl=10m
+<pre><span class="c"># Approval is captured by the active harness prompt</span>
+Request : rm -rf build/
+Reason  : clean stale build
+Decision: approve once / deny / ask for safer alternative
 
-<span class="c"># Pre-approve a protected path for a session</span>
-<span class="f">alfred</span> approve path .ai/evals/cases/ --session
+Trace   : permission.decision { actor: "human", scope: "once" }
 </pre>
       </div>
       <p>
@@ -120,8 +120,8 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">audit</span>
         </div>
-<pre><span class="f">alfred</span> audit list --since=<span class="s">"24h"</span>
-<span class="f">alfred</span> audit show tr_2f9a...
+<pre><span class="f">ls</span> .ai/observability/generated
+<span class="f">ls</span> .alfred/observability
 </pre>
       </div>
     </main>

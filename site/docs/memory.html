@@ -10,14 +10,14 @@
 <body>
   <header class="nav">
     <div class="nav-inner">
-      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+      <a class="brand" href="/alfred/">
         <span class="brand-mark">A</span><span class="brand-name">Alfred</span>
         <span class="brand-tag">Alfred labs</span>
       </a>
       <nav class="nav-links">
-        <a href="/alfred/"+(m.group(1) or "")>Home</a>
-        <a href="/alfred/"+(m.group(1) or "")>Pillars</a>
-        <a href="/alfred/"+(m.group(1) or "")>Harnesses</a>
+        <a href="/alfred/">Home</a>
+        <a href="/alfred/#pillars">Pillars</a>
+        <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
         <a href="/alfred/memory/">Memory Console</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
@@ -31,7 +31,6 @@
       <h6>Getting started</h6>
       <a href="/alfred/docs/index.html">Overview</a>
       <a href="/alfred/docs/install.html">Install Alfred</a>
-      <a href="/alfred/docs/quickstart.html">5-minute quickstart</a>
       <a href="/alfred/docs/configuration.html">Configuration</a>
       <h6>Concepts</h6>
       <a href="/alfred/docs/architecture.html">Architecture</a>
@@ -129,7 +128,8 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">migrate</span>
         </div>
-<pre><span class="f">alfred</span> migrate --to=postgres --url=postgres://user:pass@host/db?sslmode=require
+<pre><span class="c"># Migration is handled by Alfred Memory tooling</span>
+Target backend: postgres://user:pass@host/db?sslmode=require
 </pre>
       </div>
     </main>

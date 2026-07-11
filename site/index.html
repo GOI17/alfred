@@ -12,7 +12,7 @@
   <!-- ==================== NAV ==================== -->
   <header class="nav">
     <div class="nav-inner">
-      <a class="brand" href="/alfred/"+(m.group(1) or "")>
+      <a class="brand" href="/alfred/">
         <span class="brand-mark">A</span>
         <span class="brand-name">Alfred</span>
         <span class="brand-tag">Alfred labs</span>
@@ -33,13 +33,13 @@
   <!-- ==================== HERO ==================== -->
   <section class="hero">
     <div class="hero-inner">
-      <span class="eyebrow">v0.4.1 · runtime profiles · suite installer</span>
+      <span class="eyebrow" id="release-eyebrow">latest release · runtime profiles · suite installer</span>
       <h1>The operations runtime for <span class="grad">AI coding agents</span>.</h1>
       <p class="lead">
         Alfred handles the operational burden so humans focus on decisions.
         Design, test, evaluate, secure, and port agents, subagents, and skills
-        across every major AI coding harness — now with runtime profiles that
-        survive PATH, provider, model, and plugin drift between machines.
+        across AI coding harnesses — now with runtime profiles, smart per-agent
+        model assignment, worktree-aware installs, and local-first context compaction.
       </p>
       <div class="hero-cta">
         <a class="btn primary" href="/alfred/docs/index.html">Read the docs &rarr;</a>
@@ -52,22 +52,24 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">~/projects/alfred-workspace — zsh</span>
         </div>
-<pre><span class="c"># Start the guided human-first installer</span>
-<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh
+<pre><span class="c">$ curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh</span>
 
-<span class="c"># The app-like TUI supports arrows, mouse clicks, toggles, and text inputs</span>
-Choose an edition: coding / memory / full
-Choose harnesses: opencode / codex cli / codex app / pi, each marked installed or not installed
-Choose profiles: runtime profiles / decide later
+============================================================
+ ALFRED SUITE INSTALLER
+============================================================
+Edition        <span class="k">coding</span> / memory / full
+Harnesses      <span class="k">opencode</span> [installed] · codex-cli [installed] · pi [installed]
+Profiles       <span class="k">runtime profiles</span> / decide later
+Models         smart defaults for <span class="k">*</span>, <span class="k">orchestrator</span>, <span class="k">developer</span>, <span class="k">temporary</span>
+Target path    <span class="k">~/.alfred/installs/default</span>
+
+Preview:
+  + core, agents, skills, profile-manager, adapters, evals
+  + ~/.alfred/models.json <span class="c">(model defaults preview)</span>
+  + .ai/generated/opencode-install <span class="c">(harness preview)</span>
+
+No files have been written yet.
 Apply safe suite install steps now? <span class="p">[y/N]</span>
-
-<span class="c"># Create runtime profiles for the same agent on different machines</span>
-<span class="f">alfred-profile</span> init --repo ~/.alfred/profiles
-<span class="f">alfred-profile</span> plan --repo ~/.alfred/profiles --profile=work --agent=opencode
-<span class="f">alfred-profile</span> switch --repo ~/.alfred/profiles --profile=work --agent=opencode --dry-run
-
-<span class="c"># Build harness previews before live config writes</span>
-<span class="f">alfred</span> adapter build opencode --preview --out .ai/generated/opencode-install
 </pre>
       </div>
 
@@ -180,10 +182,11 @@ Apply safe suite install steps now? <span class="p">[y/N]</span>
         </article>
         <article class="pillar">
           <div class="icon">02</div>
-          <h3>Pi-first adapter</h3>
+          <h3>Harness portability</h3>
           <p>
-            Pi is the first-class runtime. The Pi adapter ships as the
-            reference implementation; everything else is a translation spike.
+            Alfred compiles one source-of-truth into executable adapter previews
+            for opencode, Codex, and Pi while keeping compatibility contracts for
+            harnesses that do not yet have a live adapter.
           </p>
         </article>
         <article class="pillar">
@@ -230,10 +233,40 @@ Apply safe suite install steps now? <span class="p">[y/N]</span>
           <div class="icon">08</div>
           <h3>Local-first profiles</h3>
           <p>
-            Detect PATH, provider, model, and plugin availability locally
-            before activating an agent profile. Avoided provider calls are
-            traced too.
+            Detect PATH, provider, model, and plugin availability locally before
+            activating an agent profile. Smart per-agent model defaults and
+            avoided provider calls are traced too.
           </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== RUNTIME FEATURES ==================== -->
+  <section class="block" id="runtime-features">
+    <div class="container">
+      <div class="section-head">
+        <h2>Built for long-running real projects</h2>
+        <p>
+          Alfred now handles the operational details that show up after the
+          demo: context pressure, worktrees, model drift, and delegation failures.
+        </p>
+      </div>
+      <div class="problem-grid">
+        <article class="problem">
+          <span class="tag">Compaction</span>
+          <h3>Stay out of the dumb zone</h3>
+          <p>Automatic context compaction triggers around 35% usage, uses local heuristics first, and only offers provider-assisted summaries with approval.</p>
+        </article>
+        <article class="problem">
+          <span class="tag">Worktrees</span>
+          <h3>One project identity across worktrees</h3>
+          <p>Alfred resolves the real git directory plus <code>origin</code> URL so worktrees reuse the parent repo identity instead of reinstalling from scratch.</p>
+        </article>
+        <article class="problem">
+          <span class="tag">Models</span>
+          <h3>User-owned models per agent</h3>
+          <p>The installer detects local providers, previews <code>~/.alfred/models.json</code>, and lets you assign per-agent primary models with a global fallback chain without hardcoding specs.</p>
         </article>
       </div>
     </div>
@@ -307,10 +340,10 @@ Apply safe suite install steps now? <span class="p">[y/N]</span>
       <div class="section-head">
         <h2>Two profiles. Same agent. No manual config surgery.</h2>
         <p>
-          Alfred now integrates the GOI17/agents idea as
-          <code>packages/profile-manager</code>: shared profile defaults,
-          private machine overlays, secret scanning, local capability checks,
-          and approval-gated activation into <code>~/.config/&lt;agent&gt;</code>.
+          Alfred includes <code>packages/profile-manager</code>: shared profile
+          defaults, private machine overlays, secret scanning, local capability
+          checks, and approval-gated activation into
+          <code>~/.config/&lt;agent&gt;</code>.
         </p>
       </div>
 
@@ -334,10 +367,18 @@ Apply safe suite install steps now? <span class="p">[y/N]</span>
             <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
             <span class="title">runtime profiles</span>
           </div>
-<pre><span class="f">alfred-profile</span> init --repo ~/.alfred/profiles
-<span class="f">alfred-profile</span> doctor --repo ~/.alfred/profiles --profile work --agent opencode
-<span class="f">alfred-profile</span> plan --repo ~/.alfred/profiles --profile work --agent opencode
-<span class="f">alfred-profile</span> switch --repo ~/.alfred/profiles --profile work --agent opencode</pre>
+<pre>Runtime profiles
+────────────────
+Profile strategy   <span class="k">runtime profiles</span> / decide later
+Active profile     <span class="k">work</span> / personal / custom
+Harness            <span class="k">opencode</span>
+
+Preview:
+  + shared defaults under ~/.alfred/profiles
+  + private machine overlay for providers, models, plugins, PATH
+  + approval-gated activation into ~/.config/opencode
+
+Apply profile activation now? <span class="p">[y/N]</span></pre>
         </div>
       </div>
     </div>
@@ -367,32 +408,32 @@ Apply safe suite install steps now? <span class="p">[y/N]</span>
         </thead>
         <tr>
             <td>Pi</td>
-            <td><span class="status probando">Testing</span></td>
+            <td><span class="status progreso">Executable spike</span></td>
             <td><code>packages/pi-adapter</code></td>
           </tr>
 <tr>
             <td>opencode</td>
-            <td><span class="status progreso">In progress</span></td>
+            <td><span class="status compatible">Executable translation spike</span></td>
             <td><code>packages/opencode-adapter</code></td>
           </tr>
 <tr>
             <td>Codex</td>
-            <td><span class="status compatible">Supported</span></td>
+            <td><span class="status compatible">Executable translation spike</span></td>
             <td><code>packages/codex-adapter</code></td>
           </tr>
 <tr>
             <td>Claude</td>
-            <td><span class="status planeado">Planned</span></td>
-            <td><code>packages/anthropic-adapter</code></td>
+            <td><span class="status planeado">Compatibility contract</span></td>
+            <td><code>.ai/harnesses/claude</code></td>
           </tr>
 <tr>
             <td>VSCode</td>
-            <td><span class="status planeado">Planned</span></td>
-            <td><code>packages/vscode-adapter</code></td>
+            <td><span class="status planeado">Compatibility contract</span></td>
+            <td><code>.ai/harnesses/vscode</code></td>
           </tr>
 <tr>
             <td>ChatGPT / Gemini</td>
-            <td><span class="status no-compatible">Not supported</span></td>
+            <td><span class="status progreso">Memory integrations</span></td>
             <td><code>packages/chatgpt-adapter</code> · <code>packages/gemini-adapter</code></td>
           </tr>
       </table>
@@ -465,5 +506,23 @@ Apply safe suite install steps now? <span class="p">[y/N]</span>
       <span>&copy; 2026 Alfred.</span>
     </div>
   </footer>
+  <script>
+    (() => {
+      const el = document.getElementById("release-eyebrow");
+      if (!el || !window.fetch) return;
+
+      fetch("https://api.github.com/repos/GOI17/alfred/tags?per_page=1", {
+        headers: { Accept: "application/vnd.github+json" }
+      })
+        .then((response) => (response.ok ? response.json() : []))
+        .then((tags) => {
+          const tag = Array.isArray(tags) && tags[0] && tags[0].name;
+          if (tag) el.textContent = `${tag} · runtime profiles · suite installer`;
+        })
+        .catch(() => {
+          // Keep the static fallback; the page must remain useful offline.
+        });
+    })();
+  </script>
 </body>
 </html>
