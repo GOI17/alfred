@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, chmodSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync, chmodSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
@@ -11,6 +11,8 @@ const installSh = resolve(root, "install.sh");
 const appTui = resolve(root, "scripts/tui/install-app.mjs");
 const pathfinder = resolve(root, "scripts/tui/install-pathfinder.mjs");
 const pathfinderTest = resolve(root, "scripts/tui/install-pathfinder.test.mjs");
+const discovery = resolve(root, "scripts/tui/install-discovery.mjs");
+const discoveryTest = resolve(root, "scripts/tui/install-discovery.test.mjs");
 const fixture = mkdtempSync(join(tmpdir(), "alfred-suite-install-"));
 const home = join(fixture, "home");
 const cwd = join(fixture, "workspace");
@@ -18,7 +20,7 @@ mkdirSync(home, { recursive: true });
 mkdirSync(cwd, { recursive: true });
 
 function run(args, options = {}) {
-  return spawnSync("sh", [installSh, ...args], {
+  return spawnSync("sh", [options.installSh ?? installSh, ...args], {
     cwd: options.cwd ?? cwd,
     env: {
       ...process.env,
@@ -263,6 +265,10 @@ try {
   assert.equal(appSyntax.status, 0, appSyntax.stderr);
   const pathfinderSyntax = spawnSync("node", ["--check", pathfinder], { encoding: "utf8" });
   assert.equal(pathfinderSyntax.status, 0, pathfinderSyntax.stderr);
+  const discoverySyntax = spawnSync("node", ["--check", discovery], { encoding: "utf8" });
+  assert.equal(discoverySyntax.status, 0, discoverySyntax.stderr);
+  const discoveryTests = spawnSync("node", [discoveryTest], { encoding: "utf8" });
+  assert.equal(discoveryTests.status, 0, discoveryTests.stderr);
   const pathfinderTests = spawnSync("node", [pathfinderTest], { encoding: "utf8" });
   assert.equal(pathfinderTests.status, 0, pathfinderTests.stderr);
 
@@ -315,12 +321,16 @@ try {
   const appTuiOutput = `${appTuiPreview.stdout}\n${appTuiPreview.stderr}`;
   assert.equal(appTuiPreview.status, 0, appTuiPreview.stderr);
   assert.match(appTuiOutput, /Alfred installer/);
-  assert.match(appTuiOutput, /Local discovery checked:/);
+  assert.match(appTuiOutput, /OS: /);
+  assert.match(appTuiOutput, /Node: /);
+  assert.match(appTuiOutput, /Provider\/model suggestions:/);
+  assert.match(appTuiOutput, /Git: /);
   assert.match(appTuiOutput, /Use recommended setup/);
   assert.match(appTuiOutput, /Phase 1\/5: Discover/);
-  assert.match(appTuiOutput, /Preview: full \| opencode,codex-cli,codex-app/);
+  assert.match(appTuiOutput, /Preview: Full \| opencode, Codex CLI, Codex App/);
   assert.match(appTuiOutput, /p full Preview/);
   assert.match(appTuiOutput, /provider calls: 0/);
+  assert.doesNotMatch(appTuiPreview.stderr, /\x1b\[[0-?]*[ -/]*[@-~]/, "redirected playback render must not emit ANSI color");
   assert.match(appTuiPreview.stdout, /ALFRED SUITE INSTALL PREVIEW/);
   assert.match(appTuiPreview.stdout, /Edition:\s+full/);
   assert.match(appTuiPreview.stdout, /Harnesses:\s+opencode,codex-cli,codex-app/);
@@ -332,6 +342,50 @@ try {
   assert.match(appTuiPreview.stdout, /TUI mode:\s+app/);
   assert.equal(existsSync(join(home, ".alfred")), false, "app TUI preview must not create ~/.alfred");
   assert.deepEqual(readdirSync(appTuiTemp), [], "private app TUI temp directory must be cleaned after success");
+
+  const forcedColorRender = spawnSync("node", [appTui], {
+    cwd,
+    env: {
+      ...process.env,
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_INSTALL_APP_TUI_RENDER: "1",
+      ALFRED_INSTALL_FORCE_COLOR: "1"
+    },
+    encoding: "utf8"
+  });
+  assert.equal(forcedColorRender.status, 0, forcedColorRender.stderr);
+  assert.match(forcedColorRender.stderr, /\x1b\[[0-?]*[ -/]*[@-~]/, "tests can explicitly force color for redirected playback");
+
+  const modeNodeBin = join(fixture, "mode-node-bin");
+  const modeTuiTemp = join(fixture, "mode-tui-tmp");
+  const modeMarker = join(fixture, "private-modes.txt");
+  mkdirSync(modeNodeBin, { recursive: true });
+  mkdirSync(modeTuiTemp, { recursive: true });
+  writeFileSync(join(modeNodeBin, "node"), `#!/bin/sh
+case "$1" in
+  *install-app.mjs)
+    private_dir=$(dirname "$1")
+    dir_mode=$(stat -f '%Lp' "$private_dir" 2>/dev/null || stat -c '%a' "$private_dir")
+    discovery_mode=$(stat -f '%Lp' "$private_dir/discovery.json" 2>/dev/null || stat -c '%a' "$private_dir/discovery.json")
+    canonical_mode=$(stat -f '%Lp' "$private_dir/model-assignment.mjs" 2>/dev/null || stat -c '%a' "$private_dir/model-assignment.mjs")
+    printf '%s %s %s\\n' "$dir_mode" "$discovery_mode" "$canonical_mode" > "$ALFRED_TEST_MODE_MARKER"
+    ;;
+esac
+exec ${shellQuote(process.execPath)} "$@"
+`);
+  chmodSync(join(modeNodeBin, "node"), 0o755);
+  const modePreview = run([], {
+    env: {
+      PATH: `${modeNodeBin}:${process.env.PATH ?? ""}`,
+      TMPDIR: modeTuiTemp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_TEST_MODE_MARKER: modeMarker
+    }
+  });
+  assert.equal(modePreview.status, 0, modePreview.stderr);
+  assert.equal(readFileSync(modeMarker, "utf8").trim(), "700 600 600");
+  assert.deepEqual(readdirSync(modeTuiTemp), [], "private mode probe must still clean staged files");
 
   const guidedQuickPath = spawnSync("node", [appTui], {
     cwd,
@@ -452,6 +506,70 @@ EOFRESULT
   assert.equal(existsSync(unsafeResultMarker), false, "rejected result assignments must never execute");
   assert.deepEqual(readdirSync(unsafeTuiTemp), [], "private app TUI temp directory must be cleaned after rejection");
 
+  const oldOutputNodeBin = join(fixture, "old-output-node-bin");
+  const oldOutputTemp = join(fixture, "old-output-tmp");
+  mkdirSync(oldOutputNodeBin, { recursive: true });
+  mkdirSync(oldOutputTemp, { recursive: true });
+  writeFileSync(join(oldOutputNodeBin, "node"), `#!/bin/sh
+if [ "$1" = "-v" ]; then printf 'v26.0.0\\n'; exit 0; fi
+cat <<'EOFRESULT'
+EDITION='coding'
+HARNESS='none'
+PROFILE_STRATEGY='runtime-profiles'
+MEMORY_SETUP='not-needed-for-coding-edition'
+NAME='old-output'
+APPLY='false'
+SKIP_PROFILE_MANAGER='false'
+TUI_USED='true'
+TUI_MODE='app'
+EOFRESULT
+`);
+  chmodSync(join(oldOutputNodeBin, "node"), 0o755);
+  const oldOutput = run([], {
+    env: {
+      PATH: `${oldOutputNodeBin}:/usr/bin:/bin`,
+      TMPDIR: oldOutputTemp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit"
+    }
+  });
+  assert.equal(oldOutput.status, 0, oldOutput.stderr);
+  assert.match(oldOutput.stdout, /Name:\s+old-output/);
+  assert.match(oldOutput.stdout, /Model strategy:\s+configure-later/);
+  assert.match(oldOutput.stdout, /Model approval:\s+false/);
+  assert.match(oldOutput.stdout, /TUI mode:\s+app/);
+  assert.deepEqual(readdirSync(oldOutputTemp), [], "old app output cleanup must remain intact");
+
+  const invalidModelNodeBin = join(fixture, "invalid-model-node-bin");
+  mkdirSync(invalidModelNodeBin, { recursive: true });
+  writeFileSync(join(invalidModelNodeBin, "node"), `#!/bin/sh
+if [ "$1" = "-v" ]; then printf 'v26.0.0\\n'; exit 0; fi
+cat <<'EOFRESULT'
+EDITION='coding'
+HARNESS='none'
+PROFILE_STRATEGY='runtime-profiles'
+MEMORY_SETUP='not-needed-for-coding-edition'
+NAME='invalid-model'
+APPLY='false'
+SKIP_PROFILE_MANAGER='false'
+TUI_USED='true'
+TUI_MODE='app'
+MODEL_STRATEGY='invented-policy'
+MODEL_WRITE_APPROVED='yes'
+EOFRESULT
+`);
+  chmodSync(join(invalidModelNodeBin, "node"), 0o755);
+  const invalidModelOutput = run([], {
+    env: {
+      PATH: `${invalidModelNodeBin}:/usr/bin:/bin`,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_INSTALL_TUI_INPUT: "1\n5\n1\nfallback-after-invalid\nn"
+    }
+  });
+  assert.notEqual(invalidModelOutput.status, 0, "invalid optional IPC values must fail closed");
+  assert.match(invalidModelOutput.stderr, /Invalid MODEL_STRATEGY|Invalid MODEL_WRITE_APPROVED/);
+
   const multiFlagPreview = run(["--edition=coding", "--name=multi", "--harness=opencode,codex-cli,codex-app"]);
   assert.equal(multiFlagPreview.status, 0, multiFlagPreview.stderr);
   assert.match(multiFlagPreview.stdout, /Harnesses:\s+opencode,codex-cli,codex-app/);
@@ -553,6 +671,8 @@ EOFRESULT
   assert.equal(trace.data.harnesses, "opencode,codex-cli");
   assert.match(trace.data.harness_status, /opencode=/);
   assert.equal(trace.data.provider_calls, 0);
+  assert.match(applied.stdout, /configure later; no model configuration will be written/);
+  assert.equal(existsSync(join(home, ".alfred", "models.json")), false, "configure-later apply must not write model config");
 
   const handoffTarget = join(fixture, "handoff-alfred-repo");
   mkdirSync(join(handoffTarget, "packages", "opencode-adapter", "src"), { recursive: true });
@@ -604,6 +724,320 @@ EOFRESULT
     true,
     "handoff copy should place Codex skills in the project final location"
   );
+
+  const gitProbe = spawnSync("git", ["--version"], { encoding: "utf8" });
+  assert.equal(gitProbe.status, 0, "git is required for the real linked-worktree installer integration test");
+  const worktreeMain = join(fixture, "worktree-main");
+  const worktreeLinked = join(fixture, "worktree-linked");
+  const worktreeTarget = join(fixture, "worktree-alfred-target");
+  const worktreeHome = join(fixture, "worktree-home");
+  mkdirSync(worktreeMain, { recursive: true });
+  mkdirSync(worktreeHome, { recursive: true });
+  assert.equal(spawnSync("git", ["init"], { cwd: worktreeMain, encoding: "utf8" }).status, 0);
+  writeFileSync(join(worktreeMain, "README.md"), "# worktree fixture\n");
+  assert.equal(spawnSync("git", ["add", "README.md"], { cwd: worktreeMain, encoding: "utf8" }).status, 0);
+  const initialCommit = spawnSync("git", ["-c", "user.name=Alfred Test", "-c", "user.email=alfred@example.invalid", "commit", "-m", "fixture"], { cwd: worktreeMain, encoding: "utf8" });
+  assert.equal(initialCommit.status, 0, initialCommit.stderr);
+  const addWorktree = spawnSync("git", ["worktree", "add", "-b", "issue-95-fixture", worktreeLinked], { cwd: worktreeMain, encoding: "utf8" });
+  assert.equal(addWorktree.status, 0, addWorktree.stderr);
+  const worktreeMainCanonical = realpathSync(worktreeMain);
+  const worktreeLinkedCanonical = realpathSync(worktreeLinked);
+  mkdirSync(join(worktreeTarget, "packages", "opencode-adapter", "src"), { recursive: true });
+  writeFileSync(
+    join(worktreeTarget, "packages", "opencode-adapter", "src", "cli.js"),
+    "const fs = require('fs'); const path = require('path'); const output = process.argv[process.argv.indexOf('--output') + 1]; fs.mkdirSync(path.join(output, '.opencode', 'agents'), { recursive: true }); fs.writeFileSync(path.join(output, 'opencode.json.preview'), '{}\\n'); fs.writeFileSync(path.join(output, '.opencode', 'agents', 'reviewer.md'), '# reviewer\\n');\n"
+  );
+  const worktreeApply = run(["--no-clone"], {
+    cwd: worktreeLinked,
+    env: {
+      HOME: worktreeHome,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_RENDER: "1",
+      ALFRED_INSTALL_APP_TUI_COLUMNS: "240",
+      ALFRED_INSTALL_APP_TUI_EVENTS: `set:edition=coding,set:harnesses=opencode,set:profiles=false,set:name=worktree,set:path=${worktreeTarget},set:apply=true,submit`,
+      ALFRED_INSTALL_HANDOFF_INPUT: "2"
+    }
+  });
+  assert.equal(worktreeApply.status, 0, worktreeApply.stderr);
+  assert.match(worktreeApply.stderr, new RegExp(`Project root: ${worktreeMainCanonical.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), "discovery displays the shell-resolved canonical root");
+  assert.equal(existsSync(join(worktreeMain, ".opencode", "agents", "reviewer.md")), true, "handoff applies harness files to the canonical main worktree");
+  assert.equal(existsSync(join(worktreeMain, "opencode.json")), true);
+  assert.equal(existsSync(join(worktreeLinked, ".opencode")), false, "linked invoking worktree is not used as the apply target");
+  assert.equal(existsSync(join(worktreeLinked, "opencode.json")), false);
+  const worktreeHandoff = readFileSync(join(worktreeTarget, ".ai", "generated", "install-handoff.txt"), "utf8");
+  assert.match(worktreeHandoff, new RegExp(`Project launched from: ${worktreeLinkedCanonical.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  assert.match(worktreeHandoff, new RegExp(`Canonical project root: ${worktreeMainCanonical.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+
+  const installSource = readFileSync(installSh, "utf8");
+  for (const requiredRemote of [
+    "scripts/tui/install-discovery.mjs",
+    "packages/profile-manager/src/index.js",
+    "packages/core/src/model-assignment.js"
+  ]) assert.match(installSource, new RegExp(requiredRemote.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(installSource, /chmod 0700 "\$APP_TUI_PRIVATE_DIR"/);
+  assert.match(installSource, /chmod 0600 "\$app_discovery_file"/);
+  assert.match(installSource, /ALFRED_INSTALL_DISCOVERY_FILE=/);
+  assert.match(installSource, /https:\/\/api\.github\.com\/repos\/GOI17\/alfred\/git\/ref\/heads\/\$DEFAULT_BRANCH/);
+  assert.match(installSource, /https:\/\/codeload\.github\.com\/GOI17\/alfred\/tar\.gz\/\$app_tui_commit_sha/);
+  assert.doesNotMatch(installSource, /codeload\.github\.com\/GOI17\/alfred\/tar\.gz\/refs\/heads/);
+
+  const remoteRoot = join(fixture, "remote-bootstrap");
+  const remoteBin = join(remoteRoot, "bin");
+  const remoteTmp = join(remoteRoot, "tmp");
+  const remoteHome = join(remoteRoot, "home");
+  const remoteCwd = join(remoteRoot, "workspace");
+  const remoteInstaller = join(remoteRoot, "install.sh");
+  const remoteSnapshot = join(remoteRoot, "snapshot.tar.gz");
+  const remoteSnapshotRoot = join(remoteRoot, "snapshot-source", "alfred-main");
+  const curlMarker = join(remoteRoot, "curl.log");
+  const tarMarker = join(remoteRoot, "tar.log");
+  const remoteCommitSha = "0123456789abcdef0123456789abcdef01234567";
+  for (const directory of [remoteBin, remoteTmp, remoteHome, remoteCwd]) mkdirSync(directory, { recursive: true });
+  writeFileSync(remoteInstaller, installSource);
+  for (const relativePath of [
+    "scripts/tui/install-app.mjs",
+    "scripts/tui/install-pathfinder.mjs",
+    "scripts/tui/install-discovery.mjs",
+    "packages/profile-manager/src/index.js",
+    "packages/core/src/model-assignment.js"
+  ]) {
+    const destination = join(remoteSnapshotRoot, relativePath);
+    mkdirSync(dirname(destination), { recursive: true });
+    copyFileSync(join(root, relativePath), destination);
+  }
+  const tarPath = spawnSync("sh", ["-c", "command -v tar"], { encoding: "utf8" }).stdout.trim();
+  assert.ok(tarPath, "tar is required for deterministic remote bootstrap coverage");
+  const packed = spawnSync(tarPath, ["-czf", remoteSnapshot, "alfred-main"], { cwd: join(remoteRoot, "snapshot-source"), encoding: "utf8" });
+  assert.equal(packed.status, 0, packed.stderr);
+  writeFileSync(join(remoteBin, "curl"), `#!/bin/sh
+output=''
+url=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) output="$2"; shift 2 ;;
+    http*) url="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+printf '%s\n' "$url" >> "$ALFRED_TEST_CURL_MARKER"
+case "$url" in
+  https://api.github.com/*)
+    printf '{"object":{"type":"commit","sha":"%s"}}\n' "$ALFRED_TEST_COMMIT_SHA" > "$output"
+    ;;
+  https://codeload.github.com/*)
+    [ "\${ALFRED_TEST_FAIL_CODELOAD:-0}" != "1" ] || exit 1
+    cp "$ALFRED_TEST_SNAPSHOT" "$output"
+    ;;
+  *) exit 1 ;;
+esac
+`);
+  writeFileSync(join(remoteBin, "tar"), `#!/bin/sh
+printf '%s\n' "$*" >> "$ALFRED_TEST_TAR_MARKER"
+exec ${shellQuote(tarPath)} "$@"
+`);
+  chmodSync(join(remoteBin, "curl"), 0o755);
+  chmodSync(join(remoteBin, "tar"), 0o755);
+  const remoteBootstrap = run([], {
+    installSh: remoteInstaller,
+    cwd: remoteCwd,
+    env: {
+      HOME: remoteHome,
+      PATH: `${remoteBin}:${process.env.PATH ?? ""}`,
+      TMPDIR: remoteTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_TEST_COMMIT_SHA: remoteCommitSha,
+      ALFRED_TEST_SNAPSHOT: remoteSnapshot,
+      ALFRED_TEST_CURL_MARKER: curlMarker,
+      ALFRED_TEST_TAR_MARKER: tarMarker
+    }
+  });
+  assert.equal(remoteBootstrap.status, 0, remoteBootstrap.stderr);
+  assert.match(remoteBootstrap.stdout, /TUI mode:\s+app/, "remote snapshot modules import successfully");
+  const curlRequests = readFileSync(curlMarker, "utf8").trim().split("\n");
+  assert.deepEqual(curlRequests, [
+    "https://api.github.com/repos/GOI17/alfred/git/ref/heads/main",
+    `https://codeload.github.com/GOI17/alfred/tar.gz/${remoteCommitSha}`
+  ], "remote bootstrap resolves the branch once and fetches that exact commit snapshot");
+  assert.doesNotMatch(curlRequests[1], /refs\/heads\/main/, "codeload must not fetch the mutable branch URL");
+  assert.match(readFileSync(tarMarker, "utf8"), /-xzf/);
+  assert.deepEqual(readdirSync(remoteTmp), [], "remote private staging is removed after successful imports");
+
+  const invalidShaMarker = join(remoteRoot, "invalid-sha-curl.log");
+  const invalidShaBootstrap = run([], {
+    installSh: remoteInstaller,
+    cwd: remoteCwd,
+    env: {
+      HOME: remoteHome,
+      PATH: `${remoteBin}:${process.env.PATH ?? ""}`,
+      TMPDIR: remoteTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_TUI_INPUT: "1\n5\n1\ninvalid-sha-fallback\nn",
+      ALFRED_TEST_COMMIT_SHA: "not-a-commit-sha",
+      ALFRED_TEST_SNAPSHOT: remoteSnapshot,
+      ALFRED_TEST_CURL_MARKER: invalidShaMarker
+    }
+  });
+  assert.equal(invalidShaBootstrap.status, 0, invalidShaBootstrap.stderr);
+  assert.match(invalidShaBootstrap.stderr, /using text installer/i, "invalid branch resolution falls back safely");
+  assert.match(invalidShaBootstrap.stdout, /TUI mode:\s+text/);
+  assert.deepEqual(readFileSync(invalidShaMarker, "utf8").trim().split("\n"), [
+    "https://api.github.com/repos/GOI17/alfred/git/ref/heads/main"
+  ], "an invalid SHA must stop before codeload");
+  assert.deepEqual(readdirSync(remoteTmp), [], "failed branch resolution cleans private staging");
+
+  const failedStagingMarker = join(remoteRoot, "failed-staging-curl.log");
+  const failedStagingBootstrap = run([], {
+    installSh: remoteInstaller,
+    cwd: remoteCwd,
+    env: {
+      HOME: remoteHome,
+      PATH: `${remoteBin}:${process.env.PATH ?? ""}`,
+      TMPDIR: remoteTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_TUI_INPUT: "1\n5\n1\nfailed-staging-fallback\nn",
+      ALFRED_TEST_COMMIT_SHA: remoteCommitSha,
+      ALFRED_TEST_FAIL_CODELOAD: "1",
+      ALFRED_TEST_SNAPSHOT: remoteSnapshot,
+      ALFRED_TEST_CURL_MARKER: failedStagingMarker
+    }
+  });
+  assert.equal(failedStagingBootstrap.status, 0, failedStagingBootstrap.stderr);
+  assert.match(failedStagingBootstrap.stderr, /using text installer/i, "failed immutable snapshot staging falls back safely");
+  assert.match(failedStagingBootstrap.stdout, /TUI mode:\s+text/);
+  assert.deepEqual(readFileSync(failedStagingMarker, "utf8").trim().split("\n"), [
+    "https://api.github.com/repos/GOI17/alfred/git/ref/heads/main",
+    `https://codeload.github.com/GOI17/alfred/tar.gz/${remoteCommitSha}`
+  ]);
+  assert.deepEqual(readdirSync(remoteTmp), [], "failed snapshot staging cleans private staging");
+
+  function writeDiscoveryFixture(filePath, { fixtureHome, fixtureTarget, existingModels = false }) {
+    const modelsPath = join(fixtureHome, ".alfred", "models.json");
+    writeFileSync(filePath, `${JSON.stringify({
+      homeDir: fixtureHome,
+      cwd,
+      targetPath: fixtureTarget,
+      env: {
+        PATH: "/fixture/bin",
+        OPENAI_API_KEY: "fixture-openai-secret",
+        ANTHROPIC_API_KEY: "fixture-anthropic-secret"
+      },
+      platform: "linux",
+      release: "fixture-release",
+      architecture: "arm64",
+      nodeVersion: "v24.3.0",
+      commands: { git: false, opencode: true, codex: false, pi: false },
+      existing_paths: [fixtureTarget, ...(existingModels ? [modelsPath] : [])]
+    }, null, 2)}\n`);
+  }
+
+  const modelPreviewHome = join(fixture, "model-preview-home");
+  const modelPreviewTarget = join(fixture, "model-preview-target");
+  const modelPreviewFixture = join(fixture, "model-preview-fixture.json");
+  mkdirSync(modelPreviewHome, { recursive: true });
+  mkdirSync(modelPreviewTarget, { recursive: true });
+  writeDiscoveryFixture(modelPreviewFixture, { fixtureHome: modelPreviewHome, fixtureTarget: modelPreviewTarget });
+  const modelPreview = run([], {
+    env: {
+      HOME: modelPreviewHome,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: modelPreviewFixture
+    }
+  });
+  assert.equal(modelPreview.status, 0, modelPreview.stderr);
+  assert.match(modelPreview.stdout, /Model strategy:\s+smart-defaults/);
+  assert.match(modelPreview.stdout, /Proposed model configuration \(local discovery only\)/);
+  assert.match(modelPreview.stdout, /"primary": "openai\/gpt-4\.1-mini"/);
+  assert.doesNotMatch(`${modelPreview.stdout}\n${modelPreview.stderr}`, /fixture-openai-secret|fixture-anthropic-secret/);
+  assert.equal(existsSync(join(modelPreviewHome, ".alfred", "models.json")), false, "preview must not write model config");
+
+  const cancelHome = join(fixture, "model-cancel-home");
+  const cancelFixture = join(fixture, "model-cancel-fixture.json");
+  const cancelWorkspace = join(fixture, "cancel-workspace");
+  const cancelTmp = join(fixture, "cancel-tmp");
+  mkdirSync(cancelHome, { recursive: true });
+  mkdirSync(cancelWorkspace, { recursive: true });
+  mkdirSync(cancelTmp, { recursive: true });
+  writeDiscoveryFixture(cancelFixture, { fixtureHome: cancelHome, fixtureTarget: modelPreviewTarget });
+  const cancelledModel = run([], {
+    cwd: cancelWorkspace,
+    env: {
+      HOME: cancelHome,
+      TMPDIR: cancelTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "q",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: cancelFixture
+    }
+  });
+  assert.equal(cancelledModel.status, 130, "q must terminate the overall installer instead of entering text fallback");
+  assert.equal(existsSync(join(cancelHome, ".alfred", "models.json")), false, "cancel must not write model config");
+  assert.equal(existsSync(join(cancelHome, ".alfred", "runtime-profiles")), false, "cancel must not write profiles");
+  assert.deepEqual(readdirSync(cancelWorkspace), [], "cancel must not write project files");
+  assert.deepEqual(readdirSync(cancelTmp), [], "cancel must clean private staging");
+
+  const keepHome = join(fixture, "model-keep-home");
+  const keepTarget = join(fixture, "model-keep-target");
+  const keepFixture = join(fixture, "model-keep-fixture.json");
+  const keepModels = join(keepHome, ".alfred", "models.json");
+  mkdirSync(join(keepHome, ".alfred"), { recursive: true });
+  mkdirSync(keepTarget, { recursive: true });
+  writeFileSync(keepModels, "{\n  \"*\": { \"primary\": \"existing/model\" },\n  \"fallbacks\": []\n}\n", { mode: 0o600 });
+  const keepBefore = readFileSync(keepModels, "utf8");
+  writeDiscoveryFixture(keepFixture, { fixtureHome: keepHome, fixtureTarget: keepTarget, existingModels: true });
+  const keepApply = run(["--path", keepTarget, "--no-clone"], {
+    env: {
+      HOME: keepHome,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "r,set:applyIntent=apply-safe-steps,enter,enter",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: keepFixture
+    }
+  });
+  assert.equal(keepApply.status, 0, keepApply.stderr);
+  assert.match(keepApply.stdout, /Model strategy:\s+keep-existing/);
+  assert.match(keepApply.stdout, /remains untouched and was not read into the TUI/);
+  assert.doesNotMatch(keepApply.stdout, /Proposed model configuration|"primary"/);
+  assert.equal(readFileSync(keepModels, "utf8"), keepBefore, "keep-existing apply must preserve existing config byte-for-byte");
+
+  const approvedHome = join(fixture, "model-approved-home");
+  const approvedTarget = join(fixture, "model-approved-target");
+  const approvedFixture = join(fixture, "model-approved-fixture.json");
+  mkdirSync(approvedHome, { recursive: true });
+  mkdirSync(approvedTarget, { recursive: true });
+  writeDiscoveryFixture(approvedFixture, { fixtureHome: approvedHome, fixtureTarget: approvedTarget });
+  const approvedApply = run(["--path", approvedTarget, "--no-clone"], {
+    env: {
+      HOME: approvedHome,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "r,set:applyIntent=apply-safe-steps,space,down,enter,down,enter",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: approvedFixture,
+      ALFRED_INSTALL_HANDOFF_INPUT: "1"
+    }
+  });
+  assert.equal(approvedApply.status, 0, approvedApply.stderr);
+  assert.match(approvedApply.stdout, /Model strategy:\s+smart-defaults/);
+  assert.match(approvedApply.stdout, /Model approval:\s+true/);
+  assert.match(approvedApply.stdout, /Wrote approved model assignment config atomically/);
+  const approvedModelsPath = join(approvedHome, ".alfred", "models.json");
+  const approvedConfig = JSON.parse(readFileSync(approvedModelsPath, "utf8"));
+  assert.deepEqual(approvedConfig, {
+    "*": { primary: "openai/gpt-4.1-mini", fallbacks: ["anthropic/claude-sonnet-4"] },
+    orchestrator: { primary: "anthropic/claude-sonnet-4" },
+    developer: { primary: "anthropic/claude-sonnet-4" },
+    fallbacks: ["openai/gpt-4.1-mini", "anthropic/claude-sonnet-4"]
+  });
+  assert.equal(statSync(approvedModelsPath).mode & 0o777, 0o600, "models config must be mode 0600");
+  assert.equal(readdirSync(join(approvedHome, ".alfred")).some((name) => name.includes("models.json") && name.endsWith(".tmp")), false, "atomic model write must leave no temp file");
+  const modelTracePath = join(approvedHome, ".alfred", "observability", "model-assignment-trace.json");
+  const modelTrace = JSON.parse(readFileSync(modelTracePath, "utf8"));
+  assert.deepEqual(modelTrace.trace_events.map((event) => event.event), ["model_assignment_configured", "provider_request_avoided"]);
+  assert.equal(modelTrace.provider_calls, 0);
+  assert.equal(statSync(modelTracePath).mode & 0o777, 0o600);
+  const approvedInstallTrace = JSON.parse(readFileSync(join(approvedHome, ".alfred", "observability", "install-trace.json"), "utf8"));
+  assert.equal(approvedInstallTrace.data.model_strategy, "smart-defaults");
+  assert.equal(approvedInstallTrace.data.model_write_approved, true);
+  assert.equal(approvedInstallTrace.data.model_config_written, true);
+  assert.equal(approvedInstallTrace.data.provider_calls, 0);
 
   console.log("suite installer validation ok: preview is default, legacy flags fail closed, and apply does not install Pi by default");
 } finally {

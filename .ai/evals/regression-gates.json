@@ -186,7 +186,7 @@
         "packages/profile-manager/test/profile-manager.test.mjs"
       ],
       "command": "node --test packages/profile-manager/test/profile-manager.test.mjs",
-      "expected_test_count": 6,
+      "expected_test_count": 8,
       "blocked_on_failure": true
     },
     {
@@ -197,7 +197,7 @@
         "packages/opencode-adapter/src/runtime.js"
       ],
       "command": "node --test packages/opencode-adapter/test/runtime.test.mjs",
-      "expected_test_count": 4,
+      "expected_test_count": 9,
       "blocked_on_failure": true
     },
     {
@@ -214,6 +214,6 @@
   ],
   "totals": {
     "files_validated": 5,
-    "tests_total": 250
+    "tests_total": 257
   }
 }

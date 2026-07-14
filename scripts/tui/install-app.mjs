@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { writeFileSync } from "node:fs";
+import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 import { StringDecoder } from "node:string_decoder";
@@ -8,7 +8,9 @@ import {
   EDITIONS,
   HARNESSES,
   MEMORY_SETUPS,
+  controlsFor,
   createPathfinderState,
+  normalizeDiscovery,
   parseHarnessSelection,
   previewPageSize,
   render,
@@ -85,6 +87,15 @@ function parseHarnessStatus(raw = process.env.ALFRED_INSTALL_HARNESS_STATUS || "
 }
 
 const harnessStatus = parseHarnessStatus();
+function readDiscovery(filePath) {
+  if (!filePath) return normalizeDiscovery(null, harnessStatus);
+  try {
+    return normalizeDiscovery(JSON.parse(readFileSync(filePath, "utf8")), harnessStatus);
+  } catch {
+    return normalizeDiscovery(null, harnessStatus);
+  }
+}
+
 let state = createPathfinderState({
   current: {
     edition: process.env.ALFRED_INSTALL_CURRENT_EDITION,
@@ -95,8 +106,10 @@ let state = createPathfinderState({
     targetPath: process.env.ALFRED_INSTALL_CURRENT_PATH,
     apply: process.env.ALFRED_INSTALL_CURRENT_APPLY
   },
-  harnessStatus
+  harnessStatus,
+  discovery: readDiscovery(process.env.ALFRED_INSTALL_DISCOVERY_FILE)
 });
+if (process.env.ALFRED_INSTALL_APP_TUI_SCRIPT) state = { ...state, compatibilityPlayback: true };
 
 let lastRender = { text: "", hitRegions: [] };
 let legacyPlayback = false;
@@ -112,10 +125,15 @@ function dimensions() {
   };
 }
 
-function screen() {
+function colorEnabled(stream) {
+  if (process.env.ALFRED_INSTALL_FORCE_COLOR === "1") return true;
+  return Boolean(stream?.isTTY) && !Object.hasOwn(process.env, "NO_COLOR");
+}
+
+function screen(output = process.stdout) {
   const viewport = dimensions();
   if (state.overlay?.type === "preview") state = transition(state, { type: "PAGE", delta: 0, pageSize: previewPageSize(viewport) });
-  lastRender = render(state, viewport);
+  lastRender = render(state, { ...viewport, color: colorEnabled(output) });
   return lastRender.text;
 }
 
@@ -132,6 +150,8 @@ function setValue(pair) {
     dispatch({ type: "PATCH", key: "harnesses", value: parseHarnessSelection(value, harnessStatus) });
   } else if (key === "profiles") {
     dispatch({ type: "PATCH", key, value: value === "false" || value === "decide-later" ? "decide-later" : "runtime-profiles" });
+  } else if (key === "modelApproval") {
+    dispatch({ type: "PATCH", key: "modelWriteApproved", value });
   } else {
     dispatch({ type: "PATCH", key, value });
   }
@@ -220,7 +240,7 @@ function handleInteractiveMouse(event) {
 }
 
 function textFocused() {
-  return state.phase === "Configure" && (state.focus === 1 || state.focus === 2) && !state.overlay;
+  return state.phase === "Configure" && ["name", "path"].includes(controlsFor(state)[state.focus]) && !state.overlay;
 }
 
 function handleToken(token, { playback = false } = {}) {
@@ -232,7 +252,7 @@ function handleToken(token, { playback = false } = {}) {
     return;
   }
   if (playback && legacyPlayback && handleLegacyToken(token)) return;
-  if (token === "cancel") return dispatch({ type: "CANCEL" });
+  if (token === "cancel" || token === "q") return dispatch({ type: "CANCEL" });
   if (token === "p") return dispatch({ type: "OPEN_PREVIEW" });
   if (token === "w") return dispatch({ type: "OPEN_WHY" });
   if (token === "esc") return dispatch(state.overlay ? { type: "CLOSE_OVERLAY" } : { type: "BACK" });
@@ -272,7 +292,7 @@ function parseBytes(data, { flushEscape = false } = {}) {
 }
 
 function writeAssignments() {
-  const output = serializeAssignments(state.decisions);
+  const output = serializeAssignments(state.decisions, { reviewVisited: state.reviewVisited });
   const resultFile = process.env.ALFRED_INSTALL_APP_TUI_RESULT_FILE;
   if (resultFile) writeFileSync(resultFile, output);
   else process.stdout.write(output);
@@ -281,7 +301,11 @@ function writeAssignments() {
 function runPlayback() {
   const script = process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT || "";
   for (const token of script.split(/[,\n]+/).map((item) => item.trim()).filter(Boolean)) handleToken(token, { playback: true });
-  if (process.env.ALFRED_INSTALL_APP_TUI_RENDER === "1") process.stderr.write(`${screen()}\n`);
+  if (process.env.ALFRED_INSTALL_APP_TUI_RENDER === "1") process.stderr.write(`${screen(process.stderr)}\n`);
+  if (state.cancelled) {
+    process.exitCode = 130;
+    return;
+  }
   writeAssignments();
 }
 
@@ -298,7 +322,7 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
   let resolveSession;
   let rejectSession;
   let onData;
-  const redraw = () => stdout.write(`\x1b[H\x1b[2J${screen()}`);
+  const redraw = () => stdout.write(`\x1b[H\x1b[2J${screen(stdout)}`);
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
@@ -367,7 +391,10 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
   else writeAssignments();
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+function canonicalPath(value) {
+  try { return realpathSync(value); } catch { return resolve(value); }
+}
+const isMain = process.argv[1] && canonicalPath(process.argv[1]) === canonicalPath(fileURLToPath(import.meta.url));
 if (isMain) {
   if (process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT) runPlayback();
   else {
