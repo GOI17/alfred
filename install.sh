@@ -279,6 +279,68 @@ Guided, preview-first, and safe to exit before anything is written.
 EOFTUI
 }
 
+APP_TUI_PRIVATE_DIR=""
+
+cleanup_app_tui_private_dir() {
+  if [ -n "$APP_TUI_PRIVATE_DIR" ] && [ -d "$APP_TUI_PRIVATE_DIR" ]; then
+    rm -rf "$APP_TUI_PRIVATE_DIR"
+  fi
+  APP_TUI_PRIVATE_DIR=""
+}
+
+reset_app_tui_cleanup_traps() {
+  trap - EXIT HUP INT TERM
+}
+
+validate_app_tui_quoted_value() {
+  quoted_value="$1"
+  case "$quoted_value" in
+    \'*\') ;;
+    *) return 1 ;;
+  esac
+  quoted_inner=${quoted_value#\'}
+  quoted_inner=${quoted_inner%\'}
+  safe_apostrophe="'\\''"
+  carriage_return="$(printf '\r')"
+  while [ -n "$quoted_inner" ]; do
+    case "$quoted_inner" in
+      "$safe_apostrophe"*) quoted_inner=${quoted_inner#"$safe_apostrophe"} ;;
+      *)
+        first_character=${quoted_inner%"${quoted_inner#?}"}
+        case "$first_character" in
+          "'"|"$carriage_return") return 1 ;;
+        esac
+        quoted_inner=${quoted_inner#?}
+        ;;
+    esac
+  done
+}
+
+validate_app_tui_result() {
+  result_file="$1"
+  seen_keys=""
+  while IFS= read -r result_line || [ -n "$result_line" ]; do
+    [ -n "$result_line" ] || continue
+    result_key=${result_line%%=*}
+    result_value=${result_line#*=}
+    case "$result_key" in
+      EDITION|HARNESS|PROFILE_STRATEGY|MEMORY_SETUP|NAME|APPLY|SKIP_PROFILE_MANAGER|TUI_USED|TUI_MODE|TARGET_PATH) ;;
+      *) return 1 ;;
+    esac
+    case ",$seen_keys," in
+      *",$result_key,"*) return 1 ;;
+    esac
+    validate_app_tui_quoted_value "$result_value" || return 1
+    if [ -z "$seen_keys" ]; then seen_keys="$result_key"; else seen_keys="$seen_keys,$result_key"; fi
+  done < "$result_file"
+  for required_key in EDITION HARNESS PROFILE_STRATEGY MEMORY_SETUP NAME APPLY SKIP_PROFILE_MANAGER TUI_USED TUI_MODE; do
+    case ",$seen_keys," in
+      *",$required_key,"*) ;;
+      *) return 1 ;;
+    esac
+  done
+}
+
 run_app_tui_if_available() {
   if [ "$HAD_ARGS" = true ] && [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ]; then
     return 1
@@ -289,19 +351,35 @@ run_app_tui_if_available() {
   command -v node >/dev/null 2>&1 || return 1
 
   app_tui_script=""
-  app_tui_tmp=""
+  app_tui_remote=false
   if [ -n "$INSTALLER_DIR" ] && [ -f "$INSTALLER_DIR/scripts/tui/install-app.mjs" ]; then
     app_tui_script="$INSTALLER_DIR/scripts/tui/install-app.mjs"
   elif [ -f "./scripts/tui/install-app.mjs" ]; then
     app_tui_script="./scripts/tui/install-app.mjs"
   else
     command -v curl >/dev/null 2>&1 || return 1
-    app_tui_tmp="${TMPDIR:-/tmp}/alfred-install-app-tui.$$.mjs"
-    curl -fsSL "https://raw.githubusercontent.com/GOI17/alfred/$DEFAULT_BRANCH/scripts/tui/install-app.mjs" -o "$app_tui_tmp" 2>/dev/null || return 1
-    app_tui_script="$app_tui_tmp"
+    app_tui_remote=true
   fi
 
-  app_tui_out="${TMPDIR:-/tmp}/alfred-install-app-tui.$$.env"
+  APP_TUI_PRIVATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/alfred-install-app-tui.XXXXXX")" || return 1
+  chmod 0700 "$APP_TUI_PRIVATE_DIR" || { cleanup_app_tui_private_dir; return 1; }
+  trap 'cleanup_app_tui_private_dir' EXIT
+  trap 'cleanup_app_tui_private_dir; exit 129' HUP
+  trap 'cleanup_app_tui_private_dir; exit 130' INT
+  trap 'cleanup_app_tui_private_dir; exit 143' TERM
+
+  if [ "$app_tui_remote" = true ]; then
+    app_tui_script="$APP_TUI_PRIVATE_DIR/install-app.mjs"
+    if ! curl -fsSL "https://raw.githubusercontent.com/GOI17/alfred/$DEFAULT_BRANCH/scripts/tui/install-app.mjs" -o "$app_tui_script" 2>/dev/null || \
+      ! curl -fsSL "https://raw.githubusercontent.com/GOI17/alfred/$DEFAULT_BRANCH/scripts/tui/install-pathfinder.mjs" -o "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" 2>/dev/null
+    then
+      cleanup_app_tui_private_dir
+      reset_app_tui_cleanup_traps
+      return 1
+    fi
+  fi
+
+  app_tui_out="$APP_TUI_PRIVATE_DIR/result.env"
   app_tui_status=1
   if [ -n "${ALFRED_INSTALL_APP_TUI_EVENTS:-}${ALFRED_INSTALL_APP_TUI_SCRIPT:-}" ]; then
     if ALFRED_INSTALL_CURRENT_EDITION="$EDITION" \
@@ -345,12 +423,24 @@ run_app_tui_if_available() {
     fi
   fi
   if [ "$app_tui_status" -eq 0 ] && [ -s "$app_tui_out" ]; then
+    if ! validate_app_tui_result "$app_tui_out"; then
+      log "Rejected unsafe app TUI result; falling back to the text installer." 1>&2
+      cleanup_app_tui_private_dir
+      reset_app_tui_cleanup_traps
+      return 1
+    fi
     # shellcheck disable=SC1090
-    . "$app_tui_out"
-    rm -f "$app_tui_out" "$app_tui_tmp"
+    . "$app_tui_out" || {
+      cleanup_app_tui_private_dir
+      reset_app_tui_cleanup_traps
+      return 1
+    }
+    cleanup_app_tui_private_dir
+    reset_app_tui_cleanup_traps
     return 0
   fi
-  rm -f "$app_tui_out" "$app_tui_tmp"
+  cleanup_app_tui_private_dir
+  reset_app_tui_cleanup_traps
   return 1
 }
 
