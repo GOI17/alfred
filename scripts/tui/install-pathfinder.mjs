@@ -454,6 +454,7 @@ function bodyEntries(state) {
   const d = effective(state.decisions);
   const focus = controlsFor(state)[boundedFocus(state)];
   const discovery = state.discovery;
+  const displayPath = (value) => abbreviateHomePath(value, discovery);
   if (state.phase === "Discover") {
     const harnesses = HARNESSES.filter((item) => discovery.harnesses[item.value] === "installed").map((item) => item.label);
     const suggestions = discovery.models.suggestions.map((item) => `${item.model} (${item.source})`);
@@ -461,11 +462,11 @@ function bodyEntries(state) {
       { text: `OS: ${discovery.os.platform} ${discovery.os.release} · ${discovery.os.architecture}`, tone: "safe" },
       { text: `Node: ${discovery.node.version} · ${discovery.node.status} (requires ${discovery.node.required_major}+)`, tone: discovery.node.status === "ok" ? "safe" : "blocker" },
       { text: `Harnesses: ${harnesses.length ? harnesses.join(", ") : "none detected"}`, tone: harnesses.length ? "safe" : "normal" },
-      { text: `Provider/model suggestions: ${suggestions.length ? suggestions.join(", ") : "none detected"}`, tone: suggestions.length ? "safe" : "normal" },
-      { text: `Existing install: ${discovery.install.target_exists ? "found" : "not found"} at ${discovery.install.selected_target}`, tone: discovery.install.target_exists ? "safe" : "normal" },
+      { text: `Provider/model suggestions: ${suggestions.length ? suggestions.join(", ") : "no safe local signals detected"}`, tone: suggestions.length ? "safe" : "normal" },
+      { text: `Existing install: ${discovery.install.target_exists ? "found" : "not found"} at ${displayPath(discovery.install.selected_target)}`, tone: discovery.install.target_exists ? "safe" : "normal" },
       { text: `Models config: ${discovery.install.models_config_exists ? "existing config found" : "not present"}`, tone: discovery.install.models_config_exists ? "safe" : "normal" },
-      { text: `Git: ${discovery.git.repository_state} · ${discovery.git.linked_worktree_state} · ${discovery.git.workspace_root}`, tone: discovery.git.repository_state === "repository" ? "safe" : "normal" },
-      { text: `Project root: ${discovery.git.project_root}`, tone: discovery.git.repository_state === "repository" ? "safe" : "normal" },
+      { text: `Git: ${discovery.git.repository_state} · ${discovery.git.linked_worktree_state} · ${displayPath(discovery.git.workspace_root)}`, tone: discovery.git.repository_state === "repository" ? "safe" : "normal" },
+      { text: `Project root: ${displayPath(discovery.git.project_root)}`, tone: discovery.git.repository_state === "repository" ? "safe" : "normal" },
       { text: `${marker(focus === "recommended")} [r] Use recommended setup`, action: { type: "USE_RECOMMENDED" }, focused: focus === "recommended" },
       { text: `${marker(focus === "customize")} Customize choices`, action: { type: "CUSTOMIZE" }, focused: focus === "customize" }
     ];
@@ -504,7 +505,7 @@ function bodyEntries(state) {
   if (state.phase === "Review") {
     const entries = [{ text: "Review every choice before final confirmation." }, ...previewModel(d, discovery).lines.slice(1).map((text) => ({ text }))];
     if (modelsApplicable(d) && d.modelStrategy === "smart-defaults") entries.push({
-      text: `${marker(focus === "model-approval")} [${d.modelWriteApproved ? "x" : " "}] Approve writing/replacing ${discovery.install.models_config_path}`,
+      text: `${marker(focus === "model-approval")} [${d.modelWriteApproved ? "x" : " "}] Approve writing/replacing ${displayPath(discovery.install.models_config_path)}`,
       action: { type: "PATCH", key: "modelWriteApproved", value: !d.modelWriteApproved }, focused: focus === "model-approval", tone: "approval"
     });
     entries.push(
@@ -518,7 +519,7 @@ function bodyEntries(state) {
     { text: `Model write: ${d.modelWriteApproved ? "approved" : "not approved"}`, tone: d.modelWriteApproved ? "approval" : "safe" }
   ];
   if (modelsApplicable(d) && d.modelStrategy === "smart-defaults") entries.push({
-    text: `${marker(focus === "model-approval")} [${d.modelWriteApproved ? "x" : " "}] Approve writing/replacing ${discovery.install.models_config_path}`,
+    text: `${marker(focus === "model-approval")} [${d.modelWriteApproved ? "x" : " "}] Approve writing/replacing ${displayPath(discovery.install.models_config_path)}`,
     action: { type: "PATCH", key: "modelWriteApproved", value: !d.modelWriteApproved }, focused: focus === "model-approval", tone: "approval"
   });
   entries.push(
@@ -608,6 +609,108 @@ function graphemeWidth(grapheme) {
   return width;
 }
 export function displayWidth(text) { return graphemes(stripAnsi(text)).reduce((total, grapheme) => total + graphemeWidth(grapheme), 0); }
+
+function inferredHome(discovery) {
+  const match = /^(.*)[\\/]\.alfred[\\/]?$/.exec(String(discovery?.install?.alfred_home || ""));
+  return match?.[1] || "";
+}
+
+export function abbreviateHomePath(value, discovery) {
+  const path = String(value);
+  const homes = [inferredHome(discovery), process.env.HOME, process.env.USERPROFILE]
+    .filter((home, index, values) => home && values.indexOf(home) === index)
+    .sort((left, right) => right.length - left.length);
+  const home = homes.find((candidate) => path === candidate || path.startsWith(`${candidate}/`) || path.startsWith(`${candidate}\\`));
+  return home ? `~${path.slice(home.length).replaceAll("\\", "/")}` : path;
+}
+
+function styledGraphemes(text) {
+  const atoms = [];
+  let activeStyle = "";
+  let index = 0;
+  const value = String(text);
+  while (index < value.length) {
+    const ansi = ANSI_AT_START_PATTERN.exec(value.slice(index));
+    if (ansi) {
+      if (ansi[0].endsWith("m")) {
+        const parameters = ansi[0].slice(2, -1);
+        const codes = parameters ? parameters.split(";").map(Number) : [0];
+        if (codes.includes(0)) {
+          const afterReset = codes.slice(codes.lastIndexOf(0) + 1);
+          activeStyle = afterReset.length ? `\x1b[${afterReset.join(";")}m` : "";
+        } else activeStyle += ansi[0];
+      }
+      index += ansi[0].length;
+      continue;
+    }
+    const nextAnsi = value.slice(index).search(/\x1b\[/);
+    const end = nextAnsi < 0 ? value.length : index + nextAnsi;
+    if (end === index) {
+      const [grapheme] = graphemes(value.slice(index));
+      atoms.push({ grapheme, width: graphemeWidth(grapheme), style: activeStyle });
+      index += grapheme.length;
+      continue;
+    }
+    for (const grapheme of graphemes(value.slice(index, end))) atoms.push({ grapheme, width: graphemeWidth(grapheme), style: activeStyle });
+    index = end;
+  }
+  return atoms;
+}
+
+function renderStyledAtoms(atoms) {
+  let output = "";
+  let activeStyle = "";
+  for (const atom of atoms) {
+    if (atom.style !== activeStyle) {
+      if (activeStyle) output += COLOR.reset;
+      if (atom.style) output += atom.style;
+      activeStyle = atom.style;
+    }
+    output += atom.grapheme;
+  }
+  return activeStyle ? `${output}${COLOR.reset}` : output;
+}
+
+export function wrapAnsi(text, width) {
+  const limit = Math.max(1, Number(width) || 1);
+  const output = [];
+  for (const paragraph of String(text).split("\n")) {
+    let remaining = styledGraphemes(paragraph);
+    if (!remaining.length) {
+      output.push("");
+      continue;
+    }
+    while (remaining.length) {
+      let visible = 0;
+      let end = 0;
+      while (end < remaining.length && visible + remaining[end].width <= limit) {
+        visible += remaining[end].width;
+        end += 1;
+      }
+      if (end === remaining.length) {
+        output.push(renderStyledAtoms(remaining));
+        break;
+      }
+      if (end === 0) end = 1;
+      const firstNonWhitespace = remaining.findIndex((atom) => !/^\s$/u.test(atom.grapheme));
+      let breakAt = -1;
+      for (let index = end - 1; index > firstNonWhitespace; index -= 1) {
+        if (/^\s$/u.test(remaining[index].grapheme)) {
+          breakAt = index;
+          break;
+        }
+      }
+      const split = breakAt > 0 ? breakAt : end;
+      const line = remaining.slice(0, split);
+      while (line.length && /^\s$/u.test(line.at(-1).grapheme)) line.pop();
+      output.push(renderStyledAtoms(line));
+      remaining = remaining.slice(breakAt > 0 ? breakAt + 1 : end);
+      while (remaining.length && /^\s$/u.test(remaining[0].grapheme)) remaining.shift();
+    }
+  }
+  return output;
+}
+
 export function clipAnsi(text, width) {
   const limit = Math.max(0, width);
   const original = String(text);
@@ -645,24 +748,41 @@ function paint(text, tone, color) {
   const code = tone === "safe" ? COLOR.green : tone === "changed" || tone === "approval" ? COLOR.yellow : tone === "blocker" ? COLOR.red : tone === "focus" ? COLOR.cyan : "";
   return code ? `${code}${text}${COLOR.reset}` : text;
 }
-function fitPanelEntries(entries, contentHeight) {
-  if (entries.length <= contentHeight) return entries;
-  const actionable = entries.filter((entry) => entry.action);
-  if (!actionable.length) return entries.slice(0, contentHeight);
+function entryBlocks(entries, width) {
+  return entries.map((entry) => ({ ...entry, lines: wrapAnsi(entry.text || "", width) }));
+}
+function blocksHeight(blocks) { return blocks.reduce((total, block) => total + block.lines.length, 0); }
+function entriesHeight(entries, width) { return blocksHeight(entryBlocks(entries, width)); }
+function fitPanelEntries(entries, contentHeight, width) {
+  const blocks = entryBlocks(entries, width);
+  if (blocksHeight(blocks) <= contentHeight) return blocks;
+  const actionable = blocks.filter((entry) => entry.action);
+  if (!actionable.length) {
+    const visible = [];
+    let remaining = contentHeight;
+    for (const block of blocks) {
+      if (remaining <= 0) break;
+      const lines = block.lines.slice(0, remaining);
+      visible.push({ ...block, lines });
+      remaining -= lines.length;
+    }
+    return visible;
+  }
   if (actionable.length >= contentHeight) {
     const focused = Math.max(0, actionable.findIndex((entry) => entry.focused));
     const start = Math.min(Math.max(0, focused - Math.floor(contentHeight / 2)), actionable.length - contentHeight);
-    return actionable.slice(start, start + contentHeight);
+    return actionable.slice(start, start + contentHeight).map((entry) => ({ ...entry, lines: entry.lines.slice(0, 1) }));
   }
-  const detailHeight = contentHeight - actionable.length;
-  const details = entries.filter((entry) => !entry.action);
-  const visibleDetails = details.slice(0, Math.max(0, detailHeight - 1));
-  const hiddenCount = details.length - visibleDetails.length;
-  return [
-    ...visibleDetails,
-    { text: `… ${hiddenCount} detail${hiddenCount === 1 ? "" : "s"} hidden; resize to view` },
-    ...actionable
-  ];
+  const actionHeight = blocksHeight(actionable);
+  const fittedActions = actionHeight <= contentHeight ? actionable : actionable.map((entry) => ({ ...entry, lines: entry.lines.slice(0, 1) }));
+  let remaining = contentHeight - blocksHeight(fittedActions);
+  const details = [];
+  for (const block of blocks.filter((entry) => !entry.action)) {
+    if (block.lines.length > remaining) break;
+    details.push(block);
+    remaining -= block.lines.length;
+  }
+  return [...details, ...fittedActions];
 }
 function panel(title, entries, width, contentHeight, { color, xOffset = 0, yOffset = 0 } = {}) {
   const inner = Math.max(1, width - 2);
@@ -671,12 +791,16 @@ function panel(title, entries, width, contentHeight, { color, xOffset = 0, yOffs
   const top = `┌${clippedTitle}${"─".repeat(Math.max(0, inner - displayWidth(clippedTitle)))}┐`;
   const lines = [paint(top, "focus", color)];
   const hitRegions = [];
-  for (let index = 0; index < contentHeight; index += 1) {
-    const entry = entries[index];
-    const content = paint(entry?.text || "", entry?.focused ? "focus" : entry?.tone, color);
-    lines.push(`${paint("│", "focus", color)}${padAnsi(content, inner)}${paint("│", "focus", color)}`);
-    if (entry?.action) hitRegions.push({ x1: xOffset + 2, x2: xOffset + width - 1, y1: yOffset + lines.length, y2: yOffset + lines.length, action: entry.action });
+  const blocks = fitPanelEntries(entries, contentHeight, inner);
+  for (const entry of blocks) {
+    const y1 = yOffset + lines.length + 1;
+    for (const text of entry.lines) {
+      const content = paint(text, entry.focused ? "focus" : entry.tone, color);
+      lines.push(`${paint("│", "focus", color)}${padAnsi(content, inner)}${paint("│", "focus", color)}`);
+    }
+    if (entry.action) hitRegions.push({ x1: xOffset + 2, x2: xOffset + width - 1, y1, y2: yOffset + lines.length, action: entry.action });
   }
+  while (lines.length < contentHeight + 1) lines.push(`${paint("│", "focus", color)}${" ".repeat(inner)}${paint("│", "focus", color)}`);
   lines.push(paint(`└${"─".repeat(inner)}┘`, "focus", color));
   return { lines, hitRegions };
 }
@@ -701,8 +825,7 @@ export function render(state, { columns = 80, rows = 24, color = false } = {}) {
   const footer = [
     `Phase ${phaseIndex + 1}/${PHASES.length}: ${state.phase}${state.overlay ? ` | ${state.overlay.type}${pageLabel}` : ""} | provider calls: 0`,
     `Preview: ${previewModel(state.decisions, state.discovery).concise}`,
-    state.overlay ? "Keys: Esc close | arrows page | p Preview | w Why | q cancel" : "Keys: arrows move/change | Space/Enter select | b Back | r Recommended",
-    "Keys: p full Preview | w Why | q cancel"
+    state.overlay ? "Keys: Esc close;arrows page;p Preview;w Why;q cancel" : "Keys: ↑↓/←→ nav/edit;Space/Enter pick;b back;r rec;p full Preview;w why;q cancel"
   ];
   const availableContentHeight = Math.max(1, height - footer.length - 3);
   const lines = [clipAnsi(paint(title, "focus", color), width)];
@@ -712,18 +835,24 @@ export function render(state, { columns = 80, rows = 24, color = false } = {}) {
     const leftWidth = Math.floor((width - gap) * 0.58);
     const rightWidth = width - gap - leftWidth;
     const reasons = rationaleLines(state).map((text) => ({ text, tone: text.includes("Changed from recommendation") ? "changed" : "normal" }));
-    const contentHeight = Math.min(availableContentHeight, Math.max(MIN_PANEL_CONTENT_HEIGHT, entries.length, reasons.length));
-    const panelHeight = contentHeight + 2;
-    const left = panel(state.phase, fitPanelEntries(entries, contentHeight), leftWidth, contentHeight, { color, yOffset: 1 });
-    const right = panel("Rationale", fitPanelEntries(reasons, contentHeight), rightWidth, contentHeight, { color, xOffset: leftWidth + gap, yOffset: 1 });
-    for (let index = 0; index < panelHeight; index += 1) lines.push(`${padAnsi(left.lines[index], leftWidth)} ${right.lines[index]}`);
+    const leftContentHeight = Math.min(availableContentHeight, Math.max(MIN_PANEL_CONTENT_HEIGHT, entriesHeight(entries, leftWidth - 2)));
+    const rightContentHeight = Math.min(availableContentHeight, Math.max(MIN_PANEL_CONTENT_HEIGHT, entriesHeight(reasons, rightWidth - 2)));
+    const panelHeight = Math.max(leftContentHeight, rightContentHeight) + 2;
+    const left = panel(state.phase, entries, leftWidth, leftContentHeight, { color, yOffset: 1 });
+    const right = panel("Rationale", reasons, rightWidth, rightContentHeight, { color, xOffset: leftWidth + gap, yOffset: 1 });
+    for (let index = 0; index < panelHeight; index += 1) {
+      const leftLine = left.lines[index] || "";
+      const rightLine = right.lines[index] || "";
+      lines.push(`${padAnsi(leftLine, leftWidth)}${rightLine ? ` ${rightLine}` : ""}`);
+    }
     hitRegions.push(...left.hitRegions, ...right.hitRegions);
   } else {
-    const contentHeight = Math.min(availableContentHeight, Math.max(MIN_PANEL_CONTENT_HEIGHT, entries.length));
-    const single = panel(state.overlay?.type === "why" ? "Rationale" : state.overlay?.type === "preview" ? "Preview" : state.phase, fitPanelEntries(entries, contentHeight), width, contentHeight, { color, yOffset: 1 });
+    const contentHeight = Math.min(availableContentHeight, Math.max(MIN_PANEL_CONTENT_HEIGHT, entriesHeight(entries, width - 2)));
+    const single = panel(state.overlay?.type === "why" ? "Rationale" : state.overlay?.type === "preview" ? "Preview" : state.phase, entries, width, contentHeight, { color, yOffset: 1 });
     lines.push(...single.lines);
     hitRegions.push(...single.hitRegions);
   }
+  while (lines.length < height - footer.length) lines.push("");
   for (const line of footer) lines.push(clipAnsi(line, width));
   return { text: lines.slice(0, height).join("\n"), hitRegions, providerCalls: 0, provider_calls: 0 };
 }

@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import {
   PHASES,
+  abbreviateHomePath,
   clipAnsi,
   controlsFor,
   createPathfinderState,
@@ -14,7 +15,8 @@ import {
   rationaleLines,
   serializeAssignments,
   stripAnsi,
-  transition
+  transition,
+  wrapAnsi
 } from "./install-pathfinder.mjs";
 import { decodeTerminalEvent, printableInputAction, sgrMouseAction } from "./install-app.mjs";
 
@@ -133,13 +135,30 @@ assert.ok(narrow.text.split("\n").length <= 24);
 assert.ok(narrow.text.split("\n").every((line) => displayWidth(line) <= 80));
 assert.match(narrow.text, /Phase 1\/5: Discover/);
 assert.match(narrow.text, /Preview:/);
-assert.match(narrow.text, /p full Preview/);
+assert.match(narrow.text, /p full/);
+assert.equal(narrow.text.match(/^Keys:/gm)?.length, 1, "the footer has one compact help line");
+assert.equal(narrow.text.split("\n").length, 24, "the footer is anchored to the full viewport");
+assert.match(narrow.text, /Provider\/model suggestions: no safe local signals detected/);
 assert.equal(narrow.provider_calls, 0);
 assert.match(stripAnsi(narrow.text), /┌ Discover/);
 
 const noColor = render(createPathfinderState({ discovery }), { columns: 80, rows: 24, color: false });
 assert.doesNotMatch(noColor.text, /\x1b\[/);
 assert.ok(noColor.text.split("\n").every((line) => displayWidth(line) <= 80));
+assert.match(noColor.text, /Existing install: found at ~\/\.alfred\/installs\/acme/, "install paths under home use ~/ in discovery");
+const homePathDiscovery = normalizeDiscovery({
+  ...discovery,
+  git: {
+    ...discovery.git,
+    workspace_root: "/home/test/projects/alfred-linked",
+    project_root: "/home/test/projects/alfred"
+  }
+});
+const homePathRender = stripAnsi(render(createPathfinderState({ discovery: homePathDiscovery }), { columns: 80, rows: 24 }).text);
+assert.match(homePathRender, /Git: repository · linked-worktree · ~\/projects\/alfred-linked/);
+assert.match(homePathRender, /Project root: ~\/projects\/alfred/);
+assert.equal(abbreviateHomePath("/home/tester/project", discovery), "/home/tester/project", "home abbreviation respects path boundaries");
+assert.equal(abbreviateHomePath("/home/test\\projects\\alfred", discovery), "~/projects/alfred", "displayed home paths consistently use ~/ separators");
 assert.doesNotMatch(render(createPathfinderState({ discovery }), { columns: 80, rows: 24 }).text, /\x1b\[/, "pure rendering defaults to redirected/no-color output");
 assert.match(render(createPathfinderState({ discovery }), { columns: 80, rows: 24, color: true }).text, /\x1b\[/, "tests may explicitly force color");
 const previousNoColor = process.env.NO_COLOR;
@@ -154,6 +173,13 @@ assert.equal(displayWidth("👩‍💻"), 2, "emoji ZWJ graphemes use two termin
 assert.equal(displayWidth("🇲🇽"), 2, "regional-indicator emoji use two terminal cells");
 assert.equal(displayWidth(clipAnsi("\x1b[32m界界界\x1b[0m", 5)), 5, "CJK clipping reserves a cell for the ellipsis");
 assert.match(stripAnsi(clipAnsi("👩‍💻👩‍💻👩‍💻", 5)), /^👩‍💻👩‍💻…$/u, "clipping never splits an emoji ZWJ sequence");
+const wrappedAnsi = wrapAnsi("\x1b[32mReadable rationale with 界 and 👩‍💻 stays colored across rows.\x1b[0m", 20);
+assert.ok(wrappedAnsi.length > 1, "long rationale wraps to multiple rows");
+assert.ok(wrappedAnsi.every((line) => displayWidth(line) <= 20), "wrapped rationale uses terminal cell width");
+assert.ok(wrappedAnsi.every((line) => /\x1b\[32m/.test(line)), "wrapped rationale preserves color on continuation rows");
+assert.doesNotMatch(wrappedAnsi.join("\n"), /…/, "wrapping does not replace rationale with clipped ellipses");
+assert.equal(stripAnsi(wrappedAnsi.join(" ")), "Readable rationale with 界 and 👩‍💻 stays colored across rows.");
+assert.ok(wrapAnsi("\x1b[0;33mCombined reset and color stays yellow across wrapped rows.\x1b[0m", 12).every((line) => /\x1b\[33m/.test(line)));
 const unicodeState = createPathfinderState({ current: { name: "開発e\u0301👩‍💻" }, discovery });
 for (const columns of [20, 40, 80, 120]) {
   const unicodeRender = render(unicodeState, { columns, rows: 24, color: false });
@@ -181,27 +207,48 @@ assert.match(stripAnsi(wide.text), /┌ Discover/);
 assert.match(stripAnsi(wide.text), /┌ Rationale/);
 
 const tallWide = render(createPathfinderState(), { columns: 120, rows: 50, color: false });
-assert.equal(tallWide.text.split("\n").length, 17, "short wide panels stay compact on tall terminals");
-assert.match(tallWide.text, /└─+┘ └─+┘\nPhase 1\/5: Discover/, "footer follows the compact panels immediately");
+const tallWideLines = tallWide.text.split("\n");
+assert.equal(tallWideLines.length, 50, "tall rendering fills the viewport so the footer reaches the bottom");
+assert.match(tallWideLines.at(-3), /^Phase 1\/5: Discover/, "status is in the bottom footer region");
+assert.match(tallWideLines.at(-2), /^Preview:/, "preview is in the bottom footer region");
+assert.match(tallWideLines.at(-1), /^Keys:/, "help occupies the final viewport row");
+const finalPanelBorder = tallWideLines.findLastIndex((line) => /└─+┘/.test(line));
+assert.ok(finalPanelBorder > 0 && finalPanelBorder < tallWideLines.length - 4, "compact panels remain at the top with blank space before the footer");
 const tallConfigure = render({ ...createPathfinderState({ discovery }), phase: "Configure" }, { columns: 120, rows: 50, color: false });
-assert.equal(tallConfigure.text.split("\n").length, 17, "wide Configure does not add an empty boxed area");
+assert.equal(tallConfigure.text.split("\n").length, 50);
+assert.ok(tallConfigure.text.split("\n").findLastIndex((line) => /└─+┘/.test(line)) < 46, "wide Configure does not add an empty boxed area");
+
+let longRationaleState = createPathfinderState();
+longRationaleState = transition(longRationaleState, { type: "PATCH", key: "name", value: "a-very-long-install-name-that-makes-the-recommendation-rationale-readable-across-lines" });
+const longWideRationale = stripAnsi(render(longRationaleState, { columns: 120, rows: 50, color: true }).text);
+assert.match(longWideRationale, /from recommendation; your selection is/);
+assert.match(longWideRationale, /selection is respected\./);
+assert.doesNotMatch(longWideRationale, /…/, "wide two-column rationale wraps without clipping");
+const longOverlayRationale = stripAnsi(render(transition(longRationaleState, { type: "OPEN_WHY" }), { columns: 80, rows: 24, color: true }).text);
+assert.match(longOverlayRationale, /Changed from recommendation; your selection is/);
+assert.match(longOverlayRationale, /selection is respected\./);
+assert.doesNotMatch(longOverlayRationale, /…/, "rationale overlay wraps without clipping");
 
 for (const phase of PHASES) {
   const phaseState = { ...createPathfinderState({ discovery }), phase };
   const rendered = render(phaseState, { columns: 80, rows: 24, color: false });
   const lines = rendered.text.split("\n");
-  assert.ok(lines.length <= 24, `${phase} does not overflow an 80x24 viewport`);
+  assert.equal(lines.length, 24, `${phase} fills but does not overflow an 80x24 viewport`);
   assert.ok(lines.every((line) => displayWidth(line) <= 80), `${phase} preserves ANSI-aware width at 80 columns`);
-  assert.match(lines.at(-1), /^Keys: p full Preview/, `${phase} footer is not clipped at 80x24`);
+  assert.match(lines.at(-1), /^Keys:/, `${phase} footer is not clipped at 80x24`);
+  assert.equal(rendered.text.match(/^Keys:/gm)?.length, 1, `${phase} has one Keys line`);
   assert.equal(rendered.hitRegions.length, controlsFor(phaseState).length, `${phase} keeps every active control visible at 80x24`);
   assert.ok(rendered.hitRegions.every(({ y1, y2 }) => y1 === y2 && y1 > 0 && y1 <= lines.length), `${phase} hit regions retain rendered y coordinates`);
 }
 
-for (const type of ["OPEN_PREVIEW", "OPEN_WHY"]) {
-  const rendered = render(transition(createPathfinderState({ discovery }), { type }), { columns: 80, rows: 24, color: false });
-  const lines = rendered.text.split("\n");
-  assert.ok(lines.length <= 24 && lines.every((line) => displayWidth(line) <= 80), `${type} overlay fits 80x24`);
-  assert.match(lines.at(-1), /^Keys: p full Preview/, `${type} overlay keeps its footer visible`);
+for (const phase of PHASES) {
+  for (const type of ["OPEN_PREVIEW", "OPEN_WHY"]) {
+    const rendered = render(transition({ ...createPathfinderState({ discovery }), phase }, { type }), { columns: 80, rows: 24, color: false });
+    const lines = rendered.text.split("\n");
+    assert.ok(lines.length === 24 && lines.every((line) => displayWidth(line) <= 80), `${phase} ${type} overlay fits 80x24`);
+    assert.match(lines.at(-1), /^Keys: Esc close;arrows page/, `${phase} ${type} overlay keeps its specific footer visible`);
+    assert.equal(rendered.text.match(/^Keys:/gm)?.length, 1, `${phase} ${type} overlay has one Keys line`);
+  }
 }
 
 const model = previewModel(discoveredRecommendation.decisions, discovery);
@@ -210,6 +257,8 @@ assert.match(model.lines.join("\n"), /Wildcard primary: ollama\/qwen2\.5-coder:7
 assert.match(model.lines.join("\n"), /Orchestrator override: anthropic\/claude-sonnet-4/);
 assert.match(model.lines.join("\n"), /Developer override: anthropic\/claude-sonnet-4/);
 assert.match(model.lines.join("\n"), /Global fallback chain: ollama\/qwen2\.5-coder:7b → anthropic\/claude-sonnet-4/);
+const exactPathPreview = previewModel({ ...discoveredRecommendation.decisions, targetPath: "/home/test/.alfred/installs/exact-preview-path" }, discovery);
+assert.match(exactPathPreview.lines.join("\n"), /Target path: \/home\/test\/\.alfred\/installs\/exact-preview-path/, "full Preview preserves the exact target path");
 const keepModel = previewModel(recommend({ discovery: existingDiscovery }).decisions, existingDiscovery);
 assert.match(keepModel.lines.join("\n"), /remains untouched and was not read into the TUI/);
 assert.doesNotMatch(keepModel.lines.join("\n"), /Wildcard primary|Global fallback chain|Model write approved/);
@@ -229,6 +278,19 @@ assert.deepEqual(controlsFor(fullConfigure), ["memory", "models", "name", "path"
 for (const rendered of [render(codingConfigure, { color: false }), render(memoryConfigure, { color: false }), render(fullConfigure, { color: false })]) {
   assert.doesNotMatch(rendered.text, /not-needed-for-/);
 }
+
+const longApprovalDiscovery = normalizeDiscovery({
+  ...discovery,
+  install: {
+    ...discovery.install,
+    models_config_path: "/home/test/.alfred/configuration/with/a/long/path/that/wraps/models.json"
+  }
+});
+const longApprovalState = transition(createPathfinderState({ discovery: longApprovalDiscovery }), { type: "USE_RECOMMENDED" });
+const longApprovalRender = render(longApprovalState, { columns: 80, rows: 24, color: false });
+const approvalRegion = longApprovalRender.hitRegions.find(({ action }) => action.type === "PATCH" && action.key === "modelWriteApproved");
+assert.ok(approvalRegion && approvalRegion.y2 > approvalRegion.y1, "a wrapped actionable row retains one multi-row mouse hit region");
+assert.equal(longApprovalRender.hitRegions.length, controlsFor(longApprovalState).length, "wrapped actions preserve every Review control hit region");
 
 let changed = createPathfinderState({ discovery });
 changed = transition(changed, { type: "CUSTOMIZE" });
