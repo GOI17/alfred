@@ -1,243 +1,126 @@
 #!/usr/bin/env node
 import { writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import process from "node:process";
+import { StringDecoder } from "node:string_decoder";
+import { fileURLToPath } from "node:url";
+import {
+  EDITIONS,
+  HARNESSES,
+  MEMORY_SETUPS,
+  createPathfinderState,
+  parseHarnessSelection,
+  previewPageSize,
+  render,
+  serializeAssignments,
+  transition
+} from "./install-pathfinder.mjs";
 
-const editions = [
-  { value: "coding", label: "Coding", help: "Agents, skills, runtime profiles, adapters, evals. No Memory DB." },
-  { value: "memory", label: "Memory", help: "Memory API/MCP/OpenAPI, console, external AI adapters." },
-  { value: "full", label: "Full", help: "Complete operations suite: coding + Memory." }
-];
-const harnesses = [
-  { value: "opencode", label: "opencode", help: "Generate opencode preview artifacts." },
-  { value: "codex-cli", label: "Codex CLI", help: "Generate previews for Codex CLI custom agents." },
-  { value: "codex-app", label: "Codex App", help: "Generate previews for the Codex desktop/app surface." },
-  { value: "pi", label: "Pi", help: "Target Pi previews; no live config writes." }
-];
-const memorySetups = [
-  { value: "decide-later", label: "Decide later", help: "Recommended first run; no storage choice yet." },
-  { value: "local-sqlite", label: "Local SQLite", help: "One-machine local coding-agent memory." },
-  { value: "postgres", label: "Postgres", help: "Shared human/web/external AI memory." }
-];
-
-const state = {
-  edition: envChoice("ALFRED_INSTALL_CURRENT_EDITION", editions, "coding"),
-  selectedHarnesses: initialHarnesses(),
-  harnessFocus: 0,
-  harnessStatus: parseHarnessStatus(),
-  useProfiles: process.env.ALFRED_INSTALL_CURRENT_PROFILE !== "decide-later",
-  memorySetup: envChoice("ALFRED_INSTALL_CURRENT_MEMORY", memorySetups, "decide-later"),
-  name: process.env.ALFRED_INSTALL_CURRENT_NAME || "acme",
-  targetPath: process.env.ALFRED_INSTALL_CURRENT_PATH || "",
-  apply: process.env.ALFRED_INSTALL_CURRENT_APPLY === "true",
-  focus: 0,
-  done: false,
-  cancelled: false,
-  message: "Use ↑/↓ to move, ←/→ to change, Space to toggle, Enter to review/apply. Mouse clicks work when supported."
-};
-
-function parseHarnessStatus() {
-  const raw = process.env.ALFRED_INSTALL_HARNESS_STATUS || "";
-  const map = new Map();
-  for (const entry of raw.split(",")) {
-    const [key, value] = entry.split("=");
-    if (key && value) map.set(key, value);
-  }
-  return map;
-}
-
-function initialHarnesses() {
-  const raw = process.env.ALFRED_INSTALL_CURRENT_HARNESS || "auto";
-  if (raw === "auto") {
-    const status = parseHarnessStatus();
-    const installed = harnesses.filter((harness) => status.get(harness.value) === "installed").map((harness) => harness.value);
-    return installed.length ? installed : [];
-  }
-  return parseHarnessList(raw);
-}
-
-function parseHarnessList(raw) {
-  const selected = [];
-  const add = (value) => {
-    if (harnesses.some((harness) => harness.value === value) && !selected.includes(value)) selected.push(value);
-  };
-  for (const value of String(raw).split(/[,+| ]+/).filter(Boolean)) {
-    if (value === "auto") {
-      for (const harness of initialHarnesses()) add(harness);
-    } else if (value === "codex") {
-      add("codex-cli");
-      add("codex-app");
-    } else if (value !== "none") {
-      add(value);
+export function decodeTerminalEvent(buffer, { flushEscape = false } = {}) {
+  if (!buffer) return { type: "incomplete", length: 0 };
+  if (buffer.startsWith("\x1b")) {
+    const mouse = /^\x1b\[<(\d+);(\d+);(\d+)([mM])/.exec(buffer);
+    if (mouse) {
+      return {
+        type: "mouse",
+        button: Number(mouse[1]),
+        x: Number(mouse[2]),
+        y: Number(mouse[3]),
+        final: mouse[4],
+        length: mouse[0].length
+      };
     }
+    const known = [
+      ["\x1b[A", "up"], ["\x1b[B", "down"], ["\x1b[D", "left"], ["\x1b[C", "right"],
+      ["\x1bOA", "up"], ["\x1bOB", "down"], ["\x1bOD", "left"], ["\x1bOC", "right"]
+    ].find(([sequence]) => buffer.startsWith(sequence));
+    if (known) return { type: "token", token: known[1], length: known[0].length };
+    if (buffer.startsWith("\x1b[")) {
+      const csi = /^\x1b\[[0-?]*[ -/]*[@-~]/.exec(buffer);
+      return csi ? { type: "ignore", length: csi[0].length } : { type: "incomplete", length: 0 };
+    }
+    if (buffer.startsWith("\x1b]")) {
+      const bell = buffer.indexOf("\u0007", 2);
+      const stringTerminator = buffer.indexOf("\x1b\\", 2);
+      const end = bell >= 0 && (stringTerminator < 0 || bell < stringTerminator) ? bell + 1 : stringTerminator >= 0 ? stringTerminator + 2 : -1;
+      return end >= 0 ? { type: "ignore", length: end } : { type: "incomplete", length: 0 };
+    }
+    if (/^\x1b[P^_]/.test(buffer)) {
+      const end = buffer.indexOf("\x1b\\", 2);
+      return end >= 0 ? { type: "ignore", length: end + 2 } : { type: "incomplete", length: 0 };
+    }
+    if (buffer.startsWith("\x1bO")) return buffer.length >= 3 ? { type: "ignore", length: 3 } : { type: "incomplete", length: 0 };
+    if (buffer.length === 1) return flushEscape ? { type: "token", token: "esc", length: 1 } : { type: "incomplete", length: 0 };
+    return { type: "ignore", length: 2 };
   }
-  return selected;
+  const char = String.fromCodePoint(buffer.codePointAt(0));
+  if (char === "\u0003") return { type: "token", token: "cancel", length: char.length };
+  if (char === "\r" || char === "\n") return { type: "token", token: "enter", length: char.length };
+  if (char === " ") return { type: "token", token: "space", length: char.length };
+  if (char === "\u007f" || char === "\b") return { type: "token", token: "backspace", length: char.length };
+  if (/^[^\u0000-\u001f\u007f]$/u.test(char)) return { type: "text", text: char, length: char.length };
+  return { type: "ignore", length: char.length };
 }
 
-function envChoice(name, options, fallback) {
-  const value = process.env[name];
-  return options.some((option) => option.value === value) ? value : fallback;
-}
-
-function requiresMemory() {
-  return state.edition === "memory" || state.edition === "full";
-}
-
-function rows() {
-  const result = ["edition", "harness"];
-  if (state.edition === "coding" || state.edition === "full") result.push("profiles");
-  if (requiresMemory()) result.push("memory");
-  result.push("name", "targetPath", "apply", "submit");
-  return result;
-}
-
-function currentRow() {
-  const list = rows();
-  if (state.focus >= list.length) state.focus = list.length - 1;
-  if (state.focus < 0) state.focus = 0;
-  return list[state.focus];
-}
-
-function optionIndex(options, value) {
-  return Math.max(0, options.findIndex((option) => option.value === value));
-}
-
-function cycle(options, value, delta) {
-  const index = optionIndex(options, value);
-  return options[(index + delta + options.length) % options.length].value;
-}
-
-function selectedOption(options, value) {
-  return options.find((option) => option.value === value) || options[0];
-}
-
-function renderRadio(title, options, value, focused) {
-  const rendered = options.map((option) => `${option.value === value ? "◉" : "○"} ${option.label}`).join("   ");
-  const help = selectedOption(options, value).help;
-  return `${focused ? "▶" : " "} ${title}\n   ${rendered}\n   ${dim(help)}`;
-}
-
-function renderCheckbox(title, checked, help, focused) {
-  return `${focused ? "▶" : " "} ${title}\n   ${checked ? "☑" : "☐"} ${checked ? "Enabled" : "Disabled"}\n   ${dim(help)}`;
-}
-
-function renderHarnessMulti(focused) {
-  const lines = [`${focused ? "▶" : " "} Harness targets`];
-  lines.push("   Select one or more. Auto preselects installed harnesses.");
-  for (const [index, harness] of harnesses.entries()) {
-    const selected = state.selectedHarnesses.includes(harness.value);
-    const status = state.harnessStatus.get(harness.value) || "not-installed";
-    const cursor = focused && index === state.harnessFocus ? "›" : " ";
-    lines.push(`   ${cursor} ${selected ? "☑" : "☐"} ${harness.label} [${status}]`);
+export function sgrMouseAction(event, { overlayOpen = false } = {}) {
+  if (!event || event.type !== "mouse" || event.final !== "M") return { type: "ignore" };
+  if (event.button === 64 || event.button === 65) {
+    return overlayOpen ? { type: "page", delta: event.button === 64 ? -1 : 1 } : { type: "ignore" };
   }
-  const active = harnesses[state.harnessFocus] || harnesses[0];
-  lines.push(`   ${dim(active.help)}`);
-  return lines.join("\n");
+  return event.button === 0 ? { type: "activate", x: event.x, y: event.y } : { type: "ignore" };
 }
 
-function renderInput(title, value, placeholder, focused) {
-  const content = value || dim(placeholder);
-  return `${focused ? "▶" : " "} ${title}\n   [ ${content}${focused ? "_" : ""} ]`;
+export function printableInputAction(text, { textFieldFocused = false, phase = "Discover", overlayOpen = false } = {}) {
+  if (textFieldFocused) return { type: "input", text };
+  if (text === "p") return { type: "token", token: "p" };
+  if (text === "w") return { type: "token", token: "w" };
+  if (text === "r" && phase === "Discover" && !overlayOpen) return { type: "token", token: "r" };
+  if (text === "b") return { type: "token", token: "b" };
+  if (text === "q") return { type: "token", token: "cancel" };
+  return { type: "ignore" };
 }
 
-function dim(value) {
-  return `\x1b[2m${value}\x1b[0m`;
+function parseHarnessStatus(raw = process.env.ALFRED_INSTALL_HARNESS_STATUS || "") {
+  return new Map(raw.split(",").map((entry) => entry.split("=")).filter(([key, value]) => key && value));
 }
 
-function bold(value) {
-  return `\x1b[1m${value}\x1b[0m`;
+const harnessStatus = parseHarnessStatus();
+let state = createPathfinderState({
+  current: {
+    edition: process.env.ALFRED_INSTALL_CURRENT_EDITION,
+    harness: process.env.ALFRED_INSTALL_CURRENT_HARNESS,
+    profile: process.env.ALFRED_INSTALL_CURRENT_PROFILE,
+    memory: process.env.ALFRED_INSTALL_CURRENT_MEMORY,
+    name: process.env.ALFRED_INSTALL_CURRENT_NAME,
+    targetPath: process.env.ALFRED_INSTALL_CURRENT_PATH,
+    apply: process.env.ALFRED_INSTALL_CURRENT_APPLY
+  },
+  harnessStatus
+});
+
+let lastRender = { text: "", hitRegions: [] };
+let legacyPlayback = false;
+let legacyFocus = 0;
+let legacyHarnessFocus = 0;
+let pendingInput = "";
+const inputDecoder = new StringDecoder("utf8");
+
+function dimensions() {
+  return {
+    columns: Number(process.env.ALFRED_INSTALL_APP_TUI_COLUMNS || process.stdout.columns || process.env.COLUMNS || 80),
+    rows: Number(process.env.ALFRED_INSTALL_APP_TUI_ROWS || process.stdout.rows || process.env.LINES || 24)
+  };
 }
 
 function screen() {
-  const list = rows();
-  const blocks = [];
-  blocks.push(`${bold("Alfred installer")}  ${dim("app TUI • preview-first • provider calls: 0")}`);
-  blocks.push(dim("Keyboard: ↑/↓ move · ←/→ choose · Space toggle · type in fields · Enter continue · q cancel"));
-  blocks.push(dim("Mouse: click a section to focus/toggle where your terminal supports SGR mouse events"));
-  blocks.push("");
-  for (const [index, row] of list.entries()) {
-    const focused = index === state.focus;
-    if (row === "edition") blocks.push(renderRadio("Edition", editions, state.edition, focused));
-    if (row === "harness") blocks.push(renderHarnessMulti(focused));
-    if (row === "profiles") blocks.push(renderCheckbox("Runtime profiles", state.useProfiles, "Use shared defaults plus machine-local overlays for PATH/provider/model/plugin drift.", focused));
-    if (row === "memory") blocks.push(renderRadio("Memory setup", memorySetups, state.memorySetup, focused));
-    if (row === "name") blocks.push(renderInput("Install name", state.name, "acme", focused));
-    if (row === "targetPath") blocks.push(renderInput("Target path (optional)", state.targetPath, "~/.alfred/installs/<name>", focused));
-    if (row === "apply") blocks.push(renderCheckbox("Apply safe suite steps now", state.apply, "Off = preview only. On = clone/reuse Alfred and generate previews; live harness config still requires approval.", focused));
-    if (row === "submit") blocks.push(`${focused ? "▶" : " "} ${bold("Review plan and continue")}\n   ${dim("Enter confirms these choices. After apply, Alfred shows file locations and asks what to copy, if anything.")}`);
-    blocks.push("");
-  }
-  blocks.push(reviewLine());
-  blocks.push(dim(state.message));
-  return blocks.join("\n");
+  const viewport = dimensions();
+  if (state.overlay?.type === "preview") state = transition(state, { type: "PAGE", delta: 0, pageSize: previewPageSize(viewport) });
+  lastRender = render(state, viewport);
+  return lastRender.text;
 }
 
-function reviewLine() {
-  const profile = state.edition === "memory" ? "not-needed-for-memory-edition" : state.useProfiles ? "runtime-profiles" : "decide-later";
-  const memory = requiresMemory() ? state.memorySetup : "not-needed-for-coding-edition";
-  const path = state.targetPath || `~/.alfred/installs/${state.name || "acme"}`;
-  const selected = state.selectedHarnesses.length ? state.selectedHarnesses.join(",") : "none";
-  return `${bold("Review:")} edition=${state.edition} · harnesses=${selected} · profiles=${profile} · memory=${memory} · name=${state.name || "acme"} · path=${path} · apply=${state.apply ? "yes" : "no"}`;
-}
-
-function move(delta) {
-  const list = rows();
-  state.focus = (state.focus + delta + list.length) % list.length;
-}
-
-function change(delta) {
-  const row = currentRow();
-  if (row === "edition") state.edition = cycle(editions, state.edition, delta);
-  if (row === "harness") state.harnessFocus = (state.harnessFocus + delta + harnesses.length) % harnesses.length;
-  if (row === "memory") state.memorySetup = cycle(memorySetups, state.memorySetup, delta);
-}
-
-function toggleOrSubmit() {
-  const row = currentRow();
-  if (row === "profiles") state.useProfiles = !state.useProfiles;
-  else if (row === "harness") toggleHarness();
-  else if (row === "apply") state.apply = !state.apply;
-  else if (row === "submit") state.done = true;
-}
-
-function toggleHarness() {
-  const harness = harnesses[state.harnessFocus];
-  if (!harness) return;
-  if (state.selectedHarnesses.includes(harness.value)) {
-    state.selectedHarnesses = state.selectedHarnesses.filter((value) => value !== harness.value);
-  } else {
-    state.selectedHarnesses = [...state.selectedHarnesses, harness.value];
-  }
-}
-
-function inputText(text) {
-  const row = currentRow();
-  if (row !== "name" && row !== "targetPath") return;
-  const clean = text.replace(/[\r\n]/g, "");
-  if (row === "name") state.name += clean;
-  if (row === "targetPath") state.targetPath += clean;
-}
-
-function backspace() {
-  const row = currentRow();
-  if (row === "name") state.name = state.name.slice(0, -1);
-  if (row === "targetPath") state.targetPath = state.targetPath.slice(0, -1);
-}
-
-function handleToken(token) {
-  if (!token) return;
-  if (token === "up") move(-1);
-  else if (token === "down") move(1);
-  else if (token === "left") change(-1);
-  else if (token === "right") change(1);
-  else if (token === "space") toggleOrSubmit();
-  else if (token === "enter") {
-    if (currentRow() === "submit") state.done = true;
-    else toggleOrSubmit();
-  } else if (token === "backspace") backspace();
-  else if (token.startsWith("text:")) inputText(token.slice(5));
-  else if (token.startsWith("set:")) setValue(token.slice(4));
-  else if (token.startsWith("mouse:")) handleMouseToken(token.slice(6));
-  else if (token === "submit") state.done = true;
+function dispatch(action) {
+  state = transition(state, action);
 }
 
 function setValue(pair) {
@@ -245,145 +128,254 @@ function setValue(pair) {
   if (index < 0) return;
   const key = pair.slice(0, index);
   const value = pair.slice(index + 1);
-  if (key === "edition" && editions.some((option) => option.value === value)) state.edition = value;
-  if (key === "harness" || key === "harnesses") state.selectedHarnesses = parseHarnessList(value);
-  if (key === "profiles") state.useProfiles = value !== "decide-later" && value !== "false";
-  if (key === "memory" && memorySetups.some((option) => option.value === value)) state.memorySetup = value;
-  if (key === "name") state.name = value;
-  if (key === "path") state.targetPath = value;
-  if (key === "apply") state.apply = value === "true" || value === "yes";
-}
-
-function handleMouseToken(token) {
-  const [, yText] = token.split(":");
-  const y = Number(yText);
-  const list = rows();
-  if (Number.isFinite(y)) state.focus = Math.max(0, Math.min(list.length - 1, Math.floor((y - 5) / 4)));
-  toggleOrSubmit();
-}
-
-function parseBytes(data) {
-  const text = data.toString("utf8");
-  let index = 0;
-  while (index < text.length) {
-    const rest = text.slice(index);
-    const mouse = /^\x1b\[<(\d+);(\d+);(\d+)([mM])/.exec(rest);
-    if (mouse) {
-      handleMouseToken(`${mouse[2]}:${mouse[3]}`);
-      index += mouse[0].length;
-      continue;
-    }
-    if (rest.startsWith("\x1b[A")) {
-      handleToken("up");
-      index += 3;
-      continue;
-    }
-    if (rest.startsWith("\x1b[B")) {
-      handleToken("down");
-      index += 3;
-      continue;
-    }
-    if (rest.startsWith("\x1b[D")) {
-      handleToken("left");
-      index += 3;
-      continue;
-    }
-    if (rest.startsWith("\x1b[C")) {
-      handleToken("right");
-      index += 3;
-      continue;
-    }
-    const char = text[index];
-    if (char === "\u0003" || (char === "q" && currentRow() !== "name" && currentRow() !== "targetPath")) {
-      state.cancelled = true;
-      state.done = true;
-      return;
-    }
-    if (char === "\r" || char === "\n") handleToken("enter");
-    else if (char === " ") handleToken("space");
-    else if (char === "\u007f") handleToken("backspace");
-    else if (char === "\x1b") index = skipEscape(text, index) - 1;
-    else inputText(char);
-    index += 1;
+  if (key === "harness" || key === "harnesses") {
+    dispatch({ type: "PATCH", key: "harnesses", value: parseHarnessSelection(value, harnessStatus) });
+  } else if (key === "profiles") {
+    dispatch({ type: "PATCH", key, value: value === "false" || value === "decide-later" ? "decide-later" : "runtime-profiles" });
+  } else {
+    dispatch({ type: "PATCH", key, value });
   }
 }
 
-function skipEscape(text, start) {
-  let index = start + 1;
-  while (index < text.length && !/[A-Za-z~]/.test(text[index])) index += 1;
-  return Math.min(index + 1, text.length);
+function legacyRows() {
+  const rows = ["edition", "harness"];
+  if (state.decisions.edition === "coding" || state.decisions.edition === "full") rows.push("profiles");
+  if (state.decisions.edition === "memory" || state.decisions.edition === "full") rows.push("memory");
+  rows.push("name", "path", "apply", "submit");
+  return rows;
 }
 
-function shellQuote(value) {
-  return String(value).replace(/\n/g, "").replace(/'/g, "'\\''");
+function legacyCurrentRow() {
+  const rows = legacyRows();
+  legacyFocus = Math.max(0, Math.min(rows.length - 1, legacyFocus));
+  return rows[legacyFocus];
 }
 
-function assignments() {
-  const profile = state.edition === "memory" ? "not-needed-for-memory-edition" : state.useProfiles ? "runtime-profiles" : "decide-later";
-  const memory = requiresMemory() ? state.memorySetup : "not-needed-for-coding-edition";
-  const name = state.name.trim() || "acme";
-  const harnessSelection = state.selectedHarnesses.length ? state.selectedHarnesses.join(",") : "none";
-  const lines = [
-    `EDITION='${shellQuote(state.edition)}'`,
-    `HARNESS='${shellQuote(harnessSelection)}'`,
-    `PROFILE_STRATEGY='${shellQuote(profile)}'`,
-    `MEMORY_SETUP='${shellQuote(memory)}'`,
-    `NAME='${shellQuote(name)}'`,
-    `APPLY='${state.apply ? "true" : "false"}'`,
-    `SKIP_PROFILE_MANAGER='${profile === "decide-later" ? "true" : "false"}'`,
-    `TUI_USED='true'`,
-    `TUI_MODE='app'`
-  ];
-  if (state.targetPath.trim()) lines.push(`TARGET_PATH='${shellQuote(state.targetPath.trim())}'`);
-  return `${lines.join("\n")}\n`;
+function cycle(values, value, delta) {
+  const index = Math.max(0, values.indexOf(value));
+  return values[(index + delta + values.length) % values.length];
+}
+
+function legacyChange(delta) {
+  const row = legacyCurrentRow();
+  if (row === "edition") dispatch({ type: "PATCH", key: "edition", value: cycle(EDITIONS.map((item) => item.value), state.decisions.edition, delta) });
+  if (row === "harness") legacyHarnessFocus = (legacyHarnessFocus + delta + HARNESSES.length) % HARNESSES.length;
+  if (row === "memory") dispatch({ type: "PATCH", key: "memory", value: cycle(MEMORY_SETUPS.map((item) => item.value), state.decisions.memorySetup, delta) });
+}
+
+function legacyActivate() {
+  const row = legacyCurrentRow();
+  if (row === "harness") dispatch({ type: "TOGGLE_HARNESS", value: HARNESSES[legacyHarnessFocus]?.value || "opencode" });
+  if (row === "profiles") dispatch({ type: "PATCH", key: "profiles", value: state.decisions.profileStrategy === "runtime-profiles" ? "decide-later" : "runtime-profiles" });
+  if (row === "apply") dispatch({ type: "PATCH", key: "apply", value: !state.decisions.apply });
+  if (row === "submit") state = { ...state, done: true };
+}
+
+function handleLegacyMouse(token) {
+  const [, yText] = token.split(":");
+  const y = Number(yText);
+  if (!Number.isFinite(y)) return;
+  legacyPlayback = true;
+  const rows = legacyRows();
+  legacyFocus = Math.max(0, Math.min(rows.length - 1, Math.floor((y - 5) / 4)));
+  legacyActivate();
+}
+
+function handleLegacyToken(token) {
+  const rows = legacyRows();
+  if (token === "up" || token === "down") {
+    legacyFocus = (legacyFocus + (token === "up" ? -1 : 1) + rows.length) % rows.length;
+    return true;
+  }
+  if (token === "left" || token === "right") {
+    legacyChange(token === "left" ? -1 : 1);
+    return true;
+  }
+  if (token === "space" || token === "enter") {
+    legacyActivate();
+    return true;
+  }
+  if (token === "backspace") {
+    const row = legacyCurrentRow();
+    if (row === "name") dispatch({ type: "PATCH", key: "name", value: state.decisions.name.slice(0, -1) });
+    if (row === "path") dispatch({ type: "PATCH", key: "path", value: state.decisions.targetPath.slice(0, -1) });
+    return true;
+  }
+  if (token.startsWith("text:")) {
+    const row = legacyCurrentRow();
+    const text = token.slice(5).replace(/[\r\n]/g, "");
+    if (row === "name") dispatch({ type: "PATCH", key: "name", value: `${state.decisions.name}${text}` });
+    if (row === "path") dispatch({ type: "PATCH", key: "path", value: `${state.decisions.targetPath}${text}` });
+    return true;
+  }
+  return false;
+}
+
+function handleInteractiveMouse(event) {
+  const action = sgrMouseAction(event, { overlayOpen: Boolean(state.overlay) });
+  if (action.type === "page") dispatch({ type: "PAGE", delta: action.delta, pageSize: previewPageSize(dimensions()) });
+  if (action.type !== "activate") return;
+  const region = lastRender.hitRegions.find((item) => action.x >= item.x1 && action.x <= item.x2 && action.y >= item.y1 && action.y <= item.y2);
+  if (region) dispatch(region.action);
+}
+
+function textFocused() {
+  return state.phase === "Configure" && (state.focus === 1 || state.focus === 2) && !state.overlay;
+}
+
+function handleToken(token, { playback = false } = {}) {
+  if (!token || state.done) return;
+  if (token.startsWith("set:")) return setValue(token.slice(4));
+  if (token.startsWith("mouse:")) return playback ? handleLegacyMouse(token.slice(6)) : undefined;
+  if (token === "submit") {
+    state = { ...state, done: true };
+    return;
+  }
+  if (playback && legacyPlayback && handleLegacyToken(token)) return;
+  if (token === "cancel") return dispatch({ type: "CANCEL" });
+  if (token === "p") return dispatch({ type: "OPEN_PREVIEW" });
+  if (token === "w") return dispatch({ type: "OPEN_WHY" });
+  if (token === "esc") return dispatch(state.overlay ? { type: "CLOSE_OVERLAY" } : { type: "BACK" });
+  if (token === "r" && state.phase === "Discover" && !state.overlay) return dispatch({ type: "USE_RECOMMENDED" });
+  if (token === "back" || token === "b") return dispatch({ type: "BACK" });
+  if (token === "up") return dispatch(state.overlay ? { type: "PAGE", delta: -1, pageSize: previewPageSize(dimensions()) } : { type: "MOVE", delta: -1 });
+  if (token === "down") return dispatch(state.overlay ? { type: "PAGE", delta: 1, pageSize: previewPageSize(dimensions()) } : { type: "MOVE", delta: 1 });
+  if (token === "left") return dispatch(state.overlay ? { type: "PAGE", delta: -1, pageSize: previewPageSize(dimensions()) } : { type: "CHANGE", delta: -1 });
+  if (token === "right") return dispatch(state.overlay ? { type: "PAGE", delta: 1, pageSize: previewPageSize(dimensions()) } : { type: "CHANGE", delta: 1 });
+  if (token === "space" || token === "enter") return dispatch({ type: "ACTIVATE" });
+  if (token === "backspace") return dispatch({ type: "BACKSPACE" });
+  if (token.startsWith("text:")) return dispatch({ type: "INPUT", text: token.slice(5) });
+}
+
+function handleDecodedEvent(event) {
+  if (event.type === "mouse") return handleInteractiveMouse(event);
+  if (event.type === "token") return handleToken(event.token);
+  if (event.type !== "text") return;
+  const action = printableInputAction(event.text, {
+    textFieldFocused: textFocused(),
+    phase: state.phase,
+    overlayOpen: Boolean(state.overlay)
+  });
+  if (action.type === "input") dispatch({ type: "INPUT", text: action.text });
+  if (action.type === "token") handleToken(action.token);
+}
+
+function parseBytes(data, { flushEscape = false } = {}) {
+  if (data?.length) pendingInput += Buffer.isBuffer(data) ? inputDecoder.write(data) : String(data);
+  while (pendingInput) {
+    const event = decodeTerminalEvent(pendingInput, { flushEscape });
+    if (event.type === "incomplete") break;
+    pendingInput = pendingInput.slice(event.length);
+    handleDecodedEvent(event);
+    if (state.done) break;
+  }
 }
 
 function writeAssignments() {
-  const output = assignments();
+  const output = serializeAssignments(state.decisions);
   const resultFile = process.env.ALFRED_INSTALL_APP_TUI_RESULT_FILE;
-  if (resultFile) {
-    writeFileSync(resultFile, output);
-  } else {
-    process.stdout.write(output);
-  }
+  if (resultFile) writeFileSync(resultFile, output);
+  else process.stdout.write(output);
 }
 
 function runPlayback() {
   const script = process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT || "";
-  for (const token of script.split(/[,\n]+/).map((item) => item.trim()).filter(Boolean)) handleToken(token);
+  for (const token of script.split(/[,\n]+/).map((item) => item.trim()).filter(Boolean)) handleToken(token, { playback: true });
   if (process.env.ALFRED_INSTALL_APP_TUI_RENDER === "1") process.stderr.write(`${screen()}\n`);
   writeAssignments();
 }
 
-async function runInteractive() {
-  const stdin = process.stdin;
-  const stdout = process.stdout;
-  const tty = stdin.isTTY && stdout.isTTY;
-  if (!tty) {
+export async function runInteractive({ stdin = process.stdin, stdout = process.stdout } = {}) {
+  if (!stdin.isTTY || !stdout.isTTY) {
     process.stderr.write("App TUI requires a TTY. Falling back to text installer.\n");
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
-  stdin.setRawMode(true);
-  stdin.resume();
-  stdout.write("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h");
+  const wasRaw = Boolean(stdin.isRaw);
+  let cleaned = false;
+  let escapeTimer = null;
+  let terminationCode = 0;
+  let resolveSession;
+  let rejectSession;
+  let onData;
   const redraw = () => stdout.write(`\x1b[H\x1b[2J${screen()}`);
-  redraw();
-  await new Promise((resolve) => {
-    stdin.on("data", (data) => {
-      parseBytes(data);
-      if (state.done) resolve();
-      else redraw();
-    });
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    if (escapeTimer) clearTimeout(escapeTimer);
+    try { stdout.write("\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l"); } catch {}
+    try { if (stdin.isRaw !== wasRaw) stdin.setRawMode(wasRaw); } catch {}
+    try { stdin.pause(); } catch {}
+    try { stdin.unref?.(); } catch {}
+  };
+  const settle = () => {
+    if (state.done) resolveSession?.();
+    else redraw();
+  };
+  const flushEscape = () => {
+    escapeTimer = null;
+    try {
+      parseBytes("", { flushEscape: true });
+      settle();
+    } catch (error) {
+      rejectSession?.(error);
+    }
+  };
+  const signalHandlers = new Map([
+    ["SIGINT", () => { terminationCode = 130; dispatch({ type: "CANCEL" }); resolveSession?.(); }],
+    ["SIGTERM", () => { terminationCode = 143; dispatch({ type: "CANCEL" }); resolveSession?.(); }],
+    ["SIGHUP", () => { terminationCode = 129; dispatch({ type: "CANCEL" }); resolveSession?.(); }]
+  ]);
+  const onError = (error) => rejectSession?.(error);
+  const session = new Promise((resolvePromise, rejectPromise) => {
+    resolveSession = resolvePromise;
+    rejectSession = rejectPromise;
+    onData = (data) => {
+      try {
+        if (escapeTimer) {
+          clearTimeout(escapeTimer);
+          escapeTimer = null;
+        }
+        parseBytes(data);
+        if (pendingInput === "\x1b") escapeTimer = setTimeout(flushEscape, 25);
+        settle();
+      } catch (error) {
+        rejectPromise(error);
+      }
+    };
+    stdin.on("data", onData);
+    stdin.on("error", onError);
+    stdout.on("error", onError);
+    for (const [signal, handler] of signalHandlers) process.once(signal, handler);
   });
-  stdout.write("\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l");
-  stdin.setRawMode(false);
-  stdin.pause();
-  if (state.cancelled) process.exit(130);
-  writeAssignments();
+  try {
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdout.write("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h");
+    if (state.done) resolveSession();
+    else redraw();
+    await session;
+  } finally {
+    if (onData) stdin.off("data", onData);
+    cleanup();
+    stdin.off("error", onError);
+    stdout.off("error", onError);
+    for (const [signal, handler] of signalHandlers) process.off(signal, handler);
+  }
+  if (terminationCode) process.exitCode = terminationCode;
+  else if (state.cancelled) process.exitCode = 130;
+  else writeAssignments();
 }
 
-if (process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT) {
-  runPlayback();
-} else {
-  runInteractive();
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  if (process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT) runPlayback();
+  else {
+    try {
+      await runInteractive();
+    } catch (error) {
+      process.stderr.write(`App TUI failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      process.exitCode = 1;
+    }
+  }
 }
