@@ -15,7 +15,7 @@ export const MEMORY_SETUPS = [
   { value: "local-sqlite", label: "Local SQLite" },
   { value: "postgres", label: "Postgres" }
 ];
-export const MODEL_STRATEGIES = ["smart-defaults", "keep-existing", "configure-later"];
+export const MODEL_STRATEGIES = ["smart-defaults", "custom-models", "keep-existing", "configure-later"];
 
 export const LABELS = Object.freeze({
   editions: Object.freeze(Object.fromEntries(EDITIONS.map(({ value, label }) => [value, label]))),
@@ -23,6 +23,7 @@ export const LABELS = Object.freeze({
   memory: Object.freeze(Object.fromEntries(MEMORY_SETUPS.map(({ value, label }) => [value, label]))),
   models: Object.freeze({
     "smart-defaults": "Use detected smart defaults",
+    "custom-models": "Enter custom models",
     "keep-existing": "Keep existing model configuration",
     "configure-later": "Configure models later"
   }),
@@ -39,6 +40,7 @@ const SGR_AT_START_PATTERN = /^\x1b\[(?:[0-9]+(?:;[0-9]+)*)?m/;
 const SGR_EXACT_PATTERN = /^\x1b\[(?:[0-9]+(?:;[0-9]+)*)?m$/;
 const COLOR = { reset: "\x1b[0m", cyan: "\x1b[36m", green: "\x1b[32m", yellow: "\x1b[33m", red: "\x1b[31m", dim: "\x1b[2m" };
 const GRAPHEME_SEGMENTER = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
+const INVALID_MODEL_INPUT = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
 
 function consumeCsi(value, index, introducerLength) {
   let cursor = index + introducerLength;
@@ -111,6 +113,74 @@ export function sanitizeTerminalText(value) {
 
 export function sanitizeTerminalOutput(value) {
   return sanitizeControls(value, { preserveNewlines: true, preserveSgr: true });
+}
+
+export function sanitizeModelInput(value) {
+  if (typeof value !== "string" || INVALID_MODEL_INPUT.test(value) || /[\ud800-\udfff]/u.test(value.normalize("NFC").replace(/[\ud800-\udbff][\udc00-\udfff]/gu, ""))) return null;
+  return value;
+}
+
+function customModelsFromConfig(config = {}) {
+  return {
+    wildcard: typeof config["*"]?.primary === "string" ? config["*"].primary : "",
+    orchestrator: typeof config.orchestrator?.primary === "string" ? config.orchestrator.primary : "",
+    developer: typeof config.developer?.primary === "string" ? config.developer.primary : "",
+    fallbacks: Array.isArray(config.fallbacks) ? config.fallbacks.filter((value) => typeof value === "string") : []
+  };
+}
+
+export function buildCustomModelsConfig(draft = {}) {
+  const wildcard = String(draft.wildcard ?? "");
+  const orchestrator = String(draft.orchestrator ?? "");
+  const developer = String(draft.developer ?? "");
+  const config = { "*": { primary: wildcard } };
+  if (orchestrator.trim()) config.orchestrator = { primary: orchestrator };
+  if (developer.trim()) config.developer = { primary: developer };
+  config.fallbacks = Array.isArray(draft.fallbacks) ? draft.fallbacks.map((value) => String(value)) : [];
+  return config;
+}
+
+export function validateCustomModelsDraft(draft = {}) {
+  const errors = [];
+  const fields = [["wildcard primary", draft.wildcard, true], ["orchestrator primary", draft.orchestrator, false], ["developer primary", draft.developer, false]];
+  for (const [label, raw, required] of fields) {
+    const value = typeof raw === "string" ? raw : "";
+    if (sanitizeModelInput(value) === null) errors.push(`${label} contains forbidden terminal controls or invalid input`);
+    else if (required && !value.trim()) errors.push("wildcard primary is required");
+  }
+  if (!Array.isArray(draft.fallbacks)) errors.push("global fallbacks must be an ordered array");
+  else draft.fallbacks.forEach((raw, index) => {
+    const value = typeof raw === "string" ? raw : "";
+    if (sanitizeModelInput(value) === null) errors.push(`fallback ${index + 1} contains forbidden terminal controls or invalid input`);
+    else if (!value.trim()) errors.push(`fallback ${index + 1} must be non-empty`);
+  });
+  return { status: errors.length ? "fail" : "pass", errors, config: buildCustomModelsConfig(draft), provider_calls: 0 };
+}
+
+export function canonicalModelsJson(draft = {}) {
+  return `${JSON.stringify(buildCustomModelsConfig(draft), null, 2)}\n`;
+}
+
+export function modelPlanInspectionStatus(state) {
+  const inspection = state?.modelInspection;
+  if (!inspection || inspection.revision !== state.modelRevision || !Number.isInteger(inspection.totalPages) || inspection.totalPages < 1) {
+    return { label: "not inspected", viewedPages: 0, totalPages: 0, complete: false };
+  }
+  const viewedPages = new Set(inspection.pagesViewed ?? []).size;
+  const complete = viewedPages >= inspection.totalPages;
+  return {
+    label: complete ? "inspected" : `pages ${viewedPages}/${inspection.totalPages}`,
+    viewedPages,
+    totalPages: inspection.totalPages,
+    complete
+  };
+}
+
+export function modelPlanReviewLines(state, width = 78) {
+  const lineWidth = Math.max(1, Number(width) || 1);
+  const canonicalLines = canonicalModelsJson(state.decisions.customModels).split("\n");
+  if (canonicalLines.at(-1) === "") canonicalLines.pop();
+  return canonicalLines.flatMap((line) => wrapExactLine(line, lineWidth));
 }
 
 export function normalizeTuiLayout(value) {
@@ -263,6 +333,7 @@ export function recommend({ current = {}, harnessStatus = {}, discovery: discove
     memorySetup,
     modelStrategy,
     modelWriteApproved: false,
+    customModels: customModelsFromConfig(discovery.models.proposed_config),
     name: sanitizeTerminalText(current.name || "acme"),
     targetPath: sanitizeTerminalText(current.targetPath ?? current.path ?? ""),
     applyIntent: "preview-only",
@@ -300,6 +371,11 @@ export function createPathfinderState(input = {}) {
     done: false,
     cancelled: false,
     reviewVisited: false,
+    modelRevision: 0,
+    reviewedModelRevision: null,
+    modelInspection: null,
+    editing: null,
+    selectedFallback: 0,
     providerCalls: 0,
     provider_calls: 0
   };
@@ -310,16 +386,22 @@ function memoryApplicable(decisions) { return decisions.edition !== "coding"; }
 function profilesApplicable(decisions) { return decisions.edition !== "memory"; }
 
 export function controlsFor(state) {
+  if (state.overlay?.type === "model-editor") return [
+    "model:wildcard", "model:orchestrator", "model:developer",
+    ...state.decisions.customModels.fallbacks.map((_, index) => `model:fallback:${index}`),
+    "fallback-add", "fallback-remove", "fallback-up", "fallback-down", "model-editor-done"
+  ];
   if (state.phase === "Discover") return ["recommended", "customize"];
   if (state.compatibilityPlayback && state.phase === "Choose") return ["edition", ...HARNESSES.map((item) => `harness:${item.value}`), "profile", "next"];
   if (state.compatibilityPlayback && state.phase === "Configure") return ["memory", "name", "path", "intent", "next"];
   if (state.phase === "Choose") return ["edition", ...HARNESSES.map((item) => `harness:${item.value}`), ...(profilesApplicable(state.decisions) ? ["profile"] : []), "next"];
   if (state.phase === "Configure") return [...(memoryApplicable(state.decisions) ? ["memory"] : []), ...(modelsApplicable(state.decisions) ? ["models"] : []), "name", "path", "intent", "next"];
   if (state.phase === "Review") return [
-    ...(modelsApplicable(state.decisions) && state.decisions.modelStrategy === "smart-defaults" ? ["model-approval"] : []),
+    ...(modelsApplicable(state.decisions) && state.decisions.modelStrategy === "custom-models" ? ["model-plan-review"] : []),
+    ...(modelsApplicable(state.decisions) && ["smart-defaults", "custom-models"].includes(state.decisions.modelStrategy) ? ["model-approval"] : []),
     "continue", "edit"
   ];
-  return [...(modelsApplicable(state.decisions) && state.decisions.modelStrategy === "smart-defaults" ? ["model-approval"] : []), "confirm", "back"];
+  return [...(modelsApplicable(state.decisions) && ["smart-defaults", "custom-models"].includes(state.decisions.modelStrategy) ? ["model-approval"] : []), "confirm", "back"];
 }
 
 function boundedFocus(state, focus = state.focus) { return Math.max(0, Math.min(controlsFor(state).length - 1, focus)); }
@@ -333,11 +415,12 @@ function cycle(values, value, delta) {
   const index = Math.max(0, values.indexOf(value));
   return values[(index + delta + values.length) % values.length];
 }
-function availableModelStrategies(state) {
-  const values = state.discovery.install.models_config_exists || state.discovery.models.existing_config
-    ? ["keep-existing", "smart-defaults", "configure-later"]
-    : ["smart-defaults", "configure-later"];
-  if (!state.discovery.models.proposed_config["*"]?.primary) return values.filter((value) => value !== "smart-defaults");
+export function availableModelStrategies(state) {
+  if (!modelsApplicable(state.decisions)) return ["configure-later"];
+  const values = [];
+  if (state.discovery.install.models_config_exists || state.discovery.models.existing_config) values.push("keep-existing");
+  if (state.discovery.models.validation.status === "pass" && state.discovery.models.proposed_config["*"]?.primary) values.push("smart-defaults");
+  values.push("custom-models", "configure-later");
   return values;
 }
 function withEdition(decisions, edition) {
@@ -359,9 +442,10 @@ function patchDecision(state, key, value) {
   if ((key === "models" || key === "modelStrategy") && MODEL_STRATEGIES.includes(value) && availableModelStrategies(state).includes(value)) {
     decisions.modelStrategy = value;
     decisions.modelWriteApproved = false;
+    if (value === "custom-models" && !decisions.customModels) decisions.customModels = customModelsFromConfig(state.discovery.models.proposed_config);
   }
   if (key === "modelWriteApproved" && [true, false, "true", "false"].includes(value) && ["Review", "Apply"].includes(state.phase)) {
-    decisions.modelWriteApproved = value === true || value === "true";
+    decisions.modelWriteApproved = (value === true || value === "true") && canApproveModels(state);
   }
   if (key === "name") decisions.name = sanitizeTerminalText(value);
   if (key === "path" || key === "targetPath") decisions.targetPath = sanitizeTerminalText(value);
@@ -374,7 +458,8 @@ function patchDecision(state, key, value) {
     decisions.apply = false;
     if (value === "preview-only") decisions.modelWriteApproved = false;
   }
-  return { ...state, decisions, providerCalls: 0, provider_calls: 0 };
+  const modelChanged = (key === "models" || key === "modelStrategy") && decisions.modelStrategy !== state.decisions.modelStrategy;
+  return { ...state, decisions, ...(modelChanged ? { modelRevision: state.modelRevision + 1, reviewedModelRevision: null, modelInspection: null, reviewVisited: false } : {}), providerCalls: 0, provider_calls: 0 };
 }
 
 function toggleHarness(state, id) {
@@ -392,18 +477,166 @@ function change(state, delta) {
   if (control === "intent") return patchDecision(state, "applyIntent", cycle(APPLY_INTENTS, state.decisions.applyIntent, delta));
   return state;
 }
+
+function customModelValue(state, control) {
+  if (control === "model:wildcard") return state.decisions.customModels.wildcard;
+  if (control === "model:orchestrator") return state.decisions.customModels.orchestrator;
+  if (control === "model:developer") return state.decisions.customModels.developer;
+  const fallback = /^model:fallback:(\d+)$/.exec(control);
+  return fallback ? state.decisions.customModels.fallbacks[Number(fallback[1])] ?? "" : null;
+}
+
+function replaceCustomModelValue(state, control, value) {
+  if (sanitizeModelInput(value) === null) return state;
+  const customModels = { ...state.decisions.customModels, fallbacks: [...state.decisions.customModels.fallbacks] };
+  if (control === "model:wildcard") customModels.wildcard = value;
+  else if (control === "model:orchestrator") customModels.orchestrator = value;
+  else if (control === "model:developer") customModels.developer = value;
+  else {
+    const fallback = /^model:fallback:(\d+)$/.exec(control);
+    if (!fallback || Number(fallback[1]) >= customModels.fallbacks.length) return state;
+    customModels.fallbacks[Number(fallback[1])] = value;
+  }
+  return {
+    ...state,
+    decisions: { ...state.decisions, customModels, modelWriteApproved: false },
+    modelRevision: state.modelRevision + 1,
+    reviewedModelRevision: null,
+    modelInspection: null,
+    reviewVisited: false
+  };
+}
+
+function startEditing(state, control) {
+  const value = customModelValue(state, control);
+  if (value === null) return state;
+  return { ...state, editing: { kind: "model", control, original: value, draft: value, cursor: graphemes(value).length } };
+}
+
+function startInstallEditing(state, control) {
+  const value = control === "name" ? state.decisions.name : control === "path" ? state.decisions.targetPath : null;
+  if (value === null) return state;
+  return { ...state, editing: { kind: "install", control, original: value, draft: value, cursor: graphemes(value).length } };
+}
+
+function commitEditing(state) {
+  if (!state.editing) return state;
+  const { kind, control, draft } = state.editing;
+  if (kind === "install") return { ...patchDecision({ ...state, editing: null }, control, draft), editing: null };
+  return { ...replaceCustomModelValue({ ...state, editing: null }, control, draft), editing: null };
+}
+
+function editInput(state, text) {
+  if (!state.editing) return state;
+  const safeText = state.editing.kind === "model" ? sanitizeModelInput(text) : sanitizeTerminalText(text);
+  if (safeText === null || safeText === "") return state;
+  const input = graphemes(safeText);
+  const current = graphemes(state.editing.draft);
+  current.splice(state.editing.cursor, 0, ...input);
+  return { ...state, editing: { ...state.editing, draft: current.join(""), cursor: state.editing.cursor + input.length } };
+}
+
+function editDelete(state, direction) {
+  if (!state.editing) return state;
+  const current = graphemes(state.editing.draft);
+  let cursor = state.editing.cursor;
+  const index = direction < 0 ? cursor - 1 : cursor;
+  if (index < 0 || index >= current.length) return state;
+  current.splice(index, 1);
+  if (direction < 0) cursor -= 1;
+  return { ...state, editing: { ...state.editing, draft: current.join(""), cursor } };
+}
+
+function moveFallback(state, delta) {
+  const fallbacks = [...state.decisions.customModels.fallbacks];
+  if (!fallbacks.length) return state;
+  const from = Math.max(0, Math.min(fallbacks.length - 1, state.selectedFallback));
+  const to = from + delta;
+  if (to < 0 || to >= fallbacks.length) return state;
+  [fallbacks[from], fallbacks[to]] = [fallbacks[to], fallbacks[from]];
+  return {
+    ...state,
+    selectedFallback: to,
+    decisions: { ...state.decisions, customModels: { ...state.decisions.customModels, fallbacks }, modelWriteApproved: false },
+    modelRevision: state.modelRevision + 1,
+    reviewedModelRevision: null,
+    modelInspection: null,
+    reviewVisited: false
+  };
+}
+
+function customPlanValidation(state) {
+  return state.decisions.modelStrategy === "custom-models" ? validateCustomModelsDraft(state.decisions.customModels) : { status: "pass", errors: [], provider_calls: 0 };
+}
+
+function canApproveModels(state) {
+  if (!["smart-defaults", "custom-models"].includes(state.decisions.modelStrategy) || state.reviewedModelRevision !== state.modelRevision || customPlanValidation(state).status !== "pass") return false;
+  return state.decisions.modelStrategy !== "custom-models" || modelPlanInspectionStatus(state).complete;
+}
+
+function canContinueReview(state) {
+  if (state.reviewedModelRevision !== state.modelRevision || customPlanValidation(state).status !== "pass") return false;
+  return state.decisions.modelStrategy !== "custom-models" || (modelPlanInspectionStatus(state).complete && state.decisions.modelWriteApproved);
+}
+function openModelPlanReview(state) {
+  if (state.phase !== "Review" || state.decisions.modelStrategy !== "custom-models") return state;
+  const currentInspection = state.modelInspection?.revision === state.modelRevision ? state.modelInspection : null;
+  const pageSize = currentInspection?.pageSize ?? PREVIEW_PAGE_SIZE;
+  return transition(
+    { ...state, overlay: { type: "model-plan-review", page: 0 } },
+    { type: "PAGE", delta: 0, pageSize, ...(currentInspection ? { totalItems: currentInspection.totalItems, inspectionKey: currentInspection.inspectionKey } : {}) }
+  );
+}
 function activate(state) {
   const control = controlsFor(state)[boundedFocus(state)];
+  if (state.overlay?.type === "model-editor") {
+    if (state.editing) return commitEditing(state);
+    if (control?.startsWith("model:")) return startEditing(state, control);
+    if (control === "fallback-add") {
+      const fallbacks = [...state.decisions.customModels.fallbacks, ""];
+      const next = {
+        ...state,
+        selectedFallback: fallbacks.length - 1,
+        decisions: { ...state.decisions, customModels: { ...state.decisions.customModels, fallbacks }, modelWriteApproved: false },
+        modelRevision: state.modelRevision + 1,
+        reviewedModelRevision: null,
+        modelInspection: null,
+        reviewVisited: false
+      };
+      next.focus = controlsFor(next).indexOf(`model:fallback:${fallbacks.length - 1}`);
+      return startEditing(next, `model:fallback:${fallbacks.length - 1}`);
+    }
+    if (control === "fallback-remove" && state.decisions.customModels.fallbacks.length) {
+      const fallbacks = [...state.decisions.customModels.fallbacks];
+      fallbacks.splice(Math.max(0, Math.min(fallbacks.length - 1, state.selectedFallback)), 1);
+      const next = {
+        ...state,
+        selectedFallback: Math.max(0, Math.min(fallbacks.length - 1, state.selectedFallback)),
+        decisions: { ...state.decisions, customModels: { ...state.decisions.customModels, fallbacks }, modelWriteApproved: false },
+        modelRevision: state.modelRevision + 1,
+        reviewedModelRevision: null,
+        modelInspection: null,
+        reviewVisited: false
+      };
+      return { ...next, focus: Math.min(next.focus, controlsFor(next).length - 1) };
+    }
+    if (control === "fallback-up") return moveFallback(state, -1);
+    if (control === "fallback-down") return moveFallback(state, 1);
+    if (control === "model-editor-done") return { ...state, overlay: null, focus: controlsFor({ ...state, overlay: null }).indexOf("models") };
+    return state;
+  }
   if (control === "recommended") return transition(state, { type: "USE_RECOMMENDED" });
   if (control === "customize") return transition(state, { type: "CUSTOMIZE" });
   if (control?.startsWith("harness:")) return toggleHarness(state, control.slice(8));
-  if (control === "model-approval") return patchDecision(state, "modelWriteApproved", !state.decisions.modelWriteApproved);
+  if (control === "models" && state.decisions.modelStrategy === "custom-models") return { ...state, overlay: { type: "model-editor" }, focus: 0 };
+  if (control === "model-plan-review") return openModelPlanReview(state);
+  if (control === "model-approval") return canApproveModels(state) ? patchDecision(state, "modelWriteApproved", !state.decisions.modelWriteApproved) : state;
   if (control === "next") return transition(state, { type: "NEXT" });
   if (control === "continue") return transition(state, { type: "CONTINUE" });
   if (control === "edit") return go(state, "Configure");
   if (control === "confirm") return transition(state, { type: "CONFIRM" });
   if (control === "back") return back(state);
-  if (control === "name" || control === "path") return { ...state, focus: boundedFocus(state, state.focus + 1) };
+  if (control === "name" || control === "path") return startInstallEditing(state, control);
   return state;
 }
 
@@ -415,18 +648,84 @@ function space(state) {
 export function transition(state, action = {}) {
   if (!state || state.done) return state;
   if (action.type === "CANCEL") return { ...state, done: true, cancelled: true, providerCalls: 0, provider_calls: 0 };
+  if (action.type === "ESCAPE" && state.editing) return { ...state, editing: null };
+  if (state.editing) {
+    if (action.type === "ACTIVATE") return commitEditing(state);
+    if (action.type === "INPUT") return editInput(state, action.text);
+    if (action.type === "SPACE") return editInput(state, " ");
+    if (action.type === "CHANGE") return { ...state, editing: { ...state.editing, cursor: Math.max(0, Math.min(graphemes(state.editing.draft).length, state.editing.cursor + Math.sign(action.delta || 0))) } };
+    if (action.type === "BACKSPACE") return editDelete(state, -1);
+    if (action.type === "DELETE") return editDelete(state, 1);
+    if (["MOVE", "BACK", "CLOSE_OVERLAY"].includes(action.type)) return state;
+  }
   if (action.type === "OPEN_WHY") return { ...state, overlay: state.overlay?.type === "why" ? null : { type: "why", page: 0 } };
   if (action.type === "OPEN_PREVIEW") return { ...state, overlay: state.overlay?.type === "preview" ? null : { type: "preview", page: 0 } };
+  if (action.type === "OPEN_MODEL_PLAN_REVIEW") return openModelPlanReview(state);
+  if (state.overlay?.type === "model-editor") {
+    if (action.type === "CLOSE_OVERLAY" || action.type === "ESCAPE") return { ...state, overlay: null, focus: 0 };
+    if (action.type === "FOCUS_CONTROL") {
+      const focus = controlsFor(state).indexOf(action.control);
+      if (focus < 0) return state;
+      const fallback = /^model:fallback:(\d+)$/.exec(action.control);
+      return { ...state, focus, ...(fallback ? { selectedFallback: Number(fallback[1]) } : {}) };
+    }
+    if (action.type === "MOVE") {
+      const controls = controlsFor(state);
+      const focus = (boundedFocus(state) + (action.delta || 0) + controls.length) % controls.length;
+      const fallback = /^model:fallback:(\d+)$/.exec(controls[focus]);
+      return { ...state, focus, ...(fallback ? { selectedFallback: Number(fallback[1]) } : {}) };
+    }
+    if (action.type === "ACTIVATE") return activate(state);
+    return state;
+  }
   if (state.overlay) {
     if (action.type === "CLOSE_OVERLAY") return { ...state, overlay: null };
     if (action.type === "PAGE") {
       const pageSize = Math.max(1, Number(action.pageSize) || PREVIEW_PAGE_SIZE);
+      if (state.overlay.type === "model-plan-review") {
+        const requestedTotalItems = Number(action.totalItems);
+        const requestedInspectionKey = typeof action.inspectionKey === "string" ? action.inspectionKey : null;
+        const existing = state.modelInspection?.revision === state.modelRevision &&
+          state.modelInspection.pageSize === pageSize &&
+          (!Number.isFinite(requestedTotalItems) || state.modelInspection.totalItems === requestedTotalItems) &&
+          (requestedInspectionKey === null || state.modelInspection.inspectionKey === requestedInspectionKey)
+          ? state.modelInspection
+          : null;
+        const totalItems = Math.max(1, Number.isFinite(requestedTotalItems) && requestedTotalItems > 0 ? requestedTotalItems : (existing?.totalItems ?? modelPlanReviewLines(state, 78).length));
+        const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+        const currentPage = existing ? state.overlay.page : 0;
+        const page = Math.max(0, Math.min(totalPages - 1, currentPage + Math.sign(action.delta || 0)));
+        const pagesViewed = [...new Set([...(existing?.pagesViewed ?? []), page])].sort((left, right) => left - right);
+        return {
+          ...state,
+          ...(state.modelInspection && !existing ? { decisions: { ...state.decisions, modelWriteApproved: false } } : {}),
+          overlay: { ...state.overlay, page },
+          modelInspection: { revision: state.modelRevision, pageSize, totalItems, totalPages, pagesViewed, inspectionKey: requestedInspectionKey ?? existing?.inspectionKey ?? null }
+        };
+      }
       const maxPage = state.overlay.type === "preview" ? Math.max(0, Math.ceil(previewModel(state.decisions, state.discovery).lines.length / pageSize) - 1) : 0;
       return { ...state, overlay: { ...state.overlay, page: Math.max(0, Math.min(maxPage, state.overlay.page + Math.sign(action.delta || 0))) } };
     }
     return state;
   }
-  if (action.type === "PATCH") return patchDecision(state, action.key, action.value);
+  if (action.type === "PATCH") {
+    const customKeys = { modelWildcard: "model:wildcard", modelOrchestrator: "model:orchestrator", modelDeveloper: "model:developer" };
+    if (customKeys[action.key]) return replaceCustomModelValue(state, customKeys[action.key], String(action.value ?? ""));
+    if (action.key === "modelFallback") {
+      if (sanitizeModelInput(action.value) === null || !String(action.value).trim()) return state;
+      const fallbacks = [...state.decisions.customModels.fallbacks, String(action.value)];
+      return {
+        ...state,
+        selectedFallback: fallbacks.length - 1,
+        decisions: { ...state.decisions, customModels: { ...state.decisions.customModels, fallbacks }, modelWriteApproved: false },
+        modelRevision: state.modelRevision + 1,
+        reviewedModelRevision: null,
+        modelInspection: null,
+        reviewVisited: false
+      };
+    }
+    return patchDecision(state, action.key, action.value);
+  }
   if (action.type === "TOGGLE_HARNESS" && HARNESSES.some((item) => item.value === action.value)) return toggleHarness(state, action.value);
   if (action.type === "FOCUS_CONTROL") {
     const focus = controlsFor(state).indexOf(action.control);
@@ -438,15 +737,15 @@ export function transition(state, action = {}) {
   if (action.type === "ACTIVATE") return activate(state);
   if (action.type === "BACK") return back(state);
   if (action.type === "USE_RECOMMENDED") {
-    const decisions = { ...state.recommendation.decisions, selectedHarnesses: [...state.recommendation.decisions.selectedHarnesses] };
-    return go({ ...state, decisions }, "Review");
+    const decisions = { ...state.recommendation.decisions, selectedHarnesses: [...state.recommendation.decisions.selectedHarnesses], customModels: { ...state.recommendation.decisions.customModels, fallbacks: [...state.recommendation.decisions.customModels.fallbacks] } };
+    return { ...go({ ...state, decisions }, "Review"), reviewedModelRevision: state.modelRevision };
   }
   if (action.type === "CUSTOMIZE") return go(state, "Choose");
   if (action.type === "EDIT" && state.phase === "Review") return go(state, "Configure");
   if (action.type === "NEXT" && state.phase === "Choose") return go(state, "Configure");
-  if (action.type === "NEXT" && state.phase === "Configure") return go(state, "Review");
-  if (action.type === "CONTINUE" && state.phase === "Review") return { ...go(state, "Apply"), reviewVisited: true };
-  if (action.type === "CONFIRM" && state.phase === "Apply" && state.reviewVisited) {
+  if (action.type === "NEXT" && state.phase === "Configure") return { ...go(state, "Review"), reviewedModelRevision: state.modelRevision };
+  if (action.type === "CONTINUE" && state.phase === "Review" && canContinueReview(state)) return { ...go(state, "Apply"), reviewVisited: true };
+  if (action.type === "CONFIRM" && state.phase === "Apply" && state.reviewVisited && canContinueReview(state)) {
     const apply = state.decisions.applyIntent === "apply-safe-steps";
     return {
       ...state,
@@ -456,17 +755,20 @@ export function transition(state, action = {}) {
       provider_calls: 0
     };
   }
-  if (action.type === "INPUT" && state.phase === "Configure") {
+  if (action.type === "INPUT" && state.compatibilityPlayback && state.phase === "Configure") {
     const control = controlsFor(state)[boundedFocus(state)];
-    if (control === "name" || control === "path") return patchDecision(state, control, `${control === "name" ? state.decisions.name : state.decisions.targetPath}${String(action.text || "").replace(/[\r\n]/g, "")}`);
+    if (control === "name" || control === "path") return patchDecision(state, control, `${control === "name" ? state.decisions.name : state.decisions.targetPath}${sanitizeTerminalText(action.text)}`);
   }
-  if (action.type === "BACKSPACE" && state.phase === "Configure") {
+  if (action.type === "BACKSPACE" && state.compatibilityPlayback && state.phase === "Configure") {
     const control = controlsFor(state)[boundedFocus(state)];
-    if (control === "name") return patchDecision(state, "name", state.decisions.name.slice(0, -1));
-    if (control === "path") return patchDecision(state, "path", state.decisions.targetPath.slice(0, -1));
+    if (control === "name") return patchDecision(state, "name", graphemes(state.decisions.name).slice(0, -1).join(""));
+    if (control === "path") return patchDecision(state, "path", graphemes(state.decisions.targetPath).slice(0, -1).join(""));
   }
+  if (action.type === "INPUT") return state;
   return { ...state, providerCalls: 0, provider_calls: 0 };
 }
+
+export function textEditingActive(state) { return Boolean(state?.editing); }
 
 function effective(decisions) {
   return {
@@ -497,6 +799,15 @@ function modelStrategyLines(value, discovery) {
   if (value.modelStrategy === "smart-defaults") {
     return [
       ...modelConfigLines(discovery.models?.proposed_config),
+      `Model write approved: ${value.modelWriteApproved ? "yes" : "no"}`
+    ];
+  }
+  if (value.modelStrategy === "custom-models") {
+    const validation = validateCustomModelsDraft(value.customModels);
+    return [
+      ...modelConfigLines(validation.config),
+      `Canonical models.json: ${JSON.stringify(validation.config)}`,
+      ...(validation.errors.length ? validation.errors.map((error) => `Blocker: ${error}`) : ["Validation: ready for Review"]),
       `Model write approved: ${value.modelWriteApproved ? "yes" : "no"}`
     ];
   }
@@ -547,6 +858,31 @@ function bodyEntries(state) {
   const focus = controlsFor(state)[boundedFocus(state)];
   const discovery = state.discovery;
   const displayPath = (value) => abbreviateHomePath(value, discovery);
+  if (state.overlay?.type === "model-editor") {
+    const editorValue = (control, value, placeholder) => {
+      if (state.editing?.control !== control) return value || placeholder;
+      const parts = graphemes(state.editing.draft);
+      parts.splice(state.editing.cursor, 0, "▏");
+      return parts.join("") || "▏";
+    };
+    const validation = validateCustomModelsDraft(d.customModels);
+    return [
+      { text: "Manual model assignment · opaque IDs are kept exactly; provider calls: 0." },
+      ...validation.errors.map((error) => ({ text: `Blocker: ${error}`, tone: "blocker" })),
+      { text: `${marker(focus === "model:wildcard")} Wildcard primary (required): [${editorValue("model:wildcard", d.customModels.wildcard, "empty")}]`, action: { type: "FOCUS_CONTROL", control: "model:wildcard" }, focused: focus === "model:wildcard" },
+      { text: `${marker(focus === "model:orchestrator")} Orchestrator primary (optional): [${editorValue("model:orchestrator", d.customModels.orchestrator, "uses wildcard")}]`, action: { type: "FOCUS_CONTROL", control: "model:orchestrator" }, focused: focus === "model:orchestrator" },
+      { text: `${marker(focus === "model:developer")} Developer primary (optional): [${editorValue("model:developer", d.customModels.developer, "uses wildcard")}]`, action: { type: "FOCUS_CONTROL", control: "model:developer" }, focused: focus === "model:developer" },
+      ...d.customModels.fallbacks.map((value, index) => {
+        const control = `model:fallback:${index}`;
+        return { text: `${marker(focus === control)} Fallback ${index + 1}: [${editorValue(control, value, "empty")}]`, action: { type: "FOCUS_CONTROL", control }, focused: focus === control };
+      }),
+      { text: `${marker(focus === "fallback-add")} Add fallback`, action: { type: "FOCUS_CONTROL", control: "fallback-add" }, focused: focus === "fallback-add" },
+      { text: `${marker(focus === "fallback-remove")} Remove selected fallback`, action: { type: "FOCUS_CONTROL", control: "fallback-remove" }, focused: focus === "fallback-remove" },
+      { text: `${marker(focus === "fallback-up")} Move selected fallback up`, action: { type: "FOCUS_CONTROL", control: "fallback-up" }, focused: focus === "fallback-up" },
+      { text: `${marker(focus === "fallback-down")} Move selected fallback down`, action: { type: "FOCUS_CONTROL", control: "fallback-down" }, focused: focus === "fallback-down" },
+      { text: `${marker(focus === "model-editor-done")} Done editing models`, action: { type: "FOCUS_CONTROL", control: "model-editor-done" }, focused: focus === "model-editor-done" }
+    ];
+  }
   if (state.phase === "Discover") {
     const harnesses = HARNESSES.filter((item) => discovery.harnesses[item.value] === "installed").map((item) => item.label);
     const suggestions = discovery.models.suggestions.map((item) => `${item.model} (${item.source})`);
@@ -585,10 +921,17 @@ function bodyEntries(state) {
         text: `  ${text}`,
         tone: d.modelStrategy === "smart-defaults" ? (discovery.models.proposed_config["*"]?.primary ? "safe" : "blocker") : "normal"
       })));
+      if (d.modelStrategy === "custom-models") entries.push({ text: "  Press Enter on Models to edit exact IDs and ordered fallbacks." });
     }
+    const installEditorValue = (control, value, placeholder) => {
+      if (state.editing?.control !== control) return value || placeholder;
+      const parts = graphemes(state.editing.draft);
+      parts.splice(state.editing.cursor, 0, "▏");
+      return parts.join("") || "▏";
+    };
     entries.push(
-      { text: `${marker(focus === "name")} Name: [${d.name}${focus === "name" ? "_" : ""}]`, action: { type: "FOCUS_CONTROL", control: "name" }, focused: focus === "name" },
-      { text: `${marker(focus === "path")} Path: [${d.targetPath || `~/.alfred/installs/${d.name}`}${focus === "path" ? "_" : ""}]`, action: { type: "FOCUS_CONTROL", control: "path" }, focused: focus === "path" },
+      { text: `${marker(focus === "name")} Name: [${installEditorValue("name", d.name, "acme")}]`, action: { type: "FOCUS_CONTROL", control: "name" }, focused: focus === "name" },
+      { text: `${marker(focus === "path")} Path: [${installEditorValue("path", d.targetPath, `~/.alfred/installs/${d.name}`)}]`, action: { type: "FOCUS_CONTROL", control: "path" }, focused: focus === "path" },
       { text: `${marker(focus === "intent")} Intent: ${LABELS.intents[d.applyIntent]}${changedSuffix(decisionChanged(state, "applyIntent"))}`, action: { type: "CHANGE", delta: 1 }, focused: focus === "intent", tone: d.applyIntent === "apply-safe-steps" ? "changed" : "normal" },
       { text: `${marker(focus === "next")} Continue to mandatory Review`, action: { type: "NEXT" }, focused: focus === "next" }
     );
@@ -596,12 +939,25 @@ function bodyEntries(state) {
   }
   if (state.phase === "Review") {
     const entries = [{ text: "Review every choice before final confirmation." }, ...previewModel(d, discovery).lines.slice(1).map((text) => ({ text }))];
-    if (modelsApplicable(d) && d.modelStrategy === "smart-defaults") entries.push({
+    if (d.modelStrategy === "custom-models") {
+      const inspection = modelPlanInspectionStatus(state);
+      entries.push({
+        text: `${marker(focus === "model-plan-review")} Inspect exact models.json — ${inspection.label}`,
+        action: { type: "OPEN_MODEL_PLAN_REVIEW" },
+        focused: focus === "model-plan-review",
+        tone: inspection.complete ? "safe" : "blocker"
+      });
+    }
+    if (modelsApplicable(d) && ["smart-defaults", "custom-models"].includes(d.modelStrategy)) entries.push({
       text: `${marker(focus === "model-approval")} [${d.modelWriteApproved ? "x" : " "}] Approve writing/replacing ${displayPath(discovery.install.models_config_path)}`,
-      action: { type: "PATCH", key: "modelWriteApproved", value: !d.modelWriteApproved }, focused: focus === "model-approval", tone: "approval"
+      action: { type: "PATCH", key: "modelWriteApproved", value: !d.modelWriteApproved }, focused: focus === "model-approval", tone: canApproveModels(state) ? "approval" : "blocker"
     });
+    if (d.modelStrategy === "custom-models" && customPlanValidation(state).status === "fail") entries.push({ text: "Continue is blocked until the custom model plan is valid.", tone: "blocker" });
+    else if (d.modelStrategy === "custom-models" && !modelPlanInspectionStatus(state).complete) entries.push({ text: "Continue is blocked until every exact models.json page is inspected.", tone: "blocker" });
+    else if (d.modelStrategy === "custom-models" && !d.modelWriteApproved) entries.push({ text: "Continue is blocked until the inspected current revision is explicitly approved.", tone: "blocker" });
+    const continueReady = canContinueReview(state);
     entries.push(
-      { text: `${marker(focus === "continue")} Continue to Apply confirmation`, action: { type: "CONTINUE" }, focused: focus === "continue" },
+      { text: `${marker(focus === "continue")} ${continueReady ? "Continue to Apply confirmation" : "Continue blocked by model review"}`, action: { type: "CONTINUE" }, focused: focus === "continue", tone: continueReady ? "normal" : "blocker" },
       { text: `${marker(focus === "edit")} Edit configuration`, action: { type: "EDIT" }, focused: focus === "edit" }
     );
     return entries;
@@ -610,12 +966,12 @@ function bodyEntries(state) {
     { text: d.applyIntent === "apply-safe-steps" ? "Explicitly confirm safe apply steps." : "Confirm preview-only output; no install files will be written.", tone: d.applyIntent === "apply-safe-steps" ? "approval" : "safe" },
     { text: `Model write: ${d.modelWriteApproved ? "approved" : "not approved"}`, tone: d.modelWriteApproved ? "approval" : "safe" }
   ];
-  if (modelsApplicable(d) && d.modelStrategy === "smart-defaults") entries.push({
+  if (modelsApplicable(d) && ["smart-defaults", "custom-models"].includes(d.modelStrategy)) entries.push({
     text: `${marker(focus === "model-approval")} [${d.modelWriteApproved ? "x" : " "}] Approve writing/replacing ${displayPath(discovery.install.models_config_path)}`,
-    action: { type: "PATCH", key: "modelWriteApproved", value: !d.modelWriteApproved }, focused: focus === "model-approval", tone: "approval"
+    action: { type: "PATCH", key: "modelWriteApproved", value: !d.modelWriteApproved }, focused: focus === "model-approval", tone: canApproveModels(state) ? "approval" : "blocker"
   });
   entries.push(
-    { text: `${marker(focus === "confirm")} Confirm ${LABELS.intents[d.applyIntent]}`, action: { type: "CONFIRM" }, focused: focus === "confirm" },
+    { text: `${marker(focus === "confirm")} ${canContinueReview(state) ? `Confirm ${LABELS.intents[d.applyIntent]}` : "Confirm blocked by model review"}`, action: { type: "CONFIRM" }, focused: focus === "confirm", tone: canContinueReview(state) ? "normal" : "blocker" },
     { text: `${marker(focus === "back")} Back to Review`, action: { type: "BACK" }, focused: focus === "back" }
   );
   return entries;
@@ -651,7 +1007,7 @@ export function rationaleLines(state) {
     ...(modelsApplicable(current) ? [["modelStrategy", "Models", LABELS.models]] : []),
     ["name", "Install name", null],
     ["targetPath", "Target path", null],
-    ...(["Review", "Apply"].includes(state.phase) && modelsApplicable(current) && current.modelStrategy === "smart-defaults" ? [["modelWriteApproved", "Model write approval", { true: "Approved", false: "Not approved" }]] : []),
+    ...(["Review", "Apply"].includes(state.phase) && modelsApplicable(current) && ["smart-defaults", "custom-models"].includes(current.modelStrategy) ? [["modelWriteApproved", "Model write approval", { true: "Approved", false: "Not approved" }]] : []),
     ["applyIntent", "Execution", LABELS.intents]
   ];
   const reasonIndexes = { edition: 0, selectedHarnesses: 1, profileStrategy: 2, memorySetup: 3, modelStrategy: 4, applyIntent: 5 };
@@ -790,6 +1146,26 @@ function renderStyledAtoms(atoms) {
     output += atom.grapheme;
   }
   return activeStyle ? `${output}${COLOR.reset}` : output;
+}
+
+function wrapExactLine(text, width) {
+  const limit = Math.max(1, Number(width) || 1);
+  const atoms = styledGraphemes(text);
+  if (!atoms.length) return [""];
+  const lines = [];
+  let line = [];
+  let visible = 0;
+  for (const atom of atoms) {
+    if (line.length && visible + atom.width > limit) {
+      lines.push(renderStyledAtoms(line));
+      line = [];
+      visible = 0;
+    }
+    line.push(atom);
+    visible += atom.width;
+  }
+  lines.push(renderStyledAtoms(line));
+  return lines;
 }
 
 export function wrapAnsi(text, width) {
@@ -976,11 +1352,20 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
     const page = Math.min(state.overlay.page, pageCount - 1);
     entries = all.slice(page * pageSize, (page + 1) * pageSize).map((text) => ({ text }));
     pageLabel = ` | page ${page + 1}/${pageCount}`;
+  } else if (state.overlay?.type === "model-plan-review") {
+    const all = modelPlanReviewLines(state, width - 2);
+    const pageSize = previewPageSize({ columns: width, rows: height });
+    const pageCount = Math.max(1, Math.ceil(all.length / pageSize));
+    const page = Math.min(state.overlay.page, pageCount - 1);
+    entries = all.slice(page * pageSize, (page + 1) * pageSize).map((text) => ({ text }));
+    pageLabel = ` | page ${page + 1}/${pageCount}`;
   } else entries = bodyEntries(state);
   const footer = [
     `Phase ${phaseIndex + 1}/${PHASES.length}: ${state.phase}${state.overlay ? ` | ${state.overlay.type}${pageLabel}` : ""} | layout: ${layout} | provider calls: 0`,
     `Preview: ${previewModel(state.decisions, state.discovery).concise}`,
-    state.overlay ? "Keys: Esc close;arrows page;p Preview;w Why;q cancel" : "Keys: ↑↓ move;←→ edit;Space toggle;Enter select;b back;p full Preview;q quit"
+    state.overlay?.type === "model-editor"
+      ? (state.editing ? "Keys: ←→ cursor;Enter commit;Esc cancel;Backspace/Delete edit" : "Keys: ↑↓ move;Enter edit/action;Esc close;p Preview;q quit")
+      : state.overlay ? "Keys: Esc close;arrows page;p Preview;w Why;q cancel" : "Keys: ↑↓ move;←→ edit;Space toggle;Enter select;b back;p full Preview;q quit"
   ];
   const availableContentHeight = Math.max(1, renderHeight - footer.length - 3);
   const lines = [clipAnsi(paint(title, "focus", color), width)];
@@ -1005,7 +1390,7 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
   } else {
     const minimumContentHeight = layout === "inline" ? 1 : MIN_PANEL_CONTENT_HEIGHT;
     const contentHeight = Math.min(availableContentHeight, Math.max(minimumContentHeight, entriesHeight(entries, width - 2)));
-    const single = panel(state.overlay?.type === "why" ? "Rationale" : state.overlay?.type === "preview" ? "Preview" : state.phase, entries, width, contentHeight, { color, yOffset: 1 });
+    const single = panel(state.overlay?.type === "why" ? "Rationale" : state.overlay?.type === "preview" ? "Preview" : state.overlay?.type === "model-plan-review" ? "Exact models.json" : state.overlay?.type === "model-editor" ? "Manual model editor" : state.phase, entries, width, contentHeight, { color, yOffset: 1 });
     lines.push(...single.lines);
     hitRegions.push(...single.hitRegions);
   }
@@ -1015,10 +1400,13 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
 }
 
 function shellQuote(value) { return sanitizeTerminalText(value).replace(/'/g, "'\\''"); }
-export function serializeAssignments(decisions, { reviewVisited = false } = {}) {
+export function serializeAssignments(decisions, { reviewVisited = false, modelRevision = null, reviewedModelRevision = null, modelInspection = null, modelPlanSha256 = "" } = {}) {
   const value = effective(decisions);
   const harnesses = value.selectedHarnesses.length ? value.selectedHarnesses.join(",") : "none";
-  const modelApproved = reviewVisited && value.apply && value.modelStrategy === "smart-defaults" && value.modelWriteApproved;
+  const writableStrategy = ["smart-defaults", "custom-models"].includes(value.modelStrategy);
+  const inspectedCurrentRevision = modelInspection?.revision === modelRevision && modelInspection.totalPages > 0 && new Set(modelInspection.pagesViewed ?? []).size >= modelInspection.totalPages;
+  const currentReview = value.modelStrategy !== "custom-models" || (modelRevision !== null && reviewedModelRevision === modelRevision && inspectedCurrentRevision && validateCustomModelsDraft(value.customModels).status === "pass");
+  const modelApproved = reviewVisited && currentReview && value.apply && writableStrategy && value.modelWriteApproved;
   const lines = [
     `EDITION='${shellQuote(value.edition)}'`,
     `HARNESS='${shellQuote(harnesses)}'`,
@@ -1032,6 +1420,20 @@ export function serializeAssignments(decisions, { reviewVisited = false } = {}) 
     `MODEL_STRATEGY='${shellQuote(value.modelStrategy)}'`,
     `MODEL_WRITE_APPROVED='${modelApproved ? "true" : "false"}'`
   ];
+  if (modelPlanSha256 && !/^[0-9a-f]{64}$/.test(modelPlanSha256)) throw new Error("invalid model plan digest");
+  if (modelApproved && value.modelStrategy === "custom-models" && modelPlanSha256) lines.push(`MODEL_PLAN_SHA256='${modelPlanSha256}'`);
   if (value.targetPath.trim()) lines.push(`TARGET_PATH='${shellQuote(value.targetPath.trim())}'`);
   return `${lines.join("\n")}\n`;
+}
+
+export function modelPlanForState(state) {
+  if (!state?.done || state.cancelled || state.decisions.modelStrategy !== "custom-models" || !state.decisions.apply || !state.decisions.modelWriteApproved || !state.reviewVisited || state.reviewedModelRevision !== state.modelRevision || !modelPlanInspectionStatus(state).complete) return null;
+  const validation = validateCustomModelsDraft(state.decisions.customModels);
+  if (validation.status !== "pass") return null;
+  return {
+    schema: "alfred.install.model-plan/v1",
+    strategy: "custom-models",
+    models: validation.config,
+    provider_calls: 0
+  };
 }

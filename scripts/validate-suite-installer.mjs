@@ -137,15 +137,25 @@ def assert_terminal_output_safe(output, layout, label):
         assert attack not in text, label + " emitted an injected SGR lookalike"
 
 def run_case(layout, mode, expected):
+    plan_dir = discovery + "." + layout + "." + mode + ".private"
+    plan_path = os.path.join(plan_dir, "model-plan.json")
+    if mode == "custom":
+        os.mkdir(plan_dir, 0o700)
+        with open(plan_path, "w", encoding="utf8") as plan_file:
+            plan_file.write("")
+        os.chmod(plan_path, 0o600)
     pid, fd = pty.fork()
     if pid == 0:
         env = os.environ.copy()
         env["ALFRED_INSTALL_APP_TUI_LAYOUT"] = layout
         env["ALFRED_INSTALL_DISCOVERY_FILE"] = discovery
+        if mode == "custom":
+            env["ALFRED_INSTALL_MODEL_PLAN_FILE"] = plan_path
         os.execve(node, [node, app], env)
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
     output = bytearray()
     sent = False
+    custom_stage = 0
     status = None
     deadline = time.monotonic() + 4.0
     while time.monotonic() < deadline:
@@ -161,11 +171,45 @@ def run_case(layout, mode, expected):
                 os.write(fd, b"r\r\r")
             elif mode == "keyboard":
                 os.write(fd, b"\x1b[B\x1b[C\r\x1b[B\x1b[C\r" + b"\x1b[B" * 5 + b"\x1b[D\r\r" + b"\x1b[B" * 4 + b"\x1b[D\r\x1b[D\r\x1b[D\r")
+            elif mode == "custom":
+                os.write(fd, b"\x1b[B\r" + b"\x1b[B" * 6 + b"\r\x1b[C\r\rZ")
+                custom_stage = 1
             elif mode == "cancel":
                 os.write(fd, b"q")
             else:
                 os.kill(pid, signal.SIGTERM)
             sent = True
+        if mode == "custom" and custom_stage == 1 and b"ollama/qwenZ" in output:
+            os.write(fd, b"\x1b")
+            time.sleep(0.06)
+            os.write(fd,
+                b"\rX\r" +
+                b"\x1b[B\r provider/orchestrator \r" +
+                b"\x1b[B\rprovider/developer\r" +
+                b"\x1b[B\r-edited\r" +
+                b"\x1b[B\r provider/second \r" +
+                b"\x1b[B\rprovider/remove\r" +
+                b"\x1b[B" * 3 + b"\r" +
+                b"\x1b[B\r" +
+                b"\x1b[A" * 2 + b"\r" +
+                b"\x1b[B" * 2 + b"\r")
+            custom_stage = 2
+        if mode == "custom" and custom_stage == 2 and b"provider/developer" in output[-5000:] and b"Phase 3/5: Configure | layout:" in output[-5000:]:
+            os.write(fd,
+                b"\x1b[B\r-pty\r" +
+                b"\x1b[B\r/tmp/pty\r" +
+                b"\x1b[B\x1b[C" +
+                b"\x1b[B\r" +
+                b"\r")
+            custom_stage = 3
+        if mode == "custom" and custom_stage == 3 and b"model-plan-review | page 1/2" in output[-5000:]:
+            os.write(fd, b"\x1b[C")
+            custom_stage = 4
+        if mode == "custom" and custom_stage == 4 and b"model-plan-review | page 2/2" in output[-5000:]:
+            os.write(fd, b"\x1b")
+            time.sleep(0.06)
+            os.write(fd, b"\x1b[B\r\x1b[B\r\x1b[B\r")
+            custom_stage = 5
         waited, candidate = os.waitpid(pid, os.WNOHANG)
         if waited == pid:
             status = candidate
@@ -173,7 +217,7 @@ def run_case(layout, mode, expected):
     if status is None:
         os.kill(pid, signal.SIGKILL)
         os.waitpid(pid, 0)
-        raise AssertionError(layout + " " + mode + " PTY lifecycle timed out")
+        raise AssertionError(layout + " " + mode + " PTY lifecycle timed out\n" + output[-4000:].decode("utf8", "replace"))
     drain_deadline = time.monotonic() + 0.25
     while time.monotonic() < drain_deadline:
         readable, _, _ = select.select([fd], [], [], 0.02)
@@ -201,11 +245,23 @@ def run_case(layout, mode, expected):
         assert b"\x1b[2K" in output, mode + " inline did not erase owned rows during redraw/cleanup"
         assert b"A" in output, mode + " inline did not use cursor-up ownership movement"
     assert_terminal_output_safe(bytes(output), layout, layout + " " + mode)
-    if mode in ("normal", "keyboard"):
+    if mode in ("normal", "keyboard", "custom"):
         assert b"TUI_MODE='app'" in output, mode + " PTY completion lost result assignments"
     if mode == "keyboard":
         assert b"HARNESS='opencode'" in output, layout + " arrow escape toggled the harness like Enter"
         assert b"MODEL_STRATEGY='configure-later'" in output, layout + " Enter silently cycled the focused model enum"
+    if mode == "custom":
+        assert b"MODEL_STRATEGY='custom-models'" in output, layout + " custom PTY lost manual strategy"
+        assert b"MODEL_WRITE_APPROVED='true'" in output, layout + " custom PTY lost current Review approval"
+        assert re.search(br"MODEL_PLAN_SHA256='[0-9a-f]{64}'", output), layout + " custom PTY omitted the exact plan digest"
+        with open(plan_path, "r", encoding="utf8") as plan_file:
+            plan = json.load(plan_file)
+        assert plan["strategy"] == "custom-models" and plan["provider_calls"] == 0
+        assert plan["models"]["*"]["primary"] == "ollama/qwenX", layout + " custom PTY did not commit text editing"
+        assert plan["models"]["orchestrator"]["primary"] == " provider/orchestrator ", layout + " custom PTY rewrote orchestrator whitespace"
+        assert plan["models"]["developer"]["primary"] == "provider/developer", layout + " custom PTY did not navigate developer"
+        assert plan["models"]["fallbacks"] == ["fallback/one-edited", " provider/second "], layout + " custom PTY did not exercise ordered fallback add/remove/move controls"
+        assert b"NAME='acme-pty'" in output and b"TARGET_PATH='/tmp/pty'" in output, layout + " custom PTY did not navigate install text fields"
 
 def set_size(fd, columns, rows):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
@@ -315,6 +371,7 @@ def run_inline_resize_case(mode, expected):
 for layout in ("fullscreen", "inline"):
     run_case(layout, "normal", 0)
     run_case(layout, "keyboard", 0)
+    run_case(layout, "custom", 0)
     run_case(layout, "cancel", 130)
     run_case(layout, "signal", 143)
 run_inline_resize_case("cancel", 130)
@@ -595,8 +652,9 @@ case "$1" in
     private_dir=$(dirname "$1")
     dir_mode=$(stat -f '%Lp' "$private_dir" 2>/dev/null || stat -c '%a' "$private_dir")
     discovery_mode=$(stat -f '%Lp' "$private_dir/discovery.json" 2>/dev/null || stat -c '%a' "$private_dir/discovery.json")
+    plan_mode=$(stat -f '%Lp' "$private_dir/model-plan.json" 2>/dev/null || stat -c '%a' "$private_dir/model-plan.json")
     canonical_mode=$(stat -f '%Lp' "$private_dir/model-assignment.mjs" 2>/dev/null || stat -c '%a' "$private_dir/model-assignment.mjs")
-    printf '%s %s %s\\n' "$dir_mode" "$discovery_mode" "$canonical_mode" > "$ALFRED_TEST_MODE_MARKER"
+    printf '%s %s %s %s\\n' "$dir_mode" "$discovery_mode" "$plan_mode" "$canonical_mode" > "$ALFRED_TEST_MODE_MARKER"
     ;;
 esac
 exec ${shellQuote(process.execPath)} "$@"
@@ -612,7 +670,7 @@ exec ${shellQuote(process.execPath)} "$@"
     }
   });
   assert.equal(modePreview.status, 0, modePreview.stderr);
-  assert.equal(readFileSync(modeMarker, "utf8").trim(), "700 600 600");
+  assert.equal(readFileSync(modeMarker, "utf8").trim(), "700 600 600 600");
   assert.deepEqual(readdirSync(modeTuiTemp), [], "private mode probe must still clean staged files");
 
   const guidedQuickPath = spawnSync("node", [appTui], {
@@ -797,6 +855,71 @@ EOFRESULT
   });
   assert.notEqual(invalidModelOutput.status, 0, "invalid optional IPC values must fail closed");
   assert.match(invalidModelOutput.stderr, /Invalid MODEL_STRATEGY|Invalid MODEL_WRITE_APPROVED/);
+
+  function runDigestIpcCase(name, extraLines) {
+    const nodeBin = join(fixture, `digest-ipc-${name}-bin`);
+    mkdirSync(nodeBin, { recursive: true });
+    writeFileSync(join(nodeBin, "node"), `#!/bin/sh
+if [ "$1" = "-v" ]; then printf 'v26.0.0\\n'; exit 0; fi
+cat <<'EOFRESULT'
+EDITION='coding'
+HARNESS='none'
+PROFILE_STRATEGY='runtime-profiles'
+MEMORY_SETUP='not-needed-for-coding-edition'
+NAME='digest-${name}'
+APPLY='true'
+SKIP_PROFILE_MANAGER='false'
+TUI_USED='true'
+TUI_MODE='app'
+MODEL_STRATEGY='custom-models'
+MODEL_WRITE_APPROVED='true'
+${extraLines}
+EOFRESULT
+`);
+    chmodSync(join(nodeBin, "node"), 0o755);
+    return run([], {
+      env: {
+        PATH: `${nodeBin}:/usr/bin:/bin`,
+        ALFRED_INSTALL_FORCE_TUI: "1",
+        ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+        ALFRED_INSTALL_TUI_INPUT: "1\n5\n1\ndigest-fallback\nn"
+      }
+    });
+  }
+  const absentDigest = runDigestIpcCase("absent", "");
+  assert.notEqual(absentDigest.status, 0, "approved custom apply requires a plan digest");
+  assert.match(absentDigest.stderr, /MODEL_PLAN_SHA256.*required/i);
+  const malformedDigest = runDigestIpcCase("malformed", "MODEL_PLAN_SHA256='ABC123'");
+  assert.notEqual(malformedDigest.status, 0, "malformed plan digest fails closed");
+  assert.match(malformedDigest.stderr, /Invalid MODEL_PLAN_SHA256/);
+  const duplicateDigest = runDigestIpcCase("duplicate", `MODEL_PLAN_SHA256='${"a".repeat(64)}'\nMODEL_PLAN_SHA256='${"b".repeat(64)}'`);
+  assert.match(duplicateDigest.stderr, /Rejected unsafe app TUI result/, "duplicate digest IPC is rejected before sourcing");
+
+  const unexpectedDigestNodeBin = join(fixture, "digest-ipc-unexpected-bin");
+  mkdirSync(unexpectedDigestNodeBin, { recursive: true });
+  writeFileSync(join(unexpectedDigestNodeBin, "node"), `#!/bin/sh
+if [ "$1" = "-v" ]; then printf 'v26.0.0\\n'; exit 0; fi
+cat <<'EOFRESULT'
+EDITION='coding'
+HARNESS='none'
+PROFILE_STRATEGY='runtime-profiles'
+MEMORY_SETUP='not-needed-for-coding-edition'
+NAME='digest-unexpected'
+APPLY='false'
+SKIP_PROFILE_MANAGER='false'
+TUI_USED='true'
+TUI_MODE='app'
+MODEL_STRATEGY='configure-later'
+MODEL_WRITE_APPROVED='false'
+MODEL_PLAN_SHA256='${"c".repeat(64)}'
+EOFRESULT
+`);
+  chmodSync(join(unexpectedDigestNodeBin, "node"), 0o755);
+  const unexpectedDigest = run([], {
+    env: { PATH: `${unexpectedDigestNodeBin}:/usr/bin:/bin`, ALFRED_INSTALL_FORCE_TUI: "1", ALFRED_INSTALL_APP_TUI_EVENTS: "submit" }
+  });
+  assert.notEqual(unexpectedDigest.status, 0, "non-custom output cannot carry a plan digest");
+  assert.match(unexpectedDigest.stderr, /Unexpected MODEL_PLAN_SHA256/);
 
   const multiFlagPreview = run(["--edition=coding", "--name=multi", "--harness=opencode,codex-cli,codex-app"]);
   assert.equal(multiFlagPreview.status, 0, multiFlagPreview.stderr);
@@ -1005,6 +1128,11 @@ EOFRESULT
   assert.match(installSource, /chmod 0700 "\$APP_TUI_PRIVATE_DIR"/);
   assert.match(installSource, /chmod 0600 "\$app_discovery_file"/);
   assert.match(installSource, /ALFRED_INSTALL_DISCOVERY_FILE=/);
+  assert.match(installSource, /MODEL_PLAN_SHA256/);
+  assert.match(installSource, /O_NOFOLLOW/);
+  assert.match(installSource, /fstatSync\(planDescriptor\)/);
+  assert.match(installSource, /timingSafeEqual\(actualDigest, expectedDigestBytes\)/);
+  assert.doesNotMatch(installSource, /readFileSync\(planPath/, "custom authority never reopens the validated plan pathname");
   assert.match(installSource, /https:\/\/api\.github\.com\/repos\/GOI17\/alfred\/git\/ref\/heads\/\$DEFAULT_BRANCH/);
   assert.match(installSource, /https:\/\/codeload\.github\.com\/GOI17\/alfred\/tar\.gz\/\$app_tui_commit_sha/);
   assert.doesNotMatch(installSource, /codeload\.github\.com\/GOI17\/alfred\/tar\.gz\/refs\/heads/);
@@ -1139,7 +1267,7 @@ exec ${shellQuote(tarPath)} "$@"
   ]);
   assert.deepEqual(readdirSync(remoteTmp), [], "failed snapshot staging cleans private staging");
 
-  function writeDiscoveryFixture(filePath, { fixtureHome, fixtureTarget, existingModels = false }) {
+  function writeDiscoveryFixture(filePath, { fixtureHome, fixtureTarget, existingModels = false, modelSignals = true }) {
     const modelsPath = join(fixtureHome, ".alfred", "models.json");
     writeFileSync(filePath, `${JSON.stringify({
       homeDir: fixtureHome,
@@ -1147,8 +1275,7 @@ exec ${shellQuote(tarPath)} "$@"
       targetPath: fixtureTarget,
       env: {
         PATH: "/fixture/bin",
-        OPENAI_API_KEY: "fixture-openai-secret",
-        ANTHROPIC_API_KEY: "fixture-anthropic-secret"
+        ...(modelSignals ? { OPENAI_API_KEY: "fixture-openai-secret", ANTHROPIC_API_KEY: "fixture-anthropic-secret" } : {})
       },
       platform: "linux",
       release: "fixture-release",
@@ -1268,6 +1395,156 @@ exec ${shellQuote(tarPath)} "$@"
   assert.equal(approvedInstallTrace.data.model_write_approved, true);
   assert.equal(approvedInstallTrace.data.model_config_written, true);
   assert.equal(approvedInstallTrace.data.provider_calls, 0);
+
+  const customEvents = [
+    "set:models=custom-models",
+    "set:modelWildcard= provider/main;$(touch_should_not_run) ",
+    "set:modelOrchestrator= provider/orchestrator'opaque ",
+    "set:modelDeveloper= provider/developer|opaque ",
+    "set:modelFallback= provider/fallback-one;$HOME ",
+    "set:modelFallback= provider/fallback-two&&false ",
+    "set:applyIntent=apply-safe-steps",
+    "down", "enter",
+    ...Array(6).fill("down"), "enter",
+    ...Array(4).fill("down"), "enter",
+    "enter", "right", "esc", "down", "enter", "down", "enter", "down", "enter"
+  ].join(",");
+  const customHome = join(fixture, "model-custom-home");
+  const customTarget = join(fixture, "model-custom-target");
+  const customFixture = join(fixture, "model-custom-fixture.json");
+  const customTmp = join(fixture, "model-custom-tmp");
+  mkdirSync(customHome, { recursive: true });
+  mkdirSync(customTarget, { recursive: true });
+  mkdirSync(customTmp, { recursive: true });
+  writeDiscoveryFixture(customFixture, { fixtureHome: customHome, fixtureTarget: customTarget, modelSignals: false });
+  const customPreviewHome = join(fixture, "model-custom-preview-home");
+  const customPreviewTarget = join(fixture, "model-custom-preview-target");
+  const customPreviewFixture = join(fixture, "model-custom-preview-fixture.json");
+  const customPreviewTmp = join(fixture, "model-custom-preview-tmp");
+  mkdirSync(customPreviewHome, { recursive: true });
+  mkdirSync(customPreviewTarget, { recursive: true });
+  mkdirSync(customPreviewTmp, { recursive: true });
+  writeDiscoveryFixture(customPreviewFixture, { fixtureHome: customPreviewHome, fixtureTarget: customPreviewTarget, modelSignals: false });
+  const customPreviewOnly = run([], {
+    env: {
+      HOME: customPreviewHome,
+      TMPDIR: customPreviewTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "set:models=custom-models,set:modelWildcard=provider/preview,submit",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: customPreviewFixture
+    }
+  });
+  assert.equal(customPreviewOnly.status, 0, customPreviewOnly.stderr);
+  assert.match(customPreviewOnly.stdout, /Model strategy:\s+custom-models/);
+  assert.equal(existsSync(join(customPreviewHome, ".alfred", "models.json")), false, "valid custom preview never writes models");
+  assert.deepEqual(readdirSync(customPreviewTmp), [], "custom preview cleans the private plan and staging directory");
+  const customCancelled = run([], {
+    env: {
+      HOME: customPreviewHome,
+      TMPDIR: customPreviewTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "set:models=custom-models,set:modelWildcard=provider/cancel,q",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: customPreviewFixture
+    }
+  });
+  assert.equal(customCancelled.status, 130);
+  assert.equal(existsSync(join(customPreviewHome, ".alfred", "models.json")), false, "custom cancel never writes models");
+  assert.deepEqual(readdirSync(customPreviewTmp), [], "custom cancel cleans the private plan and staging directory");
+
+  const customApply = run(["--path", customTarget, "--no-clone"], {
+    env: {
+      HOME: customHome,
+      TMPDIR: customTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: customEvents,
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: customFixture,
+      ALFRED_INSTALL_HANDOFF_INPUT: "1"
+    }
+  });
+  assert.equal(customApply.status, 0, customApply.stderr);
+  assert.match(customApply.stdout, /Model strategy:\s+custom-models/);
+  assert.match(customApply.stdout, /Model approval:\s+true/);
+  assert.doesNotMatch(`${customApply.stdout}\n${customApply.stderr}`, /provider\/main|provider\/orchestrator|provider\/developer|provider\/fallback/, "raw IDs never enter shell output or assignments");
+  assert.equal(existsSync(join(fixture, "touch_should_not_run")), false, "shell metacharacters in opaque IDs are never executed");
+  const customModelsPath = join(customHome, ".alfred", "models.json");
+  assert.deepEqual(JSON.parse(readFileSync(customModelsPath, "utf8")), {
+    "*": { primary: " provider/main;$(touch_should_not_run) " },
+    orchestrator: { primary: " provider/orchestrator'opaque " },
+    developer: { primary: " provider/developer|opaque " },
+    fallbacks: [" provider/fallback-one;$HOME ", " provider/fallback-two&&false "]
+  });
+  assert.equal(statSync(customModelsPath).mode & 0o777, 0o600);
+  const customTrace = JSON.parse(readFileSync(join(customHome, ".alfred", "observability", "install-trace.json"), "utf8"));
+  assert.equal(customTrace.data.model_strategy, "custom-models");
+  assert.equal(customTrace.data.model_write_approved, true);
+  assert.equal(customTrace.data.model_config_written, true);
+  assert.equal(customTrace.data.provider_calls, 0);
+  assert.deepEqual(readdirSync(customTmp), [], "approved custom write cleans plan, temp files, and private staging");
+
+  const invalidCustom = spawnSync("node", [appTui], {
+    cwd,
+    env: { ...process.env, ALFRED_INSTALL_APP_TUI_EVENTS: "set:models=custom-models,submit" },
+    encoding: "utf8"
+  });
+  assert.notEqual(invalidCustom.status, 0, "invalid custom plans cannot serialize or silently downgrade");
+  assert.match(invalidCustom.stderr, /custom model plan is invalid/);
+
+  const attackNodeBin = join(fixture, "model-plan-attack-bin");
+  mkdirSync(attackNodeBin, { recursive: true });
+  writeFileSync(join(attackNodeBin, "node"), `#!/bin/sh
+case "$1" in
+  *install-app.mjs)
+    ${shellQuote(process.execPath)} "$@" || exit $?
+    plan="$ALFRED_INSTALL_MODEL_PLAN_FILE"
+    case "$ALFRED_TEST_PLAN_ATTACK" in
+      missing) rm -f "$plan" ;;
+      symlink) cp "$plan" "$ALFRED_TEST_OUTSIDE_PLAN"; rm -f "$plan"; ln -s "$ALFRED_TEST_OUTSIDE_PLAN" "$plan" ;;
+      mode) chmod 0644 "$plan" ;;
+      unknown) printf '%s\n' '{"schema":"alfred.install.model-plan/v1","strategy":"custom-models","models":{"*":{"primary":"provider/main"},"fallbacks":[]},"provider_calls":0,"unknown":true}' > "$plan" ;;
+      invalid) printf '%s\n' '{"schema":"alfred.install.model-plan/v1","strategy":"custom-models","models":{"*":{"primary":""},"fallbacks":[]},"provider_calls":0}' > "$plan" ;;
+      tampered) printf '%s\n' '{"schema":"alfred.install.model-plan/v1","strategy":"smart-defaults","models":{"*":{"primary":"provider/main"},"fallbacks":[]},"provider_calls":0}' > "$plan" ;;
+      substitution) printf '%s\n' '{"schema":"alfred.install.model-plan/v1","strategy":"custom-models","models":{"*":{"primary":"provider/substituted"},"fallbacks":[]},"provider_calls":0}' > "$plan" ;;
+      directory-mode) chmod 0755 "$(dirname "$plan")" ;;
+    esac
+    exit 0
+    ;;
+esac
+exec ${shellQuote(process.execPath)} "$@"
+`);
+  chmodSync(join(attackNodeBin, "node"), 0o755);
+
+  for (const attack of ["missing", "symlink", "mode", "unknown", "invalid", "tampered", "substitution", "directory-mode"]) {
+    const attackHome = join(fixture, `model-plan-${attack}-home`);
+    const attackTarget = join(fixture, `model-plan-${attack}-target`);
+    const attackFixture = join(fixture, `model-plan-${attack}-fixture.json`);
+    const attackTmp = join(fixture, `model-plan-${attack}-tmp`);
+    const outsidePlan = join(fixture, `model-plan-${attack}-outside.json`);
+    const existingPath = join(attackHome, ".alfred", "models.json");
+    mkdirSync(join(attackHome, ".alfred"), { recursive: true });
+    mkdirSync(attackTarget, { recursive: true });
+    mkdirSync(attackTmp, { recursive: true });
+    writeFileSync(existingPath, '{"*":{"primary":"existing/model"},"fallbacks":[]}\n', { mode: 0o600 });
+    const before = readFileSync(existingPath, "utf8");
+    writeDiscoveryFixture(attackFixture, { fixtureHome: attackHome, fixtureTarget: attackTarget, modelSignals: false });
+    const attacked = run(["--path", attackTarget, "--no-clone"], {
+      env: {
+        HOME: attackHome,
+        PATH: `${attackNodeBin}:${process.env.PATH ?? ""}`,
+        TMPDIR: attackTmp,
+        ALFRED_INSTALL_FORCE_TUI: "1",
+        ALFRED_INSTALL_APP_TUI_EVENTS: customEvents,
+        ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: attackFixture,
+        ALFRED_INSTALL_HANDOFF_INPUT: "1",
+        ALFRED_TEST_PLAN_ATTACK: attack,
+        ALFRED_TEST_OUTSIDE_PLAN: outsidePlan
+      }
+    });
+    assert.notEqual(attacked.status, 0, `${attack} custom plan must fail closed`);
+    if (attack === "substitution") assert.match(attacked.stderr, /digest mismatch/, "valid model substitution with a stale digest is rejected by byte identity");
+    assert.equal(readFileSync(existingPath, "utf8"), before, `${attack} preserves the existing models target byte-for-byte`);
+    assert.equal(readdirSync(join(attackHome, ".alfred")).some((name) => name.includes("models.json") && name.endsWith(".tmp")), false, `${attack} leaves no target temp file`);
+    assert.deepEqual(readdirSync(attackTmp), [], `${attack} cleans private staging and plan temps`);
+  }
 
   console.log("suite installer validation ok: preview is default, legacy flags fail closed, and apply does not install Pi by default");
 } finally {

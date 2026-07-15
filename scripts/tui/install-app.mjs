@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import { readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { closeSync, constants, fchmodSync, fsyncSync, lstatSync, openSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { StringDecoder } from "node:string_decoder";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   EDITIONS,
   HARNESSES,
@@ -12,6 +13,8 @@ import {
   createPathfinderState,
   normalizeTuiLayout,
   normalizeDiscovery,
+  modelPlanForState,
+  modelPlanReviewLines,
   parseHarnessSelection,
   previewPageSize,
   render,
@@ -19,7 +22,9 @@ import {
   serializeAssignments,
   stripAnsi,
   terminalPhysicalRows,
-  transition
+  textEditingActive,
+  transition,
+  validateCustomModelsDraft
 } from "./install-pathfinder.mjs";
 
 export function decodeTerminalEvent(buffer, { flushEscape = false } = {}) {
@@ -41,6 +46,7 @@ export function decodeTerminalEvent(buffer, { flushEscape = false } = {}) {
       ["\x1bOA", "up"], ["\x1bOB", "down"], ["\x1bOD", "left"], ["\x1bOC", "right"]
     ].find(([sequence]) => buffer.startsWith(sequence));
     if (known) return { type: "token", token: known[1], length: known[0].length };
+    if (buffer.startsWith("\x1b[3~")) return { type: "token", token: "delete", length: 4 };
     if (buffer.startsWith("\x1b[")) {
       const csi = /^\x1b\[[0-?]*[ -/]*[@-~]/.exec(buffer);
       return csi ? { type: "ignore", length: csi[0].length } : { type: "incomplete", length: 0 };
@@ -146,6 +152,12 @@ function colorEnabled(stream) {
 
 function screen(output = process.stdout, layout = selectedTuiLayout, viewport = dimensions(output)) {
   if (state.overlay?.type === "preview") state = transition(state, { type: "PAGE", delta: 0, pageSize: previewPageSize(viewport) });
+  if (state.overlay?.type === "model-plan-review") {
+    const width = normalizeTuiLayout(layout) === "inline" ? Math.max(0, viewport.columns - 1) : viewport.columns;
+    const contentWidth = Math.max(1, width - 2);
+    const totalItems = modelPlanReviewLines(state, contentWidth).length;
+    state = transition(state, { type: "PAGE", delta: 0, pageSize: previewPageSize(viewport), totalItems, inspectionKey: `${contentWidth}:${totalItems}` });
+  }
   lastRender = render(state, { ...viewport, color: colorEnabled(output), layout });
   return lastRender.text;
 }
@@ -308,7 +320,30 @@ function handleInteractiveMouse(event) {
 }
 
 function textFocused() {
-  return state.phase === "Configure" && ["name", "path"].includes(controlsFor(state)[state.focus]) && !state.overlay;
+  return textEditingActive(state);
+}
+
+function pagedOverlay(state) {
+  return ["why", "preview", "model-plan-review"].includes(state?.overlay?.type);
+}
+
+export function terminalTokenAction(currentState, token, pageSize = 8) {
+  if (token === "esc") return currentState.editing
+    ? { type: "ESCAPE" }
+    : currentState.overlay
+      ? { type: "CLOSE_OVERLAY" }
+      : { type: "BACK" };
+  if (token === "up" || token === "down") {
+    if (pagedOverlay(currentState)) return { type: "PAGE", delta: token === "up" ? -1 : 1, pageSize };
+    if (!currentState.overlay || currentState.overlay.type === "model-editor") return { type: "MOVE", delta: token === "up" ? -1 : 1 };
+    return null;
+  }
+  if (token === "left" || token === "right") {
+    if (pagedOverlay(currentState)) return { type: "PAGE", delta: token === "left" ? -1 : 1, pageSize };
+    if (!currentState.overlay || currentState.overlay.type === "model-editor") return { type: "CHANGE", delta: token === "left" ? -1 : 1 };
+    return null;
+  }
+  return null;
 }
 
 function handleToken(token, { playback = false } = {}) {
@@ -323,16 +358,17 @@ function handleToken(token, { playback = false } = {}) {
   if (token === "cancel" || token === "q") return dispatch({ type: "CANCEL" });
   if (token === "p") return dispatch({ type: "OPEN_PREVIEW" });
   if (token === "w") return dispatch({ type: "OPEN_WHY" });
-  if (token === "esc") return dispatch(state.overlay ? { type: "CLOSE_OVERLAY" } : { type: "BACK" });
+  if (token === "esc") return dispatch(terminalTokenAction(state, token, previewPageSize(dimensions())));
   if (token === "r" && state.phase === "Discover" && !state.overlay) return dispatch({ type: "USE_RECOMMENDED" });
   if (token === "back" || token === "b") return dispatch({ type: "BACK" });
-  if (token === "up") return dispatch(state.overlay ? { type: "PAGE", delta: -1, pageSize: previewPageSize(dimensions()) } : { type: "MOVE", delta: -1 });
-  if (token === "down") return dispatch(state.overlay ? { type: "PAGE", delta: 1, pageSize: previewPageSize(dimensions()) } : { type: "MOVE", delta: 1 });
-  if (token === "left") return dispatch(state.overlay ? { type: "PAGE", delta: -1, pageSize: previewPageSize(dimensions()) } : { type: "CHANGE", delta: -1 });
-  if (token === "right") return dispatch(state.overlay ? { type: "PAGE", delta: 1, pageSize: previewPageSize(dimensions()) } : { type: "CHANGE", delta: 1 });
+  if (["up", "down", "left", "right"].includes(token)) {
+    const action = terminalTokenAction(state, token, previewPageSize(dimensions()));
+    return action ? dispatch(action) : undefined;
+  }
   if (token === "space") return dispatch({ type: "SPACE" });
   if (token === "enter") return dispatch({ type: "ACTIVATE" });
   if (token === "backspace") return dispatch({ type: "BACKSPACE" });
+  if (token === "delete") return dispatch({ type: "DELETE" });
   if (token.startsWith("text:")) return dispatch({ type: "INPUT", text: token.slice(5) });
 }
 
@@ -360,22 +396,90 @@ function parseBytes(data, { flushEscape = false, mouseEnabled = true } = {}) {
   }
 }
 
-function writeAssignments() {
-  const output = serializeAssignments(state.decisions, { reviewVisited: state.reviewVisited });
+function restrictedModelPlan(plan) {
+  if (!plan || typeof plan !== "object" || Array.isArray(plan)) throw new Error("invalid model plan");
+  if (JSON.stringify(Object.keys(plan).sort()) !== JSON.stringify(["models", "provider_calls", "schema", "strategy"])) throw new Error("model plan has unknown keys");
+  if (plan.schema !== "alfred.install.model-plan/v1" || plan.strategy !== "custom-models" || plan.provider_calls !== 0) throw new Error("invalid model plan contract");
+  const keys = Object.keys(plan.models ?? {});
+  if (keys.some((key) => !["*", "orchestrator", "developer", "fallbacks"].includes(key)) || !Object.hasOwn(plan.models ?? {}, "*") || !Object.hasOwn(plan.models ?? {}, "fallbacks")) throw new Error("invalid models keys");
+  for (const key of ["*", "orchestrator", "developer"]) {
+    if (!Object.hasOwn(plan.models, key)) continue;
+    const entry = plan.models[key];
+    if (!entry || Array.isArray(entry) || typeof entry !== "object" || JSON.stringify(Object.keys(entry)) !== JSON.stringify(["primary"])) throw new Error(`invalid ${key} model entry`);
+  }
+  if (!Array.isArray(plan.models.fallbacks)) throw new Error("invalid global fallbacks");
+  return plan;
+}
+
+export function writePrivateModelPlan(filePath, plan) {
+  const target = resolve(filePath);
+  const parent = dirname(target);
+  if (basename(target) !== "model-plan.json") throw new Error("model plan path must use the fixed model-plan.json filename");
+  const effectiveUid = typeof process.geteuid === "function" ? process.geteuid() : null;
+  const parentStats = lstatSync(parent);
+  if (!parentStats.isDirectory() || parentStats.isSymbolicLink()) throw new Error("model plan parent must be a regular non-symlink directory");
+  if ((parentStats.mode & 0o777) !== 0o700) throw new Error("model plan parent must have private mode 0700");
+  if (effectiveUid !== null && parentStats.uid !== effectiveUid) throw new Error("model plan parent must be owned by the effective uid");
+  const existing = lstatSync(target);
+  if (!existing.isFile() || existing.isSymbolicLink()) throw new Error("model plan target must be a regular non-symlink file");
+  if ((existing.mode & 0o777) !== 0o600) throw new Error("model plan target must have mode 0600");
+  if (effectiveUid !== null && existing.uid !== effectiveUid) throw new Error("model plan target must be owned by the effective uid");
+  const bytes = Buffer.from(`${JSON.stringify(restrictedModelPlan(plan), null, 2)}\n`, "utf8");
+  const temporaryPath = join(parent, `.${basename(target)}.${process.pid}.${Date.now()}.tmp`);
+  let descriptor;
+  try {
+    descriptor = openSync(temporaryPath, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
+    fchmodSync(descriptor, 0o600);
+    writeFileSync(descriptor, bytes);
+    fsyncSync(descriptor);
+    closeSync(descriptor);
+    descriptor = undefined;
+    renameSync(temporaryPath, target);
+    const directoryDescriptor = openSync(parent, constants.O_RDONLY);
+    try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+  } catch (error) {
+    if (descriptor !== undefined) try { closeSync(descriptor); } catch {}
+    try { unlinkSync(temporaryPath); } catch {}
+    throw error;
+  }
+  return { bytes, sha256: createHash("sha256").update(bytes).digest("hex") };
+}
+
+async function writeAssignments() {
+  if (state.decisions.modelStrategy === "custom-models" && validateCustomModelsDraft(state.decisions.customModels).status !== "pass") throw new Error("custom model plan is invalid; edit it or choose Configure models later");
+  const plan = modelPlanForState(state);
+  let modelPlanSha256 = "";
+  if (plan) {
+    const planPath = process.env.ALFRED_INSTALL_MODEL_PLAN_FILE;
+    if (!planPath) throw new Error("approved custom model plan path is unavailable");
+    const modulePath = join(dirname(fileURLToPath(import.meta.url)), "model-assignment.mjs");
+    const canonicalPath = (() => { try { return realpathSync(modulePath); } catch { return resolve(dirname(fileURLToPath(import.meta.url)), "../../packages/core/src/model-assignment.js"); } })();
+    const { validateModelsConfig } = await import(pathToFileURL(canonicalPath).href);
+    const validation = validateModelsConfig(plan.models);
+    if (validation.status !== "pass") throw new Error(`invalid custom model plan: ${validation.errors.join("; ")}`);
+    modelPlanSha256 = writePrivateModelPlan(planPath, plan).sha256;
+  }
+  const output = serializeAssignments(state.decisions, { reviewVisited: state.reviewVisited, modelRevision: state.modelRevision, reviewedModelRevision: state.reviewedModelRevision, modelInspection: state.modelInspection, modelPlanSha256 });
   const resultFile = process.env.ALFRED_INSTALL_APP_TUI_RESULT_FILE;
   if (resultFile) writeFileSync(resultFile, output);
   else process.stdout.write(output);
 }
 
-function runPlayback() {
+async function runPlayback() {
   const script = process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT || "";
-  for (const token of script.split(/[,\n]+/).map((item) => item.trim()).filter(Boolean)) handleToken(token, { playback: true });
+  const tokens = script.split(/[,\n]+/).flatMap((item) => {
+    const withoutLeadingSeparatorSpace = item.replace(/^\s+/, "");
+    if (/^set:model(?:Wildcard|Orchestrator|Developer|Fallback)=/.test(withoutLeadingSeparatorSpace)) return [withoutLeadingSeparatorSpace];
+    const token = item.trim();
+    return token ? [token] : [];
+  });
+  for (const token of tokens) handleToken(token, { playback: true });
   if (process.env.ALFRED_INSTALL_APP_TUI_RENDER === "1") process.stderr.write(`${screen(process.stderr)}\n`);
   if (state.cancelled) {
     process.exitCode = 130;
     return;
   }
-  writeAssignments();
+  await writeAssignments();
 }
 
 export async function runInteractive({ stdin = process.stdin, stdout = process.stdout, layout: layoutInput = selectedTuiLayout } = {}) {
@@ -479,7 +583,7 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
   }
   if (terminationCode) process.exitCode = terminationCode;
   else if (state.cancelled) process.exitCode = 130;
-  else writeAssignments();
+  else await writeAssignments();
 }
 
 function canonicalPath(value) {
@@ -487,7 +591,7 @@ function canonicalPath(value) {
 }
 const isMain = process.argv[1] && canonicalPath(process.argv[1]) === canonicalPath(fileURLToPath(import.meta.url));
 if (isMain) {
-  if (process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT) runPlayback();
+  if (process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT) await runPlayback();
   else {
     try {
       await runInteractive();
