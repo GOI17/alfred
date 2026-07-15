@@ -38,6 +38,10 @@ SKIP_PROFILE_MANAGER=false
 HAD_ARGS=false
 TUI_USED=false
 TUI_MODE="none"
+MODEL_STRATEGY="configure-later"
+MODEL_WRITE_APPROVED=false
+MODEL_PLAN_SHA256=""
+MODEL_CONFIG_WRITTEN=false
 
 log() { printf '[alfred-install] %s\n' "$*"; }
 err() { printf '[alfred-install][error] %s\n' "$*" 1>&2; exit 1; }
@@ -243,6 +247,42 @@ done
 
 HARNESS_STATUS="$(detect_harness_status)"
 SOURCE_PROJECT_PATH="$(pwd -P 2>/dev/null || pwd)"
+SOURCE_WORKSPACE_ROOT="$SOURCE_PROJECT_PATH"
+CANONICAL_PROJECT_ROOT="$SOURCE_PROJECT_PATH"
+GIT_AVAILABILITY="not-installed"
+GIT_REPOSITORY_STATE="not-repository"
+GIT_LINKED_WORKTREE_STATE="not-applicable"
+
+resolve_invoking_project_root() {
+  command -v git >/dev/null 2>&1 || return 0
+  GIT_AVAILABILITY="installed"
+  workspace_root="$(git -C "$SOURCE_PROJECT_PATH" rev-parse --show-toplevel 2>/dev/null)" || return 0
+  [ -n "$workspace_root" ] || return 0
+  SOURCE_WORKSPACE_ROOT="$workspace_root"
+  GIT_REPOSITORY_STATE="repository"
+  git_dir="$(git -C "$SOURCE_PROJECT_PATH" rev-parse --path-format=absolute --git-dir 2>/dev/null || git -C "$SOURCE_PROJECT_PATH" rev-parse --absolute-git-dir 2>/dev/null || true)"
+  common_dir="$(git -C "$SOURCE_PROJECT_PATH" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  if [ -z "$common_dir" ]; then
+    common_dir="$(git -C "$SOURCE_PROJECT_PATH" rev-parse --git-common-dir 2>/dev/null || true)"
+    case "$common_dir" in
+      /*) ;;
+      "") common_dir="$git_dir" ;;
+      *) common_dir="$SOURCE_WORKSPACE_ROOT/$common_dir" ;;
+    esac
+  fi
+  if [ -n "$common_dir" ] && [ "$(basename "$common_dir")" = ".git" ]; then
+    CANONICAL_PROJECT_ROOT="$(cd "$(dirname "$common_dir")" 2>/dev/null && pwd -P)" || CANONICAL_PROJECT_ROOT="$SOURCE_WORKSPACE_ROOT"
+  else
+    CANONICAL_PROJECT_ROOT="$SOURCE_WORKSPACE_ROOT"
+  fi
+  if [ -n "$git_dir" ] && [ -n "$common_dir" ] && [ "$git_dir" != "$common_dir" ]; then
+    GIT_LINKED_WORKTREE_STATE="linked-worktree"
+  else
+    GIT_LINKED_WORKTREE_STATE="main-worktree"
+  fi
+}
+
+resolve_invoking_project_root
 
 has_dev_tty() {
   { : < /dev/tty > /dev/tty; } 2>/dev/null
@@ -280,12 +320,38 @@ EOFTUI
 }
 
 APP_TUI_PRIVATE_DIR=""
+APP_MODEL_PLAN_FILE=""
 
 cleanup_app_tui_private_dir() {
   if [ -n "$APP_TUI_PRIVATE_DIR" ] && [ -d "$APP_TUI_PRIVATE_DIR" ]; then
     rm -rf "$APP_TUI_PRIVATE_DIR"
   fi
   APP_TUI_PRIVATE_DIR=""
+  APP_MODEL_PLAN_FILE=""
+}
+
+validate_commit_sha() {
+  [ "${#1}" -eq 40 ] || return 1
+  case "$1" in
+    *[!0123456789abcdefABCDEF]*) return 1 ;;
+  esac
+}
+
+resolve_remote_default_branch_sha() {
+  branch_metadata_file="$1"
+  if ! curl -fsSL "https://api.github.com/repos/GOI17/alfred/git/ref/heads/$DEFAULT_BRANCH" -o "$branch_metadata_file" 2>/dev/null; then
+    return 1
+  fi
+  chmod 0600 "$branch_metadata_file" || return 1
+  resolved_sha="$(node --input-type=module - "$branch_metadata_file" 2>/dev/null <<'NODERESOLVE'
+import fs from "node:fs";
+const metadata = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+if (metadata?.object?.type !== "commit" || typeof metadata.object.sha !== "string") process.exit(1);
+process.stdout.write(metadata.object.sha);
+NODERESOLVE
+)" || return 1
+  validate_commit_sha "$resolved_sha" || return 1
+  printf '%s' "$resolved_sha"
 }
 
 reset_app_tui_cleanup_traps() {
@@ -324,7 +390,7 @@ validate_app_tui_result() {
     result_key=${result_line%%=*}
     result_value=${result_line#*=}
     case "$result_key" in
-      EDITION|HARNESS|PROFILE_STRATEGY|MEMORY_SETUP|NAME|APPLY|SKIP_PROFILE_MANAGER|TUI_USED|TUI_MODE|TARGET_PATH) ;;
+      EDITION|HARNESS|PROFILE_STRATEGY|MEMORY_SETUP|NAME|APPLY|SKIP_PROFILE_MANAGER|TUI_USED|TUI_MODE|TARGET_PATH|MODEL_STRATEGY|MODEL_WRITE_APPROVED|MODEL_PLAN_SHA256) ;;
       *) return 1 ;;
     esac
     case ",$seen_keys," in
@@ -350,12 +416,12 @@ run_app_tui_if_available() {
   fi
   command -v node >/dev/null 2>&1 || return 1
 
-  app_tui_script=""
+  app_tui_source_dir=""
   app_tui_remote=false
   if [ -n "$INSTALLER_DIR" ] && [ -f "$INSTALLER_DIR/scripts/tui/install-app.mjs" ]; then
-    app_tui_script="$INSTALLER_DIR/scripts/tui/install-app.mjs"
+    app_tui_source_dir="$INSTALLER_DIR"
   elif [ -f "./scripts/tui/install-app.mjs" ]; then
-    app_tui_script="./scripts/tui/install-app.mjs"
+    app_tui_source_dir="."
   else
     command -v curl >/dev/null 2>&1 || return 1
     app_tui_remote=true
@@ -363,21 +429,86 @@ run_app_tui_if_available() {
 
   APP_TUI_PRIVATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/alfred-install-app-tui.XXXXXX")" || return 1
   chmod 0700 "$APP_TUI_PRIVATE_DIR" || { cleanup_app_tui_private_dir; return 1; }
+  APP_MODEL_PLAN_FILE="$APP_TUI_PRIVATE_DIR/model-plan.json"
+  if ! (umask 077; : > "$APP_MODEL_PLAN_FILE") || ! chmod 0600 "$APP_MODEL_PLAN_FILE"; then
+    cleanup_app_tui_private_dir
+    return 1
+  fi
   trap 'cleanup_app_tui_private_dir' EXIT
   trap 'cleanup_app_tui_private_dir; exit 129' HUP
   trap 'cleanup_app_tui_private_dir; exit 130' INT
   trap 'cleanup_app_tui_private_dir; exit 143' TERM
 
+  app_tui_script="$APP_TUI_PRIVATE_DIR/install-app.mjs"
   if [ "$app_tui_remote" = true ]; then
-    app_tui_script="$APP_TUI_PRIVATE_DIR/install-app.mjs"
-    if ! curl -fsSL "https://raw.githubusercontent.com/GOI17/alfred/$DEFAULT_BRANCH/scripts/tui/install-app.mjs" -o "$app_tui_script" 2>/dev/null || \
-      ! curl -fsSL "https://raw.githubusercontent.com/GOI17/alfred/$DEFAULT_BRANCH/scripts/tui/install-pathfinder.mjs" -o "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" 2>/dev/null
+    command -v tar >/dev/null 2>&1 || { cleanup_app_tui_private_dir; reset_app_tui_cleanup_traps; return 1; }
+    app_tui_branch_metadata="$APP_TUI_PRIVATE_DIR/default-branch.json"
+    app_tui_commit_sha="$(resolve_remote_default_branch_sha "$app_tui_branch_metadata")" || {
+      cleanup_app_tui_private_dir
+      reset_app_tui_cleanup_traps
+      return 1
+    }
+    rm -f "$app_tui_branch_metadata"
+    app_tui_snapshot="$APP_TUI_PRIVATE_DIR/alfred-snapshot.tar.gz"
+    app_tui_snapshot_dir="$APP_TUI_PRIVATE_DIR/snapshot"
+    mkdir "$app_tui_snapshot_dir" || { cleanup_app_tui_private_dir; reset_app_tui_cleanup_traps; return 1; }
+    if ! curl -fsSL "https://codeload.github.com/GOI17/alfred/tar.gz/$app_tui_commit_sha" -o "$app_tui_snapshot" 2>/dev/null || \
+      ! tar -xzf "$app_tui_snapshot" -C "$app_tui_snapshot_dir" --strip-components=1 2>/dev/null || \
+      ! cp "$app_tui_snapshot_dir/scripts/tui/install-app.mjs" "$app_tui_script" || \
+      ! cp "$app_tui_snapshot_dir/scripts/tui/install-pathfinder.mjs" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" || \
+      ! cp "$app_tui_snapshot_dir/scripts/tui/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" || \
+      ! cp "$app_tui_snapshot_dir/packages/profile-manager/src/index.js" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" || \
+      ! cp "$app_tui_snapshot_dir/packages/core/src/model-assignment.js" "$APP_TUI_PRIVATE_DIR/model-assignment.mjs"
+    then
+      cleanup_app_tui_private_dir
+      reset_app_tui_cleanup_traps
+      return 1
+    fi
+    rm -rf "$app_tui_snapshot_dir" "$app_tui_snapshot"
+  else
+    if ! cp "$app_tui_source_dir/scripts/tui/install-app.mjs" "$app_tui_script" || \
+      ! cp "$app_tui_source_dir/scripts/tui/install-pathfinder.mjs" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" || \
+      ! cp "$app_tui_source_dir/scripts/tui/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" || \
+      ! cp "$app_tui_source_dir/packages/profile-manager/src/index.js" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" || \
+      ! cp "$app_tui_source_dir/packages/core/src/model-assignment.js" "$APP_TUI_PRIVATE_DIR/model-assignment.mjs"
     then
       cleanup_app_tui_private_dir
       reset_app_tui_cleanup_traps
       return 1
     fi
   fi
+
+  chmod 0600 "$app_tui_script" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" \
+    "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" \
+    "$APP_TUI_PRIVATE_DIR/model-assignment.mjs" || {
+      cleanup_app_tui_private_dir
+      reset_app_tui_cleanup_traps
+      return 1
+    }
+
+  app_discovery_file="$APP_TUI_PRIVATE_DIR/discovery.json"
+  discovery_target="$TARGET_PATH"
+  if [ -z "$discovery_target" ]; then discovery_target="$HOME/.alfred/installs/$NAME"; fi
+  if ! (umask 077; ALFRED_INSTALL_TARGET_PATH="$discovery_target" \
+    ALFRED_INSTALL_NAME="$NAME" \
+    ALFRED_INSTALL_NODE_MIN="$NODE_MIN" \
+    ALFRED_INSTALL_SOURCE_WORKSPACE_PATH="$SOURCE_PROJECT_PATH" \
+    ALFRED_INSTALL_WORKSPACE_ROOT="$SOURCE_WORKSPACE_ROOT" \
+    ALFRED_INSTALL_PROJECT_ROOT="$CANONICAL_PROJECT_ROOT" \
+    ALFRED_INSTALL_GIT_AVAILABILITY="$GIT_AVAILABILITY" \
+    ALFRED_INSTALL_GIT_REPOSITORY_STATE="$GIT_REPOSITORY_STATE" \
+    ALFRED_INSTALL_GIT_WORKTREE_STATE="$GIT_LINKED_WORKTREE_STATE" \
+    node "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" > "$app_discovery_file")
+  then
+    cleanup_app_tui_private_dir
+    reset_app_tui_cleanup_traps
+    return 1
+  fi
+  chmod 0600 "$app_discovery_file" || {
+    cleanup_app_tui_private_dir
+    reset_app_tui_cleanup_traps
+    return 1
+  }
 
   app_tui_out="$APP_TUI_PRIVATE_DIR/result.env"
   app_tui_status=1
@@ -390,9 +521,13 @@ run_app_tui_if_available() {
       ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH" \
       ALFRED_INSTALL_CURRENT_APPLY="$APPLY" \
       ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
+      ALFRED_INSTALL_DISCOVERY_FILE="$app_discovery_file" \
+      ALFRED_INSTALL_MODEL_PLAN_FILE="$APP_MODEL_PLAN_FILE" \
       node "$app_tui_script" > "$app_tui_out"
     then
       app_tui_status=0
+    else
+      app_tui_status=$?
     fi
   elif has_dev_tty; then
     if ALFRED_INSTALL_CURRENT_EDITION="$EDITION" \
@@ -403,10 +538,14 @@ run_app_tui_if_available() {
       ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH" \
       ALFRED_INSTALL_CURRENT_APPLY="$APPLY" \
       ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
+      ALFRED_INSTALL_DISCOVERY_FILE="$app_discovery_file" \
+      ALFRED_INSTALL_MODEL_PLAN_FILE="$APP_MODEL_PLAN_FILE" \
       ALFRED_INSTALL_APP_TUI_RESULT_FILE="$app_tui_out" \
       node "$app_tui_script" < /dev/tty > /dev/tty
     then
       app_tui_status=0
+    else
+      app_tui_status=$?
     fi
   else
     if ALFRED_INSTALL_CURRENT_EDITION="$EDITION" \
@@ -417,10 +556,19 @@ run_app_tui_if_available() {
       ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH" \
       ALFRED_INSTALL_CURRENT_APPLY="$APPLY" \
       ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
+      ALFRED_INSTALL_DISCOVERY_FILE="$app_discovery_file" \
+      ALFRED_INSTALL_MODEL_PLAN_FILE="$APP_MODEL_PLAN_FILE" \
       node "$app_tui_script" > "$app_tui_out"
     then
       app_tui_status=0
+    else
+      app_tui_status=$?
     fi
+  fi
+  if [ "$app_tui_status" -ge 128 ]; then
+    cleanup_app_tui_private_dir
+    reset_app_tui_cleanup_traps
+    return "$app_tui_status"
   fi
   if [ "$app_tui_status" -eq 0 ] && [ -s "$app_tui_out" ]; then
     if ! validate_app_tui_result "$app_tui_out"; then
@@ -435,8 +583,6 @@ run_app_tui_if_available() {
       reset_app_tui_cleanup_traps
       return 1
     }
-    cleanup_app_tui_private_dir
-    reset_app_tui_cleanup_traps
     return 0
   fi
   cleanup_app_tui_private_dir
@@ -639,7 +785,40 @@ run_tui_if_available() {
   tui_confirm_apply
 }
 
-run_app_tui_if_available || run_tui_if_available
+if run_app_tui_if_available; then
+  :
+else
+  app_tui_launch_status=$?
+  if [ "$app_tui_launch_status" -ge 128 ]; then
+    exit "$app_tui_launch_status"
+  fi
+  log "App TUI unavailable or failed to launch; using text installer." 1>&2
+  run_tui_if_available
+fi
+
+case "$MODEL_STRATEGY" in
+  smart-defaults|custom-models|keep-existing|configure-later) ;;
+  *) err "Invalid MODEL_STRATEGY from app TUI: $MODEL_STRATEGY" ;;
+esac
+case "$MODEL_WRITE_APPROVED" in
+  true|false) ;;
+  *) err "Invalid MODEL_WRITE_APPROVED from app TUI: $MODEL_WRITE_APPROVED" ;;
+esac
+for boolean_value in "$APPLY" "$SKIP_PROFILE_MANAGER" "$TUI_USED"; do
+  case "$boolean_value" in true|false) ;; *) err "Invalid boolean assignment from app TUI" ;; esac
+done
+if [ "$MODEL_WRITE_APPROVED" = true ] && { [ "$TUI_MODE" != "app" ] || { [ "$MODEL_STRATEGY" != "smart-defaults" ] && [ "$MODEL_STRATEGY" != "custom-models" ]; } || [ "$APPLY" != true ]; }; then
+  err "Model write approval requires app Review, a writable model strategy, and explicit Apply confirmation"
+fi
+if [ -n "$MODEL_PLAN_SHA256" ]; then
+  if [ "${#MODEL_PLAN_SHA256}" -ne 64 ]; then err "Invalid MODEL_PLAN_SHA256 from app TUI: expected 64 lowercase hex characters"; fi
+  case "$MODEL_PLAN_SHA256" in *[!0123456789abcdef]*) err "Invalid MODEL_PLAN_SHA256 from app TUI: expected 64 lowercase hex characters" ;; esac
+  if [ "$TUI_MODE" != "app" ] || [ "$MODEL_STRATEGY" != "custom-models" ] || [ "$MODEL_WRITE_APPROVED" != true ] || [ "$APPLY" != true ]; then
+    err "Unexpected MODEL_PLAN_SHA256 without an approved custom model apply"
+  fi
+elif [ "$TUI_MODE" = "app" ] && [ "$MODEL_STRATEGY" = "custom-models" ] && [ "$MODEL_WRITE_APPROVED" = true ] && [ "$APPLY" = true ]; then
+  err "MODEL_PLAN_SHA256 is required for an approved custom model apply"
+fi
 
 case "$EDITION" in
   coding|memory|full) ;;
@@ -675,6 +854,151 @@ if command -v node >/dev/null 2>&1; then
   fi
 fi
 
+print_model_assignment_preview() {
+  case "$MODEL_STRATEGY" in
+    smart-defaults)
+      printf '\nProposed model configuration (local discovery only):\n'
+      if [ -n "$APP_TUI_PRIVATE_DIR" ] && [ -f "$APP_TUI_PRIVATE_DIR/discovery.json" ]; then
+        node --input-type=module - "$APP_TUI_PRIVATE_DIR/discovery.json" <<'NODEPREVIEW'
+import fs from "node:fs";
+const discovery = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+process.stdout.write(`${JSON.stringify(discovery.models?.proposed_config ?? {}, null, 2)}\n`);
+NODEPREVIEW
+      else
+        printf '  unavailable; configure models later\n'
+      fi
+      printf 'Proposed target: %s/.alfred/models.json\n' "$HOME"
+      printf 'Write approved: %s\n' "$MODEL_WRITE_APPROVED"
+      ;;
+    custom-models)
+      printf '\nCustom model configuration: exact values were reviewed in the app TUI.\n'
+      printf 'Proposed target: %s/.alfred/models.json\n' "$HOME"
+      printf 'Write approved: %s\n' "$MODEL_WRITE_APPROVED"
+      ;;
+    keep-existing)
+      printf '\nModel configuration: existing ~/.alfred/models.json remains untouched and was not read into the TUI.\n'
+      ;;
+    configure-later)
+      printf '\nModel configuration: configure later; no model configuration will be written.\n'
+      ;;
+  esac
+  printf 'Model provider calls: 0\n'
+}
+
+write_approved_model_assignment() {
+  [ "$TUI_USED" = true ] || return 0
+  [ "$TUI_MODE" = "app" ] || return 0
+  [ "$APPLY" = true ] || return 0
+  { [ "$MODEL_STRATEGY" = "smart-defaults" ] || [ "$MODEL_STRATEGY" = "custom-models" ]; } || return 0
+  [ "$MODEL_WRITE_APPROVED" = true ] || return 0
+  [ -n "$APP_TUI_PRIVATE_DIR" ] && [ -f "$APP_TUI_PRIVATE_DIR/discovery.json" ] && [ -f "$APP_TUI_PRIVATE_DIR/model-assignment.mjs" ] || \
+    err "Approved model configuration is unavailable"
+
+  model_target="$HOME/.alfred/models.json"
+  model_trace="$HOME/.alfred/observability/model-assignment-trace.json"
+  mkdir -p "$(dirname "$model_target")" "$(dirname "$model_trace")"
+  node --input-type=module - "$MODEL_STRATEGY" "$APP_TUI_PRIVATE_DIR" "$APP_MODEL_PLAN_FILE" "$APP_TUI_PRIVATE_DIR/discovery.json" "$APP_TUI_PRIVATE_DIR/model-assignment.mjs" "$model_target" "$model_trace" "$MODEL_PLAN_SHA256" <<'NODEWRITE'
+import fs from "node:fs";
+import path from "node:path";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { pathToFileURL } from "node:url";
+
+const [strategy, privateDir, planPath, discoveryPath, modulePath, targetPath, tracePath, expectedDigest] = process.argv.slice(2);
+const { traceModelAssignmentConfigured, validateModelsConfig } = await import(pathToFileURL(modulePath).href);
+const effectiveUid = typeof process.geteuid === "function" ? process.geteuid() : null;
+let config;
+let detectedModels = [];
+if (strategy === "custom-models") {
+  if (!/^[0-9a-f]{64}$/.test(expectedDigest)) throw new Error("invalid expected custom model plan digest");
+  const expectedPrivateDir = path.resolve(privateDir);
+  const expectedPlanPath = path.join(expectedPrivateDir, "model-plan.json");
+  if (path.resolve(planPath) !== expectedPlanPath || path.dirname(expectedPlanPath) !== expectedPrivateDir || path.basename(expectedPlanPath) !== "model-plan.json") throw new Error("custom model plan must use the fixed private parent and name");
+  const privateStats = fs.lstatSync(expectedPrivateDir);
+  if (!privateStats.isDirectory() || privateStats.isSymbolicLink() || (privateStats.mode & 0o777) !== 0o700) throw new Error("invalid app TUI private directory mode or type");
+  if (effectiveUid !== null && privateStats.uid !== effectiveUid) throw new Error("app TUI private directory is not owned by the effective uid");
+  const pathStats = fs.lstatSync(expectedPlanPath);
+  if (!pathStats.isFile() || pathStats.isSymbolicLink() || (pathStats.mode & 0o777) !== 0o600) throw new Error("custom model plan must be a mode-0600 regular non-symlink file");
+  if (effectiveUid !== null && pathStats.uid !== effectiveUid) throw new Error("custom model plan is not owned by the effective uid");
+  const noFollow = typeof fs.constants.O_NOFOLLOW === "number" ? fs.constants.O_NOFOLLOW : 0;
+  let planDescriptor;
+  let planBytes;
+  try {
+    planDescriptor = fs.openSync(expectedPlanPath, fs.constants.O_RDONLY | noFollow);
+    const openedStats = fs.fstatSync(planDescriptor);
+    if (!openedStats.isFile() || (openedStats.mode & 0o777) !== 0o600) throw new Error("opened custom model plan is not a mode-0600 regular file");
+    if (effectiveUid !== null && openedStats.uid !== effectiveUid) throw new Error("opened custom model plan is not owned by the effective uid");
+    if (openedStats.dev !== pathStats.dev || openedStats.ino !== pathStats.ino) throw new Error("custom model plan changed before open");
+    planBytes = fs.readFileSync(planDescriptor);
+  } finally {
+    if (planDescriptor !== undefined) fs.closeSync(planDescriptor);
+  }
+  const actualDigest = createHash("sha256").update(planBytes).digest();
+  const expectedDigestBytes = Buffer.from(expectedDigest, "hex");
+  if (actualDigest.length !== expectedDigestBytes.length || !timingSafeEqual(actualDigest, expectedDigestBytes)) throw new Error("custom model plan digest mismatch");
+  const plan = JSON.parse(planBytes.toString("utf8"));
+  const exactKeys = (value, allowed) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).every((key) => allowed.includes(key));
+  if (!exactKeys(plan, ["schema", "strategy", "models", "provider_calls"]) || Object.keys(plan).length !== 4 || plan.schema !== "alfred.install.model-plan/v1" || plan.strategy !== "custom-models" || plan.provider_calls !== 0) throw new Error("invalid custom model plan contract");
+  if (!exactKeys(plan.models, ["*", "orchestrator", "developer", "fallbacks"]) || !Object.hasOwn(plan.models, "*") || !Object.hasOwn(plan.models, "fallbacks")) throw new Error("invalid custom models keys");
+  for (const key of ["*", "orchestrator", "developer"]) {
+    if (!Object.hasOwn(plan.models, key)) continue;
+    const entry = plan.models[key];
+    if (!exactKeys(entry, ["primary"]) || Object.keys(entry).length !== 1 || typeof entry.primary !== "string" || !entry.primary.trim() || /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u.test(entry.primary)) throw new Error(`invalid ${key} model entry`);
+  }
+  if (!Array.isArray(plan.models.fallbacks) || plan.models.fallbacks.some((value) => typeof value !== "string" || !value.trim() || /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u.test(value))) throw new Error("invalid custom fallback chain");
+  config = plan.models;
+} else if (strategy === "smart-defaults") {
+  if (expectedDigest) throw new Error("smart defaults cannot carry a custom plan digest");
+  const discovery = JSON.parse(fs.readFileSync(discoveryPath, "utf8"));
+  if (discovery.schema !== "alfred.install.discovery/v1" || discovery.provider_calls !== 0) throw new Error("invalid discovery contract");
+  config = discovery.models?.proposed_config;
+  detectedModels = discovery.models?.suggestions ?? [];
+} else {
+  throw new Error("invalid writable model strategy");
+}
+const validation = validateModelsConfig(config);
+if (validation.status !== "pass" || !config?.["*"]?.primary) throw new Error(`invalid proposed model config: ${validation.errors.join("; ")}`);
+
+function writeAtomic(filePath, text) {
+  const temporaryPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`);
+  let descriptor;
+  try {
+    descriptor = fs.openSync(temporaryPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY, 0o600);
+    fs.fchmodSync(descriptor, 0o600);
+    fs.writeFileSync(descriptor, text, "utf8");
+    fs.fsyncSync(descriptor);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    fs.renameSync(temporaryPath, filePath);
+    const directoryDescriptor = fs.openSync(path.dirname(filePath), fs.constants.O_RDONLY);
+    try { fs.fsyncSync(directoryDescriptor); } finally { fs.closeSync(directoryDescriptor); }
+  } catch (error) {
+    if (descriptor !== undefined) try { fs.closeSync(descriptor); } catch {}
+    try { fs.unlinkSync(temporaryPath); } catch {}
+    throw error;
+  }
+}
+
+writeAtomic(targetPath, `${JSON.stringify(config, null, 2)}\n`);
+const configured = traceModelAssignmentConfigured({
+  targetPath,
+  detectedModels,
+  modelCount: config.fallbacks?.length ?? 0,
+  action: "write"
+});
+const avoided = {
+  trace_id: "install-model-provider-request-avoided",
+  timestamp: new Date().toISOString(),
+  event: "provider_request_avoided",
+  actor: "alfred-suite-install",
+  data: { operation: "model_assignment_configuration", reason: "local_discovery_sufficient", provider_calls: 0 }
+};
+writeAtomic(tracePath, `${JSON.stringify({ trace_events: [configured, avoided], provider_calls: 0 }, null, 2)}\n`);
+NODEWRITE
+  MODEL_CONFIG_WRITTEN=true
+  log "Wrote approved model assignment config atomically: $model_target"
+  log "Trace events: model_assignment_configured, provider_request_avoided (provider_calls=0)"
+}
+
 edition_components() {
   if [ -n "$COMPONENTS" ]; then
     printf '%s' "$COMPONENTS"
@@ -690,6 +1014,11 @@ edition_components() {
 }
 
 COMPONENT_PLAN="$(edition_components)"
+
+DISPLAY_PROFILE_STRATEGY="$PROFILE_STRATEGY"
+DISPLAY_MEMORY_SETUP="$MEMORY_SETUP"
+if [ "$PROFILE_STRATEGY" = "not-needed-for-memory-edition" ]; then DISPLAY_PROFILE_STRATEGY="Not included in Memory edition"; fi
+if [ "$MEMORY_SETUP" = "not-needed-for-coding-edition" ]; then DISPLAY_MEMORY_SETUP="Not included in Coding edition"; fi
 
 print_expected_preview_locations() {
   if [ "$SELECTED_HARNESSES" = "none" ]; then
@@ -718,6 +1047,7 @@ print_handoff_explanation() {
 
 Where files go and why:
   - Project you launched from: $SOURCE_PROJECT_PATH
+  - Canonical project root:    $CANONICAL_PROJECT_ROOT
   - Alfred suite install path: $TARGET_PATH
   - Runtime profiles path:    $HOME/.alfred/runtime-profiles
   - Trace path:               $HOME/.alfred/observability/install-trace.json
@@ -737,8 +1067,8 @@ EOFHANDOFF
 pretty_path() {
   path_value="$1"
   case "$path_value" in
-    "$SOURCE_PROJECT_PATH") printf '<project>' ;;
-    "$SOURCE_PROJECT_PATH"/*) printf '<project>/%s' "${path_value#"$SOURCE_PROJECT_PATH"/}" ;;
+    "$CANONICAL_PROJECT_ROOT") printf '<project>' ;;
+    "$CANONICAL_PROJECT_ROOT"/*) printf '<project>/%s' "${path_value#"$CANONICAL_PROJECT_ROOT"/}" ;;
     "$HOME") printf '~' ;;
     "$HOME"/*) printf '~/%s' "${path_value#"$HOME"/}" ;;
     *) printf '%s' "$path_value" ;;
@@ -752,6 +1082,7 @@ write_handoff_summary() {
     printf 'Alfred install handoff\n'
     printf '======================\n\n'
     printf 'Project launched from: %s\n' "$SOURCE_PROJECT_PATH"
+    printf 'Canonical project root: %s\n' "$CANONICAL_PROJECT_ROOT"
     printf 'Alfred suite install:  %s\n' "$TARGET_PATH"
     printf 'Runtime profiles:      %s\n' "$HOME/.alfred/runtime-profiles"
     printf 'Trace:                 %s\n' "$HOME/.alfred/observability/install-trace.json"
@@ -767,10 +1098,10 @@ apply_generated_directory() {
   source_root="$1"
   relative_dir="$2"
   if [ -d "$source_root/$relative_dir" ]; then
-    mkdir -p "$SOURCE_PROJECT_PATH/$relative_dir"
-    cp -R "$source_root/$relative_dir/." "$SOURCE_PROJECT_PATH/$relative_dir/"
+    mkdir -p "$CANONICAL_PROJECT_ROOT/$relative_dir"
+    cp -R "$source_root/$relative_dir/." "$CANONICAL_PROJECT_ROOT/$relative_dir/"
     APPLIED_PROJECT_PATHS="${APPLIED_PROJECT_PATHS}
-  - $(pretty_path "$SOURCE_PROJECT_PATH/$relative_dir")"
+  - $(pretty_path "$CANONICAL_PROJECT_ROOT/$relative_dir")"
     APPLIED_ANY=true
   fi
 }
@@ -780,9 +1111,9 @@ apply_opencode_preview_to_project() {
   [ -d "$preview_dir" ] || return 0
   apply_generated_directory "$preview_dir" ".opencode"
   if [ -f "$preview_dir/opencode.json.preview" ]; then
-    cp "$preview_dir/opencode.json.preview" "$SOURCE_PROJECT_PATH/opencode.json"
+    cp "$preview_dir/opencode.json.preview" "$CANONICAL_PROJECT_ROOT/opencode.json"
     APPLIED_PROJECT_PATHS="${APPLIED_PROJECT_PATHS}
-  - $(pretty_path "$SOURCE_PROJECT_PATH/opencode.json")"
+  - $(pretty_path "$CANONICAL_PROJECT_ROOT/opencode.json")"
     APPLIED_ANY=true
   fi
 }
@@ -895,8 +1226,10 @@ Name:           $NAME
 Target path:    $TARGET_PATH
 Harnesses:      $SELECTED_HARNESSES
 Detected:       $(display_harness_status)
-Profile:        $PROFILE_STRATEGY
-Memory setup:   $MEMORY_SETUP
+Profile:        $DISPLAY_PROFILE_STRATEGY
+Memory setup:   $DISPLAY_MEMORY_SETUP
+Model strategy: $MODEL_STRATEGY
+Model approval: $MODEL_WRITE_APPROVED
 Components:     $COMPONENT_PLAN
 Node:           $node_status
 Provider calls: 0
@@ -913,6 +1246,8 @@ Safety:
   - Harness-specific files must be generated as previews and applied only
     after explicit human approval.
 EOFPLAN
+
+print_model_assignment_preview
 
 if [ "$APPLY" != true ] || [ "$TUI_USED" != true ]; then
   print_handoff_explanation
@@ -1019,9 +1354,16 @@ if [ "$SELECTED_HARNESSES" = "none" ]; then
   log "No harness selected/detected. Suite repo installed; harness previews skipped."
 fi
 
+write_approved_model_assignment
+
 TRACE_DIR="$HOME/.alfred/observability"
 mkdir -p "$TRACE_DIR"
 TRACE_FILE="$TRACE_DIR/install-trace.json"
+if [ "$MODEL_CONFIG_WRITTEN" = true ]; then
+  INSTALL_TRACE_EVENTS='["install_management_operation", "model_assignment_configured", "provider_request_avoided"]'
+else
+  INSTALL_TRACE_EVENTS='["install_management_operation", "provider_request_avoided"]'
+fi
 TRACE_TMP="$TRACE_FILE.$$ .tmp"
 TRACE_TMP="$(printf '%s' "$TRACE_TMP" | tr -d ' ')"
 cat > "$TRACE_TMP" <<EOFTRACE
@@ -1041,6 +1383,10 @@ cat > "$TRACE_TMP" <<EOFTRACE
     "tui_mode": "$TUI_MODE",
     "profile_strategy": "$PROFILE_STRATEGY",
     "memory_setup": "$MEMORY_SETUP",
+    "model_strategy": "$MODEL_STRATEGY",
+    "model_write_approved": $MODEL_WRITE_APPROVED,
+    "model_config_written": $MODEL_CONFIG_WRITTEN,
+    "trace_events": $INSTALL_TRACE_EVENTS,
     "components": "$COMPONENT_PLAN",
     "status": "pass",
     "human_approval": true,

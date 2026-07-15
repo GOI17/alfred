@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, chmodSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync, chmodSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
@@ -11,6 +11,8 @@ const installSh = resolve(root, "install.sh");
 const appTui = resolve(root, "scripts/tui/install-app.mjs");
 const pathfinder = resolve(root, "scripts/tui/install-pathfinder.mjs");
 const pathfinderTest = resolve(root, "scripts/tui/install-pathfinder.test.mjs");
+const discovery = resolve(root, "scripts/tui/install-discovery.mjs");
+const discoveryTest = resolve(root, "scripts/tui/install-discovery.test.mjs");
 const fixture = mkdtempSync(join(tmpdir(), "alfred-suite-install-"));
 const home = join(fixture, "home");
 const cwd = join(fixture, "workspace");
@@ -18,7 +20,7 @@ mkdirSync(home, { recursive: true });
 mkdirSync(cwd, { recursive: true });
 
 function run(args, options = {}) {
-  return spawnSync("sh", [installSh, ...args], {
+  return spawnSync("sh", [options.installSh ?? installSh, ...args], {
     cwd: options.cwd ?? cwd,
     env: {
       ...process.env,
@@ -30,7 +32,7 @@ function run(args, options = {}) {
   });
 }
 
-function runInteractiveLifecycle(mode) {
+function runInteractiveLifecycle(layout, mode) {
   const childScript = `
     import { Writable } from "node:stream";
     const { runInteractive } = await import(${JSON.stringify(pathToFileURL(appTui).href)});
@@ -52,7 +54,7 @@ function runInteractiveLifecycle(mode) {
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(process.execPath, ["--input-type=module", "--eval", childScript], {
       cwd,
-      env: { ...process.env },
+      env: { ...process.env, ALFRED_INSTALL_APP_TUI_LAYOUT: layout },
       stdio: ["pipe", "pipe", "pipe"]
     });
     let stdout = "";
@@ -63,13 +65,13 @@ function runInteractiveLifecycle(mode) {
       if (settled) return;
       settled = true;
       child.kill("SIGKILL");
-      rejectPromise(new Error(`interactive ${mode} lifecycle timed out`));
+      rejectPromise(new Error(`interactive ${layout} ${mode} lifecycle timed out`));
     }, 4000);
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
       stdout += chunk;
-      if (started || !stdout.includes("\x1b[?1049h")) return;
+      if (started || !stdout.includes("Alfred installer")) return;
       started = true;
       if (mode === "normal") child.stdin.write("r\r\r");
       if (mode === "cancel") child.stdin.write("q");
@@ -93,31 +95,67 @@ function runInteractiveLifecycle(mode) {
 
 function pythonPtyCommand() {
   for (const command of ["python3", "python"]) {
-    const probe = spawnSync(command, ["-c", "import sys; assert sys.version_info[0] >= 3; import os, pty, select, signal"], { encoding: "utf8" });
+    const probe = spawnSync(command, ["-c", "import sys; assert sys.version_info[0] >= 3; import fcntl, os, pty, select, signal, struct, termios"], { encoding: "utf8" });
     if (!probe.error && probe.status === 0) return command;
   }
   return null;
 }
 
-function runPythonPtyLifecycle(command) {
+function runPythonPtyLifecycle(command, discoveryFile) {
   const pythonScript = String.raw`
+import json
 import os
 import pty
 import select
 import signal
+import subprocess
+import fcntl
+import re
+import struct
 import sys
+import termios
 import time
 
-node, app = sys.argv[1], sys.argv[2]
+node, app, discovery = sys.argv[1], sys.argv[2], sys.argv[3]
 enter = b"\x1b[?1049h"
 restore = b"\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l"
+mouse_enable = b"\x1b[?1000h\x1b[?1006h"
 
-def run_case(mode, expected):
+def assert_terminal_output_safe(output, layout, label):
+    text = output.decode("utf8", "replace")
+    if layout == "fullscreen":
+        allowed = re.compile(r"\x1b(?:\[[0-9;]*m|\[H|\[2J|\[\?(?:1049|25|1000|1006)[hl])")
+    else:
+        allowed = re.compile(r"\x1b(?:\[[0-9;]*m|\[[1-9][0-9]*A|\[2K|\[\?25[hl])")
+    remaining = allowed.sub("", text)
+    assert "\x1b" not in remaining, label + " emitted a terminal escape outside its owned controls"
+    assert not any(0x80 <= ord(char) <= 0x9f for char in remaining), label + " emitted a C1 terminal control"
+    assert not any(ord(char) < 0x20 and char not in "\r\n" for char in remaining), label + " emitted a C0 cursor/control character"
+    for payload in ("injected osc52", "injected title", "injected dcs", "injected c1 title"):
+        assert payload not in text, label + " emitted an injected terminal-control payload"
+    for attack in ("\x1b[>4;2m", "\x1b[?1m", "\x1b[<1m", "\x1b[=1m", "\x1b[38:5:36m", "\x1b[31 m", "\x1b[31$m", "\x1b[;31m", "\x1b[31;;1m", "\x1b[31;m", "\x9b31m"):
+        assert attack not in text, label + " emitted an injected SGR lookalike"
+
+def run_case(layout, mode, expected):
+    plan_dir = discovery + "." + layout + "." + mode + ".private"
+    plan_path = os.path.join(plan_dir, "model-plan.json")
+    if mode == "custom":
+        os.mkdir(plan_dir, 0o700)
+        with open(plan_path, "w", encoding="utf8") as plan_file:
+            plan_file.write("")
+        os.chmod(plan_path, 0o600)
     pid, fd = pty.fork()
     if pid == 0:
-        os.execve(node, [node, app], os.environ.copy())
+        env = os.environ.copy()
+        env["ALFRED_INSTALL_APP_TUI_LAYOUT"] = layout
+        env["ALFRED_INSTALL_DISCOVERY_FILE"] = discovery
+        if mode == "custom":
+            env["ALFRED_INSTALL_MODEL_PLAN_FILE"] = plan_path
+        os.execve(node, [node, app], env)
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
     output = bytearray()
     sent = False
+    custom_stage = 0
     status = None
     deadline = time.monotonic() + 4.0
     while time.monotonic() < deadline:
@@ -128,14 +166,50 @@ def run_case(mode, expected):
             except OSError:
                 chunk = b""
             output.extend(chunk)
-        if not sent and enter in output:
+        if not sent and b"Alfred installer" in output:
             if mode == "normal":
                 os.write(fd, b"r\r\r")
+            elif mode == "keyboard":
+                os.write(fd, b"\x1b[B\x1b[C\r\x1b[B\x1b[C\r" + b"\x1b[B" * 5 + b"\x1b[D\r\r" + b"\x1b[B" * 4 + b"\x1b[D\r\x1b[D\r\x1b[D\r")
+            elif mode == "custom":
+                os.write(fd, b"\x1b[B\r" + b"\x1b[B" * 6 + b"\r\x1b[C\r\rZ")
+                custom_stage = 1
             elif mode == "cancel":
                 os.write(fd, b"q")
             else:
                 os.kill(pid, signal.SIGTERM)
             sent = True
+        if mode == "custom" and custom_stage == 1 and b"ollama/qwenZ" in output:
+            os.write(fd, b"\x1b")
+            time.sleep(0.06)
+            os.write(fd,
+                b"\rX\r" +
+                b"\x1b[B\r provider/orchestrator \r" +
+                b"\x1b[B\rprovider/developer\r" +
+                b"\x1b[B\r-edited\r" +
+                b"\x1b[B\r provider/second \r" +
+                b"\x1b[B\rprovider/remove\r" +
+                b"\x1b[B" * 3 + b"\r" +
+                b"\x1b[B\r" +
+                b"\x1b[A" * 2 + b"\r" +
+                b"\x1b[B" * 2 + b"\r")
+            custom_stage = 2
+        if mode == "custom" and custom_stage == 2 and b"provider/developer" in output[-5000:] and b"Phase 3/5: Configure | layout:" in output[-5000:]:
+            os.write(fd,
+                b"\x1b[B\r-pty\r" +
+                b"\x1b[B\r/tmp/pty\r" +
+                b"\x1b[B\x1b[C" +
+                b"\x1b[B\r" +
+                b"\r")
+            custom_stage = 3
+        if mode == "custom" and custom_stage == 3 and b"model-plan-review | page 1/2" in output[-5000:]:
+            os.write(fd, b"\x1b[C")
+            custom_stage = 4
+        if mode == "custom" and custom_stage == 4 and b"model-plan-review | page 2/2" in output[-5000:]:
+            os.write(fd, b"\x1b")
+            time.sleep(0.06)
+            os.write(fd, b"\x1b[B\r\x1b[B\r\x1b[B\r")
+            custom_stage = 5
         waited, candidate = os.waitpid(pid, os.WNOHANG)
         if waited == pid:
             status = candidate
@@ -143,7 +217,7 @@ def run_case(mode, expected):
     if status is None:
         os.kill(pid, signal.SIGKILL)
         os.waitpid(pid, 0)
-        raise AssertionError(mode + " PTY lifecycle timed out")
+        raise AssertionError(layout + " " + mode + " PTY lifecycle timed out\n" + output[-4000:].decode("utf8", "replace"))
     drain_deadline = time.monotonic() + 0.25
     while time.monotonic() < drain_deadline:
         readable, _, _ = select.select([fd], [], [], 0.02)
@@ -158,18 +232,156 @@ def run_case(mode, expected):
         output.extend(chunk)
     os.close(fd)
     code = os.WEXITSTATUS(status) if os.WIFEXITED(status) else 128 + os.WTERMSIG(status)
-    assert sent, mode + " never entered alternate-screen mode"
-    assert code == expected, "%s exited %s, expected %s" % (mode, code, expected)
-    assert restore in output, mode + " did not emit terminal restoration"
-    if mode == "normal":
-        assert b"TUI_MODE='app'" in output, "normal PTY completion lost result assignments"
+    assert sent, layout + " " + mode + " never rendered"
+    assert code == expected, "%s %s exited %s, expected %s" % (layout, mode, code, expected)
+    if layout == "fullscreen":
+        assert enter in output, mode + " did not enter alternate-screen mode"
+        assert restore in output, mode + " did not emit fullscreen terminal restoration"
+        assert mouse_enable in output, mode + " did not enable mouse reporting"
+    else:
+        assert b"\x1b[?1049" not in output, mode + " inline emitted alternate-screen control"
+        assert b"\x1b[?1000" not in output and b"\x1b[?1006" not in output, mode + " inline emitted mouse control"
+        assert b"\x1b[2J" not in output, mode + " inline cleared the terminal"
+        assert b"\x1b[2K" in output, mode + " inline did not erase owned rows during redraw/cleanup"
+        assert b"A" in output, mode + " inline did not use cursor-up ownership movement"
+    assert_terminal_output_safe(bytes(output), layout, layout + " " + mode)
+    if mode in ("normal", "keyboard", "custom"):
+        assert b"TUI_MODE='app'" in output, mode + " PTY completion lost result assignments"
+    if mode == "keyboard":
+        assert b"HARNESS='opencode'" in output, layout + " arrow escape toggled the harness like Enter"
+        assert b"MODEL_STRATEGY='configure-later'" in output, layout + " Enter silently cycled the focused model enum"
+    if mode == "custom":
+        assert b"[Enter] Edit model assignments" in output, layout + " custom PTY did not expose the focusable model edit action"
+        assert "Select field → Enter → type → Enter to save".encode("utf8") in output, layout + " custom PTY did not explain field editing"
+        assert b"[EDITING]" in output, layout + " custom PTY did not expose active wildcard edit mode"
+        assert b"MODEL_STRATEGY='custom-models'" in output, layout + " custom PTY lost manual strategy"
+        assert b"MODEL_WRITE_APPROVED='true'" in output, layout + " custom PTY lost current Review approval"
+        assert re.search(br"MODEL_PLAN_SHA256='[0-9a-f]{64}'", output), layout + " custom PTY omitted the exact plan digest"
+        with open(plan_path, "r", encoding="utf8") as plan_file:
+            plan = json.load(plan_file)
+        assert plan["strategy"] == "custom-models" and plan["provider_calls"] == 0
+        assert plan["models"]["*"]["primary"] == "ollama/qwenX", layout + " custom PTY did not commit text editing"
+        assert plan["models"]["orchestrator"]["primary"] == " provider/orchestrator ", layout + " custom PTY rewrote orchestrator whitespace"
+        assert plan["models"]["developer"]["primary"] == "provider/developer", layout + " custom PTY did not navigate developer"
+        assert plan["models"]["fallbacks"] == ["fallback/one-edited", " provider/second "], layout + " custom PTY did not exercise ordered fallback add/remove/move controls"
+        assert b"NAME='acme-pty'" in output and b"TARGET_PATH='/tmp/pty'" in output, layout + " custom PTY did not navigate install text fields"
 
-run_case("normal", 0)
-run_case("cancel", 130)
-run_case("signal", 143)
+def set_size(fd, columns, rows):
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+
+def read_available(fd, output):
+    readable, _, _ = select.select([fd], [], [], 0.02)
+    if not readable:
+        return False
+    try:
+        chunk = os.read(fd, 65536)
+    except OSError:
+        return False
+    if not chunk:
+        return False
+    output.extend(chunk)
+    return True
+
+def run_inline_resize_case(mode, expected):
+    pid, fd = pty.fork()
+    if pid == 0:
+        env = os.environ.copy()
+        env["ALFRED_INSTALL_APP_TUI_LAYOUT"] = "inline"
+        env["ALFRED_INSTALL_DISCOVERY_FILE"] = discovery
+        env["NO_COLOR"] = "1"
+        os.execve(node, [node, app], env)
+    set_size(fd, 120, 30)
+    output = bytearray()
+    deadline = time.monotonic() + 5.0
+    while b"Alfred installer" not in output and time.monotonic() < deadline:
+        read_available(fd, output)
+    assert b"Alfred installer" in output, mode + " resize PTY never rendered wide frame"
+    time.sleep(0.05)
+    while read_available(fd, output):
+        pass
+    initial = bytes(output)
+    assert "界界界".encode("utf8") in initial, mode + " resize PTY lost CJK discovery content"
+    assert "👩‍💻".encode("utf8") in initial, mode + " resize PTY lost emoji ZWJ discovery content"
+    assert "é".encode("utf8") in initial, mode + " resize PTY lost combining discovery content"
+    initial_plain = re.sub(br"\x1b\[[0-?]*[ -/]*[@-~]", b"", initial).decode("utf8").replace("\r", "")
+    initial_lines = initial_plain.split("\n")
+    if initial_lines and initial_lines[-1] == "":
+        initial_lines.pop()
+    calculator = ${JSON.stringify(`
+      import { readFileSync } from "node:fs";
+      import { terminalPhysicalRows } from ${JSON.stringify(pathToFileURL(pathfinder).href)};
+      const lines = JSON.parse(readFileSync(0, "utf8"));
+      const text = lines.join("\\n");
+      process.stdout.write(String(terminalPhysicalRows(text, 20)));
+    `)}
+    calculated = subprocess.run([node, "--input-type=module", "--eval", calculator], input=json.dumps(initial_lines), text=True, capture_output=True)
+    assert calculated.returncode == 0, calculated.stderr
+    expected_narrow_rows = int(calculated.stdout)
+
+    narrow_start = len(output)
+    set_size(fd, 20, 8)
+    while b"Resize terminal" not in output[narrow_start:] and time.monotonic() < deadline:
+        read_available(fd, output)
+    assert b"Resize terminal" in output[narrow_start:], mode + " resize PTY did not render narrow recovery frame"
+    time.sleep(0.05)
+    while read_available(fd, output):
+        pass
+    narrow = bytes(output[narrow_start:])
+    assert narrow.startswith((b"\r\x1b[%dA" % (expected_narrow_rows - 1))), mode + " narrowing did not move to true reflowed frame start"
+    assert narrow.count(b"\x1b[2K") >= expected_narrow_rows, mode + " narrowing left stale reflowed physical rows"
+
+    wide_start = len(output)
+    set_size(fd, 120, 30)
+    while b"Alfred installer" not in output[wide_start:] and time.monotonic() < deadline:
+        read_available(fd, output)
+    assert b"Alfred installer" in output[wide_start:], mode + " resize PTY did not recover after widening"
+    time.sleep(0.05)
+    while read_available(fd, output):
+        pass
+    widened = bytes(output[wide_start:])
+    assert widened.startswith(b"\r\x1b[3A"), mode + " widening did not own exactly the four-row recovery frame"
+    assert widened.count(b"\x1b[2K") >= 4, mode + " widening left stale recovery-frame rows"
+
+    action_start = len(output)
+    if mode == "cancel":
+        os.write(fd, b"q")
+    else:
+        os.kill(pid, signal.SIGTERM)
+    status = None
+    while time.monotonic() < deadline:
+        read_available(fd, output)
+        waited, candidate = os.waitpid(pid, os.WNOHANG)
+        if waited == pid:
+            status = candidate
+            break
+    if status is None:
+        os.kill(pid, signal.SIGKILL)
+        os.waitpid(pid, 0)
+        raise AssertionError(mode + " resize PTY lifecycle timed out")
+    time.sleep(0.05)
+    while read_available(fd, output):
+        pass
+    os.close(fd)
+    code = os.WEXITSTATUS(status) if os.WIFEXITED(status) else 128 + os.WTERMSIG(status)
+    cleanup = bytes(output[action_start:])
+    assert code == expected, "%s resize PTY exited %s, expected %s" % (mode, code, expected)
+    assert b"\x1b[2K" in cleanup and b"\x1b[?25h" in cleanup, mode + " resize PTY did not erase the final owned frame and restore cursor"
+    assert b"\x1b[?1049" not in output, mode + " resize PTY emitted alternate-screen control"
+    assert b"\x1b[?1000" not in output and b"\x1b[?1006" not in output, mode + " resize PTY emitted mouse control"
+    assert b"\x1b[2J" not in output, mode + " resize PTY emitted whole-screen clear"
+    assert_terminal_output_safe(bytes(output), "inline", "inline " + mode + " resize")
+
+for layout in ("fullscreen", "inline"):
+    run_case(layout, "normal", 0)
+    run_case(layout, "keyboard", 0)
+    run_case(layout, "custom", 0)
+    run_case(layout, "cancel", 130)
+    run_case(layout, "signal", 143)
+run_inline_resize_case("cancel", 130)
+run_inline_resize_case("signal", 143)
 print("real PTY lifecycle tests ok (Python pty)")
 `;
-  const result = spawnSync(command, ["-c", pythonScript, process.execPath, appTui], {
+  const result = spawnSync(command, ["-c", pythonScript, process.execPath, appTui, discoveryFile], {
     cwd,
     env: { ...process.env },
     encoding: "utf8",
@@ -184,11 +396,11 @@ function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-function runScriptPtyCase(mode, utilLinux) {
+function runScriptPtyCase(layout, mode, utilLinux, discoveryFile) {
   const wrapper = `${shellQuote(process.execPath)} ${shellQuote(appTui)} & child=$!; printf '__ALFRED_PID__:%s\\n' "$child"; wait "$child"; code=$?; printf '__ALFRED_EXIT__:%s\\n' "$code"; exit "$code"`;
   const args = utilLinux ? ["-qfec", wrapper, "/dev/null"] : ["-q", "/dev/null", "sh", "-c", wrapper];
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn("script", args, { cwd, env: { ...process.env }, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn("script", args, { cwd, env: { ...process.env, ALFRED_INSTALL_APP_TUI_LAYOUT: layout, ALFRED_INSTALL_DISCOVERY_FILE: discoveryFile }, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     let sent = false;
@@ -199,7 +411,7 @@ function runScriptPtyCase(mode, utilLinux) {
       settled = true;
       try { if (nodePid) process.kill(nodePid, "SIGKILL"); } catch {}
       child.kill("SIGKILL");
-      rejectPromise(new Error(`script PTY ${mode} lifecycle timed out`));
+      rejectPromise(new Error(`script PTY ${layout} ${mode} lifecycle timed out`));
     }, 5000);
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
@@ -207,9 +419,10 @@ function runScriptPtyCase(mode, utilLinux) {
       stdout += chunk;
       const pidMatch = /__ALFRED_PID__:(\d+)/.exec(stdout);
       if (pidMatch) nodePid = Number(pidMatch[1]);
-      if (sent || !nodePid || !stdout.includes("\x1b[?1049h")) return;
+      if (sent || !nodePid || !stdout.includes("Alfred installer")) return;
       sent = true;
       if (mode === "normal") child.stdin.write("r\r\r");
+      if (mode === "keyboard") child.stdin.write(`\x1b[B\x1b[C\r\x1b[B\x1b[C\r${"\x1b[B".repeat(5)}\x1b[D\r\r${"\x1b[B".repeat(4)}\x1b[D\r\x1b[D\r\x1b[D\r`);
       if (mode === "cancel") child.stdin.write("q");
       if (mode === "signal") process.kill(nodePid, "SIGTERM");
     });
@@ -225,11 +438,23 @@ function runScriptPtyCase(mode, utilLinux) {
       settled = true;
       clearTimeout(timeout);
       try {
-        const expected = mode === "normal" ? 0 : mode === "cancel" ? 130 : 143;
+        const expected = mode === "normal" || mode === "keyboard" ? 0 : mode === "cancel" ? 130 : 143;
         const exitMatch = /__ALFRED_EXIT__:(\d+)/.exec(stdout);
         assert.equal(Number(exitMatch?.[1]), expected, `${mode} script PTY child exit mismatch\n${stdout}\n${stderr}`);
-        assert.match(stdout, /\x1b\[\?1006l\x1b\[\?1000l\x1b\[\?25h\x1b\[\?1049l/, `${mode} script PTY did not restore terminal modes`);
-        if (mode === "normal") assert.match(stdout, /TUI_MODE='app'/);
+        if (layout === "fullscreen") {
+          assert.match(stdout, /\x1b\[\?1049h/);
+          assert.match(stdout, /\x1b\[\?1000h\x1b\[\?1006h/);
+          assert.match(stdout, /\x1b\[\?1006l\x1b\[\?1000l\x1b\[\?25h\x1b\[\?1049l/, `${mode} script PTY did not restore terminal modes`);
+        } else {
+          assert.doesNotMatch(stdout, /\x1b\[\?1049|\x1b\[\?1000|\x1b\[\?1006|\x1b\[2J/, `${mode} inline script PTY emitted forbidden terminal controls`);
+          assert.match(stdout, /\x1b\[2K/, `${mode} inline script PTY did not erase owned rows`);
+        }
+        assert.doesNotMatch(stdout, /\x1b\]|\x1b[PX^_]|\x1b\[(?:>4;2|\?1|<1|=1|38:5:36|31 |31\$|;31|31;;1|31;)m|[\u0090\u0098\u009b\u009d\u009e\u009f]|injected osc52|injected title|injected dcs|injected c1 title/, `${layout} ${mode} script PTY emitted injected terminal controls`);
+        if (mode === "normal" || mode === "keyboard") assert.match(stdout, /TUI_MODE='app'/);
+        if (mode === "keyboard") {
+          assert.match(stdout, /HARNESS='opencode'/, `${layout} arrow escape toggled the harness like Enter`);
+          assert.match(stdout, /MODEL_STRATEGY='configure-later'/, `${layout} Enter silently cycled the focused model enum`);
+        }
         resolvePromise();
       } catch (error) {
         rejectPromise(error);
@@ -239,17 +464,41 @@ function runScriptPtyCase(mode, utilLinux) {
 }
 
 async function runRealPtyLifecycle() {
+  const ptyDiscovery = join(fixture, "pty-unicode-discovery.json");
+  const osc52 = "\x1b]52;c;injected osc52\x07";
+  const oscTitle = "\x1b]0;injected title\x1b\\";
+  const dcs = "\x1bP1;2|injected dcs\x1b\\";
+  const c1Csi = "\x9b31m";
+  const c1Osc = "\x9d0;injected c1 title\x9c";
+  const sgrLookalikes = "\x1b[>4;2m\x1b[?1m\x1b[<1m\x1b[=1m\x1b[38:5:36m\x1b[31 m\x1b[31$m\x1b[;31m\x1b[31;;1m\x1b[31;m";
+  writeFileSync(ptyDiscovery, JSON.stringify({
+    schema: "alfred.install.discovery/v1",
+    os: { platform: `te${oscTitle}st`, release: `界界界${"a界".repeat(28)}👩‍💻é${dcs}${sgrLookalikes}\tstable`, architecture: `arm${c1Csi}64` },
+    node: { status: "ok", version: `v24.1.0${c1Osc}\r\nnext\b`, major: 24, required_major: 22 },
+    harnesses: { opencode: "not-installed", "codex-cli": "not-installed", "codex-app": "not-installed", pi: "not-installed" },
+    models: {
+      suggestions: [{ provider: `ol${osc52}lama`, model: `ollama/qwen${dcs}\t2.5`, source: `socket:/tmp/model${oscTitle}.sock` }],
+      proposed_config: { "*": { primary: `ollama/${c1Csi}qwen` }, fallbacks: [`fallback${osc52}/one`] },
+      validation: { status: "fail", errors: [] }, existing_config: false
+    },
+    install: { alfred_home: "/tmp/.alfred", selected_target: `/tmp/界界界/${osc52}👩‍💻/é\nnext`, target_exists: false, models_config_path: `/tmp/.alfred/${dcs}models.json`, models_config_exists: false },
+    git: { availability: "installed", workspace_root: `/tmp/界界界${c1Osc}\twork`, project_root: `/tmp/👩‍💻/${oscTitle}é\rroot`, repository_state: "repository", linked_worktree_state: "main-worktree" },
+    provider_calls: 0
+  }));
   const python = pythonPtyCommand();
   if (python) {
-    runPythonPtyLifecycle(python);
+    runPythonPtyLifecycle(python, ptyDiscovery);
     return;
   }
   const scriptProbe = spawnSync("script", ["--version"], { encoding: "utf8" });
   if (!scriptProbe.error) {
     const utilLinux = `${scriptProbe.stdout}\n${scriptProbe.stderr}`.includes("util-linux");
-    await runScriptPtyCase("normal", utilLinux);
-    await runScriptPtyCase("cancel", utilLinux);
-    await runScriptPtyCase("signal", utilLinux);
+    for (const layout of ["fullscreen", "inline"]) {
+      await runScriptPtyCase(layout, "normal", utilLinux, ptyDiscovery);
+      await runScriptPtyCase(layout, "keyboard", utilLinux, ptyDiscovery);
+      await runScriptPtyCase(layout, "cancel", utilLinux, ptyDiscovery);
+      await runScriptPtyCase(layout, "signal", utilLinux, ptyDiscovery);
+    }
     console.log("real PTY lifecycle tests ok (script)");
     return;
   }
@@ -263,24 +512,40 @@ try {
   assert.equal(appSyntax.status, 0, appSyntax.stderr);
   const pathfinderSyntax = spawnSync("node", ["--check", pathfinder], { encoding: "utf8" });
   assert.equal(pathfinderSyntax.status, 0, pathfinderSyntax.stderr);
+  const discoverySyntax = spawnSync("node", ["--check", discovery], { encoding: "utf8" });
+  assert.equal(discoverySyntax.status, 0, discoverySyntax.stderr);
+  const discoveryTests = spawnSync("node", [discoveryTest], { encoding: "utf8" });
+  assert.equal(discoveryTests.status, 0, discoveryTests.stderr);
   const pathfinderTests = spawnSync("node", [pathfinderTest], { encoding: "utf8" });
   assert.equal(pathfinderTests.status, 0, pathfinderTests.stderr);
 
-  const interactiveNormal = await runInteractiveLifecycle("normal");
-  assert.equal(interactiveNormal.code, 0, interactiveNormal.stderr);
-  assert.equal(interactiveNormal.signal, null);
-  assert.match(interactiveNormal.stdout, /TUI_MODE='app'/);
-  assert.match(interactiveNormal.stdout, /\x1b\[\?1006l\x1b\[\?1000l\x1b\[\?25h\x1b\[\?1049l/, "normal completion restores terminal modes");
+  for (const layout of ["fullscreen", "inline"]) {
+    const interactiveNormal = await runInteractiveLifecycle(layout, "normal");
+    assert.equal(interactiveNormal.code, 0, interactiveNormal.stderr);
+    assert.equal(interactiveNormal.signal, null);
+    assert.match(interactiveNormal.stdout, /TUI_MODE='app'/);
 
-  const interactiveCancel = await runInteractiveLifecycle("cancel");
-  assert.equal(interactiveCancel.code, 130, interactiveCancel.stderr);
-  assert.equal(interactiveCancel.signal, null);
-  assert.match(interactiveCancel.stdout, /\x1b\[\?1006l\x1b\[\?1000l\x1b\[\?25h\x1b\[\?1049l/, "q cancellation restores terminal modes");
+    const interactiveCancel = await runInteractiveLifecycle(layout, "cancel");
+    assert.equal(interactiveCancel.code, 130, interactiveCancel.stderr);
+    assert.equal(interactiveCancel.signal, null);
 
-  const interactiveSignal = await runInteractiveLifecycle("signal");
-  assert.equal(interactiveSignal.code, 143, interactiveSignal.stderr);
-  assert.equal(interactiveSignal.signal, null);
-  assert.match(interactiveSignal.stdout, /\x1b\[\?1006l\x1b\[\?1000l\x1b\[\?25h\x1b\[\?1049l/, "SIGTERM restores terminal modes");
+    const interactiveSignal = await runInteractiveLifecycle(layout, "signal");
+    assert.equal(interactiveSignal.code, 143, interactiveSignal.stderr);
+    assert.equal(interactiveSignal.signal, null);
+
+    for (const lifecycle of [interactiveNormal, interactiveCancel, interactiveSignal]) {
+      if (layout === "fullscreen") {
+        assert.match(lifecycle.stdout, /\x1b\[\?1049h/);
+        assert.match(lifecycle.stdout, /\x1b\[\?1000h\x1b\[\?1006h/);
+        assert.match(lifecycle.stdout, /\x1b\[\?1006l\x1b\[\?1000l\x1b\[\?25h\x1b\[\?1049l/, "fullscreen lifecycle restores terminal modes");
+      } else {
+        assert.doesNotMatch(lifecycle.stdout, /\x1b\[\?1049|\x1b\[\?1000|\x1b\[\?1006|\x1b\[2J/, "inline lifecycle avoids alternate screen, mouse reporting, and whole-screen clears");
+        assert.match(lifecycle.stdout, /\x1b\[2K/, "inline lifecycle erases only owned rows");
+        assert.match(lifecycle.stdout, /\x1b\[[1-9][0-9]*A/, "inline lifecycle uses cursor-up movement within owned rows");
+        assert.match(lifecycle.stdout, /\x1b\[\?25h/, "inline lifecycle restores the cursor");
+      }
+    }
+  }
 
   await runRealPtyLifecycle();
 
@@ -307,6 +572,7 @@ try {
     env: {
       TMPDIR: appTuiTemp,
       ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_LAYOUT: "inline",
       ALFRED_INSTALL_APP_TUI_RENDER: "1",
       ALFRED_INSTALL_APP_TUI_EVENTS:
         "set:edition=full,set:harnesses=opencode+codex-cli+codex-app,set:profiles=true,set:memory=postgres,set:name=app-demo,set:apply=false,submit"
@@ -315,12 +581,17 @@ try {
   const appTuiOutput = `${appTuiPreview.stdout}\n${appTuiPreview.stderr}`;
   assert.equal(appTuiPreview.status, 0, appTuiPreview.stderr);
   assert.match(appTuiOutput, /Alfred installer/);
-  assert.match(appTuiOutput, /Local discovery checked:/);
+  assert.match(appTuiOutput, /OS: /);
+  assert.match(appTuiOutput, /Node: /);
+  assert.match(appTuiOutput, /Provider\/model suggestions:/);
+  assert.match(appTuiOutput, /Git: /);
   assert.match(appTuiOutput, /Use recommended setup/);
   assert.match(appTuiOutput, /Phase 1\/5: Discover/);
-  assert.match(appTuiOutput, /Preview: full \| opencode,codex-cli,codex-app/);
+  assert.match(appTuiOutput, /layout: inline/, "install.sh forwards the inherited inline layout selector");
+  assert.match(appTuiOutput, /Preview: Full \| opencode, Codex CLI, Codex App/);
   assert.match(appTuiOutput, /p full Preview/);
   assert.match(appTuiOutput, /provider calls: 0/);
+  assert.doesNotMatch(appTuiPreview.stderr, /\x1b\[[0-?]*[ -/]*[@-~]/, "redirected playback render must not emit ANSI color");
   assert.match(appTuiPreview.stdout, /ALFRED SUITE INSTALL PREVIEW/);
   assert.match(appTuiPreview.stdout, /Edition:\s+full/);
   assert.match(appTuiPreview.stdout, /Harnesses:\s+opencode,codex-cli,codex-app/);
@@ -332,6 +603,78 @@ try {
   assert.match(appTuiPreview.stdout, /TUI mode:\s+app/);
   assert.equal(existsSync(join(home, ".alfred")), false, "app TUI preview must not create ~/.alfred");
   assert.deepEqual(readdirSync(appTuiTemp), [], "private app TUI temp directory must be cleaned after success");
+
+  const forcedColorRender = spawnSync("node", [appTui], {
+    cwd,
+    env: {
+      ...process.env,
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_INSTALL_APP_TUI_RENDER: "1",
+      ALFRED_INSTALL_FORCE_COLOR: "1"
+    },
+    encoding: "utf8"
+  });
+  assert.equal(forcedColorRender.status, 0, forcedColorRender.stderr);
+  assert.match(forcedColorRender.stderr, /\x1b\[[0-?]*[ -/]*[@-~]/, "tests can explicitly force color for redirected playback");
+
+  const inlinePlaybackRender = spawnSync("node", [appTui], {
+    cwd,
+    env: {
+      ...process.env,
+      ALFRED_INSTALL_APP_TUI_LAYOUT: "inline",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_INSTALL_APP_TUI_RENDER: "1"
+    },
+    encoding: "utf8"
+  });
+  assert.equal(inlinePlaybackRender.status, 0, inlinePlaybackRender.stderr);
+  assert.match(inlinePlaybackRender.stderr, /layout: inline/, "layout selection is deterministic without a TTY");
+  assert.doesNotMatch(inlinePlaybackRender.stderr, /\x1b\[\?1049|\x1b\[\?1000|\x1b\[\?1006|\x1b\[2J/);
+
+  const unknownLayoutRender = spawnSync("node", [appTui], {
+    cwd,
+    env: {
+      ...process.env,
+      ALFRED_INSTALL_APP_TUI_LAYOUT: "unknown-layout",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_INSTALL_APP_TUI_RENDER: "1"
+    },
+    encoding: "utf8"
+  });
+  assert.equal(unknownLayoutRender.status, 0, unknownLayoutRender.stderr);
+  assert.match(unknownLayoutRender.stderr, /layout: fullscreen/, "unknown layout values safely normalize to fullscreen");
+
+  const modeNodeBin = join(fixture, "mode-node-bin");
+  const modeTuiTemp = join(fixture, "mode-tui-tmp");
+  const modeMarker = join(fixture, "private-modes.txt");
+  mkdirSync(modeNodeBin, { recursive: true });
+  mkdirSync(modeTuiTemp, { recursive: true });
+  writeFileSync(join(modeNodeBin, "node"), `#!/bin/sh
+case "$1" in
+  *install-app.mjs)
+    private_dir=$(dirname "$1")
+    dir_mode=$(stat -f '%Lp' "$private_dir" 2>/dev/null || stat -c '%a' "$private_dir")
+    discovery_mode=$(stat -f '%Lp' "$private_dir/discovery.json" 2>/dev/null || stat -c '%a' "$private_dir/discovery.json")
+    plan_mode=$(stat -f '%Lp' "$private_dir/model-plan.json" 2>/dev/null || stat -c '%a' "$private_dir/model-plan.json")
+    canonical_mode=$(stat -f '%Lp' "$private_dir/model-assignment.mjs" 2>/dev/null || stat -c '%a' "$private_dir/model-assignment.mjs")
+    printf '%s %s %s %s\\n' "$dir_mode" "$discovery_mode" "$plan_mode" "$canonical_mode" > "$ALFRED_TEST_MODE_MARKER"
+    ;;
+esac
+exec ${shellQuote(process.execPath)} "$@"
+`);
+  chmodSync(join(modeNodeBin, "node"), 0o755);
+  const modePreview = run([], {
+    env: {
+      PATH: `${modeNodeBin}:${process.env.PATH ?? ""}`,
+      TMPDIR: modeTuiTemp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_TEST_MODE_MARKER: modeMarker
+    }
+  });
+  assert.equal(modePreview.status, 0, modePreview.stderr);
+  assert.equal(readFileSync(modeMarker, "utf8").trim(), "700 600 600 600");
+  assert.deepEqual(readdirSync(modeTuiTemp), [], "private mode probe must still clean staged files");
 
   const guidedQuickPath = spawnSync("node", [appTui], {
     cwd,
@@ -452,6 +795,135 @@ EOFRESULT
   assert.equal(existsSync(unsafeResultMarker), false, "rejected result assignments must never execute");
   assert.deepEqual(readdirSync(unsafeTuiTemp), [], "private app TUI temp directory must be cleaned after rejection");
 
+  const oldOutputNodeBin = join(fixture, "old-output-node-bin");
+  const oldOutputTemp = join(fixture, "old-output-tmp");
+  mkdirSync(oldOutputNodeBin, { recursive: true });
+  mkdirSync(oldOutputTemp, { recursive: true });
+  writeFileSync(join(oldOutputNodeBin, "node"), `#!/bin/sh
+if [ "$1" = "-v" ]; then printf 'v26.0.0\\n'; exit 0; fi
+cat <<'EOFRESULT'
+EDITION='coding'
+HARNESS='none'
+PROFILE_STRATEGY='runtime-profiles'
+MEMORY_SETUP='not-needed-for-coding-edition'
+NAME='old-output'
+APPLY='false'
+SKIP_PROFILE_MANAGER='false'
+TUI_USED='true'
+TUI_MODE='app'
+EOFRESULT
+`);
+  chmodSync(join(oldOutputNodeBin, "node"), 0o755);
+  const oldOutput = run([], {
+    env: {
+      PATH: `${oldOutputNodeBin}:/usr/bin:/bin`,
+      TMPDIR: oldOutputTemp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit"
+    }
+  });
+  assert.equal(oldOutput.status, 0, oldOutput.stderr);
+  assert.match(oldOutput.stdout, /Name:\s+old-output/);
+  assert.match(oldOutput.stdout, /Model strategy:\s+configure-later/);
+  assert.match(oldOutput.stdout, /Model approval:\s+false/);
+  assert.match(oldOutput.stdout, /TUI mode:\s+app/);
+  assert.deepEqual(readdirSync(oldOutputTemp), [], "old app output cleanup must remain intact");
+
+  const invalidModelNodeBin = join(fixture, "invalid-model-node-bin");
+  mkdirSync(invalidModelNodeBin, { recursive: true });
+  writeFileSync(join(invalidModelNodeBin, "node"), `#!/bin/sh
+if [ "$1" = "-v" ]; then printf 'v26.0.0\\n'; exit 0; fi
+cat <<'EOFRESULT'
+EDITION='coding'
+HARNESS='none'
+PROFILE_STRATEGY='runtime-profiles'
+MEMORY_SETUP='not-needed-for-coding-edition'
+NAME='invalid-model'
+APPLY='false'
+SKIP_PROFILE_MANAGER='false'
+TUI_USED='true'
+TUI_MODE='app'
+MODEL_STRATEGY='invented-policy'
+MODEL_WRITE_APPROVED='yes'
+EOFRESULT
+`);
+  chmodSync(join(invalidModelNodeBin, "node"), 0o755);
+  const invalidModelOutput = run([], {
+    env: {
+      PATH: `${invalidModelNodeBin}:/usr/bin:/bin`,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_INSTALL_TUI_INPUT: "1\n5\n1\nfallback-after-invalid\nn"
+    }
+  });
+  assert.notEqual(invalidModelOutput.status, 0, "invalid optional IPC values must fail closed");
+  assert.match(invalidModelOutput.stderr, /Invalid MODEL_STRATEGY|Invalid MODEL_WRITE_APPROVED/);
+
+  function runDigestIpcCase(name, extraLines) {
+    const nodeBin = join(fixture, `digest-ipc-${name}-bin`);
+    mkdirSync(nodeBin, { recursive: true });
+    writeFileSync(join(nodeBin, "node"), `#!/bin/sh
+if [ "$1" = "-v" ]; then printf 'v26.0.0\\n'; exit 0; fi
+cat <<'EOFRESULT'
+EDITION='coding'
+HARNESS='none'
+PROFILE_STRATEGY='runtime-profiles'
+MEMORY_SETUP='not-needed-for-coding-edition'
+NAME='digest-${name}'
+APPLY='true'
+SKIP_PROFILE_MANAGER='false'
+TUI_USED='true'
+TUI_MODE='app'
+MODEL_STRATEGY='custom-models'
+MODEL_WRITE_APPROVED='true'
+${extraLines}
+EOFRESULT
+`);
+    chmodSync(join(nodeBin, "node"), 0o755);
+    return run([], {
+      env: {
+        PATH: `${nodeBin}:/usr/bin:/bin`,
+        ALFRED_INSTALL_FORCE_TUI: "1",
+        ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+        ALFRED_INSTALL_TUI_INPUT: "1\n5\n1\ndigest-fallback\nn"
+      }
+    });
+  }
+  const absentDigest = runDigestIpcCase("absent", "");
+  assert.notEqual(absentDigest.status, 0, "approved custom apply requires a plan digest");
+  assert.match(absentDigest.stderr, /MODEL_PLAN_SHA256.*required/i);
+  const malformedDigest = runDigestIpcCase("malformed", "MODEL_PLAN_SHA256='ABC123'");
+  assert.notEqual(malformedDigest.status, 0, "malformed plan digest fails closed");
+  assert.match(malformedDigest.stderr, /Invalid MODEL_PLAN_SHA256/);
+  const duplicateDigest = runDigestIpcCase("duplicate", `MODEL_PLAN_SHA256='${"a".repeat(64)}'\nMODEL_PLAN_SHA256='${"b".repeat(64)}'`);
+  assert.match(duplicateDigest.stderr, /Rejected unsafe app TUI result/, "duplicate digest IPC is rejected before sourcing");
+
+  const unexpectedDigestNodeBin = join(fixture, "digest-ipc-unexpected-bin");
+  mkdirSync(unexpectedDigestNodeBin, { recursive: true });
+  writeFileSync(join(unexpectedDigestNodeBin, "node"), `#!/bin/sh
+if [ "$1" = "-v" ]; then printf 'v26.0.0\\n'; exit 0; fi
+cat <<'EOFRESULT'
+EDITION='coding'
+HARNESS='none'
+PROFILE_STRATEGY='runtime-profiles'
+MEMORY_SETUP='not-needed-for-coding-edition'
+NAME='digest-unexpected'
+APPLY='false'
+SKIP_PROFILE_MANAGER='false'
+TUI_USED='true'
+TUI_MODE='app'
+MODEL_STRATEGY='configure-later'
+MODEL_WRITE_APPROVED='false'
+MODEL_PLAN_SHA256='${"c".repeat(64)}'
+EOFRESULT
+`);
+  chmodSync(join(unexpectedDigestNodeBin, "node"), 0o755);
+  const unexpectedDigest = run([], {
+    env: { PATH: `${unexpectedDigestNodeBin}:/usr/bin:/bin`, ALFRED_INSTALL_FORCE_TUI: "1", ALFRED_INSTALL_APP_TUI_EVENTS: "submit" }
+  });
+  assert.notEqual(unexpectedDigest.status, 0, "non-custom output cannot carry a plan digest");
+  assert.match(unexpectedDigest.stderr, /Unexpected MODEL_PLAN_SHA256/);
+
   const multiFlagPreview = run(["--edition=coding", "--name=multi", "--harness=opencode,codex-cli,codex-app"]);
   assert.equal(multiFlagPreview.status, 0, multiFlagPreview.stderr);
   assert.match(multiFlagPreview.stdout, /Harnesses:\s+opencode,codex-cli,codex-app/);
@@ -553,6 +1025,8 @@ EOFRESULT
   assert.equal(trace.data.harnesses, "opencode,codex-cli");
   assert.match(trace.data.harness_status, /opencode=/);
   assert.equal(trace.data.provider_calls, 0);
+  assert.match(applied.stdout, /configure later; no model configuration will be written/);
+  assert.equal(existsSync(join(home, ".alfred", "models.json")), false, "configure-later apply must not write model config");
 
   const handoffTarget = join(fixture, "handoff-alfred-repo");
   mkdirSync(join(handoffTarget, "packages", "opencode-adapter", "src"), { recursive: true });
@@ -604,6 +1078,476 @@ EOFRESULT
     true,
     "handoff copy should place Codex skills in the project final location"
   );
+
+  const gitProbe = spawnSync("git", ["--version"], { encoding: "utf8" });
+  assert.equal(gitProbe.status, 0, "git is required for the real linked-worktree installer integration test");
+  const worktreeMain = join(fixture, "worktree-main");
+  const worktreeLinked = join(fixture, "worktree-linked");
+  const worktreeTarget = join(fixture, "worktree-alfred-target");
+  const worktreeHome = join(fixture, "worktree-home");
+  mkdirSync(worktreeMain, { recursive: true });
+  mkdirSync(worktreeHome, { recursive: true });
+  assert.equal(spawnSync("git", ["init"], { cwd: worktreeMain, encoding: "utf8" }).status, 0);
+  writeFileSync(join(worktreeMain, "README.md"), "# worktree fixture\n");
+  assert.equal(spawnSync("git", ["add", "README.md"], { cwd: worktreeMain, encoding: "utf8" }).status, 0);
+  const initialCommit = spawnSync("git", ["-c", "user.name=Alfred Test", "-c", "user.email=alfred@example.invalid", "commit", "-m", "fixture"], { cwd: worktreeMain, encoding: "utf8" });
+  assert.equal(initialCommit.status, 0, initialCommit.stderr);
+  const addWorktree = spawnSync("git", ["worktree", "add", "-b", "issue-95-fixture", worktreeLinked], { cwd: worktreeMain, encoding: "utf8" });
+  assert.equal(addWorktree.status, 0, addWorktree.stderr);
+  const worktreeMainCanonical = realpathSync(worktreeMain);
+  const worktreeLinkedCanonical = realpathSync(worktreeLinked);
+  mkdirSync(join(worktreeTarget, "packages", "opencode-adapter", "src"), { recursive: true });
+  writeFileSync(
+    join(worktreeTarget, "packages", "opencode-adapter", "src", "cli.js"),
+    "const fs = require('fs'); const path = require('path'); const output = process.argv[process.argv.indexOf('--output') + 1]; fs.mkdirSync(path.join(output, '.opencode', 'agents'), { recursive: true }); fs.writeFileSync(path.join(output, 'opencode.json.preview'), '{}\\n'); fs.writeFileSync(path.join(output, '.opencode', 'agents', 'reviewer.md'), '# reviewer\\n');\n"
+  );
+  const worktreeApply = run(["--no-clone"], {
+    cwd: worktreeLinked,
+    env: {
+      HOME: worktreeHome,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_RENDER: "1",
+      ALFRED_INSTALL_APP_TUI_COLUMNS: "240",
+      ALFRED_INSTALL_APP_TUI_EVENTS: `set:edition=coding,set:harnesses=opencode,set:profiles=false,set:name=worktree,set:path=${worktreeTarget},set:apply=true,submit`,
+      ALFRED_INSTALL_HANDOFF_INPUT: "2"
+    }
+  });
+  assert.equal(worktreeApply.status, 0, worktreeApply.stderr);
+  assert.match(worktreeApply.stderr, new RegExp(`Project root: ${worktreeMainCanonical.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), "discovery displays the shell-resolved canonical root");
+  assert.equal(existsSync(join(worktreeMain, ".opencode", "agents", "reviewer.md")), true, "handoff applies harness files to the canonical main worktree");
+  assert.equal(existsSync(join(worktreeMain, "opencode.json")), true);
+  assert.equal(existsSync(join(worktreeLinked, ".opencode")), false, "linked invoking worktree is not used as the apply target");
+  assert.equal(existsSync(join(worktreeLinked, "opencode.json")), false);
+  const worktreeHandoff = readFileSync(join(worktreeTarget, ".ai", "generated", "install-handoff.txt"), "utf8");
+  assert.match(worktreeHandoff, new RegExp(`Project launched from: ${worktreeLinkedCanonical.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  assert.match(worktreeHandoff, new RegExp(`Canonical project root: ${worktreeMainCanonical.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+
+  const installSource = readFileSync(installSh, "utf8");
+  for (const requiredRemote of [
+    "scripts/tui/install-discovery.mjs",
+    "packages/profile-manager/src/index.js",
+    "packages/core/src/model-assignment.js"
+  ]) assert.match(installSource, new RegExp(requiredRemote.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(installSource, /chmod 0700 "\$APP_TUI_PRIVATE_DIR"/);
+  assert.match(installSource, /chmod 0600 "\$app_discovery_file"/);
+  assert.match(installSource, /ALFRED_INSTALL_DISCOVERY_FILE=/);
+  assert.match(installSource, /MODEL_PLAN_SHA256/);
+  assert.match(installSource, /O_NOFOLLOW/);
+  assert.match(installSource, /fstatSync\(planDescriptor\)/);
+  assert.match(installSource, /timingSafeEqual\(actualDigest, expectedDigestBytes\)/);
+  assert.doesNotMatch(installSource, /readFileSync\(planPath/, "custom authority never reopens the validated plan pathname");
+  assert.match(installSource, /https:\/\/api\.github\.com\/repos\/GOI17\/alfred\/git\/ref\/heads\/\$DEFAULT_BRANCH/);
+  assert.match(installSource, /https:\/\/codeload\.github\.com\/GOI17\/alfred\/tar\.gz\/\$app_tui_commit_sha/);
+  assert.doesNotMatch(installSource, /codeload\.github\.com\/GOI17\/alfred\/tar\.gz\/refs\/heads/);
+
+  const remoteRoot = join(fixture, "remote-bootstrap");
+  const remoteBin = join(remoteRoot, "bin");
+  const remoteTmp = join(remoteRoot, "tmp");
+  const remoteHome = join(remoteRoot, "home");
+  const remoteCwd = join(remoteRoot, "workspace");
+  const remoteInstaller = join(remoteRoot, "install.sh");
+  const remoteSnapshot = join(remoteRoot, "snapshot.tar.gz");
+  const remoteSnapshotRoot = join(remoteRoot, "snapshot-source", "alfred-main");
+  const curlMarker = join(remoteRoot, "curl.log");
+  const tarMarker = join(remoteRoot, "tar.log");
+  const remoteCommitSha = "0123456789abcdef0123456789abcdef01234567";
+  for (const directory of [remoteBin, remoteTmp, remoteHome, remoteCwd]) mkdirSync(directory, { recursive: true });
+  writeFileSync(remoteInstaller, installSource);
+  for (const relativePath of [
+    "scripts/tui/install-app.mjs",
+    "scripts/tui/install-pathfinder.mjs",
+    "scripts/tui/install-discovery.mjs",
+    "packages/profile-manager/src/index.js",
+    "packages/core/src/model-assignment.js"
+  ]) {
+    const destination = join(remoteSnapshotRoot, relativePath);
+    mkdirSync(dirname(destination), { recursive: true });
+    copyFileSync(join(root, relativePath), destination);
+  }
+  const tarPath = spawnSync("sh", ["-c", "command -v tar"], { encoding: "utf8" }).stdout.trim();
+  assert.ok(tarPath, "tar is required for deterministic remote bootstrap coverage");
+  const packed = spawnSync(tarPath, ["-czf", remoteSnapshot, "alfred-main"], { cwd: join(remoteRoot, "snapshot-source"), encoding: "utf8" });
+  assert.equal(packed.status, 0, packed.stderr);
+  writeFileSync(join(remoteBin, "curl"), `#!/bin/sh
+output=''
+url=''
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o) output="$2"; shift 2 ;;
+    http*) url="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+printf '%s\n' "$url" >> "$ALFRED_TEST_CURL_MARKER"
+case "$url" in
+  https://api.github.com/*)
+    printf '{"object":{"type":"commit","sha":"%s"}}\n' "$ALFRED_TEST_COMMIT_SHA" > "$output"
+    ;;
+  https://codeload.github.com/*)
+    [ "\${ALFRED_TEST_FAIL_CODELOAD:-0}" != "1" ] || exit 1
+    cp "$ALFRED_TEST_SNAPSHOT" "$output"
+    ;;
+  *) exit 1 ;;
+esac
+`);
+  writeFileSync(join(remoteBin, "tar"), `#!/bin/sh
+printf '%s\n' "$*" >> "$ALFRED_TEST_TAR_MARKER"
+exec ${shellQuote(tarPath)} "$@"
+`);
+  chmodSync(join(remoteBin, "curl"), 0o755);
+  chmodSync(join(remoteBin, "tar"), 0o755);
+  const remoteBootstrap = run([], {
+    installSh: remoteInstaller,
+    cwd: remoteCwd,
+    env: {
+      HOME: remoteHome,
+      PATH: `${remoteBin}:${process.env.PATH ?? ""}`,
+      TMPDIR: remoteTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_TEST_COMMIT_SHA: remoteCommitSha,
+      ALFRED_TEST_SNAPSHOT: remoteSnapshot,
+      ALFRED_TEST_CURL_MARKER: curlMarker,
+      ALFRED_TEST_TAR_MARKER: tarMarker
+    }
+  });
+  assert.equal(remoteBootstrap.status, 0, remoteBootstrap.stderr);
+  assert.match(remoteBootstrap.stdout, /TUI mode:\s+app/, "remote snapshot modules import successfully");
+  const curlRequests = readFileSync(curlMarker, "utf8").trim().split("\n");
+  assert.deepEqual(curlRequests, [
+    "https://api.github.com/repos/GOI17/alfred/git/ref/heads/main",
+    `https://codeload.github.com/GOI17/alfred/tar.gz/${remoteCommitSha}`
+  ], "remote bootstrap resolves the branch once and fetches that exact commit snapshot");
+  assert.doesNotMatch(curlRequests[1], /refs\/heads\/main/, "codeload must not fetch the mutable branch URL");
+  assert.match(readFileSync(tarMarker, "utf8"), /-xzf/);
+  assert.deepEqual(readdirSync(remoteTmp), [], "remote private staging is removed after successful imports");
+
+  const invalidShaMarker = join(remoteRoot, "invalid-sha-curl.log");
+  const invalidShaBootstrap = run([], {
+    installSh: remoteInstaller,
+    cwd: remoteCwd,
+    env: {
+      HOME: remoteHome,
+      PATH: `${remoteBin}:${process.env.PATH ?? ""}`,
+      TMPDIR: remoteTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_TUI_INPUT: "1\n5\n1\ninvalid-sha-fallback\nn",
+      ALFRED_TEST_COMMIT_SHA: "not-a-commit-sha",
+      ALFRED_TEST_SNAPSHOT: remoteSnapshot,
+      ALFRED_TEST_CURL_MARKER: invalidShaMarker
+    }
+  });
+  assert.equal(invalidShaBootstrap.status, 0, invalidShaBootstrap.stderr);
+  assert.match(invalidShaBootstrap.stderr, /using text installer/i, "invalid branch resolution falls back safely");
+  assert.match(invalidShaBootstrap.stdout, /TUI mode:\s+text/);
+  assert.deepEqual(readFileSync(invalidShaMarker, "utf8").trim().split("\n"), [
+    "https://api.github.com/repos/GOI17/alfred/git/ref/heads/main"
+  ], "an invalid SHA must stop before codeload");
+  assert.deepEqual(readdirSync(remoteTmp), [], "failed branch resolution cleans private staging");
+
+  const failedStagingMarker = join(remoteRoot, "failed-staging-curl.log");
+  const failedStagingBootstrap = run([], {
+    installSh: remoteInstaller,
+    cwd: remoteCwd,
+    env: {
+      HOME: remoteHome,
+      PATH: `${remoteBin}:${process.env.PATH ?? ""}`,
+      TMPDIR: remoteTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_TUI_INPUT: "1\n5\n1\nfailed-staging-fallback\nn",
+      ALFRED_TEST_COMMIT_SHA: remoteCommitSha,
+      ALFRED_TEST_FAIL_CODELOAD: "1",
+      ALFRED_TEST_SNAPSHOT: remoteSnapshot,
+      ALFRED_TEST_CURL_MARKER: failedStagingMarker
+    }
+  });
+  assert.equal(failedStagingBootstrap.status, 0, failedStagingBootstrap.stderr);
+  assert.match(failedStagingBootstrap.stderr, /using text installer/i, "failed immutable snapshot staging falls back safely");
+  assert.match(failedStagingBootstrap.stdout, /TUI mode:\s+text/);
+  assert.deepEqual(readFileSync(failedStagingMarker, "utf8").trim().split("\n"), [
+    "https://api.github.com/repos/GOI17/alfred/git/ref/heads/main",
+    `https://codeload.github.com/GOI17/alfred/tar.gz/${remoteCommitSha}`
+  ]);
+  assert.deepEqual(readdirSync(remoteTmp), [], "failed snapshot staging cleans private staging");
+
+  function writeDiscoveryFixture(filePath, { fixtureHome, fixtureTarget, existingModels = false, modelSignals = true }) {
+    const modelsPath = join(fixtureHome, ".alfred", "models.json");
+    writeFileSync(filePath, `${JSON.stringify({
+      homeDir: fixtureHome,
+      cwd,
+      targetPath: fixtureTarget,
+      env: {
+        PATH: "/fixture/bin",
+        ...(modelSignals ? { OPENAI_API_KEY: "fixture-openai-secret", ANTHROPIC_API_KEY: "fixture-anthropic-secret" } : {})
+      },
+      platform: "linux",
+      release: "fixture-release",
+      architecture: "arm64",
+      nodeVersion: "v24.3.0",
+      commands: { git: false, opencode: true, codex: false, pi: false },
+      existing_paths: [fixtureTarget, ...(existingModels ? [modelsPath] : [])]
+    }, null, 2)}\n`);
+  }
+
+  const modelPreviewHome = join(fixture, "model-preview-home");
+  const modelPreviewTarget = join(fixture, "model-preview-target");
+  const modelPreviewFixture = join(fixture, "model-preview-fixture.json");
+  mkdirSync(modelPreviewHome, { recursive: true });
+  mkdirSync(modelPreviewTarget, { recursive: true });
+  writeDiscoveryFixture(modelPreviewFixture, { fixtureHome: modelPreviewHome, fixtureTarget: modelPreviewTarget });
+  const modelPreview = run([], {
+    env: {
+      HOME: modelPreviewHome,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: modelPreviewFixture
+    }
+  });
+  assert.equal(modelPreview.status, 0, modelPreview.stderr);
+  assert.match(modelPreview.stdout, /Model strategy:\s+smart-defaults/);
+  assert.match(modelPreview.stdout, /Proposed model configuration \(local discovery only\)/);
+  assert.match(modelPreview.stdout, /"primary": "openai\/gpt-4\.1-mini"/);
+  assert.doesNotMatch(`${modelPreview.stdout}\n${modelPreview.stderr}`, /fixture-openai-secret|fixture-anthropic-secret/);
+  assert.equal(existsSync(join(modelPreviewHome, ".alfred", "models.json")), false, "preview must not write model config");
+
+  const cancelHome = join(fixture, "model-cancel-home");
+  const cancelFixture = join(fixture, "model-cancel-fixture.json");
+  const cancelWorkspace = join(fixture, "cancel-workspace");
+  const cancelTmp = join(fixture, "cancel-tmp");
+  mkdirSync(cancelHome, { recursive: true });
+  mkdirSync(cancelWorkspace, { recursive: true });
+  mkdirSync(cancelTmp, { recursive: true });
+  writeDiscoveryFixture(cancelFixture, { fixtureHome: cancelHome, fixtureTarget: modelPreviewTarget });
+  const cancelledModel = run([], {
+    cwd: cancelWorkspace,
+    env: {
+      HOME: cancelHome,
+      TMPDIR: cancelTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_LAYOUT: "inline",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "q",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: cancelFixture
+    }
+  });
+  assert.equal(cancelledModel.status, 130, "q must terminate the overall installer instead of entering text fallback");
+  assert.doesNotMatch(`${cancelledModel.stdout}\n${cancelledModel.stderr}`, /using text installer|ALFRED HUMAN-FIRST INSTALLER/i, "inline cancellation must not run text fallback");
+  assert.equal(existsSync(join(cancelHome, ".alfred", "models.json")), false, "cancel must not write model config");
+  assert.equal(existsSync(join(cancelHome, ".alfred", "runtime-profiles")), false, "cancel must not write profiles");
+  assert.deepEqual(readdirSync(cancelWorkspace), [], "cancel must not write project files");
+  assert.deepEqual(readdirSync(cancelTmp), [], "cancel must clean private staging");
+
+  const keepHome = join(fixture, "model-keep-home");
+  const keepTarget = join(fixture, "model-keep-target");
+  const keepFixture = join(fixture, "model-keep-fixture.json");
+  const keepModels = join(keepHome, ".alfred", "models.json");
+  mkdirSync(join(keepHome, ".alfred"), { recursive: true });
+  mkdirSync(keepTarget, { recursive: true });
+  writeFileSync(keepModels, "{\n  \"*\": { \"primary\": \"existing/model\" },\n  \"fallbacks\": []\n}\n", { mode: 0o600 });
+  const keepBefore = readFileSync(keepModels, "utf8");
+  writeDiscoveryFixture(keepFixture, { fixtureHome: keepHome, fixtureTarget: keepTarget, existingModels: true });
+  const keepApply = run(["--path", keepTarget, "--no-clone"], {
+    env: {
+      HOME: keepHome,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "r,set:applyIntent=apply-safe-steps,enter,enter",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: keepFixture
+    }
+  });
+  assert.equal(keepApply.status, 0, keepApply.stderr);
+  assert.match(keepApply.stdout, /Model strategy:\s+keep-existing/);
+  assert.match(keepApply.stdout, /remains untouched and was not read into the TUI/);
+  assert.doesNotMatch(keepApply.stdout, /Proposed model configuration|"primary"/);
+  assert.equal(readFileSync(keepModels, "utf8"), keepBefore, "keep-existing apply must preserve existing config byte-for-byte");
+
+  const approvedHome = join(fixture, "model-approved-home");
+  const approvedTarget = join(fixture, "model-approved-target");
+  const approvedFixture = join(fixture, "model-approved-fixture.json");
+  mkdirSync(approvedHome, { recursive: true });
+  mkdirSync(approvedTarget, { recursive: true });
+  writeDiscoveryFixture(approvedFixture, { fixtureHome: approvedHome, fixtureTarget: approvedTarget });
+  const approvedApply = run(["--path", approvedTarget, "--no-clone"], {
+    env: {
+      HOME: approvedHome,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "r,set:applyIntent=apply-safe-steps,space,down,enter,down,enter",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: approvedFixture,
+      ALFRED_INSTALL_HANDOFF_INPUT: "1"
+    }
+  });
+  assert.equal(approvedApply.status, 0, approvedApply.stderr);
+  assert.match(approvedApply.stdout, /Model strategy:\s+smart-defaults/);
+  assert.match(approvedApply.stdout, /Model approval:\s+true/);
+  assert.match(approvedApply.stdout, /Wrote approved model assignment config atomically/);
+  const approvedModelsPath = join(approvedHome, ".alfred", "models.json");
+  const approvedConfig = JSON.parse(readFileSync(approvedModelsPath, "utf8"));
+  assert.deepEqual(approvedConfig, {
+    "*": { primary: "openai/gpt-4.1-mini", fallbacks: ["anthropic/claude-sonnet-4"] },
+    orchestrator: { primary: "anthropic/claude-sonnet-4" },
+    developer: { primary: "anthropic/claude-sonnet-4" },
+    fallbacks: ["openai/gpt-4.1-mini", "anthropic/claude-sonnet-4"]
+  });
+  assert.equal(statSync(approvedModelsPath).mode & 0o777, 0o600, "models config must be mode 0600");
+  assert.equal(readdirSync(join(approvedHome, ".alfred")).some((name) => name.includes("models.json") && name.endsWith(".tmp")), false, "atomic model write must leave no temp file");
+  const modelTracePath = join(approvedHome, ".alfred", "observability", "model-assignment-trace.json");
+  const modelTrace = JSON.parse(readFileSync(modelTracePath, "utf8"));
+  assert.deepEqual(modelTrace.trace_events.map((event) => event.event), ["model_assignment_configured", "provider_request_avoided"]);
+  assert.equal(modelTrace.provider_calls, 0);
+  assert.equal(statSync(modelTracePath).mode & 0o777, 0o600);
+  const approvedInstallTrace = JSON.parse(readFileSync(join(approvedHome, ".alfred", "observability", "install-trace.json"), "utf8"));
+  assert.equal(approvedInstallTrace.data.model_strategy, "smart-defaults");
+  assert.equal(approvedInstallTrace.data.model_write_approved, true);
+  assert.equal(approvedInstallTrace.data.model_config_written, true);
+  assert.equal(approvedInstallTrace.data.provider_calls, 0);
+
+  const customEvents = [
+    "set:models=custom-models",
+    "set:modelWildcard= provider/main;$(touch_should_not_run) ",
+    "set:modelOrchestrator= provider/orchestrator'opaque ",
+    "set:modelDeveloper= provider/developer|opaque ",
+    "set:modelFallback= provider/fallback-one;$HOME ",
+    "set:modelFallback= provider/fallback-two&&false ",
+    "set:applyIntent=apply-safe-steps",
+    "down", "enter",
+    ...Array(6).fill("down"), "enter",
+    ...Array(5).fill("down"), "enter",
+    "enter", "right", "esc", "down", "enter", "down", "enter", "down", "enter"
+  ].join(",");
+  const customHome = join(fixture, "model-custom-home");
+  const customTarget = join(fixture, "model-custom-target");
+  const customFixture = join(fixture, "model-custom-fixture.json");
+  const customTmp = join(fixture, "model-custom-tmp");
+  mkdirSync(customHome, { recursive: true });
+  mkdirSync(customTarget, { recursive: true });
+  mkdirSync(customTmp, { recursive: true });
+  writeDiscoveryFixture(customFixture, { fixtureHome: customHome, fixtureTarget: customTarget, modelSignals: false });
+  const customPreviewHome = join(fixture, "model-custom-preview-home");
+  const customPreviewTarget = join(fixture, "model-custom-preview-target");
+  const customPreviewFixture = join(fixture, "model-custom-preview-fixture.json");
+  const customPreviewTmp = join(fixture, "model-custom-preview-tmp");
+  mkdirSync(customPreviewHome, { recursive: true });
+  mkdirSync(customPreviewTarget, { recursive: true });
+  mkdirSync(customPreviewTmp, { recursive: true });
+  writeDiscoveryFixture(customPreviewFixture, { fixtureHome: customPreviewHome, fixtureTarget: customPreviewTarget, modelSignals: false });
+  const customPreviewOnly = run([], {
+    env: {
+      HOME: customPreviewHome,
+      TMPDIR: customPreviewTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "set:models=custom-models,set:modelWildcard=provider/preview,submit",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: customPreviewFixture
+    }
+  });
+  assert.equal(customPreviewOnly.status, 0, customPreviewOnly.stderr);
+  assert.match(customPreviewOnly.stdout, /Model strategy:\s+custom-models/);
+  assert.equal(existsSync(join(customPreviewHome, ".alfred", "models.json")), false, "valid custom preview never writes models");
+  assert.deepEqual(readdirSync(customPreviewTmp), [], "custom preview cleans the private plan and staging directory");
+  const customCancelled = run([], {
+    env: {
+      HOME: customPreviewHome,
+      TMPDIR: customPreviewTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "set:models=custom-models,set:modelWildcard=provider/cancel,q",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: customPreviewFixture
+    }
+  });
+  assert.equal(customCancelled.status, 130);
+  assert.equal(existsSync(join(customPreviewHome, ".alfred", "models.json")), false, "custom cancel never writes models");
+  assert.deepEqual(readdirSync(customPreviewTmp), [], "custom cancel cleans the private plan and staging directory");
+
+  const customApply = run(["--path", customTarget, "--no-clone"], {
+    env: {
+      HOME: customHome,
+      TMPDIR: customTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: customEvents,
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: customFixture,
+      ALFRED_INSTALL_HANDOFF_INPUT: "1"
+    }
+  });
+  assert.equal(customApply.status, 0, customApply.stderr);
+  assert.match(customApply.stdout, /Model strategy:\s+custom-models/);
+  assert.match(customApply.stdout, /Model approval:\s+true/);
+  assert.doesNotMatch(`${customApply.stdout}\n${customApply.stderr}`, /provider\/main|provider\/orchestrator|provider\/developer|provider\/fallback/, "raw IDs never enter shell output or assignments");
+  assert.equal(existsSync(join(fixture, "touch_should_not_run")), false, "shell metacharacters in opaque IDs are never executed");
+  const customModelsPath = join(customHome, ".alfred", "models.json");
+  assert.deepEqual(JSON.parse(readFileSync(customModelsPath, "utf8")), {
+    "*": { primary: " provider/main;$(touch_should_not_run) " },
+    orchestrator: { primary: " provider/orchestrator'opaque " },
+    developer: { primary: " provider/developer|opaque " },
+    fallbacks: [" provider/fallback-one;$HOME ", " provider/fallback-two&&false "]
+  });
+  assert.equal(statSync(customModelsPath).mode & 0o777, 0o600);
+  const customTrace = JSON.parse(readFileSync(join(customHome, ".alfred", "observability", "install-trace.json"), "utf8"));
+  assert.equal(customTrace.data.model_strategy, "custom-models");
+  assert.equal(customTrace.data.model_write_approved, true);
+  assert.equal(customTrace.data.model_config_written, true);
+  assert.equal(customTrace.data.provider_calls, 0);
+  assert.deepEqual(readdirSync(customTmp), [], "approved custom write cleans plan, temp files, and private staging");
+
+  const invalidCustom = spawnSync("node", [appTui], {
+    cwd,
+    env: { ...process.env, ALFRED_INSTALL_APP_TUI_EVENTS: "set:models=custom-models,submit" },
+    encoding: "utf8"
+  });
+  assert.notEqual(invalidCustom.status, 0, "invalid custom plans cannot serialize or silently downgrade");
+  assert.match(invalidCustom.stderr, /custom model plan is invalid/);
+
+  const attackNodeBin = join(fixture, "model-plan-attack-bin");
+  mkdirSync(attackNodeBin, { recursive: true });
+  writeFileSync(join(attackNodeBin, "node"), `#!/bin/sh
+case "$1" in
+  *install-app.mjs)
+    ${shellQuote(process.execPath)} "$@" || exit $?
+    plan="$ALFRED_INSTALL_MODEL_PLAN_FILE"
+    case "$ALFRED_TEST_PLAN_ATTACK" in
+      missing) rm -f "$plan" ;;
+      symlink) cp "$plan" "$ALFRED_TEST_OUTSIDE_PLAN"; rm -f "$plan"; ln -s "$ALFRED_TEST_OUTSIDE_PLAN" "$plan" ;;
+      mode) chmod 0644 "$plan" ;;
+      unknown) printf '%s\n' '{"schema":"alfred.install.model-plan/v1","strategy":"custom-models","models":{"*":{"primary":"provider/main"},"fallbacks":[]},"provider_calls":0,"unknown":true}' > "$plan" ;;
+      invalid) printf '%s\n' '{"schema":"alfred.install.model-plan/v1","strategy":"custom-models","models":{"*":{"primary":""},"fallbacks":[]},"provider_calls":0}' > "$plan" ;;
+      tampered) printf '%s\n' '{"schema":"alfred.install.model-plan/v1","strategy":"smart-defaults","models":{"*":{"primary":"provider/main"},"fallbacks":[]},"provider_calls":0}' > "$plan" ;;
+      substitution) printf '%s\n' '{"schema":"alfred.install.model-plan/v1","strategy":"custom-models","models":{"*":{"primary":"provider/substituted"},"fallbacks":[]},"provider_calls":0}' > "$plan" ;;
+      directory-mode) chmod 0755 "$(dirname "$plan")" ;;
+    esac
+    exit 0
+    ;;
+esac
+exec ${shellQuote(process.execPath)} "$@"
+`);
+  chmodSync(join(attackNodeBin, "node"), 0o755);
+
+  for (const attack of ["missing", "symlink", "mode", "unknown", "invalid", "tampered", "substitution", "directory-mode"]) {
+    const attackHome = join(fixture, `model-plan-${attack}-home`);
+    const attackTarget = join(fixture, `model-plan-${attack}-target`);
+    const attackFixture = join(fixture, `model-plan-${attack}-fixture.json`);
+    const attackTmp = join(fixture, `model-plan-${attack}-tmp`);
+    const outsidePlan = join(fixture, `model-plan-${attack}-outside.json`);
+    const existingPath = join(attackHome, ".alfred", "models.json");
+    mkdirSync(join(attackHome, ".alfred"), { recursive: true });
+    mkdirSync(attackTarget, { recursive: true });
+    mkdirSync(attackTmp, { recursive: true });
+    writeFileSync(existingPath, '{"*":{"primary":"existing/model"},"fallbacks":[]}\n', { mode: 0o600 });
+    const before = readFileSync(existingPath, "utf8");
+    writeDiscoveryFixture(attackFixture, { fixtureHome: attackHome, fixtureTarget: attackTarget, modelSignals: false });
+    const attacked = run(["--path", attackTarget, "--no-clone"], {
+      env: {
+        HOME: attackHome,
+        PATH: `${attackNodeBin}:${process.env.PATH ?? ""}`,
+        TMPDIR: attackTmp,
+        ALFRED_INSTALL_FORCE_TUI: "1",
+        ALFRED_INSTALL_APP_TUI_EVENTS: customEvents,
+        ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: attackFixture,
+        ALFRED_INSTALL_HANDOFF_INPUT: "1",
+        ALFRED_TEST_PLAN_ATTACK: attack,
+        ALFRED_TEST_OUTSIDE_PLAN: outsidePlan
+      }
+    });
+    assert.notEqual(attacked.status, 0, `${attack} custom plan must fail closed`);
+    if (attack === "substitution") assert.match(attacked.stderr, /digest mismatch/, "valid model substitution with a stale digest is rejected by byte identity");
+    assert.equal(readFileSync(existingPath, "utf8"), before, `${attack} preserves the existing models target byte-for-byte`);
+    assert.equal(readdirSync(join(attackHome, ".alfred")).some((name) => name.includes("models.json") && name.endsWith(".tmp")), false, `${attack} leaves no target temp file`);
+    assert.deepEqual(readdirSync(attackTmp), [], `${attack} cleans private staging and plan temps`);
+  }
 
   console.log("suite installer validation ok: preview is default, legacy flags fail closed, and apply does not install Pi by default");
 } finally {

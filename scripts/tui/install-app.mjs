@@ -1,19 +1,30 @@
 #!/usr/bin/env node
-import { writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { closeSync, constants, fchmodSync, fsyncSync, lstatSync, openSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { StringDecoder } from "node:string_decoder";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   EDITIONS,
   HARNESSES,
   MEMORY_SETUPS,
+  controlsFor,
   createPathfinderState,
+  normalizeTuiLayout,
+  normalizeDiscovery,
+  modelPlanForState,
+  modelPlanReviewLines,
   parseHarnessSelection,
   previewPageSize,
   render,
+  sanitizeTerminalOutput,
   serializeAssignments,
-  transition
+  stripAnsi,
+  terminalPhysicalRows,
+  textEditingActive,
+  transition,
+  validateCustomModelsDraft
 } from "./install-pathfinder.mjs";
 
 export function decodeTerminalEvent(buffer, { flushEscape = false } = {}) {
@@ -35,6 +46,7 @@ export function decodeTerminalEvent(buffer, { flushEscape = false } = {}) {
       ["\x1bOA", "up"], ["\x1bOB", "down"], ["\x1bOD", "left"], ["\x1bOC", "right"]
     ].find(([sequence]) => buffer.startsWith(sequence));
     if (known) return { type: "token", token: known[1], length: known[0].length };
+    if (buffer.startsWith("\x1b[3~")) return { type: "token", token: "delete", length: 4 };
     if (buffer.startsWith("\x1b[")) {
       const csi = /^\x1b\[[0-?]*[ -/]*[@-~]/.exec(buffer);
       return csi ? { type: "ignore", length: csi[0].length } : { type: "incomplete", length: 0 };
@@ -85,6 +97,15 @@ function parseHarnessStatus(raw = process.env.ALFRED_INSTALL_HARNESS_STATUS || "
 }
 
 const harnessStatus = parseHarnessStatus();
+function readDiscovery(filePath) {
+  if (!filePath) return normalizeDiscovery(null, harnessStatus);
+  try {
+    return normalizeDiscovery(JSON.parse(readFileSync(filePath, "utf8")), harnessStatus);
+  } catch {
+    return normalizeDiscovery(null, harnessStatus);
+  }
+}
+
 let state = createPathfinderState({
   current: {
     edition: process.env.ALFRED_INSTALL_CURRENT_EDITION,
@@ -95,8 +116,10 @@ let state = createPathfinderState({
     targetPath: process.env.ALFRED_INSTALL_CURRENT_PATH,
     apply: process.env.ALFRED_INSTALL_CURRENT_APPLY
   },
-  harnessStatus
+  harnessStatus,
+  discovery: readDiscovery(process.env.ALFRED_INSTALL_DISCOVERY_FILE)
 });
+if (process.env.ALFRED_INSTALL_APP_TUI_SCRIPT) state = { ...state, compatibilityPlayback: true };
 
 let lastRender = { text: "", hitRegions: [] };
 let legacyPlayback = false;
@@ -104,19 +127,94 @@ let legacyFocus = 0;
 let legacyHarnessFocus = 0;
 let pendingInput = "";
 const inputDecoder = new StringDecoder("utf8");
+const selectedTuiLayout = normalizeTuiLayout(process.env.ALFRED_INSTALL_APP_TUI_LAYOUT);
 
-function dimensions() {
+function dimension(...values) {
+  for (const value of values) {
+    if (value === undefined || value === null || value === "") continue;
+    const number = Number(value);
+    if (Number.isFinite(number)) return Math.max(0, Math.floor(number));
+  }
+  return 0;
+}
+
+function dimensions(output = process.stdout) {
   return {
-    columns: Number(process.env.ALFRED_INSTALL_APP_TUI_COLUMNS || process.stdout.columns || process.env.COLUMNS || 80),
-    rows: Number(process.env.ALFRED_INSTALL_APP_TUI_ROWS || process.stdout.rows || process.env.LINES || 24)
+    columns: dimension(process.env.ALFRED_INSTALL_APP_TUI_COLUMNS, output?.columns, process.env.COLUMNS, 80),
+    rows: dimension(process.env.ALFRED_INSTALL_APP_TUI_ROWS, output?.rows, process.env.LINES, 24)
   };
 }
 
-function screen() {
-  const viewport = dimensions();
+function colorEnabled(stream) {
+  if (process.env.ALFRED_INSTALL_FORCE_COLOR === "1") return true;
+  return Boolean(stream?.isTTY) && !Object.hasOwn(process.env, "NO_COLOR");
+}
+
+function screen(output = process.stdout, layout = selectedTuiLayout, viewport = dimensions(output)) {
   if (state.overlay?.type === "preview") state = transition(state, { type: "PAGE", delta: 0, pageSize: previewPageSize(viewport) });
-  lastRender = render(state, viewport);
+  if (state.overlay?.type === "model-plan-review") {
+    const width = normalizeTuiLayout(layout) === "inline" ? Math.max(0, viewport.columns - 1) : viewport.columns;
+    const contentWidth = Math.max(1, width - 2);
+    const totalItems = modelPlanReviewLines(state, contentWidth).length;
+    state = transition(state, { type: "PAGE", delta: 0, pageSize: previewPageSize(viewport), totalItems, inspectionKey: `${contentWidth}:${totalItems}` });
+  }
+  lastRender = render(state, { ...viewport, color: colorEnabled(output), layout });
   return lastRender.text;
+}
+
+function cursorUp(rows) {
+  return rows > 0 ? `\x1b[${rows}A` : "";
+}
+
+export function inlineFrameInfo(text, { columns = 0, rows = 0 } = {}) {
+  const value = sanitizeTerminalOutput(text);
+  const logicalLines = value === "" ? [] : value.split("\n").map((line) => {
+    const plainText = stripAnsi(line);
+    return { text: plainText };
+  });
+  return {
+    columns: dimension(columns),
+    rows: dimension(rows),
+    text: logicalLines.map(({ text: line }) => line).join("\n"),
+    logicalLines
+  };
+}
+
+export function inlinePhysicalRows(frame, columns = frame?.columns) {
+  if (typeof frame === "number") return Math.max(0, Math.floor(frame));
+  if (!frame?.logicalLines?.length) return 0;
+  const width = dimension(columns);
+  if (width === 0) return 0;
+  const text = typeof frame.text === "string" ? frame.text : frame.logicalLines.map((line) => line.text || "").join("\n");
+  return terminalPhysicalRows(text, width);
+}
+
+export function inlineRedrawSequence(text, previousFrame = null, currentColumns = previousFrame?.columns) {
+  const value = sanitizeTerminalOutput(text);
+  const lines = value === "" ? [] : value.split("\n");
+  const oldRows = inlinePhysicalRows(previousFrame, currentColumns);
+  if (oldRows === 0) return value;
+  const totalRows = Math.max(oldRows, lines.length);
+  let output = `\r${cursorUp(oldRows - 1)}`;
+  for (let index = 0; index < totalRows; index += 1) {
+    output += "\x1b[2K";
+    if (index < lines.length) output += lines[index];
+    if (index < totalRows - 1) output += "\r\n";
+  }
+  const targetRow = Math.max(0, lines.length - 1);
+  output += `\r${cursorUp(totalRows - 1 - targetRow)}`;
+  return output;
+}
+
+export function inlineClearSequence(ownedFrame = null, currentColumns = ownedFrame?.columns) {
+  const rows = inlinePhysicalRows(ownedFrame, currentColumns);
+  if (rows === 0) return "";
+  let output = `\r${cursorUp(rows - 1)}`;
+  for (let index = 0; index < rows; index += 1) {
+    output += "\x1b[2K";
+    if (index < rows - 1) output += "\r\n";
+  }
+  return `${output}\r${cursorUp(rows - 1)}`;
 }
 
 function dispatch(action) {
@@ -132,6 +230,8 @@ function setValue(pair) {
     dispatch({ type: "PATCH", key: "harnesses", value: parseHarnessSelection(value, harnessStatus) });
   } else if (key === "profiles") {
     dispatch({ type: "PATCH", key, value: value === "false" || value === "decide-later" ? "decide-later" : "runtime-profiles" });
+  } else if (key === "modelApproval") {
+    dispatch({ type: "PATCH", key: "modelWriteApproved", value });
   } else {
     dispatch({ type: "PATCH", key, value });
   }
@@ -220,7 +320,30 @@ function handleInteractiveMouse(event) {
 }
 
 function textFocused() {
-  return state.phase === "Configure" && (state.focus === 1 || state.focus === 2) && !state.overlay;
+  return textEditingActive(state);
+}
+
+function pagedOverlay(state) {
+  return ["why", "preview", "model-plan-review"].includes(state?.overlay?.type);
+}
+
+export function terminalTokenAction(currentState, token, pageSize = 8) {
+  if (token === "esc") return currentState.editing
+    ? { type: "ESCAPE" }
+    : currentState.overlay
+      ? { type: "CLOSE_OVERLAY" }
+      : { type: "BACK" };
+  if (token === "up" || token === "down") {
+    if (pagedOverlay(currentState)) return { type: "PAGE", delta: token === "up" ? -1 : 1, pageSize };
+    if (!currentState.overlay || currentState.overlay.type === "model-editor") return { type: "MOVE", delta: token === "up" ? -1 : 1 };
+    return null;
+  }
+  if (token === "left" || token === "right") {
+    if (pagedOverlay(currentState)) return { type: "PAGE", delta: token === "left" ? -1 : 1, pageSize };
+    if (!currentState.overlay || currentState.overlay.type === "model-editor") return { type: "CHANGE", delta: token === "left" ? -1 : 1 };
+    return null;
+  }
+  return null;
 }
 
 function handleToken(token, { playback = false } = {}) {
@@ -232,23 +355,25 @@ function handleToken(token, { playback = false } = {}) {
     return;
   }
   if (playback && legacyPlayback && handleLegacyToken(token)) return;
-  if (token === "cancel") return dispatch({ type: "CANCEL" });
+  if (token === "cancel" || token === "q") return dispatch({ type: "CANCEL" });
   if (token === "p") return dispatch({ type: "OPEN_PREVIEW" });
   if (token === "w") return dispatch({ type: "OPEN_WHY" });
-  if (token === "esc") return dispatch(state.overlay ? { type: "CLOSE_OVERLAY" } : { type: "BACK" });
+  if (token === "esc") return dispatch(terminalTokenAction(state, token, previewPageSize(dimensions())));
   if (token === "r" && state.phase === "Discover" && !state.overlay) return dispatch({ type: "USE_RECOMMENDED" });
   if (token === "back" || token === "b") return dispatch({ type: "BACK" });
-  if (token === "up") return dispatch(state.overlay ? { type: "PAGE", delta: -1, pageSize: previewPageSize(dimensions()) } : { type: "MOVE", delta: -1 });
-  if (token === "down") return dispatch(state.overlay ? { type: "PAGE", delta: 1, pageSize: previewPageSize(dimensions()) } : { type: "MOVE", delta: 1 });
-  if (token === "left") return dispatch(state.overlay ? { type: "PAGE", delta: -1, pageSize: previewPageSize(dimensions()) } : { type: "CHANGE", delta: -1 });
-  if (token === "right") return dispatch(state.overlay ? { type: "PAGE", delta: 1, pageSize: previewPageSize(dimensions()) } : { type: "CHANGE", delta: 1 });
-  if (token === "space" || token === "enter") return dispatch({ type: "ACTIVATE" });
+  if (["up", "down", "left", "right"].includes(token)) {
+    const action = terminalTokenAction(state, token, previewPageSize(dimensions()));
+    return action ? dispatch(action) : undefined;
+  }
+  if (token === "space") return dispatch({ type: "SPACE" });
+  if (token === "enter") return dispatch({ type: "ACTIVATE" });
   if (token === "backspace") return dispatch({ type: "BACKSPACE" });
+  if (token === "delete") return dispatch({ type: "DELETE" });
   if (token.startsWith("text:")) return dispatch({ type: "INPUT", text: token.slice(5) });
 }
 
-function handleDecodedEvent(event) {
-  if (event.type === "mouse") return handleInteractiveMouse(event);
+function handleDecodedEvent(event, { mouseEnabled = true } = {}) {
+  if (event.type === "mouse") return mouseEnabled ? handleInteractiveMouse(event) : undefined;
   if (event.type === "token") return handleToken(event.token);
   if (event.type !== "text") return;
   const action = printableInputAction(event.text, {
@@ -260,32 +385,104 @@ function handleDecodedEvent(event) {
   if (action.type === "token") handleToken(action.token);
 }
 
-function parseBytes(data, { flushEscape = false } = {}) {
+function parseBytes(data, { flushEscape = false, mouseEnabled = true } = {}) {
   if (data?.length) pendingInput += Buffer.isBuffer(data) ? inputDecoder.write(data) : String(data);
   while (pendingInput) {
     const event = decodeTerminalEvent(pendingInput, { flushEscape });
     if (event.type === "incomplete") break;
     pendingInput = pendingInput.slice(event.length);
-    handleDecodedEvent(event);
+    handleDecodedEvent(event, { mouseEnabled });
     if (state.done) break;
   }
 }
 
-function writeAssignments() {
-  const output = serializeAssignments(state.decisions);
+function restrictedModelPlan(plan) {
+  if (!plan || typeof plan !== "object" || Array.isArray(plan)) throw new Error("invalid model plan");
+  if (JSON.stringify(Object.keys(plan).sort()) !== JSON.stringify(["models", "provider_calls", "schema", "strategy"])) throw new Error("model plan has unknown keys");
+  if (plan.schema !== "alfred.install.model-plan/v1" || plan.strategy !== "custom-models" || plan.provider_calls !== 0) throw new Error("invalid model plan contract");
+  const keys = Object.keys(plan.models ?? {});
+  if (keys.some((key) => !["*", "orchestrator", "developer", "fallbacks"].includes(key)) || !Object.hasOwn(plan.models ?? {}, "*") || !Object.hasOwn(plan.models ?? {}, "fallbacks")) throw new Error("invalid models keys");
+  for (const key of ["*", "orchestrator", "developer"]) {
+    if (!Object.hasOwn(plan.models, key)) continue;
+    const entry = plan.models[key];
+    if (!entry || Array.isArray(entry) || typeof entry !== "object" || JSON.stringify(Object.keys(entry)) !== JSON.stringify(["primary"])) throw new Error(`invalid ${key} model entry`);
+  }
+  if (!Array.isArray(plan.models.fallbacks)) throw new Error("invalid global fallbacks");
+  return plan;
+}
+
+export function writePrivateModelPlan(filePath, plan) {
+  const target = resolve(filePath);
+  const parent = dirname(target);
+  if (basename(target) !== "model-plan.json") throw new Error("model plan path must use the fixed model-plan.json filename");
+  const effectiveUid = typeof process.geteuid === "function" ? process.geteuid() : null;
+  const parentStats = lstatSync(parent);
+  if (!parentStats.isDirectory() || parentStats.isSymbolicLink()) throw new Error("model plan parent must be a regular non-symlink directory");
+  if ((parentStats.mode & 0o777) !== 0o700) throw new Error("model plan parent must have private mode 0700");
+  if (effectiveUid !== null && parentStats.uid !== effectiveUid) throw new Error("model plan parent must be owned by the effective uid");
+  const existing = lstatSync(target);
+  if (!existing.isFile() || existing.isSymbolicLink()) throw new Error("model plan target must be a regular non-symlink file");
+  if ((existing.mode & 0o777) !== 0o600) throw new Error("model plan target must have mode 0600");
+  if (effectiveUid !== null && existing.uid !== effectiveUid) throw new Error("model plan target must be owned by the effective uid");
+  const bytes = Buffer.from(`${JSON.stringify(restrictedModelPlan(plan), null, 2)}\n`, "utf8");
+  const temporaryPath = join(parent, `.${basename(target)}.${process.pid}.${Date.now()}.tmp`);
+  let descriptor;
+  try {
+    descriptor = openSync(temporaryPath, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
+    fchmodSync(descriptor, 0o600);
+    writeFileSync(descriptor, bytes);
+    fsyncSync(descriptor);
+    closeSync(descriptor);
+    descriptor = undefined;
+    renameSync(temporaryPath, target);
+    const directoryDescriptor = openSync(parent, constants.O_RDONLY);
+    try { fsyncSync(directoryDescriptor); } finally { closeSync(directoryDescriptor); }
+  } catch (error) {
+    if (descriptor !== undefined) try { closeSync(descriptor); } catch {}
+    try { unlinkSync(temporaryPath); } catch {}
+    throw error;
+  }
+  return { bytes, sha256: createHash("sha256").update(bytes).digest("hex") };
+}
+
+async function writeAssignments() {
+  if (state.decisions.modelStrategy === "custom-models" && validateCustomModelsDraft(state.decisions.customModels).status !== "pass") throw new Error("custom model plan is invalid; edit it or choose Configure models later");
+  const plan = modelPlanForState(state);
+  let modelPlanSha256 = "";
+  if (plan) {
+    const planPath = process.env.ALFRED_INSTALL_MODEL_PLAN_FILE;
+    if (!planPath) throw new Error("approved custom model plan path is unavailable");
+    const modulePath = join(dirname(fileURLToPath(import.meta.url)), "model-assignment.mjs");
+    const canonicalPath = (() => { try { return realpathSync(modulePath); } catch { return resolve(dirname(fileURLToPath(import.meta.url)), "../../packages/core/src/model-assignment.js"); } })();
+    const { validateModelsConfig } = await import(pathToFileURL(canonicalPath).href);
+    const validation = validateModelsConfig(plan.models);
+    if (validation.status !== "pass") throw new Error(`invalid custom model plan: ${validation.errors.join("; ")}`);
+    modelPlanSha256 = writePrivateModelPlan(planPath, plan).sha256;
+  }
+  const output = serializeAssignments(state.decisions, { reviewVisited: state.reviewVisited, modelRevision: state.modelRevision, reviewedModelRevision: state.reviewedModelRevision, modelInspection: state.modelInspection, modelPlanSha256 });
   const resultFile = process.env.ALFRED_INSTALL_APP_TUI_RESULT_FILE;
   if (resultFile) writeFileSync(resultFile, output);
   else process.stdout.write(output);
 }
 
-function runPlayback() {
+async function runPlayback() {
   const script = process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT || "";
-  for (const token of script.split(/[,\n]+/).map((item) => item.trim()).filter(Boolean)) handleToken(token, { playback: true });
-  if (process.env.ALFRED_INSTALL_APP_TUI_RENDER === "1") process.stderr.write(`${screen()}\n`);
-  writeAssignments();
+  const tokens = script.split(/[,\n]+/).flatMap((item) => {
+    const withoutLeadingSeparatorSpace = item.replace(/^\s+/, "");
+    if (/^set:model(?:Wildcard|Orchestrator|Developer|Fallback)=/.test(withoutLeadingSeparatorSpace)) return [withoutLeadingSeparatorSpace];
+    const token = item.trim();
+    return token ? [token] : [];
+  });
+  for (const token of tokens) handleToken(token, { playback: true });
+  if (process.env.ALFRED_INSTALL_APP_TUI_RENDER === "1") process.stderr.write(`${screen(process.stderr)}\n`);
+  if (state.cancelled) {
+    process.exitCode = 130;
+    return;
+  }
+  await writeAssignments();
 }
 
-export async function runInteractive({ stdin = process.stdin, stdout = process.stdout } = {}) {
+export async function runInteractive({ stdin = process.stdin, stdout = process.stdout, layout: layoutInput = selectedTuiLayout } = {}) {
   if (!stdin.isTTY || !stdout.isTTY) {
     process.stderr.write("App TUI requires a TTY. Falling back to text installer.\n");
     process.exitCode = 2;
@@ -298,12 +495,29 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
   let resolveSession;
   let rejectSession;
   let onData;
-  const redraw = () => stdout.write(`\x1b[H\x1b[2J${screen()}`);
+  let onResize;
+  let ownedFrame = null;
+  const layout = normalizeTuiLayout(layoutInput);
+  const fullscreen = layout === "fullscreen";
+  const mouseEnabled = fullscreen;
+  const redraw = () => {
+    const viewport = dimensions(stdout);
+    if (!fullscreen && (viewport.columns === 0 || viewport.rows === 0)) return;
+    const content = screen(stdout, layout, viewport);
+    if (fullscreen) stdout.write(`\x1b[H\x1b[2J${content}`);
+    else {
+      stdout.write(inlineRedrawSequence(content, ownedFrame, viewport.columns));
+      ownedFrame = inlineFrameInfo(content, viewport);
+    }
+  };
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
     if (escapeTimer) clearTimeout(escapeTimer);
-    try { stdout.write("\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l"); } catch {}
+    try {
+      if (fullscreen) stdout.write("\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l");
+      else stdout.write(`${inlineClearSequence(ownedFrame, dimensions(stdout).columns)}\x1b[?25h`);
+    } catch {}
     try { if (stdin.isRaw !== wasRaw) stdin.setRawMode(wasRaw); } catch {}
     try { stdin.pause(); } catch {}
     try { stdin.unref?.(); } catch {}
@@ -315,7 +529,7 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
   const flushEscape = () => {
     escapeTimer = null;
     try {
-      parseBytes("", { flushEscape: true });
+      parseBytes("", { flushEscape: true, mouseEnabled });
       settle();
     } catch (error) {
       rejectSession?.(error);
@@ -336,7 +550,7 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
           clearTimeout(escapeTimer);
           escapeTimer = null;
         }
-        parseBytes(data);
+        parseBytes(data, { mouseEnabled });
         if (pendingInput === "\x1b") escapeTimer = setTimeout(flushEscape, 25);
         settle();
       } catch (error) {
@@ -346,12 +560,16 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
     stdin.on("data", onData);
     stdin.on("error", onError);
     stdout.on("error", onError);
+    onResize = () => {
+      try { if (!state.done) redraw(); } catch (error) { rejectPromise(error); }
+    };
+    stdout.on("resize", onResize);
     for (const [signal, handler] of signalHandlers) process.once(signal, handler);
   });
   try {
     stdin.setRawMode(true);
     stdin.resume();
-    stdout.write("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h");
+    stdout.write(fullscreen ? "\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h" : "\x1b[?25l");
     if (state.done) resolveSession();
     else redraw();
     await session;
@@ -360,16 +578,20 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
     cleanup();
     stdin.off("error", onError);
     stdout.off("error", onError);
+    if (onResize) stdout.off("resize", onResize);
     for (const [signal, handler] of signalHandlers) process.off(signal, handler);
   }
   if (terminationCode) process.exitCode = terminationCode;
   else if (state.cancelled) process.exitCode = 130;
-  else writeAssignments();
+  else await writeAssignments();
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+function canonicalPath(value) {
+  try { return realpathSync(value); } catch { return resolve(value); }
+}
+const isMain = process.argv[1] && canonicalPath(process.argv[1]) === canonicalPath(fileURLToPath(import.meta.url));
 if (isMain) {
-  if (process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT) runPlayback();
+  if (process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT) await runPlayback();
   else {
     try {
       await runInteractive();
