@@ -386,7 +386,6 @@ function toggleHarness(state, id) {
 function change(state, delta) {
   const control = controlsFor(state)[boundedFocus(state)];
   if (control === "edition") return { ...state, decisions: withEdition(state.decisions, cycle(EDITIONS.map((item) => item.value), state.decisions.edition, delta)) };
-  if (control.startsWith("harness:")) return toggleHarness(state, control.slice(8));
   if (control === "profile") return patchDecision(state, "profileStrategy", cycle(PROFILE_STRATEGIES, state.decisions.profileStrategy, delta));
   if (control === "memory") return patchDecision(state, "memorySetup", cycle(MEMORY_SETUPS.map((item) => item.value), state.decisions.memorySetup, delta));
   if (control === "models") return patchDecision(state, "modelStrategy", cycle(availableModelStrategies(state), state.decisions.modelStrategy, delta));
@@ -398,7 +397,6 @@ function activate(state) {
   if (control === "recommended") return transition(state, { type: "USE_RECOMMENDED" });
   if (control === "customize") return transition(state, { type: "CUSTOMIZE" });
   if (control?.startsWith("harness:")) return toggleHarness(state, control.slice(8));
-  if (["profile", "memory", "models", "intent"].includes(control)) return change(state, 1);
   if (control === "model-approval") return patchDecision(state, "modelWriteApproved", !state.decisions.modelWriteApproved);
   if (control === "next") return transition(state, { type: "NEXT" });
   if (control === "continue") return transition(state, { type: "CONTINUE" });
@@ -407,6 +405,11 @@ function activate(state) {
   if (control === "back") return back(state);
   if (control === "name" || control === "path") return { ...state, focus: boundedFocus(state, state.focus + 1) };
   return state;
+}
+
+function space(state) {
+  const control = controlsFor(state)[boundedFocus(state)];
+  return ["edition", "profile", "memory", "models", "intent"].includes(control) ? change(state, 1) : activate(state);
 }
 
 export function transition(state, action = {}) {
@@ -431,6 +434,7 @@ export function transition(state, action = {}) {
   }
   if (action.type === "MOVE") return { ...state, focus: (boundedFocus(state) + (action.delta || 0) + controlsFor(state).length) % controlsFor(state).length };
   if (action.type === "CHANGE") return change(state, action.delta || 1);
+  if (action.type === "SPACE") return space(state);
   if (action.type === "ACTIVATE") return activate(state);
   if (action.type === "BACK") return back(state);
   if (action.type === "USE_RECOMMENDED") {
@@ -976,7 +980,7 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
   const footer = [
     `Phase ${phaseIndex + 1}/${PHASES.length}: ${state.phase}${state.overlay ? ` | ${state.overlay.type}${pageLabel}` : ""} | layout: ${layout} | provider calls: 0`,
     `Preview: ${previewModel(state.decisions, state.discovery).concise}`,
-    state.overlay ? "Keys: Esc close;arrows page;p Preview;w Why;q cancel" : "Keys: ↑↓/←→ nav/edit;Space/Enter pick;b back;r rec;p full Preview;w why;q cancel"
+    state.overlay ? "Keys: Esc close;arrows page;p Preview;w Why;q cancel" : "Keys: ↑↓ move;←→ edit;Space toggle;Enter select;b back;p full Preview;q quit"
   ];
   const availableContentHeight = Math.max(1, renderHeight - footer.length - 3);
   const lines = [clipAnsi(paint(title, "focus", color), width)];

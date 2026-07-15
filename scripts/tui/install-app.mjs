@@ -330,7 +330,8 @@ function handleToken(token, { playback = false } = {}) {
   if (token === "down") return dispatch(state.overlay ? { type: "PAGE", delta: 1, pageSize: previewPageSize(dimensions()) } : { type: "MOVE", delta: 1 });
   if (token === "left") return dispatch(state.overlay ? { type: "PAGE", delta: -1, pageSize: previewPageSize(dimensions()) } : { type: "CHANGE", delta: -1 });
   if (token === "right") return dispatch(state.overlay ? { type: "PAGE", delta: 1, pageSize: previewPageSize(dimensions()) } : { type: "CHANGE", delta: 1 });
-  if (token === "space" || token === "enter") return dispatch({ type: "ACTIVATE" });
+  if (token === "space") return dispatch({ type: "SPACE" });
+  if (token === "enter") return dispatch({ type: "ACTIVATE" });
   if (token === "backspace") return dispatch({ type: "BACKSPACE" });
   if (token.startsWith("text:")) return dispatch({ type: "INPUT", text: token.slice(5) });
 }

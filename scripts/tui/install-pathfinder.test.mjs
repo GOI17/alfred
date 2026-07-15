@@ -132,6 +132,71 @@ custom = transition(custom, { type: "CONFIRM" });
 assert.equal(custom.done, true);
 assert.equal(custom.decisions.apply, true, "apply requires explicit confirmation after Review");
 
+function focusControl(state, control) {
+  return transition(state, { type: "FOCUS_CONTROL", control });
+}
+
+for (const [control, activatedPhase] of [["recommended", "Review"], ["customize", "Choose"]]) {
+  const discoverAction = focusControl(createPathfinderState(), control);
+  const decisionsBefore = structuredClone(discoverAction.decisions);
+  for (const delta of [-1, 1]) {
+    const changedDiscoverAction = transition(discoverAction, { type: "CHANGE", delta });
+    assert.equal(changedDiscoverAction.phase, "Discover", `${control} ignores horizontal arrows`);
+    assert.deepEqual(changedDiscoverAction.decisions, decisionsBefore, `${control} horizontal arrows do not mutate decisions`);
+  }
+  assert.equal(transition(discoverAction, { type: "ACTIVATE" }).phase, activatedPhase, `Enter activates ${control}`);
+}
+
+const harnessAction = focusControl(transition(createPathfinderState(), { type: "CUSTOMIZE" }), "harness:opencode");
+for (const delta of [-1, 1]) {
+  assert.deepEqual(
+    transition(harnessAction, { type: "CHANGE", delta }).decisions.selectedHarnesses,
+    harnessAction.decisions.selectedHarnesses,
+    "horizontal arrows never toggle harness selection"
+  );
+}
+assert.deepEqual(transition(harnessAction, { type: "SPACE" }).decisions.selectedHarnesses, ["opencode"], "Space toggles a harness");
+assert.deepEqual(transition(harnessAction, { type: "ACTIVATE" }).decisions.selectedHarnesses, ["opencode"], "Enter toggles a harness");
+
+const chooseEnums = transition(createPathfinderState({ discovery }), { type: "CUSTOMIZE" });
+const enumCases = [
+  { control: "edition", key: "edition", state: chooseEnums },
+  { control: "profile", key: "profileStrategy", state: chooseEnums },
+  { control: "memory", key: "memorySetup", state: { ...createPathfinderState({ current: { edition: "full" }, discovery }), phase: "Configure" } },
+  { control: "models", key: "modelStrategy", state: { ...createPathfinderState({ discovery }), phase: "Configure" } },
+  { control: "intent", key: "applyIntent", state: { ...createPathfinderState({ discovery }), phase: "Configure" } }
+];
+for (const { control, key, state: enumState } of enumCases) {
+  const focused = focusControl(enumState, control);
+  const initial = focused.decisions[key];
+  const left = transition(focused, { type: "CHANGE", delta: -1 });
+  const right = transition(focused, { type: "CHANGE", delta: 1 });
+  assert.notEqual(left.decisions[key], initial, `Left cycles ${control}`);
+  assert.notEqual(right.decisions[key], initial, `Right cycles ${control}`);
+  assert.equal(transition(focused, { type: "ACTIVATE" }).decisions[key], initial, `Enter does not cycle ${control}`);
+  assert.equal(transition(focused, { type: "SPACE" }).decisions[key], right.decisions[key], `Space cycles ${control} forward`);
+}
+
+const chooseNext = focusControl(chooseEnums, "next");
+assert.equal(transition(chooseNext, { type: "CHANGE", delta: 1 }).phase, "Choose", "Right does not activate Choose Next");
+assert.equal(transition(chooseNext, { type: "ACTIVATE" }).phase, "Configure", "Enter activates Choose Next");
+const configureNext = focusControl({ ...createPathfinderState({ discovery }), phase: "Configure" }, "next");
+assert.equal(transition(configureNext, { type: "CHANGE", delta: -1 }).phase, "Configure", "Left does not activate Configure Continue");
+assert.equal(transition(configureNext, { type: "ACTIVATE" }).phase, "Review", "Enter activates Configure Continue");
+const reviewContinue = focusControl(transition(createPathfinderState({ discovery }), { type: "USE_RECOMMENDED" }), "continue");
+assert.equal(transition(reviewContinue, { type: "CHANGE", delta: 1 }).phase, "Review", "Right does not activate Review Continue");
+assert.equal(transition(reviewContinue, { type: "ACTIVATE" }).phase, "Apply", "Enter activates Review Continue");
+const applyConfirm = focusControl(transition(reviewContinue, { type: "ACTIVATE" }), "confirm");
+assert.equal(transition(applyConfirm, { type: "CHANGE", delta: -1 }).done, false, "Left does not confirm Apply");
+assert.equal(transition(applyConfirm, { type: "ACTIVATE" }).done, true, "Enter confirms Apply");
+
+const modelApproval = focusControl(transition(createPathfinderState({ discovery }), { type: "USE_RECOMMENDED" }), "model-approval");
+for (const delta of [-1, 1]) {
+  assert.equal(transition(modelApproval, { type: "CHANGE", delta }).decisions.modelWriteApproved, false, "horizontal arrows do not toggle model approval");
+}
+assert.equal(transition(modelApproval, { type: "SPACE" }).decisions.modelWriteApproved, true, "Space toggles model approval");
+assert.equal(transition(modelApproval, { type: "ACTIVATE" }).decisions.modelWriteApproved, true, "Enter toggles model approval");
+
 let overlayState = createPathfinderState();
 for (const phase of PHASES) {
   overlayState = { ...overlayState, phase, done: false };
@@ -371,6 +436,11 @@ for (const layout of ["fullscreen", "inline"]) {
     assert.ok(lines.length <= maximumRows, `${layout} ${phase} fits an 80x24 viewport`);
     assert.ok(lines.every((line) => displayWidth(line) <= maximumWidth), `${layout} ${phase} preserves a non-wrapping ANSI-aware width at 80 columns`);
     assert.match(lines.at(-1), /^Keys:/, `${layout} ${phase} footer is not clipped at 80x24`);
+    if (!phaseState.overlay) {
+      assert.match(lines.at(-1), /←→ edit/, `${layout} ${phase} footer identifies horizontal editing`);
+      assert.match(lines.at(-1), /Space toggle/, `${layout} ${phase} footer identifies Space toggling`);
+      assert.match(lines.at(-1), /Enter select/, `${layout} ${phase} footer identifies Enter selection`);
+    }
     assert.match(lines.at(-3), new RegExp(`layout: ${layout}`), `${layout} ${phase} identifies its layout`);
     assert.equal(rendered.text.match(/^Keys:/gm)?.length, 1, `${layout} ${phase} has one Keys line`);
     assert.equal(rendered.hitRegions.length, controlsFor(phaseState).length, `${layout} ${phase} keeps every active control visible at 80x24`);

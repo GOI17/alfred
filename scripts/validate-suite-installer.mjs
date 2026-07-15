@@ -159,6 +159,8 @@ def run_case(layout, mode, expected):
         if not sent and b"Alfred installer" in output:
             if mode == "normal":
                 os.write(fd, b"r\r\r")
+            elif mode == "keyboard":
+                os.write(fd, b"\x1b[B\x1b[C\r\x1b[B\x1b[C\r" + b"\x1b[B" * 5 + b"\x1b[D\r\r" + b"\x1b[B" * 4 + b"\x1b[D\r\x1b[D\r\x1b[D\r")
             elif mode == "cancel":
                 os.write(fd, b"q")
             else:
@@ -199,8 +201,11 @@ def run_case(layout, mode, expected):
         assert b"\x1b[2K" in output, mode + " inline did not erase owned rows during redraw/cleanup"
         assert b"A" in output, mode + " inline did not use cursor-up ownership movement"
     assert_terminal_output_safe(bytes(output), layout, layout + " " + mode)
-    if mode == "normal":
-        assert b"TUI_MODE='app'" in output, "normal PTY completion lost result assignments"
+    if mode in ("normal", "keyboard"):
+        assert b"TUI_MODE='app'" in output, mode + " PTY completion lost result assignments"
+    if mode == "keyboard":
+        assert b"HARNESS='opencode'" in output, layout + " arrow escape toggled the harness like Enter"
+        assert b"MODEL_STRATEGY='configure-later'" in output, layout + " Enter silently cycled the focused model enum"
 
 def set_size(fd, columns, rows):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
@@ -309,6 +314,7 @@ def run_inline_resize_case(mode, expected):
 
 for layout in ("fullscreen", "inline"):
     run_case(layout, "normal", 0)
+    run_case(layout, "keyboard", 0)
     run_case(layout, "cancel", 130)
     run_case(layout, "signal", 143)
 run_inline_resize_case("cancel", 130)
@@ -356,6 +362,7 @@ function runScriptPtyCase(layout, mode, utilLinux, discoveryFile) {
       if (sent || !nodePid || !stdout.includes("Alfred installer")) return;
       sent = true;
       if (mode === "normal") child.stdin.write("r\r\r");
+      if (mode === "keyboard") child.stdin.write(`\x1b[B\x1b[C\r\x1b[B\x1b[C\r${"\x1b[B".repeat(5)}\x1b[D\r\r${"\x1b[B".repeat(4)}\x1b[D\r\x1b[D\r\x1b[D\r`);
       if (mode === "cancel") child.stdin.write("q");
       if (mode === "signal") process.kill(nodePid, "SIGTERM");
     });
@@ -371,7 +378,7 @@ function runScriptPtyCase(layout, mode, utilLinux, discoveryFile) {
       settled = true;
       clearTimeout(timeout);
       try {
-        const expected = mode === "normal" ? 0 : mode === "cancel" ? 130 : 143;
+        const expected = mode === "normal" || mode === "keyboard" ? 0 : mode === "cancel" ? 130 : 143;
         const exitMatch = /__ALFRED_EXIT__:(\d+)/.exec(stdout);
         assert.equal(Number(exitMatch?.[1]), expected, `${mode} script PTY child exit mismatch\n${stdout}\n${stderr}`);
         if (layout === "fullscreen") {
@@ -383,7 +390,11 @@ function runScriptPtyCase(layout, mode, utilLinux, discoveryFile) {
           assert.match(stdout, /\x1b\[2K/, `${mode} inline script PTY did not erase owned rows`);
         }
         assert.doesNotMatch(stdout, /\x1b\]|\x1b[PX^_]|\x1b\[(?:>4;2|\?1|<1|=1|38:5:36|31 |31\$|;31|31;;1|31;)m|[\u0090\u0098\u009b\u009d\u009e\u009f]|injected osc52|injected title|injected dcs|injected c1 title/, `${layout} ${mode} script PTY emitted injected terminal controls`);
-        if (mode === "normal") assert.match(stdout, /TUI_MODE='app'/);
+        if (mode === "normal" || mode === "keyboard") assert.match(stdout, /TUI_MODE='app'/);
+        if (mode === "keyboard") {
+          assert.match(stdout, /HARNESS='opencode'/, `${layout} arrow escape toggled the harness like Enter`);
+          assert.match(stdout, /MODEL_STRATEGY='configure-later'/, `${layout} Enter silently cycled the focused model enum`);
+        }
         resolvePromise();
       } catch (error) {
         rejectPromise(error);
@@ -424,6 +435,7 @@ async function runRealPtyLifecycle() {
     const utilLinux = `${scriptProbe.stdout}\n${scriptProbe.stderr}`.includes("util-linux");
     for (const layout of ["fullscreen", "inline"]) {
       await runScriptPtyCase(layout, "normal", utilLinux, ptyDiscovery);
+      await runScriptPtyCase(layout, "keyboard", utilLinux, ptyDiscovery);
       await runScriptPtyCase(layout, "cancel", utilLinux, ptyDiscovery);
       await runScriptPtyCase(layout, "signal", utilLinux, ptyDiscovery);
     }
