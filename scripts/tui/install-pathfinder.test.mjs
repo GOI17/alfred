@@ -121,6 +121,19 @@ assert.equal(recommend({ discovery: existingDiscovery }).decisions.modelStrategy
 let noSignalModels = { ...createPathfinderState(), phase: "Configure" };
 assert.ok(MODEL_STRATEGIES.includes("custom-models"), "custom-models is a stable strategy");
 assert.deepEqual(availableModelStrategies(noSignalModels), ["custom-models", "configure-later"], "manual model assignment remains available with zero detections");
+noSignalModels = focusControl(noSignalModels, "models");
+noSignalModels = transition(noSignalModels, { type: "CHANGE", delta: 1 });
+assert.equal(noSignalModels.decisions.modelStrategy, "custom-models", "Right selects custom models with no local model signal");
+assert.equal(controlsFor(noSignalModels)[noSignalModels.focus], "models-edit", "selecting custom models with an arrow focuses the adjacent edit action");
+const modelEditAction = noSignalModels;
+for (const delta of [-1, 1]) {
+  const unchanged = transition(modelEditAction, { type: "CHANGE", delta });
+  assert.equal(unchanged.phase, "Configure", "horizontal arrows on models-edit cannot navigate phases");
+  assert.equal(unchanged.decisions.modelStrategy, "custom-models", "horizontal arrows on models-edit cannot change model strategy");
+  assert.equal(unchanged.overlay, null, "horizontal arrows on models-edit never activate the editor");
+}
+assert.equal(transition(modelEditAction, { type: "ACTIVATE" }).overlay?.type, "model-editor", "Enter on models-edit opens the manual model editor");
+assert.equal(transition(modelEditAction, { type: "SPACE" }).overlay?.type, "model-editor", "Space on models-edit opens the manual model editor");
 noSignalModels = transition(noSignalModels, { type: "PATCH", key: "modelStrategy", value: "custom-models" });
 noSignalModels = focusControl(noSignalModels, "models");
 noSignalModels = transition(noSignalModels, { type: "ACTIVATE" });
@@ -128,6 +141,9 @@ assert.equal(noSignalModels.overlay?.type, "model-editor", "Enter opens the manu
 noSignalModels = focusControl(noSignalModels, "model:wildcard");
 noSignalModels = transition(noSignalModels, { type: "ACTIVATE" });
 noSignalModels = transition(noSignalModels, { type: "INPUT", text: "ollama/qwen2.5-coder:7b" });
+const editingRender = stripAnsi(render(noSignalModels, { columns: 80, rows: 24, color: false }).text);
+assert.match(editingRender, /Select field → Enter → type → Enter to save/, "the editor explains the complete field-edit sequence");
+assert.match(editingRender, /\[EDITING\].*▏|▏.*\[EDITING\]/, "the active field visibly marks edit mode and the cursor");
 noSignalModels = transition(noSignalModels, { type: "ACTIVATE" });
 assert.equal(noSignalModels.decisions.customModels.wildcard, "ollama/qwen2.5-coder:7b", "explicit edit mode commits the wildcard model ID");
 
@@ -805,6 +821,22 @@ assert.doesNotMatch(laterModel.lines.join("\n"), /Wildcard primary|Global fallba
 const codingConfigure = { ...createPathfinderState({ discovery }), phase: "Configure" };
 assert.deepEqual(controlsFor(codingConfigure), ["models", "name", "path", "intent", "next"]);
 assert.doesNotMatch(stripAnsi(render(codingConfigure, { columns: 100, rows: 30, color: false }).text), /Memory:/);
+const customConfigure = transition(focusControl({ ...createPathfinderState(), phase: "Configure" }, "models"), { type: "CHANGE", delta: 1 });
+assert.deepEqual(controlsFor(customConfigure), ["models", "models-edit", "name", "path", "intent", "next"], "models-edit immediately follows the custom strategy selector");
+const customConfigureRender = render(customConfigure, { columns: 80, rows: 24, color: false, layout: "fullscreen" });
+assert.match(customConfigureRender.text, /Models \(←\/→ choose\): Custom model assignments/, "the Models row is visibly a selector");
+assert.match(customConfigureRender.text, /> \[Enter\] Edit model assignments…/, "the focused models-edit control is visibly actionable");
+assert.match(customConfigureRender.text.split("\n").at(-1), /Enter edit models/, "the models-edit footer names its focused action");
+assert.ok(customConfigureRender.hitRegions.some(({ action }) => action.type === "OPEN_MODEL_EDITOR" && action.control === "models-edit"), "fullscreen exposes a mouse hit region for models-edit");
+for (const layout of ["fullscreen", "inline"]) {
+  let reachable = { ...customConfigure, focus: 0 };
+  for (const expectedControl of controlsFor(customConfigure)) {
+    assert.equal(controlsFor(reachable)[reachable.focus], expectedControl, `${layout} Down reaches ${expectedControl} in order`);
+    const rendered = render(reachable, { columns: 80, rows: 24, color: false, layout });
+    assert.equal(rendered.hitRegions.length, controlsFor(reachable).length, `${layout} custom Configure keeps every control reachable at 80x24`);
+    reachable = transition(reachable, { type: "MOVE", delta: 1 });
+  }
+}
 const memoryConfigure = { ...createPathfinderState({ current: { edition: "memory" }, discovery }), phase: "Configure" };
 assert.deepEqual(controlsFor(memoryConfigure), ["memory", "name", "path", "intent", "next"]);
 assert.doesNotMatch(stripAnsi(render(memoryConfigure, { columns: 100, rows: 30, color: false }).text), /Profiles:|Models:/);

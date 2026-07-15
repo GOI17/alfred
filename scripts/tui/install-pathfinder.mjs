@@ -23,7 +23,7 @@ export const LABELS = Object.freeze({
   memory: Object.freeze(Object.fromEntries(MEMORY_SETUPS.map(({ value, label }) => [value, label]))),
   models: Object.freeze({
     "smart-defaults": "Use detected smart defaults",
-    "custom-models": "Enter custom models",
+    "custom-models": "Custom model assignments",
     "keep-existing": "Keep existing model configuration",
     "configure-later": "Configure models later"
   }),
@@ -395,7 +395,11 @@ export function controlsFor(state) {
   if (state.compatibilityPlayback && state.phase === "Choose") return ["edition", ...HARNESSES.map((item) => `harness:${item.value}`), "profile", "next"];
   if (state.compatibilityPlayback && state.phase === "Configure") return ["memory", "name", "path", "intent", "next"];
   if (state.phase === "Choose") return ["edition", ...HARNESSES.map((item) => `harness:${item.value}`), ...(profilesApplicable(state.decisions) ? ["profile"] : []), "next"];
-  if (state.phase === "Configure") return [...(memoryApplicable(state.decisions) ? ["memory"] : []), ...(modelsApplicable(state.decisions) ? ["models"] : []), "name", "path", "intent", "next"];
+  if (state.phase === "Configure") return [
+    ...(memoryApplicable(state.decisions) ? ["memory"] : []),
+    ...(modelsApplicable(state.decisions) ? ["models", ...(state.decisions.modelStrategy === "custom-models" ? ["models-edit"] : [])] : []),
+    "name", "path", "intent", "next"
+  ];
   if (state.phase === "Review") return [
     ...(modelsApplicable(state.decisions) && state.decisions.modelStrategy === "custom-models" ? ["model-plan-review"] : []),
     ...(modelsApplicable(state.decisions) && ["smart-defaults", "custom-models"].includes(state.decisions.modelStrategy) ? ["model-approval"] : []),
@@ -473,7 +477,13 @@ function change(state, delta) {
   if (control === "edition") return { ...state, decisions: withEdition(state.decisions, cycle(EDITIONS.map((item) => item.value), state.decisions.edition, delta)) };
   if (control === "profile") return patchDecision(state, "profileStrategy", cycle(PROFILE_STRATEGIES, state.decisions.profileStrategy, delta));
   if (control === "memory") return patchDecision(state, "memorySetup", cycle(MEMORY_SETUPS.map((item) => item.value), state.decisions.memorySetup, delta));
-  if (control === "models") return patchDecision(state, "modelStrategy", cycle(availableModelStrategies(state), state.decisions.modelStrategy, delta));
+  if (control === "models") {
+    const next = patchDecision(state, "modelStrategy", cycle(availableModelStrategies(state), state.decisions.modelStrategy, delta));
+    if (next.decisions.modelStrategy === "custom-models" && state.decisions.modelStrategy !== "custom-models") {
+      return { ...next, focus: controlsFor(next).indexOf("models-edit") };
+    }
+    return next;
+  }
   if (control === "intent") return patchDecision(state, "applyIntent", cycle(APPLY_INTENTS, state.decisions.applyIntent, delta));
   return state;
 }
@@ -587,6 +597,10 @@ function openModelPlanReview(state) {
     { type: "PAGE", delta: 0, pageSize, ...(currentInspection ? { totalItems: currentInspection.totalItems, inspectionKey: currentInspection.inspectionKey } : {}) }
   );
 }
+function openModelEditor(state) {
+  if (state.phase !== "Configure" || !modelsApplicable(state.decisions) || state.decisions.modelStrategy !== "custom-models") return state;
+  return { ...state, overlay: { type: "model-editor" }, focus: 0 };
+}
 function activate(state) {
   const control = controlsFor(state)[boundedFocus(state)];
   if (state.overlay?.type === "model-editor") {
@@ -622,13 +636,16 @@ function activate(state) {
     }
     if (control === "fallback-up") return moveFallback(state, -1);
     if (control === "fallback-down") return moveFallback(state, 1);
-    if (control === "model-editor-done") return { ...state, overlay: null, focus: controlsFor({ ...state, overlay: null }).indexOf("models") };
+    if (control === "model-editor-done") {
+      const configure = { ...state, overlay: null };
+      return { ...configure, focus: controlsFor(configure).indexOf("models-edit") };
+    }
     return state;
   }
   if (control === "recommended") return transition(state, { type: "USE_RECOMMENDED" });
   if (control === "customize") return transition(state, { type: "CUSTOMIZE" });
   if (control?.startsWith("harness:")) return toggleHarness(state, control.slice(8));
-  if (control === "models" && state.decisions.modelStrategy === "custom-models") return { ...state, overlay: { type: "model-editor" }, focus: 0 };
+  if ((control === "models" || control === "models-edit") && state.decisions.modelStrategy === "custom-models") return openModelEditor(state);
   if (control === "model-plan-review") return openModelPlanReview(state);
   if (control === "model-approval") return canApproveModels(state) ? patchDecision(state, "modelWriteApproved", !state.decisions.modelWriteApproved) : state;
   if (control === "next") return transition(state, { type: "NEXT" });
@@ -660,9 +677,13 @@ export function transition(state, action = {}) {
   }
   if (action.type === "OPEN_WHY") return { ...state, overlay: state.overlay?.type === "why" ? null : { type: "why", page: 0 } };
   if (action.type === "OPEN_PREVIEW") return { ...state, overlay: state.overlay?.type === "preview" ? null : { type: "preview", page: 0 } };
+  if (action.type === "OPEN_MODEL_EDITOR") return openModelEditor(state);
   if (action.type === "OPEN_MODEL_PLAN_REVIEW") return openModelPlanReview(state);
   if (state.overlay?.type === "model-editor") {
-    if (action.type === "CLOSE_OVERLAY" || action.type === "ESCAPE") return { ...state, overlay: null, focus: 0 };
+    if (action.type === "CLOSE_OVERLAY" || action.type === "ESCAPE") {
+      const configure = { ...state, overlay: null };
+      return { ...configure, focus: controlsFor(configure).indexOf("models-edit") };
+    }
     if (action.type === "FOCUS_CONTROL") {
       const focus = controlsFor(state).indexOf(action.control);
       if (focus < 0) return state;
@@ -865,16 +886,18 @@ function bodyEntries(state) {
       parts.splice(state.editing.cursor, 0, "▏");
       return parts.join("") || "▏";
     };
+    const editingTag = (control) => state.editing?.control === control ? " [EDITING]" : "";
     const validation = validateCustomModelsDraft(d.customModels);
     return [
       { text: "Manual model assignment · opaque IDs are kept exactly; provider calls: 0." },
+      { text: "Select field → Enter → type → Enter to save." },
       ...validation.errors.map((error) => ({ text: `Blocker: ${error}`, tone: "blocker" })),
-      { text: `${marker(focus === "model:wildcard")} Wildcard primary (required): [${editorValue("model:wildcard", d.customModels.wildcard, "empty")}]`, action: { type: "FOCUS_CONTROL", control: "model:wildcard" }, focused: focus === "model:wildcard" },
-      { text: `${marker(focus === "model:orchestrator")} Orchestrator primary (optional): [${editorValue("model:orchestrator", d.customModels.orchestrator, "uses wildcard")}]`, action: { type: "FOCUS_CONTROL", control: "model:orchestrator" }, focused: focus === "model:orchestrator" },
-      { text: `${marker(focus === "model:developer")} Developer primary (optional): [${editorValue("model:developer", d.customModels.developer, "uses wildcard")}]`, action: { type: "FOCUS_CONTROL", control: "model:developer" }, focused: focus === "model:developer" },
+      { text: `${marker(focus === "model:wildcard")} Wildcard primary (required)${editingTag("model:wildcard")}: [${editorValue("model:wildcard", d.customModels.wildcard, "empty")}]`, action: { type: "FOCUS_CONTROL", control: "model:wildcard" }, focused: focus === "model:wildcard" },
+      { text: `${marker(focus === "model:orchestrator")} Orchestrator primary (optional)${editingTag("model:orchestrator")}: [${editorValue("model:orchestrator", d.customModels.orchestrator, "uses wildcard")}]`, action: { type: "FOCUS_CONTROL", control: "model:orchestrator" }, focused: focus === "model:orchestrator" },
+      { text: `${marker(focus === "model:developer")} Developer primary (optional)${editingTag("model:developer")}: [${editorValue("model:developer", d.customModels.developer, "uses wildcard")}]`, action: { type: "FOCUS_CONTROL", control: "model:developer" }, focused: focus === "model:developer" },
       ...d.customModels.fallbacks.map((value, index) => {
         const control = `model:fallback:${index}`;
-        return { text: `${marker(focus === control)} Fallback ${index + 1}: [${editorValue(control, value, "empty")}]`, action: { type: "FOCUS_CONTROL", control }, focused: focus === control };
+        return { text: `${marker(focus === control)} Fallback ${index + 1}${editingTag(control)}: [${editorValue(control, value, "empty")}]`, action: { type: "FOCUS_CONTROL", control }, focused: focus === control };
       }),
       { text: `${marker(focus === "fallback-add")} Add fallback`, action: { type: "FOCUS_CONTROL", control: "fallback-add" }, focused: focus === "fallback-add" },
       { text: `${marker(focus === "fallback-remove")} Remove selected fallback`, action: { type: "FOCUS_CONTROL", control: "fallback-remove" }, focused: focus === "fallback-remove" },
@@ -916,12 +939,16 @@ function bodyEntries(state) {
     const entries = [];
     if (memoryApplicable(d)) entries.push({ text: `${marker(focus === "memory")} Memory: ${LABELS.memory[d.memorySetup]}${changedSuffix(decisionChanged(state, "memorySetup"))}`, action: { type: "CHANGE", delta: 1 }, focused: focus === "memory", tone: decisionChanged(state, "memorySetup") ? "changed" : "normal" });
     if (modelsApplicable(d)) {
-      entries.push({ text: `${marker(focus === "models")} Models: ${LABELS.models[d.modelStrategy]}${changedSuffix(decisionChanged(state, "modelStrategy"))}`, action: { type: "CHANGE", delta: 1 }, focused: focus === "models", tone: decisionChanged(state, "modelStrategy") ? "changed" : "normal" });
+      entries.push({ text: `${marker(focus === "models")} Models (←/→ choose): ${LABELS.models[d.modelStrategy]}${changedSuffix(decisionChanged(state, "modelStrategy"))}`, action: { type: "CHANGE", delta: 1, control: "models" }, focused: focus === "models", tone: decisionChanged(state, "modelStrategy") ? "changed" : "normal" });
+      if (d.modelStrategy === "custom-models") entries.push({
+        text: `${marker(focus === "models-edit")} [Enter] Edit model assignments…`,
+        action: { type: "OPEN_MODEL_EDITOR", control: "models-edit" },
+        focused: focus === "models-edit"
+      });
       entries.push(...modelStrategyLines(d, discovery).map((text) => ({
         text: `  ${text}`,
         tone: d.modelStrategy === "smart-defaults" ? (discovery.models.proposed_config["*"]?.primary ? "safe" : "blocker") : "normal"
       })));
-      if (d.modelStrategy === "custom-models") entries.push({ text: "  Press Enter on Models to edit exact IDs and ordered fallbacks." });
     }
     const installEditorValue = (control, value, placeholder) => {
       if (state.editing?.control !== control) return value || placeholder;
@@ -1360,12 +1387,15 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
     entries = all.slice(page * pageSize, (page + 1) * pageSize).map((text) => ({ text }));
     pageLabel = ` | page ${page + 1}/${pageCount}`;
   } else entries = bodyEntries(state);
+  const focusedControl = controlsFor(state)[boundedFocus(state)];
   const footer = [
     `Phase ${phaseIndex + 1}/${PHASES.length}: ${state.phase}${state.overlay ? ` | ${state.overlay.type}${pageLabel}` : ""} | layout: ${layout} | provider calls: 0`,
     `Preview: ${previewModel(state.decisions, state.discovery).concise}`,
     state.overlay?.type === "model-editor"
       ? (state.editing ? "Keys: ←→ cursor;Enter commit;Esc cancel;Backspace/Delete edit" : "Keys: ↑↓ move;Enter edit/action;Esc close;p Preview;q quit")
-      : state.overlay ? "Keys: Esc close;arrows page;p Preview;w Why;q cancel" : "Keys: ↑↓ move;←→ edit;Space toggle;Enter select;b back;p full Preview;q quit"
+      : state.overlay ? "Keys: Esc close;arrows page;p Preview;w Why;q cancel"
+        : focusedControl === "models-edit" ? "Keys: ↑↓ move;Enter edit models;b back;p full Preview;q quit"
+          : "Keys: ↑↓ move;←→ edit;Space toggle;Enter select;b back;p full Preview;q quit"
   ];
   const availableContentHeight = Math.max(1, renderHeight - footer.length - 3);
   const lines = [clipAnsi(paint(title, "focus", color), width)];

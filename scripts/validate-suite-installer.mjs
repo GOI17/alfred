@@ -251,6 +251,9 @@ def run_case(layout, mode, expected):
         assert b"HARNESS='opencode'" in output, layout + " arrow escape toggled the harness like Enter"
         assert b"MODEL_STRATEGY='configure-later'" in output, layout + " Enter silently cycled the focused model enum"
     if mode == "custom":
+        assert b"[Enter] Edit model assignments" in output, layout + " custom PTY did not expose the focusable model edit action"
+        assert "Select field → Enter → type → Enter to save".encode("utf8") in output, layout + " custom PTY did not explain field editing"
+        assert b"[EDITING]" in output, layout + " custom PTY did not expose active wildcard edit mode"
         assert b"MODEL_STRATEGY='custom-models'" in output, layout + " custom PTY lost manual strategy"
         assert b"MODEL_WRITE_APPROVED='true'" in output, layout + " custom PTY lost current Review approval"
         assert re.search(br"MODEL_PLAN_SHA256='[0-9a-f]{64}'", output), layout + " custom PTY omitted the exact plan digest"
@@ -1406,7 +1409,7 @@ exec ${shellQuote(tarPath)} "$@"
     "set:applyIntent=apply-safe-steps",
     "down", "enter",
     ...Array(6).fill("down"), "enter",
-    ...Array(4).fill("down"), "enter",
+    ...Array(5).fill("down"), "enter",
     "enter", "right", "esc", "down", "enter", "down", "enter", "down", "enter"
   ].join(",");
   const customHome = join(fixture, "model-custom-home");
