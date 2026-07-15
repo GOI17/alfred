@@ -34,18 +34,99 @@ const PROFILE_STRATEGIES = ["runtime-profiles", "decide-later"];
 const APPLY_INTENTS = ["preview-only", "apply-safe-steps"];
 const PREVIEW_PAGE_SIZE = 8;
 const MIN_PANEL_CONTENT_HEIGHT = 4;
-const ANSI_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]/g;
-const ANSI_AT_START_PATTERN = /^\x1b\[[0-?]*[ -/]*[@-~]/;
+const SGR_PATTERN = /\x1b\[(?:[0-9]+(?:;[0-9]+)*)?m/;
+const SGR_AT_START_PATTERN = /^\x1b\[(?:[0-9]+(?:;[0-9]+)*)?m/;
+const SGR_EXACT_PATTERN = /^\x1b\[(?:[0-9]+(?:;[0-9]+)*)?m$/;
 const COLOR = { reset: "\x1b[0m", cyan: "\x1b[36m", green: "\x1b[32m", yellow: "\x1b[33m", red: "\x1b[31m", dim: "\x1b[2m" };
 const GRAPHEME_SEGMENTER = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
 
+function consumeCsi(value, index, introducerLength) {
+  let cursor = index + introducerLength;
+  while (cursor < value.length && value.charCodeAt(cursor) >= 0x30 && value.charCodeAt(cursor) <= 0x3f) cursor += 1;
+  while (cursor < value.length && value.charCodeAt(cursor) >= 0x20 && value.charCodeAt(cursor) <= 0x2f) cursor += 1;
+  return cursor < value.length && value.charCodeAt(cursor) >= 0x40 && value.charCodeAt(cursor) <= 0x7e ? cursor + 1 : value.length;
+}
+
+function consumeControlString(value, index, introducerLength, bellTerminates) {
+  for (let cursor = index + introducerLength; cursor < value.length; cursor += 1) {
+    const code = value.charCodeAt(cursor);
+    if (bellTerminates && code === 0x07) return cursor + 1;
+    if (code === 0x9c) return cursor + 1;
+    if (code === 0x1b && value[cursor + 1] === "\\") return cursor + 2;
+  }
+  return value.length;
+}
+
+function terminalSequenceAt(value, index) {
+  const code = value.charCodeAt(index);
+  if (code === 0x9b) return { end: consumeCsi(value, index, 1), sgr: false };
+  if (code === 0x9d) return { end: consumeControlString(value, index, 1, true), sgr: false };
+  if ([0x90, 0x98, 0x9e, 0x9f].includes(code)) return { end: consumeControlString(value, index, 1, false), sgr: false };
+  if (code !== 0x1b) return null;
+  const next = value[index + 1];
+  if (next === "[") {
+    const end = consumeCsi(value, index, 2);
+    return { end, sgr: SGR_EXACT_PATTERN.test(value.slice(index, end)) };
+  }
+  if (next === "]") return { end: consumeControlString(value, index, 2, true), sgr: false };
+  if (["P", "X", "^", "_"].includes(next)) return { end: consumeControlString(value, index, 2, false), sgr: false };
+  if (next === "\\") return { end: index + 2, sgr: false };
+  let cursor = index + 1;
+  while (cursor < value.length && value.charCodeAt(cursor) >= 0x20 && value.charCodeAt(cursor) <= 0x2f) cursor += 1;
+  if (cursor < value.length && value.charCodeAt(cursor) >= 0x30 && value.charCodeAt(cursor) <= 0x7e) cursor += 1;
+  return { end: Math.max(index + 1, cursor), sgr: false };
+}
+
+function sanitizeControls(value, { preserveNewlines = false, preserveSgr = false } = {}) {
+  const input = String(value ?? "");
+  let output = "";
+  const safeSpace = () => { if (!output.endsWith(" ")) output += " "; };
+  for (let index = 0; index < input.length;) {
+    const sequence = terminalSequenceAt(input, index);
+    if (sequence) {
+      if (preserveSgr && sequence.sgr) output += input.slice(index, sequence.end);
+      index = sequence.end;
+      continue;
+    }
+    const codePoint = input.codePointAt(index);
+    const character = String.fromCodePoint(codePoint);
+    index += character.length;
+    if (codePoint === 0x0a && preserveNewlines) {
+      output += "\n";
+      continue;
+    }
+    if ((codePoint >= 0x09 && codePoint <= 0x0d) || codePoint === 0x85 || codePoint === 0x2028 || codePoint === 0x2029) {
+      safeSpace();
+      continue;
+    }
+    if (codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)) continue;
+    output += character;
+  }
+  return output;
+}
+
+export function sanitizeTerminalText(value) {
+  return sanitizeControls(value);
+}
+
+export function sanitizeTerminalOutput(value) {
+  return sanitizeControls(value, { preserveNewlines: true, preserveSgr: true });
+}
+
+export function normalizeTuiLayout(value) {
+  return value === "inline" ? "inline" : "fullscreen";
+}
+
 function known(value, fallback = "unknown") {
-  return typeof value === "string" && value.trim() ? value : fallback;
+  if (typeof value !== "string") return fallback;
+  const sanitized = sanitizeTerminalText(value);
+  return sanitized.trim() ? sanitized : fallback;
 }
 
 function safeSource(value) {
   if (typeof value !== "string") return "unknown";
-  if (/^env:[A-Z][A-Z0-9_]*$/.test(value) || value.startsWith("socket:")) return value;
+  const sanitized = sanitizeTerminalText(value);
+  if (/^env:[A-Z][A-Z0-9_]*$/.test(sanitized) || sanitized.startsWith("socket:")) return sanitized;
   return "unknown";
 }
 
@@ -56,11 +137,17 @@ function safeConfig(value) {
     const entry = value[key];
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
     const clean = {};
-    if (typeof entry.primary === "string" && entry.primary.trim()) clean.primary = entry.primary;
-    if (Array.isArray(entry.fallbacks)) clean.fallbacks = entry.fallbacks.filter((item) => typeof item === "string" && item.trim());
+    if (typeof entry.primary === "string" && sanitizeTerminalText(entry.primary).trim()) clean.primary = sanitizeTerminalText(entry.primary);
+    if (Array.isArray(entry.fallbacks)) clean.fallbacks = entry.fallbacks.flatMap((item) => {
+      const sanitized = typeof item === "string" ? sanitizeTerminalText(item) : "";
+      return sanitized.trim() ? [sanitized] : [];
+    });
     if (Object.keys(clean).length) result[key] = clean;
   }
-  result.fallbacks = Array.isArray(value.fallbacks) ? value.fallbacks.filter((item) => typeof item === "string" && item.trim()) : [];
+  result.fallbacks = Array.isArray(value.fallbacks) ? value.fallbacks.flatMap((item) => {
+    const sanitized = typeof item === "string" ? sanitizeTerminalText(item) : "";
+    return sanitized.trim() ? [sanitized] : [];
+  }) : [];
   return result;
 }
 
@@ -73,7 +160,7 @@ export function normalizeDiscovery(input, legacyHarnessStatus = {}) {
   }));
   const suggestions = Array.isArray(value.models?.suggestions) ? value.models.suggestions.flatMap((item) => {
     if (!item || typeof item.provider !== "string" || typeof item.model !== "string") return [];
-    return [{ provider: item.provider, model: item.model, source: safeSource(item.source) }];
+    return [{ provider: sanitizeTerminalText(item.provider), model: sanitizeTerminalText(item.model), source: safeSource(item.source) }];
   }) : [];
   return {
     schema: value.schema ?? "unknown",
@@ -94,7 +181,7 @@ export function normalizeDiscovery(input, legacyHarnessStatus = {}) {
       proposed_config: safeConfig(value.models?.proposed_config),
       validation: {
         status: value.models?.validation?.status === "pass" ? "pass" : value.models?.validation?.status === "fail" ? "fail" : "unknown",
-        errors: Array.isArray(value.models?.validation?.errors) ? value.models.validation.errors.map(String) : []
+        errors: Array.isArray(value.models?.validation?.errors) ? value.models.validation.errors.map((error) => sanitizeTerminalText(error)) : []
       },
       existing_config: value.models?.existing_config === true
     },
@@ -118,8 +205,8 @@ export function normalizeDiscovery(input, legacyHarnessStatus = {}) {
 }
 
 export function previewPageSize({ columns = 80, rows = 24 } = {}) {
-  const width = Math.max(20, Number(columns) || 80);
-  const height = Math.max(8, Number(rows) || 24);
+  const width = terminalDimension(columns, 80);
+  const height = terminalDimension(rows, 24);
   return width >= 100 ? Math.max(1, height - 8) : Math.max(1, Math.min(PREVIEW_PAGE_SIZE, height - 8));
 }
 
@@ -176,8 +263,8 @@ export function recommend({ current = {}, harnessStatus = {}, discovery: discove
     memorySetup,
     modelStrategy,
     modelWriteApproved: false,
-    name: String(current.name || "acme"),
-    targetPath: String(current.targetPath ?? current.path ?? ""),
+    name: sanitizeTerminalText(current.name || "acme"),
+    targetPath: sanitizeTerminalText(current.targetPath ?? current.path ?? ""),
     applyIntent: "preview-only",
     apply: false
   };
@@ -276,8 +363,8 @@ function patchDecision(state, key, value) {
   if (key === "modelWriteApproved" && [true, false, "true", "false"].includes(value) && ["Review", "Apply"].includes(state.phase)) {
     decisions.modelWriteApproved = value === true || value === "true";
   }
-  if (key === "name") decisions.name = String(value);
-  if (key === "path" || key === "targetPath") decisions.targetPath = String(value);
+  if (key === "name") decisions.name = sanitizeTerminalText(value);
+  if (key === "path" || key === "targetPath") decisions.targetPath = sanitizeTerminalText(value);
   if (key === "apply") {
     decisions.apply = value === true || value === "true" || value === "yes";
     decisions.applyIntent = decisions.apply ? "apply-safe-steps" : "preview-only";
@@ -384,15 +471,16 @@ function effective(decisions) {
     memorySetup: decisions.edition === "coding" ? "not-needed-for-coding-edition" : decisions.memorySetup,
     modelStrategy: decisions.edition === "memory" ? "configure-later" : decisions.modelStrategy,
     modelWriteApproved: decisions.edition !== "memory" && decisions.modelWriteApproved === true,
-    name: decisions.name.trim() || "acme"
+    name: sanitizeTerminalText(decisions.name).trim() || "acme",
+    targetPath: sanitizeTerminalText(decisions.targetPath)
   };
 }
 function modelConfigLines(config = {}) {
   return [
-    `Wildcard primary: ${config["*"]?.primary || "none detected"}`,
-    `Orchestrator override: ${config.orchestrator?.primary || "uses wildcard"}`,
-    `Developer override: ${config.developer?.primary || "uses wildcard"}`,
-    `Global fallback chain: ${config.fallbacks?.length ? config.fallbacks.join(" → ") : "none detected"}`
+    `Wildcard primary: ${sanitizeTerminalText(config["*"]?.primary || "none detected")}`,
+    `Orchestrator override: ${sanitizeTerminalText(config.orchestrator?.primary || "uses wildcard")}`,
+    `Developer override: ${sanitizeTerminalText(config.developer?.primary || "uses wildcard")}`,
+    `Global fallback chain: ${config.fallbacks?.length ? config.fallbacks.map(sanitizeTerminalText).join(" → ") : "none detected"}`
   ];
 }
 
@@ -415,7 +503,7 @@ function modelStrategyLines(value, discovery) {
 }
 
 export function previewModel(decisions, discoveryInput) {
-  const discovery = discoveryInput?.schema ? normalizeDiscovery(discoveryInput) : discoveryInput ?? normalizeDiscovery();
+  const discovery = discoveryInput?.schema === "alfred.install.discovery/v1" ? normalizeDiscovery(discoveryInput) : discoveryInput ?? normalizeDiscovery();
   const value = effective(decisions);
   const harnesses = value.selectedHarnesses.length ? value.selectedHarnesses.map((id) => HARNESSES.find((item) => item.value === id)?.label || id).join(", ") : "None";
   const targetPath = effectiveTargetPath(value);
@@ -438,8 +526,8 @@ export function previewModel(decisions, discoveryInput) {
     "Review is required before interactive confirmation."
   );
   return {
-    concise: `${LABELS.editions[value.edition]} | ${harnesses} | ${modelsApplicable(value) ? LABELS.models[value.modelStrategy] : LABELS.memory[value.memorySetup]} | ${LABELS.intents[value.applyIntent]}`,
-    lines,
+    concise: sanitizeTerminalText(`${LABELS.editions[value.edition]} | ${harnesses} | ${modelsApplicable(value) ? LABELS.models[value.modelStrategy] : LABELS.memory[value.memorySetup]} | ${LABELS.intents[value.applyIntent]}`),
+    lines: lines.map(sanitizeTerminalText),
     providerCalls: 0,
     provider_calls: 0
   };
@@ -576,10 +664,10 @@ export function rationaleLines(state) {
       : `${label}: ${display}. ${REASON_TEXT[state.recommendation.reasons[reasonIndexes[key]]] || "Matches recommendation."}`);
   }
   lines.push("Provider calls: 0");
-  return lines;
+  return lines.map(sanitizeTerminalText);
 }
 
-export function stripAnsi(text) { return String(text).replace(ANSI_PATTERN, ""); }
+export function stripAnsi(text) { return sanitizeControls(text, { preserveNewlines: true }); }
 function graphemes(text) {
   if (!GRAPHEME_SEGMENTER) return Array.from(text);
   return Array.from(GRAPHEME_SEGMENTER.segment(text), ({ segment }) => segment);
@@ -610,6 +698,35 @@ function graphemeWidth(grapheme) {
 }
 export function displayWidth(text) { return graphemes(stripAnsi(text)).reduce((total, grapheme) => total + graphemeWidth(grapheme), 0); }
 
+export function terminalPhysicalRows(text, columns) {
+  const viewportWidth = Number(columns);
+  if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) return 0;
+  const width = Math.floor(viewportWidth);
+  if (width <= 0) return 0;
+  const value = stripAnsi(text);
+  if (value === "") return 0;
+  return value.split("\n").reduce((total, line) => {
+    let rows = 1;
+    let occupied = 0;
+    for (const grapheme of graphemes(line)) {
+      const cellWidth = graphemeWidth(grapheme);
+      if (cellWidth <= 0) continue;
+      if (cellWidth > width) {
+        if (occupied > 0) rows += 1;
+        rows += Math.ceil(cellWidth / width) - 1;
+        occupied = width;
+        continue;
+      }
+      if (cellWidth > width - occupied) {
+        rows += 1;
+        occupied = 0;
+      }
+      occupied += cellWidth;
+    }
+    return total + rows;
+  }, 0);
+}
+
 function inferredHome(discovery) {
   const match = /^(.*)[\\/]\.alfred[\\/]?$/.exec(String(discovery?.install?.alfred_home || ""));
   return match?.[1] || "";
@@ -621,16 +738,16 @@ export function abbreviateHomePath(value, discovery) {
     .filter((home, index, values) => home && values.indexOf(home) === index)
     .sort((left, right) => right.length - left.length);
   const home = homes.find((candidate) => path === candidate || path.startsWith(`${candidate}/`) || path.startsWith(`${candidate}\\`));
-  return home ? `~${path.slice(home.length).replaceAll("\\", "/")}` : path;
+  return sanitizeTerminalText(home ? `~${path.slice(home.length).replaceAll("\\", "/")}` : path);
 }
 
 function styledGraphemes(text) {
   const atoms = [];
   let activeStyle = "";
   let index = 0;
-  const value = String(text);
+  const value = sanitizeTerminalOutput(text);
   while (index < value.length) {
-    const ansi = ANSI_AT_START_PATTERN.exec(value.slice(index));
+    const ansi = SGR_AT_START_PATTERN.exec(value.slice(index));
     if (ansi) {
       if (ansi[0].endsWith("m")) {
         const parameters = ansi[0].slice(2, -1);
@@ -643,7 +760,7 @@ function styledGraphemes(text) {
       index += ansi[0].length;
       continue;
     }
-    const nextAnsi = value.slice(index).search(/\x1b\[/);
+    const nextAnsi = value.slice(index).search(SGR_PATTERN);
     const end = nextAnsi < 0 ? value.length : index + nextAnsi;
     if (end === index) {
       const [grapheme] = graphemes(value.slice(index));
@@ -674,7 +791,7 @@ function renderStyledAtoms(atoms) {
 export function wrapAnsi(text, width) {
   const limit = Math.max(1, Number(width) || 1);
   const output = [];
-  for (const paragraph of String(text).split("\n")) {
+  for (const paragraph of sanitizeTerminalOutput(text).split("\n")) {
     let remaining = styledGraphemes(paragraph);
     if (!remaining.length) {
       output.push("");
@@ -713,16 +830,16 @@ export function wrapAnsi(text, width) {
 
 export function clipAnsi(text, width) {
   const limit = Math.max(0, width);
-  const original = String(text);
+  const original = sanitizeTerminalOutput(text);
   if (displayWidth(original) <= limit) return original;
   const target = Math.max(0, limit - 1);
   let output = "";
   let visible = 0;
   for (let index = 0; index < original.length && visible < target;) {
     const rest = original.slice(index);
-    const sgr = ANSI_AT_START_PATTERN.exec(rest);
+    const sgr = SGR_AT_START_PATTERN.exec(rest);
     if (sgr) { output += sgr[0]; index += sgr[0].length; continue; }
-    const nextAnsi = rest.search(/\x1b\[/);
+    const nextAnsi = rest.search(SGR_PATTERN);
     const textEnd = nextAnsi < 0 ? original.length : index + nextAnsi;
     const text = original.slice(index, textEnd);
     let consumed = 0;
@@ -736,7 +853,7 @@ export function clipAnsi(text, width) {
     index += consumed;
     if (consumed < text.length) break;
   }
-  const reset = /\x1b\[[0-?]*[ -/]*[@-~]/.test(original) ? COLOR.reset : "";
+  const reset = SGR_PATTERN.test(original) ? COLOR.reset : "";
   return limit === 0 ? "" : limit === 1 ? "…" : `${output}…${reset}`;
 }
 export function padAnsi(text, width) {
@@ -749,7 +866,7 @@ function paint(text, tone, color) {
   return code ? `${code}${text}${COLOR.reset}` : text;
 }
 function entryBlocks(entries, width) {
-  return entries.map((entry) => ({ ...entry, lines: wrapAnsi(entry.text || "", width) }));
+  return entries.map((entry) => ({ ...entry, lines: wrapAnsi(sanitizeTerminalText(entry.text || ""), width) }));
 }
 function blocksHeight(blocks) { return blocks.reduce((total, block) => total + block.lines.length, 0); }
 function entriesHeight(entries, width) { return blocksHeight(entryBlocks(entries, width)); }
@@ -786,7 +903,7 @@ function fitPanelEntries(entries, contentHeight, width) {
 }
 function panel(title, entries, width, contentHeight, { color, xOffset = 0, yOffset = 0 } = {}) {
   const inner = Math.max(1, width - 2);
-  const titleText = ` ${title} `;
+  const titleText = ` ${sanitizeTerminalText(title)} `;
   const clippedTitle = clipAnsi(titleText, inner);
   const top = `┌${clippedTitle}${"─".repeat(Math.max(0, inner - displayWidth(clippedTitle)))}┐`;
   const lines = [paint(top, "focus", color)];
@@ -805,12 +922,46 @@ function panel(title, entries, width, contentHeight, { color, xOffset = 0, yOffs
   return { lines, hitRegions };
 }
 
-export function render(state, { columns = 80, rows = 24, color = false } = {}) {
-  const width = Math.max(20, Number(columns) || 80);
-  const height = Math.max(8, Number(rows) || 24);
+function terminalDimension(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : fallback;
+}
+
+function resizePrompt(width, height, layout) {
+  if (width === 0 || height === 0) return { text: "", hitRegions: [], providerCalls: 0, provider_calls: 0 };
+  const message = "Resize terminal";
+  const cancel = "q cancel";
+  let lines;
+  if (height === 1 || width < 3) lines = [clipAnsi(message, width)];
+  else if (height === 2) lines = [clipAnsi(message, width), clipAnsi(cancel, width)];
+  else {
+    const inner = width - 2;
+    lines = [
+      `┌${"─".repeat(inner)}┐`,
+      `│${padAnsi(message, inner)}│`
+    ];
+    if (height >= 4) lines.push(`│${padAnsi(cancel, inner)}│`);
+    lines.push(`└${"─".repeat(inner)}┘`);
+  }
+  return {
+    text: lines.slice(0, height).join("\n"),
+    hitRegions: [],
+    layout,
+    providerCalls: 0,
+    provider_calls: 0
+  };
+}
+
+export function render(state, { columns = 80, rows = 24, color = false, layout: layoutInput = "fullscreen" } = {}) {
+  const columnsAvailable = terminalDimension(columns, 80);
+  const height = terminalDimension(rows, 24);
+  const layout = normalizeTuiLayout(layoutInput);
+  const width = layout === "inline" ? Math.max(0, columnsAvailable - 1) : columnsAvailable;
+  const renderHeight = layout === "fullscreen" ? Math.max(0, height - 1) : height;
+  if (width < 20 || renderHeight < 8) return resizePrompt(width, renderHeight, layout);
   const wide = width >= 100;
   const phaseIndex = Math.max(0, PHASES.indexOf(state.phase));
-  const title = wide ? `Alfred installer | ${PHASES.map((phase) => phase === state.phase ? `[${phase}]` : phase).join(" > ")}` : `Alfred installer | ${phaseIndex + 1}/${PHASES.length} ${state.phase}`;
+  const title = sanitizeTerminalText(wide ? `Alfred installer | ${PHASES.map((phase) => phase === state.phase ? `[${phase}]` : phase).join(" > ")}` : `Alfred installer | ${phaseIndex + 1}/${PHASES.length} ${state.phase}`);
   let entries;
   let pageLabel = "";
   if (state.overlay?.type === "why") entries = rationaleLines(state).map((text) => ({ text }));
@@ -823,11 +974,11 @@ export function render(state, { columns = 80, rows = 24, color = false } = {}) {
     pageLabel = ` | page ${page + 1}/${pageCount}`;
   } else entries = bodyEntries(state);
   const footer = [
-    `Phase ${phaseIndex + 1}/${PHASES.length}: ${state.phase}${state.overlay ? ` | ${state.overlay.type}${pageLabel}` : ""} | provider calls: 0`,
+    `Phase ${phaseIndex + 1}/${PHASES.length}: ${state.phase}${state.overlay ? ` | ${state.overlay.type}${pageLabel}` : ""} | layout: ${layout} | provider calls: 0`,
     `Preview: ${previewModel(state.decisions, state.discovery).concise}`,
     state.overlay ? "Keys: Esc close;arrows page;p Preview;w Why;q cancel" : "Keys: ↑↓/←→ nav/edit;Space/Enter pick;b back;r rec;p full Preview;w why;q cancel"
   ];
-  const availableContentHeight = Math.max(1, height - footer.length - 3);
+  const availableContentHeight = Math.max(1, renderHeight - footer.length - 3);
   const lines = [clipAnsi(paint(title, "focus", color), width)];
   const hitRegions = [];
   if (wide && !state.overlay) {
@@ -835,8 +986,9 @@ export function render(state, { columns = 80, rows = 24, color = false } = {}) {
     const leftWidth = Math.floor((width - gap) * 0.58);
     const rightWidth = width - gap - leftWidth;
     const reasons = rationaleLines(state).map((text) => ({ text, tone: text.includes("Changed from recommendation") ? "changed" : "normal" }));
-    const leftContentHeight = Math.min(availableContentHeight, Math.max(MIN_PANEL_CONTENT_HEIGHT, entriesHeight(entries, leftWidth - 2)));
-    const rightContentHeight = Math.min(availableContentHeight, Math.max(MIN_PANEL_CONTENT_HEIGHT, entriesHeight(reasons, rightWidth - 2)));
+    const minimumContentHeight = layout === "inline" ? 1 : MIN_PANEL_CONTENT_HEIGHT;
+    const leftContentHeight = Math.min(availableContentHeight, Math.max(minimumContentHeight, entriesHeight(entries, leftWidth - 2)));
+    const rightContentHeight = Math.min(availableContentHeight, Math.max(minimumContentHeight, entriesHeight(reasons, rightWidth - 2)));
     const panelHeight = Math.max(leftContentHeight, rightContentHeight) + 2;
     const left = panel(state.phase, entries, leftWidth, leftContentHeight, { color, yOffset: 1 });
     const right = panel("Rationale", reasons, rightWidth, rightContentHeight, { color, xOffset: leftWidth + gap, yOffset: 1 });
@@ -847,17 +999,18 @@ export function render(state, { columns = 80, rows = 24, color = false } = {}) {
     }
     hitRegions.push(...left.hitRegions, ...right.hitRegions);
   } else {
-    const contentHeight = Math.min(availableContentHeight, Math.max(MIN_PANEL_CONTENT_HEIGHT, entriesHeight(entries, width - 2)));
+    const minimumContentHeight = layout === "inline" ? 1 : MIN_PANEL_CONTENT_HEIGHT;
+    const contentHeight = Math.min(availableContentHeight, Math.max(minimumContentHeight, entriesHeight(entries, width - 2)));
     const single = panel(state.overlay?.type === "why" ? "Rationale" : state.overlay?.type === "preview" ? "Preview" : state.phase, entries, width, contentHeight, { color, yOffset: 1 });
     lines.push(...single.lines);
     hitRegions.push(...single.hitRegions);
   }
-  while (lines.length < height - footer.length) lines.push("");
-  for (const line of footer) lines.push(clipAnsi(line, width));
-  return { text: lines.slice(0, height).join("\n"), hitRegions, providerCalls: 0, provider_calls: 0 };
+  if (layout === "fullscreen") while (lines.length < renderHeight - footer.length) lines.push("");
+  for (const line of footer) lines.push(clipAnsi(sanitizeTerminalText(line), width));
+  return { text: sanitizeTerminalOutput(lines.slice(0, renderHeight).join("\n")), hitRegions, providerCalls: 0, provider_calls: 0 };
 }
 
-function shellQuote(value) { return String(value).replace(/\n/g, "").replace(/'/g, "'\\''"); }
+function shellQuote(value) { return sanitizeTerminalText(value).replace(/'/g, "'\\''"); }
 export function serializeAssignments(decisions, { reviewVisited = false } = {}) {
   const value = effective(decisions);
   const harnesses = value.selectedHarnesses.length ? value.selectedHarnesses.join(",") : "none";

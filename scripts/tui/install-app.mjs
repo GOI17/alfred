@@ -10,11 +10,15 @@ import {
   MEMORY_SETUPS,
   controlsFor,
   createPathfinderState,
+  normalizeTuiLayout,
   normalizeDiscovery,
   parseHarnessSelection,
   previewPageSize,
   render,
+  sanitizeTerminalOutput,
   serializeAssignments,
+  stripAnsi,
+  terminalPhysicalRows,
   transition
 } from "./install-pathfinder.mjs";
 
@@ -117,11 +121,21 @@ let legacyFocus = 0;
 let legacyHarnessFocus = 0;
 let pendingInput = "";
 const inputDecoder = new StringDecoder("utf8");
+const selectedTuiLayout = normalizeTuiLayout(process.env.ALFRED_INSTALL_APP_TUI_LAYOUT);
 
-function dimensions() {
+function dimension(...values) {
+  for (const value of values) {
+    if (value === undefined || value === null || value === "") continue;
+    const number = Number(value);
+    if (Number.isFinite(number)) return Math.max(0, Math.floor(number));
+  }
+  return 0;
+}
+
+function dimensions(output = process.stdout) {
   return {
-    columns: Number(process.env.ALFRED_INSTALL_APP_TUI_COLUMNS || process.stdout.columns || process.env.COLUMNS || 80),
-    rows: Number(process.env.ALFRED_INSTALL_APP_TUI_ROWS || process.stdout.rows || process.env.LINES || 24)
+    columns: dimension(process.env.ALFRED_INSTALL_APP_TUI_COLUMNS, output?.columns, process.env.COLUMNS, 80),
+    rows: dimension(process.env.ALFRED_INSTALL_APP_TUI_ROWS, output?.rows, process.env.LINES, 24)
   };
 }
 
@@ -130,11 +144,65 @@ function colorEnabled(stream) {
   return Boolean(stream?.isTTY) && !Object.hasOwn(process.env, "NO_COLOR");
 }
 
-function screen(output = process.stdout) {
-  const viewport = dimensions();
+function screen(output = process.stdout, layout = selectedTuiLayout, viewport = dimensions(output)) {
   if (state.overlay?.type === "preview") state = transition(state, { type: "PAGE", delta: 0, pageSize: previewPageSize(viewport) });
-  lastRender = render(state, { ...viewport, color: colorEnabled(output) });
+  lastRender = render(state, { ...viewport, color: colorEnabled(output), layout });
   return lastRender.text;
+}
+
+function cursorUp(rows) {
+  return rows > 0 ? `\x1b[${rows}A` : "";
+}
+
+export function inlineFrameInfo(text, { columns = 0, rows = 0 } = {}) {
+  const value = sanitizeTerminalOutput(text);
+  const logicalLines = value === "" ? [] : value.split("\n").map((line) => {
+    const plainText = stripAnsi(line);
+    return { text: plainText };
+  });
+  return {
+    columns: dimension(columns),
+    rows: dimension(rows),
+    text: logicalLines.map(({ text: line }) => line).join("\n"),
+    logicalLines
+  };
+}
+
+export function inlinePhysicalRows(frame, columns = frame?.columns) {
+  if (typeof frame === "number") return Math.max(0, Math.floor(frame));
+  if (!frame?.logicalLines?.length) return 0;
+  const width = dimension(columns);
+  if (width === 0) return 0;
+  const text = typeof frame.text === "string" ? frame.text : frame.logicalLines.map((line) => line.text || "").join("\n");
+  return terminalPhysicalRows(text, width);
+}
+
+export function inlineRedrawSequence(text, previousFrame = null, currentColumns = previousFrame?.columns) {
+  const value = sanitizeTerminalOutput(text);
+  const lines = value === "" ? [] : value.split("\n");
+  const oldRows = inlinePhysicalRows(previousFrame, currentColumns);
+  if (oldRows === 0) return value;
+  const totalRows = Math.max(oldRows, lines.length);
+  let output = `\r${cursorUp(oldRows - 1)}`;
+  for (let index = 0; index < totalRows; index += 1) {
+    output += "\x1b[2K";
+    if (index < lines.length) output += lines[index];
+    if (index < totalRows - 1) output += "\r\n";
+  }
+  const targetRow = Math.max(0, lines.length - 1);
+  output += `\r${cursorUp(totalRows - 1 - targetRow)}`;
+  return output;
+}
+
+export function inlineClearSequence(ownedFrame = null, currentColumns = ownedFrame?.columns) {
+  const rows = inlinePhysicalRows(ownedFrame, currentColumns);
+  if (rows === 0) return "";
+  let output = `\r${cursorUp(rows - 1)}`;
+  for (let index = 0; index < rows; index += 1) {
+    output += "\x1b[2K";
+    if (index < rows - 1) output += "\r\n";
+  }
+  return `${output}\r${cursorUp(rows - 1)}`;
 }
 
 function dispatch(action) {
@@ -267,8 +335,8 @@ function handleToken(token, { playback = false } = {}) {
   if (token.startsWith("text:")) return dispatch({ type: "INPUT", text: token.slice(5) });
 }
 
-function handleDecodedEvent(event) {
-  if (event.type === "mouse") return handleInteractiveMouse(event);
+function handleDecodedEvent(event, { mouseEnabled = true } = {}) {
+  if (event.type === "mouse") return mouseEnabled ? handleInteractiveMouse(event) : undefined;
   if (event.type === "token") return handleToken(event.token);
   if (event.type !== "text") return;
   const action = printableInputAction(event.text, {
@@ -280,13 +348,13 @@ function handleDecodedEvent(event) {
   if (action.type === "token") handleToken(action.token);
 }
 
-function parseBytes(data, { flushEscape = false } = {}) {
+function parseBytes(data, { flushEscape = false, mouseEnabled = true } = {}) {
   if (data?.length) pendingInput += Buffer.isBuffer(data) ? inputDecoder.write(data) : String(data);
   while (pendingInput) {
     const event = decodeTerminalEvent(pendingInput, { flushEscape });
     if (event.type === "incomplete") break;
     pendingInput = pendingInput.slice(event.length);
-    handleDecodedEvent(event);
+    handleDecodedEvent(event, { mouseEnabled });
     if (state.done) break;
   }
 }
@@ -309,7 +377,7 @@ function runPlayback() {
   writeAssignments();
 }
 
-export async function runInteractive({ stdin = process.stdin, stdout = process.stdout } = {}) {
+export async function runInteractive({ stdin = process.stdin, stdout = process.stdout, layout: layoutInput = selectedTuiLayout } = {}) {
   if (!stdin.isTTY || !stdout.isTTY) {
     process.stderr.write("App TUI requires a TTY. Falling back to text installer.\n");
     process.exitCode = 2;
@@ -322,12 +390,29 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
   let resolveSession;
   let rejectSession;
   let onData;
-  const redraw = () => stdout.write(`\x1b[H\x1b[2J${screen(stdout)}`);
+  let onResize;
+  let ownedFrame = null;
+  const layout = normalizeTuiLayout(layoutInput);
+  const fullscreen = layout === "fullscreen";
+  const mouseEnabled = fullscreen;
+  const redraw = () => {
+    const viewport = dimensions(stdout);
+    if (!fullscreen && (viewport.columns === 0 || viewport.rows === 0)) return;
+    const content = screen(stdout, layout, viewport);
+    if (fullscreen) stdout.write(`\x1b[H\x1b[2J${content}`);
+    else {
+      stdout.write(inlineRedrawSequence(content, ownedFrame, viewport.columns));
+      ownedFrame = inlineFrameInfo(content, viewport);
+    }
+  };
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
     if (escapeTimer) clearTimeout(escapeTimer);
-    try { stdout.write("\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l"); } catch {}
+    try {
+      if (fullscreen) stdout.write("\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l");
+      else stdout.write(`${inlineClearSequence(ownedFrame, dimensions(stdout).columns)}\x1b[?25h`);
+    } catch {}
     try { if (stdin.isRaw !== wasRaw) stdin.setRawMode(wasRaw); } catch {}
     try { stdin.pause(); } catch {}
     try { stdin.unref?.(); } catch {}
@@ -339,7 +424,7 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
   const flushEscape = () => {
     escapeTimer = null;
     try {
-      parseBytes("", { flushEscape: true });
+      parseBytes("", { flushEscape: true, mouseEnabled });
       settle();
     } catch (error) {
       rejectSession?.(error);
@@ -360,7 +445,7 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
           clearTimeout(escapeTimer);
           escapeTimer = null;
         }
-        parseBytes(data);
+        parseBytes(data, { mouseEnabled });
         if (pendingInput === "\x1b") escapeTimer = setTimeout(flushEscape, 25);
         settle();
       } catch (error) {
@@ -370,12 +455,16 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
     stdin.on("data", onData);
     stdin.on("error", onError);
     stdout.on("error", onError);
+    onResize = () => {
+      try { if (!state.done) redraw(); } catch (error) { rejectPromise(error); }
+    };
+    stdout.on("resize", onResize);
     for (const [signal, handler] of signalHandlers) process.once(signal, handler);
   });
   try {
     stdin.setRawMode(true);
     stdin.resume();
-    stdout.write("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h");
+    stdout.write(fullscreen ? "\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h" : "\x1b[?25l");
     if (state.done) resolveSession();
     else redraw();
     await session;
@@ -384,6 +473,7 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
     cleanup();
     stdin.off("error", onError);
     stdout.off("error", onError);
+    if (onResize) stdout.off("resize", onResize);
     for (const [signal, handler] of signalHandlers) process.off(signal, handler);
   }
   if (terminationCode) process.exitCode = terminationCode;

@@ -48,11 +48,25 @@ The shell validates proposed config with `validateModelsConfig`, writes a same-d
 
 Preserve playback tokens, current-input variables, result-file behavior, text/non-TTY fallback, and existing assignment meanings. Discovery is read-only and local; model assignment remains user-owned. No provider endpoint is contacted, no secret value is captured, and no live harness or protected project config is modified.
 
+`ALFRED_INSTALL_APP_TUI_LAYOUT` accepts `fullscreen` or `inline`. Missing and unknown values normalize to `fullscreen` for compatibility. This is an installer environment selector, not a new global Alfred CLI option. Playback remains deterministic and exposes the selected normalized layout without requiring a TTY. Normal shell environment inheritance carries the selector through `install.sh`; no executable path or unvalidated value is added to result IPC.
+
+Fullscreen retains the alternate-screen, raw-mode, hidden-cursor, and SGR mouse lifecycle. It clears only the alternate screen while active, disables mouse reporting and leaves the alternate screen on every completion, cancellation, signal, or error path. Rendering always owns at most `max(0, rows - 1)`: `rows=0` and `rows=1` render empty text with no exceptions, while `rows>=2` may use at most `rows - 1` even for the minimal resize status. The physical last terminal row is therefore preserved exactly.
+
+Inline retains raw keyboard navigation but never enters the alternate screen, enables mouse reporting, or emits a whole-terminal clear. It hides/restores the cursor and owns only its natural compact row range. Redraw starts from the current owned final row, moves up by at most the prior owned height, erases each owned line, renders the new content, and clears stale owned rows when a render shrinks. Resize and cleanup calculate prior physical rows by placing ANSI-free grapheme clusters into terminal columns: wide CJK and emoji graphemes move intact to the next row when they do not fit, and combining/ZWJ sequences use the same widths as display rendering. This relative ownership protocol cannot address terminal history above the first owned row. Completion, cancellation, SIGINT/SIGTERM/SIGHUP, and errors restore raw/cursor state and erase transient owned rows when the output stream remains writable, allowing installer output to continue at that location. Mouse input is intentionally disabled in inline mode so screen-relative coordinates cannot trigger incorrect actions.
+
 ## Presentation
 
 Controls are edition-derived: Coding hides Memory; Memory hides Profiles and Models; Full shows all. Previews also omit inapplicable rows—internal sentinels such as `not-needed-for-coding-edition` never reach users. Central label maps render “Coding,” “Runtime profiles,” “Use detected smart defaults,” etc.; reducers and IPC retain stable enums.
 
-At 80x24, use one ANSI-bordered active panel, compact discovery summary, persistent preview, and footer without overflow. At width >=100, use bordered two-column panels for choices/discovery and current rationale, filling available height. ANSI-aware clipping/padding ignores SGR bytes. Cyan marks focus, green safe/detected, yellow changed/approval, red blockers; text and borders retain meaning with `NO_COLOR` or non-TTY output.
+At 80x24, use one ANSI-bordered active panel, compact discovery summary, persistent preview, and one help line without overflow. At width >=100, use bordered two-column panels for choices/discovery and current rationale. ANSI-aware clipping/padding ignores SGR bytes. Cyan marks focus, green safe/detected, yellow changed/approval, red blockers; text and borders retain meaning with `NO_COLOR` or non-TTY output.
+
+Fullscreen keeps compact panels at the top, anchors status/preview/help near the bottom, and reserves one untouched terminal row below the help line. Inline places status/preview/help immediately after the panels with no vertical filler. Both footers identify the normalized layout when it fits the existing single-line footer budget.
+
+Invoke inline mode for a local installer path with:
+
+```sh
+ALFRED_INSTALL_APP_TUI_LAYOUT=inline ALFRED_INSTALL_FORCE_TUI=1 sh /path/install.sh
+```
 
 ## Files and Tests
 
@@ -60,9 +74,9 @@ At 80x24, use one ANSI-bordered active panel, compact discovery summary, persist
 |---|---|
 | `install.sh` | Build/pass discovery, validate additive IPC, gate and atomically write models, trace. |
 | `scripts/tui/install-discovery.mjs` | New local probe using profile-manager/core exports. |
-| `scripts/tui/install-app.mjs` | Validate discovery input; preserve terminal/playback behavior. |
-| `scripts/tui/install-pathfinder.mjs` | Conditional controls, model decisions, dynamic rationale, labels, ANSI panels. |
-| `scripts/tui/install-pathfinder.test.mjs` | State, labels, rationale-after-edit, model shape, ANSI width, 80x24/wide tests. |
-| `scripts/validate-suite-installer.mjs` | OS/Node/provider/install/git fixtures; legacy IPC; preview/cancel no-write; existing-config protection; confirmed atomic write and traces. |
+| `scripts/tui/install-app.mjs` | Validate discovery input; preserve terminal/playback behavior; own fullscreen and inline terminal lifecycles. |
+| `scripts/tui/install-pathfinder.mjs` | Conditional controls, model decisions, dynamic rationale, labels, ANSI panels, and layout-aware pure rendering. |
+| `scripts/tui/install-pathfinder.test.mjs` | State, labels, rationale-after-edit, model shape, grapheme-aware physical rows, natural inline height, strict zero-row fullscreen behavior at `rows<=1`, and 80x24 tests for both layouts. |
+| `scripts/validate-suite-installer.mjs` | OS/Node/provider/install/git fixtures; legacy IPC; both PTY lifecycles plus CJK/emoji resize and cleanup; preview/cancel no-write; existing-config protection; confirmed atomic write and traces. |
 
 Reuse existing profile-manager/core tests as contract gates. `scripts/shell/install.sh` remains a compatibility reference, not a second implementation. Run `npm run profile-manager:test`, `npm run core:test`, and `npm run validate:suite-installer`. No migration, harness-config write, provider call, or open design question.

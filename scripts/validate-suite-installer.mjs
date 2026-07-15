@@ -32,7 +32,7 @@ function run(args, options = {}) {
   });
 }
 
-function runInteractiveLifecycle(mode) {
+function runInteractiveLifecycle(layout, mode) {
   const childScript = `
     import { Writable } from "node:stream";
     const { runInteractive } = await import(${JSON.stringify(pathToFileURL(appTui).href)});
@@ -54,7 +54,7 @@ function runInteractiveLifecycle(mode) {
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(process.execPath, ["--input-type=module", "--eval", childScript], {
       cwd,
-      env: { ...process.env },
+      env: { ...process.env, ALFRED_INSTALL_APP_TUI_LAYOUT: layout },
       stdio: ["pipe", "pipe", "pipe"]
     });
     let stdout = "";
@@ -65,13 +65,13 @@ function runInteractiveLifecycle(mode) {
       if (settled) return;
       settled = true;
       child.kill("SIGKILL");
-      rejectPromise(new Error(`interactive ${mode} lifecycle timed out`));
+      rejectPromise(new Error(`interactive ${layout} ${mode} lifecycle timed out`));
     }, 4000);
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
       stdout += chunk;
-      if (started || !stdout.includes("\x1b[?1049h")) return;
+      if (started || !stdout.includes("Alfred installer")) return;
       started = true;
       if (mode === "normal") child.stdin.write("r\r\r");
       if (mode === "cancel") child.stdin.write("q");
@@ -95,29 +95,55 @@ function runInteractiveLifecycle(mode) {
 
 function pythonPtyCommand() {
   for (const command of ["python3", "python"]) {
-    const probe = spawnSync(command, ["-c", "import sys; assert sys.version_info[0] >= 3; import os, pty, select, signal"], { encoding: "utf8" });
+    const probe = spawnSync(command, ["-c", "import sys; assert sys.version_info[0] >= 3; import fcntl, os, pty, select, signal, struct, termios"], { encoding: "utf8" });
     if (!probe.error && probe.status === 0) return command;
   }
   return null;
 }
 
-function runPythonPtyLifecycle(command) {
+function runPythonPtyLifecycle(command, discoveryFile) {
   const pythonScript = String.raw`
+import json
 import os
 import pty
 import select
 import signal
+import subprocess
+import fcntl
+import re
+import struct
 import sys
+import termios
 import time
 
-node, app = sys.argv[1], sys.argv[2]
+node, app, discovery = sys.argv[1], sys.argv[2], sys.argv[3]
 enter = b"\x1b[?1049h"
 restore = b"\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l"
+mouse_enable = b"\x1b[?1000h\x1b[?1006h"
 
-def run_case(mode, expected):
+def assert_terminal_output_safe(output, layout, label):
+    text = output.decode("utf8", "replace")
+    if layout == "fullscreen":
+        allowed = re.compile(r"\x1b(?:\[[0-9;]*m|\[H|\[2J|\[\?(?:1049|25|1000|1006)[hl])")
+    else:
+        allowed = re.compile(r"\x1b(?:\[[0-9;]*m|\[[1-9][0-9]*A|\[2K|\[\?25[hl])")
+    remaining = allowed.sub("", text)
+    assert "\x1b" not in remaining, label + " emitted a terminal escape outside its owned controls"
+    assert not any(0x80 <= ord(char) <= 0x9f for char in remaining), label + " emitted a C1 terminal control"
+    assert not any(ord(char) < 0x20 and char not in "\r\n" for char in remaining), label + " emitted a C0 cursor/control character"
+    for payload in ("injected osc52", "injected title", "injected dcs", "injected c1 title"):
+        assert payload not in text, label + " emitted an injected terminal-control payload"
+    for attack in ("\x1b[>4;2m", "\x1b[?1m", "\x1b[<1m", "\x1b[=1m", "\x1b[38:5:36m", "\x1b[31 m", "\x1b[31$m", "\x1b[;31m", "\x1b[31;;1m", "\x1b[31;m", "\x9b31m"):
+        assert attack not in text, label + " emitted an injected SGR lookalike"
+
+def run_case(layout, mode, expected):
     pid, fd = pty.fork()
     if pid == 0:
-        os.execve(node, [node, app], os.environ.copy())
+        env = os.environ.copy()
+        env["ALFRED_INSTALL_APP_TUI_LAYOUT"] = layout
+        env["ALFRED_INSTALL_DISCOVERY_FILE"] = discovery
+        os.execve(node, [node, app], env)
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
     output = bytearray()
     sent = False
     status = None
@@ -130,7 +156,7 @@ def run_case(mode, expected):
             except OSError:
                 chunk = b""
             output.extend(chunk)
-        if not sent and enter in output:
+        if not sent and b"Alfred installer" in output:
             if mode == "normal":
                 os.write(fd, b"r\r\r")
             elif mode == "cancel":
@@ -145,7 +171,7 @@ def run_case(mode, expected):
     if status is None:
         os.kill(pid, signal.SIGKILL)
         os.waitpid(pid, 0)
-        raise AssertionError(mode + " PTY lifecycle timed out")
+        raise AssertionError(layout + " " + mode + " PTY lifecycle timed out")
     drain_deadline = time.monotonic() + 0.25
     while time.monotonic() < drain_deadline:
         readable, _, _ = select.select([fd], [], [], 0.02)
@@ -160,18 +186,136 @@ def run_case(mode, expected):
         output.extend(chunk)
     os.close(fd)
     code = os.WEXITSTATUS(status) if os.WIFEXITED(status) else 128 + os.WTERMSIG(status)
-    assert sent, mode + " never entered alternate-screen mode"
-    assert code == expected, "%s exited %s, expected %s" % (mode, code, expected)
-    assert restore in output, mode + " did not emit terminal restoration"
+    assert sent, layout + " " + mode + " never rendered"
+    assert code == expected, "%s %s exited %s, expected %s" % (layout, mode, code, expected)
+    if layout == "fullscreen":
+        assert enter in output, mode + " did not enter alternate-screen mode"
+        assert restore in output, mode + " did not emit fullscreen terminal restoration"
+        assert mouse_enable in output, mode + " did not enable mouse reporting"
+    else:
+        assert b"\x1b[?1049" not in output, mode + " inline emitted alternate-screen control"
+        assert b"\x1b[?1000" not in output and b"\x1b[?1006" not in output, mode + " inline emitted mouse control"
+        assert b"\x1b[2J" not in output, mode + " inline cleared the terminal"
+        assert b"\x1b[2K" in output, mode + " inline did not erase owned rows during redraw/cleanup"
+        assert b"A" in output, mode + " inline did not use cursor-up ownership movement"
+    assert_terminal_output_safe(bytes(output), layout, layout + " " + mode)
     if mode == "normal":
         assert b"TUI_MODE='app'" in output, "normal PTY completion lost result assignments"
 
-run_case("normal", 0)
-run_case("cancel", 130)
-run_case("signal", 143)
+def set_size(fd, columns, rows):
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+
+def read_available(fd, output):
+    readable, _, _ = select.select([fd], [], [], 0.02)
+    if not readable:
+        return False
+    try:
+        chunk = os.read(fd, 65536)
+    except OSError:
+        return False
+    if not chunk:
+        return False
+    output.extend(chunk)
+    return True
+
+def run_inline_resize_case(mode, expected):
+    pid, fd = pty.fork()
+    if pid == 0:
+        env = os.environ.copy()
+        env["ALFRED_INSTALL_APP_TUI_LAYOUT"] = "inline"
+        env["ALFRED_INSTALL_DISCOVERY_FILE"] = discovery
+        env["NO_COLOR"] = "1"
+        os.execve(node, [node, app], env)
+    set_size(fd, 120, 30)
+    output = bytearray()
+    deadline = time.monotonic() + 5.0
+    while b"Alfred installer" not in output and time.monotonic() < deadline:
+        read_available(fd, output)
+    assert b"Alfred installer" in output, mode + " resize PTY never rendered wide frame"
+    time.sleep(0.05)
+    while read_available(fd, output):
+        pass
+    initial = bytes(output)
+    assert "界界界".encode("utf8") in initial, mode + " resize PTY lost CJK discovery content"
+    assert "👩‍💻".encode("utf8") in initial, mode + " resize PTY lost emoji ZWJ discovery content"
+    assert "é".encode("utf8") in initial, mode + " resize PTY lost combining discovery content"
+    initial_plain = re.sub(br"\x1b\[[0-?]*[ -/]*[@-~]", b"", initial).decode("utf8").replace("\r", "")
+    initial_lines = initial_plain.split("\n")
+    if initial_lines and initial_lines[-1] == "":
+        initial_lines.pop()
+    calculator = ${JSON.stringify(`
+      import { readFileSync } from "node:fs";
+      import { terminalPhysicalRows } from ${JSON.stringify(pathToFileURL(pathfinder).href)};
+      const lines = JSON.parse(readFileSync(0, "utf8"));
+      const text = lines.join("\\n");
+      process.stdout.write(String(terminalPhysicalRows(text, 20)));
+    `)}
+    calculated = subprocess.run([node, "--input-type=module", "--eval", calculator], input=json.dumps(initial_lines), text=True, capture_output=True)
+    assert calculated.returncode == 0, calculated.stderr
+    expected_narrow_rows = int(calculated.stdout)
+
+    narrow_start = len(output)
+    set_size(fd, 20, 8)
+    while b"Resize terminal" not in output[narrow_start:] and time.monotonic() < deadline:
+        read_available(fd, output)
+    assert b"Resize terminal" in output[narrow_start:], mode + " resize PTY did not render narrow recovery frame"
+    time.sleep(0.05)
+    while read_available(fd, output):
+        pass
+    narrow = bytes(output[narrow_start:])
+    assert narrow.startswith((b"\r\x1b[%dA" % (expected_narrow_rows - 1))), mode + " narrowing did not move to true reflowed frame start"
+    assert narrow.count(b"\x1b[2K") >= expected_narrow_rows, mode + " narrowing left stale reflowed physical rows"
+
+    wide_start = len(output)
+    set_size(fd, 120, 30)
+    while b"Alfred installer" not in output[wide_start:] and time.monotonic() < deadline:
+        read_available(fd, output)
+    assert b"Alfred installer" in output[wide_start:], mode + " resize PTY did not recover after widening"
+    time.sleep(0.05)
+    while read_available(fd, output):
+        pass
+    widened = bytes(output[wide_start:])
+    assert widened.startswith(b"\r\x1b[3A"), mode + " widening did not own exactly the four-row recovery frame"
+    assert widened.count(b"\x1b[2K") >= 4, mode + " widening left stale recovery-frame rows"
+
+    action_start = len(output)
+    if mode == "cancel":
+        os.write(fd, b"q")
+    else:
+        os.kill(pid, signal.SIGTERM)
+    status = None
+    while time.monotonic() < deadline:
+        read_available(fd, output)
+        waited, candidate = os.waitpid(pid, os.WNOHANG)
+        if waited == pid:
+            status = candidate
+            break
+    if status is None:
+        os.kill(pid, signal.SIGKILL)
+        os.waitpid(pid, 0)
+        raise AssertionError(mode + " resize PTY lifecycle timed out")
+    time.sleep(0.05)
+    while read_available(fd, output):
+        pass
+    os.close(fd)
+    code = os.WEXITSTATUS(status) if os.WIFEXITED(status) else 128 + os.WTERMSIG(status)
+    cleanup = bytes(output[action_start:])
+    assert code == expected, "%s resize PTY exited %s, expected %s" % (mode, code, expected)
+    assert b"\x1b[2K" in cleanup and b"\x1b[?25h" in cleanup, mode + " resize PTY did not erase the final owned frame and restore cursor"
+    assert b"\x1b[?1049" not in output, mode + " resize PTY emitted alternate-screen control"
+    assert b"\x1b[?1000" not in output and b"\x1b[?1006" not in output, mode + " resize PTY emitted mouse control"
+    assert b"\x1b[2J" not in output, mode + " resize PTY emitted whole-screen clear"
+    assert_terminal_output_safe(bytes(output), "inline", "inline " + mode + " resize")
+
+for layout in ("fullscreen", "inline"):
+    run_case(layout, "normal", 0)
+    run_case(layout, "cancel", 130)
+    run_case(layout, "signal", 143)
+run_inline_resize_case("cancel", 130)
+run_inline_resize_case("signal", 143)
 print("real PTY lifecycle tests ok (Python pty)")
 `;
-  const result = spawnSync(command, ["-c", pythonScript, process.execPath, appTui], {
+  const result = spawnSync(command, ["-c", pythonScript, process.execPath, appTui, discoveryFile], {
     cwd,
     env: { ...process.env },
     encoding: "utf8",
@@ -186,11 +330,11 @@ function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-function runScriptPtyCase(mode, utilLinux) {
+function runScriptPtyCase(layout, mode, utilLinux, discoveryFile) {
   const wrapper = `${shellQuote(process.execPath)} ${shellQuote(appTui)} & child=$!; printf '__ALFRED_PID__:%s\\n' "$child"; wait "$child"; code=$?; printf '__ALFRED_EXIT__:%s\\n' "$code"; exit "$code"`;
   const args = utilLinux ? ["-qfec", wrapper, "/dev/null"] : ["-q", "/dev/null", "sh", "-c", wrapper];
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn("script", args, { cwd, env: { ...process.env }, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn("script", args, { cwd, env: { ...process.env, ALFRED_INSTALL_APP_TUI_LAYOUT: layout, ALFRED_INSTALL_DISCOVERY_FILE: discoveryFile }, stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     let sent = false;
@@ -201,7 +345,7 @@ function runScriptPtyCase(mode, utilLinux) {
       settled = true;
       try { if (nodePid) process.kill(nodePid, "SIGKILL"); } catch {}
       child.kill("SIGKILL");
-      rejectPromise(new Error(`script PTY ${mode} lifecycle timed out`));
+      rejectPromise(new Error(`script PTY ${layout} ${mode} lifecycle timed out`));
     }, 5000);
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
@@ -209,7 +353,7 @@ function runScriptPtyCase(mode, utilLinux) {
       stdout += chunk;
       const pidMatch = /__ALFRED_PID__:(\d+)/.exec(stdout);
       if (pidMatch) nodePid = Number(pidMatch[1]);
-      if (sent || !nodePid || !stdout.includes("\x1b[?1049h")) return;
+      if (sent || !nodePid || !stdout.includes("Alfred installer")) return;
       sent = true;
       if (mode === "normal") child.stdin.write("r\r\r");
       if (mode === "cancel") child.stdin.write("q");
@@ -230,7 +374,15 @@ function runScriptPtyCase(mode, utilLinux) {
         const expected = mode === "normal" ? 0 : mode === "cancel" ? 130 : 143;
         const exitMatch = /__ALFRED_EXIT__:(\d+)/.exec(stdout);
         assert.equal(Number(exitMatch?.[1]), expected, `${mode} script PTY child exit mismatch\n${stdout}\n${stderr}`);
-        assert.match(stdout, /\x1b\[\?1006l\x1b\[\?1000l\x1b\[\?25h\x1b\[\?1049l/, `${mode} script PTY did not restore terminal modes`);
+        if (layout === "fullscreen") {
+          assert.match(stdout, /\x1b\[\?1049h/);
+          assert.match(stdout, /\x1b\[\?1000h\x1b\[\?1006h/);
+          assert.match(stdout, /\x1b\[\?1006l\x1b\[\?1000l\x1b\[\?25h\x1b\[\?1049l/, `${mode} script PTY did not restore terminal modes`);
+        } else {
+          assert.doesNotMatch(stdout, /\x1b\[\?1049|\x1b\[\?1000|\x1b\[\?1006|\x1b\[2J/, `${mode} inline script PTY emitted forbidden terminal controls`);
+          assert.match(stdout, /\x1b\[2K/, `${mode} inline script PTY did not erase owned rows`);
+        }
+        assert.doesNotMatch(stdout, /\x1b\]|\x1b[PX^_]|\x1b\[(?:>4;2|\?1|<1|=1|38:5:36|31 |31\$|;31|31;;1|31;)m|[\u0090\u0098\u009b\u009d\u009e\u009f]|injected osc52|injected title|injected dcs|injected c1 title/, `${layout} ${mode} script PTY emitted injected terminal controls`);
         if (mode === "normal") assert.match(stdout, /TUI_MODE='app'/);
         resolvePromise();
       } catch (error) {
@@ -241,17 +393,40 @@ function runScriptPtyCase(mode, utilLinux) {
 }
 
 async function runRealPtyLifecycle() {
+  const ptyDiscovery = join(fixture, "pty-unicode-discovery.json");
+  const osc52 = "\x1b]52;c;injected osc52\x07";
+  const oscTitle = "\x1b]0;injected title\x1b\\";
+  const dcs = "\x1bP1;2|injected dcs\x1b\\";
+  const c1Csi = "\x9b31m";
+  const c1Osc = "\x9d0;injected c1 title\x9c";
+  const sgrLookalikes = "\x1b[>4;2m\x1b[?1m\x1b[<1m\x1b[=1m\x1b[38:5:36m\x1b[31 m\x1b[31$m\x1b[;31m\x1b[31;;1m\x1b[31;m";
+  writeFileSync(ptyDiscovery, JSON.stringify({
+    schema: "alfred.install.discovery/v1",
+    os: { platform: `te${oscTitle}st`, release: `界界界${"a界".repeat(28)}👩‍💻é${dcs}${sgrLookalikes}\tstable`, architecture: `arm${c1Csi}64` },
+    node: { status: "ok", version: `v24.1.0${c1Osc}\r\nnext\b`, major: 24, required_major: 22 },
+    harnesses: { opencode: "not-installed", "codex-cli": "not-installed", "codex-app": "not-installed", pi: "not-installed" },
+    models: {
+      suggestions: [{ provider: `ol${osc52}lama`, model: `ollama/qwen${dcs}\t2.5`, source: `socket:/tmp/model${oscTitle}.sock` }],
+      proposed_config: { "*": { primary: `ollama/${c1Csi}qwen` }, fallbacks: [`fallback${osc52}/one`] },
+      validation: { status: "fail", errors: [] }, existing_config: false
+    },
+    install: { alfred_home: "/tmp/.alfred", selected_target: `/tmp/界界界/${osc52}👩‍💻/é\nnext`, target_exists: false, models_config_path: `/tmp/.alfred/${dcs}models.json`, models_config_exists: false },
+    git: { availability: "installed", workspace_root: `/tmp/界界界${c1Osc}\twork`, project_root: `/tmp/👩‍💻/${oscTitle}é\rroot`, repository_state: "repository", linked_worktree_state: "main-worktree" },
+    provider_calls: 0
+  }));
   const python = pythonPtyCommand();
   if (python) {
-    runPythonPtyLifecycle(python);
+    runPythonPtyLifecycle(python, ptyDiscovery);
     return;
   }
   const scriptProbe = spawnSync("script", ["--version"], { encoding: "utf8" });
   if (!scriptProbe.error) {
     const utilLinux = `${scriptProbe.stdout}\n${scriptProbe.stderr}`.includes("util-linux");
-    await runScriptPtyCase("normal", utilLinux);
-    await runScriptPtyCase("cancel", utilLinux);
-    await runScriptPtyCase("signal", utilLinux);
+    for (const layout of ["fullscreen", "inline"]) {
+      await runScriptPtyCase(layout, "normal", utilLinux, ptyDiscovery);
+      await runScriptPtyCase(layout, "cancel", utilLinux, ptyDiscovery);
+      await runScriptPtyCase(layout, "signal", utilLinux, ptyDiscovery);
+    }
     console.log("real PTY lifecycle tests ok (script)");
     return;
   }
@@ -272,21 +447,33 @@ try {
   const pathfinderTests = spawnSync("node", [pathfinderTest], { encoding: "utf8" });
   assert.equal(pathfinderTests.status, 0, pathfinderTests.stderr);
 
-  const interactiveNormal = await runInteractiveLifecycle("normal");
-  assert.equal(interactiveNormal.code, 0, interactiveNormal.stderr);
-  assert.equal(interactiveNormal.signal, null);
-  assert.match(interactiveNormal.stdout, /TUI_MODE='app'/);
-  assert.match(interactiveNormal.stdout, /\x1b\[\?1006l\x1b\[\?1000l\x1b\[\?25h\x1b\[\?1049l/, "normal completion restores terminal modes");
+  for (const layout of ["fullscreen", "inline"]) {
+    const interactiveNormal = await runInteractiveLifecycle(layout, "normal");
+    assert.equal(interactiveNormal.code, 0, interactiveNormal.stderr);
+    assert.equal(interactiveNormal.signal, null);
+    assert.match(interactiveNormal.stdout, /TUI_MODE='app'/);
 
-  const interactiveCancel = await runInteractiveLifecycle("cancel");
-  assert.equal(interactiveCancel.code, 130, interactiveCancel.stderr);
-  assert.equal(interactiveCancel.signal, null);
-  assert.match(interactiveCancel.stdout, /\x1b\[\?1006l\x1b\[\?1000l\x1b\[\?25h\x1b\[\?1049l/, "q cancellation restores terminal modes");
+    const interactiveCancel = await runInteractiveLifecycle(layout, "cancel");
+    assert.equal(interactiveCancel.code, 130, interactiveCancel.stderr);
+    assert.equal(interactiveCancel.signal, null);
 
-  const interactiveSignal = await runInteractiveLifecycle("signal");
-  assert.equal(interactiveSignal.code, 143, interactiveSignal.stderr);
-  assert.equal(interactiveSignal.signal, null);
-  assert.match(interactiveSignal.stdout, /\x1b\[\?1006l\x1b\[\?1000l\x1b\[\?25h\x1b\[\?1049l/, "SIGTERM restores terminal modes");
+    const interactiveSignal = await runInteractiveLifecycle(layout, "signal");
+    assert.equal(interactiveSignal.code, 143, interactiveSignal.stderr);
+    assert.equal(interactiveSignal.signal, null);
+
+    for (const lifecycle of [interactiveNormal, interactiveCancel, interactiveSignal]) {
+      if (layout === "fullscreen") {
+        assert.match(lifecycle.stdout, /\x1b\[\?1049h/);
+        assert.match(lifecycle.stdout, /\x1b\[\?1000h\x1b\[\?1006h/);
+        assert.match(lifecycle.stdout, /\x1b\[\?1006l\x1b\[\?1000l\x1b\[\?25h\x1b\[\?1049l/, "fullscreen lifecycle restores terminal modes");
+      } else {
+        assert.doesNotMatch(lifecycle.stdout, /\x1b\[\?1049|\x1b\[\?1000|\x1b\[\?1006|\x1b\[2J/, "inline lifecycle avoids alternate screen, mouse reporting, and whole-screen clears");
+        assert.match(lifecycle.stdout, /\x1b\[2K/, "inline lifecycle erases only owned rows");
+        assert.match(lifecycle.stdout, /\x1b\[[1-9][0-9]*A/, "inline lifecycle uses cursor-up movement within owned rows");
+        assert.match(lifecycle.stdout, /\x1b\[\?25h/, "inline lifecycle restores the cursor");
+      }
+    }
+  }
 
   await runRealPtyLifecycle();
 
@@ -313,6 +500,7 @@ try {
     env: {
       TMPDIR: appTuiTemp,
       ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_LAYOUT: "inline",
       ALFRED_INSTALL_APP_TUI_RENDER: "1",
       ALFRED_INSTALL_APP_TUI_EVENTS:
         "set:edition=full,set:harnesses=opencode+codex-cli+codex-app,set:profiles=true,set:memory=postgres,set:name=app-demo,set:apply=false,submit"
@@ -327,6 +515,7 @@ try {
   assert.match(appTuiOutput, /Git: /);
   assert.match(appTuiOutput, /Use recommended setup/);
   assert.match(appTuiOutput, /Phase 1\/5: Discover/);
+  assert.match(appTuiOutput, /layout: inline/, "install.sh forwards the inherited inline layout selector");
   assert.match(appTuiOutput, /Preview: Full \| opencode, Codex CLI, Codex App/);
   assert.match(appTuiOutput, /p full Preview/);
   assert.match(appTuiOutput, /provider calls: 0/);
@@ -355,6 +544,33 @@ try {
   });
   assert.equal(forcedColorRender.status, 0, forcedColorRender.stderr);
   assert.match(forcedColorRender.stderr, /\x1b\[[0-?]*[ -/]*[@-~]/, "tests can explicitly force color for redirected playback");
+
+  const inlinePlaybackRender = spawnSync("node", [appTui], {
+    cwd,
+    env: {
+      ...process.env,
+      ALFRED_INSTALL_APP_TUI_LAYOUT: "inline",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_INSTALL_APP_TUI_RENDER: "1"
+    },
+    encoding: "utf8"
+  });
+  assert.equal(inlinePlaybackRender.status, 0, inlinePlaybackRender.stderr);
+  assert.match(inlinePlaybackRender.stderr, /layout: inline/, "layout selection is deterministic without a TTY");
+  assert.doesNotMatch(inlinePlaybackRender.stderr, /\x1b\[\?1049|\x1b\[\?1000|\x1b\[\?1006|\x1b\[2J/);
+
+  const unknownLayoutRender = spawnSync("node", [appTui], {
+    cwd,
+    env: {
+      ...process.env,
+      ALFRED_INSTALL_APP_TUI_LAYOUT: "unknown-layout",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+      ALFRED_INSTALL_APP_TUI_RENDER: "1"
+    },
+    encoding: "utf8"
+  });
+  assert.equal(unknownLayoutRender.status, 0, unknownLayoutRender.stderr);
+  assert.match(unknownLayoutRender.stderr, /layout: fullscreen/, "unknown layout values safely normalize to fullscreen");
 
   const modeNodeBin = join(fixture, "mode-node-bin");
   const modeTuiTemp = join(fixture, "mode-tui-tmp");
@@ -966,11 +1182,13 @@ exec ${shellQuote(tarPath)} "$@"
       HOME: cancelHome,
       TMPDIR: cancelTmp,
       ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_LAYOUT: "inline",
       ALFRED_INSTALL_APP_TUI_EVENTS: "q",
       ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: cancelFixture
     }
   });
   assert.equal(cancelledModel.status, 130, "q must terminate the overall installer instead of entering text fallback");
+  assert.doesNotMatch(`${cancelledModel.stdout}\n${cancelledModel.stderr}`, /using text installer|ALFRED HUMAN-FIRST INSTALLER/i, "inline cancellation must not run text fallback");
   assert.equal(existsSync(join(cancelHome, ".alfred", "models.json")), false, "cancel must not write model config");
   assert.equal(existsSync(join(cancelHome, ".alfred", "runtime-profiles")), false, "cancel must not write profiles");
   assert.deepEqual(readdirSync(cancelWorkspace), [], "cancel must not write project files");
