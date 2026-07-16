@@ -34,6 +34,7 @@ export const LABELS = Object.freeze({
 const PROFILE_STRATEGIES = ["runtime-profiles", "decide-later"];
 const APPLY_INTENTS = ["preview-only", "apply-safe-steps"];
 const PREVIEW_PAGE_SIZE = 8;
+const CATALOG_PAGE_SIZE = 8;
 const MIN_PANEL_CONTENT_HEIGHT = 4;
 const SGR_PATTERN = /\x1b\[(?:[0-9]+(?:;[0-9]+)*)?m/;
 const SGR_AT_START_PATTERN = /^\x1b\[(?:[0-9]+(?:;[0-9]+)*)?m/;
@@ -41,6 +42,19 @@ const SGR_EXACT_PATTERN = /^\x1b\[(?:[0-9]+(?:;[0-9]+)*)?m$/;
 const COLOR = { reset: "\x1b[0m", cyan: "\x1b[36m", green: "\x1b[32m", yellow: "\x1b[33m", red: "\x1b[31m", dim: "\x1b[2m" };
 const GRAPHEME_SEGMENTER = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
 const INVALID_MODEL_INPUT = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
+const CATALOG_OVERLAYS = new Set(["catalog-consent", "catalog-loading", "catalog-providers", "catalog-models", "catalog-target"]);
+const CATALOG_ERROR_MESSAGES = Object.freeze({
+  timeout: "Catalog request timed out; manual editing remains available.",
+  aborted: "Catalog request was cancelled; manual editing remains available.",
+  network: "Catalog download failed; manual editing remains available.",
+  http: "Catalog returned an unexpected status; manual editing remains available.",
+  redirect: "Catalog request was redirected; manual editing remains available.",
+  "content-type": "Catalog did not return JSON; manual editing remains available.",
+  oversized: "Catalog exceeded its size limit; manual editing remains available.",
+  malformed: "Catalog JSON was malformed; manual editing remains available.",
+  schema: "Catalog data was invalid; manual editing remains available.",
+  trace: "Catalog audit recording failed; browsing was stopped safely."
+});
 
 function consumeCsi(value, index, introducerLength) {
   let cursor = index + introducerLength;
@@ -127,6 +141,70 @@ function customModelsFromConfig(config = {}) {
     developer: typeof config.developer?.primary === "string" ? config.developer.primary : "",
     fallbacks: Array.isArray(config.fallbacks) ? config.fallbacks.filter((value) => typeof value === "string") : []
   };
+}
+
+function modelProvenanceFromDraft(draft) {
+  return {
+    wildcard: draft.wildcard ? "locally-detected" : "manual",
+    orchestrator: draft.orchestrator ? "locally-detected" : "manual",
+    developer: draft.developer ? "locally-detected" : "manual",
+    fallbacks: draft.fallbacks.map(() => "locally-detected")
+  };
+}
+
+function initialCatalogState() {
+  return {
+    requestNonce: 0,
+    decisionNonce: 0,
+    status: "idle",
+    consent: null,
+    error: null,
+    providers: [],
+    providerQuery: "",
+    providerPage: 0,
+    providerSelection: 0,
+    selectedProviderId: null,
+    modelQuery: "",
+    modelPage: 0,
+    modelSelection: 0,
+    selectedModelId: null,
+    dismissedRequestNonce: 0
+  };
+}
+
+function caseFold(value) {
+  return String(value ?? "").normalize("NFC").toLowerCase();
+}
+
+export function catalogLiteralSearch(records = [], query = "") {
+  const needle = caseFold(query);
+  if (!needle) return [...records];
+  return records.filter((record) => caseFold(record?.id).includes(needle) || caseFold(record?.label).includes(needle));
+}
+
+export function catalogPageSize({ rows = 24 } = {}) {
+  return Math.max(1, Math.min(CATALOG_PAGE_SIZE, terminalDimension(rows, 24) - 12));
+}
+
+function selectedCatalogProvider(state) {
+  return state.catalog.providers.find((provider) => provider.id === state.catalog.selectedProviderId) ?? null;
+}
+
+function catalogRecords(state) {
+  if (state.overlay?.type === "catalog-providers") return catalogLiteralSearch(state.catalog.providers, state.catalog.providerQuery);
+  if (state.overlay?.type === "catalog-models") return catalogLiteralSearch(selectedCatalogProvider(state)?.models ?? [], state.catalog.modelQuery);
+  return [];
+}
+
+function catalogPageInfo(state, pageSize = CATALOG_PAGE_SIZE) {
+  const records = catalogRecords(state);
+  const size = Math.max(1, Number(pageSize) || CATALOG_PAGE_SIZE);
+  const pageKey = state.overlay?.type === "catalog-models" ? "modelPage" : "providerPage";
+  const selectionKey = state.overlay?.type === "catalog-models" ? "modelSelection" : "providerSelection";
+  const pageCount = Math.max(1, Math.ceil(records.length / size));
+  const page = Math.max(0, Math.min(pageCount - 1, state.catalog[pageKey] ?? 0));
+  const selection = records.length ? Math.max(0, Math.min(records.length - 1, state.catalog[selectionKey] ?? 0)) : 0;
+  return { records, size, page, pageCount, selection, visible: records.slice(page * size, (page + 1) * size) };
 }
 
 export function buildCustomModelsConfig(draft = {}) {
@@ -360,9 +438,10 @@ export function recommend({ current = {}, harnessStatus = {}, discovery: discove
 
 export function createPathfinderState(input = {}) {
   const recommendation = recommend(input);
+  const customModels = { ...recommendation.decisions.customModels, fallbacks: [...recommendation.decisions.customModels.fallbacks] };
   return {
     phase: "Discover",
-    decisions: { ...recommendation.decisions, selectedHarnesses: [...recommendation.decisions.selectedHarnesses] },
+    decisions: { ...recommendation.decisions, selectedHarnesses: [...recommendation.decisions.selectedHarnesses], customModels },
     recommendation,
     discovery: recommendation.discovery,
     focus: 0,
@@ -376,6 +455,8 @@ export function createPathfinderState(input = {}) {
     modelInspection: null,
     editing: null,
     selectedFallback: 0,
+    modelProvenance: modelProvenanceFromDraft(customModels),
+    catalog: initialCatalogState(),
     providerCalls: 0,
     provider_calls: 0
   };
@@ -386,10 +467,13 @@ function memoryApplicable(decisions) { return decisions.edition !== "coding"; }
 function profilesApplicable(decisions) { return decisions.edition !== "memory"; }
 
 export function controlsFor(state) {
+  if (state.overlay?.type === "catalog-consent") return ["catalog-consent-decline", "catalog-consent-allow"];
+  if (state.overlay?.type === "catalog-target") return ["catalog-target-wildcard", "catalog-target-orchestrator", "catalog-target-developer", "catalog-target-fallback"];
+  if (["catalog-loading", "catalog-providers", "catalog-models"].includes(state.overlay?.type)) return [];
   if (state.overlay?.type === "model-editor") return [
     "model:wildcard", "model:orchestrator", "model:developer",
     ...state.decisions.customModels.fallbacks.map((_, index) => `model:fallback:${index}`),
-    "fallback-add", "fallback-remove", "fallback-up", "fallback-down", "model-editor-done"
+    "catalog-browse", "fallback-add", "fallback-remove", "fallback-up", "fallback-down", "model-editor-done"
   ];
   if (state.phase === "Discover") return ["recommended", "customize"];
   if (state.compatibilityPlayback && state.phase === "Choose") return ["edition", ...HARNESSES.map((item) => `harness:${item.value}`), "profile", "next"];
@@ -496,20 +580,23 @@ function customModelValue(state, control) {
   return fallback ? state.decisions.customModels.fallbacks[Number(fallback[1])] ?? "" : null;
 }
 
-function replaceCustomModelValue(state, control, value) {
+function replaceCustomModelValue(state, control, value, provenance = "manual") {
   if (sanitizeModelInput(value) === null) return state;
   const customModels = { ...state.decisions.customModels, fallbacks: [...state.decisions.customModels.fallbacks] };
-  if (control === "model:wildcard") customModels.wildcard = value;
-  else if (control === "model:orchestrator") customModels.orchestrator = value;
-  else if (control === "model:developer") customModels.developer = value;
+  const modelProvenance = { ...state.modelProvenance, fallbacks: [...state.modelProvenance.fallbacks] };
+  if (control === "model:wildcard") { customModels.wildcard = value; modelProvenance.wildcard = provenance; }
+  else if (control === "model:orchestrator") { customModels.orchestrator = value; modelProvenance.orchestrator = provenance; }
+  else if (control === "model:developer") { customModels.developer = value; modelProvenance.developer = provenance; }
   else {
     const fallback = /^model:fallback:(\d+)$/.exec(control);
     if (!fallback || Number(fallback[1]) >= customModels.fallbacks.length) return state;
     customModels.fallbacks[Number(fallback[1])] = value;
+    modelProvenance.fallbacks[Number(fallback[1])] = provenance;
   }
   return {
     ...state,
     decisions: { ...state.decisions, customModels, modelWriteApproved: false },
+    modelProvenance,
     modelRevision: state.modelRevision + 1,
     reviewedModelRevision: null,
     modelInspection: null,
@@ -559,15 +646,18 @@ function editDelete(state, direction) {
 
 function moveFallback(state, delta) {
   const fallbacks = [...state.decisions.customModels.fallbacks];
+  const provenance = [...state.modelProvenance.fallbacks];
   if (!fallbacks.length) return state;
   const from = Math.max(0, Math.min(fallbacks.length - 1, state.selectedFallback));
   const to = from + delta;
   if (to < 0 || to >= fallbacks.length) return state;
   [fallbacks[from], fallbacks[to]] = [fallbacks[to], fallbacks[from]];
+  [provenance[from], provenance[to]] = [provenance[to], provenance[from]];
   return {
     ...state,
     selectedFallback: to,
     decisions: { ...state.decisions, customModels: { ...state.decisions.customModels, fallbacks }, modelWriteApproved: false },
+    modelProvenance: { ...state.modelProvenance, fallbacks: provenance },
     modelRevision: state.modelRevision + 1,
     reviewedModelRevision: null,
     modelInspection: null,
@@ -601,17 +691,145 @@ function openModelEditor(state) {
   if (state.phase !== "Configure" || !modelsApplicable(state.decisions) || state.decisions.modelStrategy !== "custom-models") return state;
   return { ...state, overlay: { type: "model-editor" }, focus: 0 };
 }
+
+function openCatalog(state) {
+  if (state.overlay?.type !== "model-editor" || state.editing) return state;
+  if (state.catalog.status === "success" && state.catalog.providers.length) {
+    return { ...state, overlay: { type: "catalog-providers" }, focus: 0 };
+  }
+  if (state.catalog.requestNonce > 0) {
+    return { ...state, catalog: { ...state.catalog, error: state.catalog.error ?? "Catalog was already requested once; use manual editing." } };
+  }
+  return { ...state, overlay: { type: "catalog-consent" }, focus: 0, catalog: { ...state.catalog, error: null } };
+}
+
+function catalogBack(state) {
+  if (state.overlay?.type === "catalog-target") return { ...state, overlay: { type: "catalog-models" }, focus: 0 };
+  if (state.overlay?.type === "catalog-models") return { ...state, overlay: { type: "catalog-providers" }, focus: 0, catalog: { ...state.catalog, selectedModelId: null } };
+  if (state.overlay?.type === "catalog-providers") return { ...state, overlay: { type: "model-editor" }, focus: controlsFor({ ...state, overlay: { type: "model-editor" } }).indexOf("catalog-browse") };
+  if (["catalog-consent", "catalog-loading"].includes(state.overlay?.type)) {
+    return {
+      ...state,
+      overlay: { type: "model-editor" },
+      focus: controlsFor({ ...state, overlay: { type: "model-editor" } }).indexOf("catalog-browse"),
+      catalog: state.overlay.type === "catalog-loading" ? { ...state.catalog, dismissedRequestNonce: state.catalog.requestNonce } : state.catalog
+    };
+  }
+  return state;
+}
+
+function moveCatalogSelection(state, delta, pageSize = CATALOG_PAGE_SIZE) {
+  if (!["catalog-providers", "catalog-models"].includes(state.overlay?.type)) return state;
+  const info = catalogPageInfo(state, pageSize);
+  if (!info.records.length) return state;
+  const selection = Math.max(0, Math.min(info.records.length - 1, info.selection + Math.sign(delta || 0)));
+  const page = Math.floor(selection / info.size);
+  const model = state.overlay.type === "catalog-models";
+  return {
+    ...state,
+    catalog: {
+      ...state.catalog,
+      [model ? "modelSelection" : "providerSelection"]: selection,
+      [model ? "modelPage" : "providerPage"]: page
+    }
+  };
+}
+
+function pageCatalog(state, delta, pageSize = CATALOG_PAGE_SIZE) {
+  if (!["catalog-providers", "catalog-models"].includes(state.overlay?.type)) return state;
+  const info = catalogPageInfo(state, pageSize);
+  const page = Math.max(0, Math.min(info.pageCount - 1, info.page + Math.sign(delta || 0)));
+  const selection = Math.min(info.records.length - 1, Math.max(0, page * info.size));
+  const model = state.overlay.type === "catalog-models";
+  return {
+    ...state,
+    catalog: {
+      ...state.catalog,
+      [model ? "modelPage" : "providerPage"]: page,
+      [model ? "modelSelection" : "providerSelection"]: selection
+    }
+  };
+}
+
+function editCatalogQuery(state, text, replace = false) {
+  if (!["catalog-providers", "catalog-models"].includes(state.overlay?.type)) return state;
+  const safe = sanitizeTerminalText(text);
+  if (!safe && !replace) return state;
+  const model = state.overlay.type === "catalog-models";
+  const queryKey = model ? "modelQuery" : "providerQuery";
+  const pageKey = model ? "modelPage" : "providerPage";
+  const selectionKey = model ? "modelSelection" : "providerSelection";
+  const query = replace ? safe : `${state.catalog[queryKey]}${safe}`;
+  return { ...state, catalog: { ...state.catalog, [queryKey]: query, [pageKey]: 0, [selectionKey]: 0 } };
+}
+
+function activateCatalogResult(state, id) {
+  if (state.overlay?.type === "catalog-providers") {
+    const info = catalogPageInfo(state);
+    const provider = id ? state.catalog.providers.find((item) => item.id === id) : info.records[info.selection];
+    if (!provider) return state;
+    return {
+      ...state,
+      overlay: { type: "catalog-models" },
+      catalog: { ...state.catalog, selectedProviderId: provider.id, selectedModelId: null, modelQuery: "", modelPage: 0, modelSelection: 0 }
+    };
+  }
+  if (state.overlay?.type === "catalog-models") {
+    const provider = selectedCatalogProvider(state);
+    const info = catalogPageInfo(state);
+    const model = id ? provider?.models.find((item) => item.id === id) : info.records[info.selection];
+    if (!provider || !model) return state;
+    return { ...state, overlay: { type: "catalog-target" }, focus: 0, catalog: { ...state.catalog, selectedModelId: model.id } };
+  }
+  return state;
+}
+
+function assignCatalogSelection(state, control) {
+  const provider = selectedCatalogProvider(state);
+  const model = provider?.models.find((item) => item.id === state.catalog.selectedModelId);
+  if (!provider || !model) return state;
+  const qualified = `${provider.id}/${model.id}`;
+  if (control === "catalog-target-fallback") {
+    const fallbacks = [...state.decisions.customModels.fallbacks, qualified];
+    return {
+      ...state,
+      overlay: { type: "model-editor" },
+      selectedFallback: fallbacks.length - 1,
+      decisions: { ...state.decisions, customModels: { ...state.decisions.customModels, fallbacks }, modelWriteApproved: false },
+      modelProvenance: { ...state.modelProvenance, fallbacks: [...state.modelProvenance.fallbacks, "catalog-listed"] },
+      modelRevision: state.modelRevision + 1,
+      reviewedModelRevision: null,
+      modelInspection: null,
+      reviewVisited: false,
+      focus: controlsFor({ ...state, overlay: { type: "model-editor" }, decisions: { ...state.decisions, customModels: { ...state.decisions.customModels, fallbacks } } }).indexOf(`model:fallback:${fallbacks.length - 1}`)
+    };
+  }
+  const target = control === "catalog-target-wildcard" ? "model:wildcard" : control === "catalog-target-orchestrator" ? "model:orchestrator" : control === "catalog-target-developer" ? "model:developer" : null;
+  if (!target) return state;
+  const assigned = replaceCustomModelValue(state, target, qualified, "catalog-listed");
+  return { ...assigned, overlay: { type: "model-editor" }, focus: controlsFor({ ...assigned, overlay: { type: "model-editor" } }).indexOf(target) };
+}
+
 function activate(state) {
   const control = controlsFor(state)[boundedFocus(state)];
+  if (state.overlay?.type === "catalog-consent") {
+    if (control === "catalog-consent-decline") return transition(state, { type: "CATALOG_CONSENT", allow: false });
+    if (control === "catalog-consent-allow") return transition(state, { type: "CATALOG_CONSENT", allow: true });
+    return state;
+  }
+  if (state.overlay?.type === "catalog-target") return assignCatalogSelection(state, control);
+  if (["catalog-providers", "catalog-models"].includes(state.overlay?.type)) return activateCatalogResult(state);
   if (state.overlay?.type === "model-editor") {
     if (state.editing) return commitEditing(state);
     if (control?.startsWith("model:")) return startEditing(state, control);
+    if (control === "catalog-browse") return openCatalog(state);
     if (control === "fallback-add") {
       const fallbacks = [...state.decisions.customModels.fallbacks, ""];
       const next = {
         ...state,
         selectedFallback: fallbacks.length - 1,
         decisions: { ...state.decisions, customModels: { ...state.decisions.customModels, fallbacks }, modelWriteApproved: false },
+        modelProvenance: { ...state.modelProvenance, fallbacks: [...state.modelProvenance.fallbacks, "manual"] },
         modelRevision: state.modelRevision + 1,
         reviewedModelRevision: null,
         modelInspection: null,
@@ -622,11 +840,14 @@ function activate(state) {
     }
     if (control === "fallback-remove" && state.decisions.customModels.fallbacks.length) {
       const fallbacks = [...state.decisions.customModels.fallbacks];
+      const provenance = [...state.modelProvenance.fallbacks];
       fallbacks.splice(Math.max(0, Math.min(fallbacks.length - 1, state.selectedFallback)), 1);
+      provenance.splice(Math.max(0, Math.min(provenance.length - 1, state.selectedFallback)), 1);
       const next = {
         ...state,
         selectedFallback: Math.max(0, Math.min(fallbacks.length - 1, state.selectedFallback)),
         decisions: { ...state.decisions, customModels: { ...state.decisions.customModels, fallbacks }, modelWriteApproved: false },
+        modelProvenance: { ...state.modelProvenance, fallbacks: provenance },
         modelRevision: state.modelRevision + 1,
         reviewedModelRevision: null,
         modelInspection: null,
@@ -665,6 +886,72 @@ function space(state) {
 export function transition(state, action = {}) {
   if (!state || state.done) return state;
   if (action.type === "CANCEL") return { ...state, done: true, cancelled: true, providerCalls: 0, provider_calls: 0 };
+  if (action.type === "OPEN_CATALOG") return openCatalog(state);
+  if (action.type === "CATALOG_CONSENT" && state.overlay?.type === "catalog-consent") {
+    const allow = action.allow === true;
+    return {
+      ...state,
+      overlay: allow ? { type: "catalog-loading" } : { type: "model-editor" },
+      focus: 0,
+      catalog: {
+        ...state.catalog,
+        decisionNonce: state.catalog.decisionNonce + 1,
+        consent: allow ? "allowed" : "declined",
+        status: allow ? "requested" : "declined",
+        error: allow ? null : "Catalog request declined; manual editing remains available.",
+        requestNonce: state.catalog.requestNonce + (allow ? 1 : 0)
+      }
+    };
+  }
+  if (action.type === "CATALOG_REQUEST_STARTED" && action.nonce === state.catalog.requestNonce && state.catalog.status === "requested") {
+    return { ...state, catalog: { ...state.catalog, status: "loading" } };
+  }
+  if (action.type === "CATALOG_REQUEST_SUCCEEDED" && action.nonce === state.catalog.requestNonce && ["requested", "loading"].includes(state.catalog.status)) {
+    const providers = Array.isArray(action.result?.providers) ? action.result.providers : [];
+    const dismissed = state.catalog.dismissedRequestNonce === action.nonce;
+    return {
+      ...state,
+      overlay: dismissed ? state.overlay : { type: "catalog-providers" },
+      focus: 0,
+      catalog: {
+        ...state.catalog,
+        status: "success",
+        error: null,
+        providers,
+        providerQuery: "",
+        providerPage: 0,
+        providerSelection: 0,
+        selectedProviderId: null,
+        modelQuery: "",
+        modelPage: 0,
+        modelSelection: 0,
+        selectedModelId: null
+      }
+    };
+  }
+  if (action.type === "CATALOG_REQUEST_FAILED" && action.nonce === state.catalog.requestNonce && ["requested", "loading"].includes(state.catalog.status)) {
+    const category = Object.hasOwn(CATALOG_ERROR_MESSAGES, action.category) ? action.category : "network";
+    return {
+      ...state,
+      overlay: { type: "model-editor" },
+      focus: 0,
+      catalog: { ...state.catalog, status: "failure", error: CATALOG_ERROR_MESSAGES[category], providers: [] }
+    };
+  }
+  if (action.type === "CATALOG_BACK" || (action.type === "ESCAPE" && CATALOG_OVERLAYS.has(state.overlay?.type))) return catalogBack(state);
+  if (action.type === "CATALOG_MOVE") return moveCatalogSelection(state, action.delta, action.pageSize);
+  if (action.type === "CATALOG_PAGE") return pageCatalog(state, action.delta, action.pageSize);
+  if (action.type === "CATALOG_SET_QUERY") return editCatalogQuery(state, action.value, true);
+  if (action.type === "CATALOG_INPUT") return editCatalogQuery(state, action.text, false);
+  if (action.type === "SPACE" && ["catalog-providers", "catalog-models"].includes(state.overlay?.type)) return editCatalogQuery(state, " ", false);
+  if (action.type === "CATALOG_BACKSPACE" && ["catalog-providers", "catalog-models"].includes(state.overlay?.type)) {
+    const model = state.overlay.type === "catalog-models";
+    const key = model ? "modelQuery" : "providerQuery";
+    return editCatalogQuery(state, graphemes(state.catalog[key]).slice(0, -1).join(""), true);
+  }
+  if (action.type === "CATALOG_SELECT_PROVIDER" && state.overlay?.type === "catalog-providers") return activateCatalogResult(state, action.id);
+  if (action.type === "CATALOG_SELECT_MODEL" && state.overlay?.type === "catalog-models") return activateCatalogResult(state, action.id);
+  if (action.type === "CATALOG_ASSIGN" && state.overlay?.type === "catalog-target") return assignCatalogSelection(state, action.target);
   if (action.type === "ESCAPE" && state.editing) return { ...state, editing: null };
   if (state.editing) {
     if (action.type === "ACTIVATE") return commitEditing(state);
@@ -699,6 +986,27 @@ export function transition(state, action = {}) {
     if (action.type === "ACTIVATE") return activate(state);
     return state;
   }
+  if (["catalog-consent", "catalog-target"].includes(state.overlay?.type)) {
+    if (action.type === "MOVE") {
+      const controls = controlsFor(state);
+      return { ...state, focus: (boundedFocus(state) + (action.delta || 0) + controls.length) % controls.length };
+    }
+    if (action.type === "FOCUS_CONTROL") {
+      const focus = controlsFor(state).indexOf(action.control);
+      return focus < 0 ? state : { ...state, focus };
+    }
+    if (action.type === "ACTIVATE" || action.type === "SPACE") return activate(state);
+    return state;
+  }
+  if (["catalog-providers", "catalog-models"].includes(state.overlay?.type)) {
+    if (action.type === "MOVE") return moveCatalogSelection(state, action.delta, action.pageSize);
+    if (action.type === "PAGE" || action.type === "CHANGE") return pageCatalog(state, action.delta, action.pageSize);
+    if (action.type === "INPUT") return editCatalogQuery(state, action.text, false);
+    if (action.type === "BACKSPACE") return transition(state, { type: "CATALOG_BACKSPACE" });
+    if (action.type === "ACTIVATE") return activateCatalogResult(state);
+    return state;
+  }
+  if (state.overlay?.type === "catalog-loading") return state;
   if (state.overlay) {
     if (action.type === "CLOSE_OVERLAY") return { ...state, overlay: null };
     if (action.type === "PAGE") {
@@ -739,6 +1047,7 @@ export function transition(state, action = {}) {
         ...state,
         selectedFallback: fallbacks.length - 1,
         decisions: { ...state.decisions, customModels: { ...state.decisions.customModels, fallbacks }, modelWriteApproved: false },
+        modelProvenance: { ...state.modelProvenance, fallbacks: [...state.modelProvenance.fallbacks, "manual"] },
         modelRevision: state.modelRevision + 1,
         reviewedModelRevision: null,
         modelInspection: null,
@@ -759,7 +1068,7 @@ export function transition(state, action = {}) {
   if (action.type === "BACK") return back(state);
   if (action.type === "USE_RECOMMENDED") {
     const decisions = { ...state.recommendation.decisions, selectedHarnesses: [...state.recommendation.decisions.selectedHarnesses], customModels: { ...state.recommendation.decisions.customModels, fallbacks: [...state.recommendation.decisions.customModels.fallbacks] } };
-    return { ...go({ ...state, decisions }, "Review"), reviewedModelRevision: state.modelRevision };
+    return { ...go({ ...state, decisions, modelProvenance: modelProvenanceFromDraft(decisions.customModels) }, "Review"), reviewedModelRevision: state.modelRevision };
   }
   if (action.type === "CUSTOMIZE") return go(state, "Choose");
   if (action.type === "EDIT" && state.phase === "Review") return go(state, "Configure");
@@ -874,11 +1183,67 @@ function decisionChanged(state, key, normalize = (value) => value) {
   return JSON.stringify(normalize(state.decisions[key])) !== JSON.stringify(normalize(state.recommendation.decisions[key]));
 }
 function changedSuffix(changed) { return changed ? " [changed]" : ""; }
-function bodyEntries(state) {
+function bodyEntries(state, catalogSize = CATALOG_PAGE_SIZE) {
   const d = effective(state.decisions);
   const focus = controlsFor(state)[boundedFocus(state)];
   const discovery = state.discovery;
   const displayPath = (value) => abbreviateHomePath(value, discovery);
+  if (state.overlay?.type === "catalog-consent") {
+    return [
+      { text: "models.dev catalog access requires explicit one-time consent." },
+      { text: "GET https://models.dev/api.json" },
+      { text: "Purpose: download public model metadata for this private session." },
+      { text: "At most one metadata request; no retries or background refresh." },
+      { text: "catalog-listed ≠ account-verified; no subscription or access is tested.", tone: "blocker" },
+      { text: `${marker(focus === "catalog-consent-decline")} Decline`, action: { type: "FOCUS_CONTROL", control: "catalog-consent-decline" }, focused: focus === "catalog-consent-decline", tone: "safe" },
+      { text: `${marker(focus === "catalog-consent-allow")} Allow once`, action: { type: "FOCUS_CONTROL", control: "catalog-consent-allow" }, focused: focus === "catalog-consent-allow", tone: "approval" }
+    ];
+  }
+  if (state.overlay?.type === "catalog-loading") {
+    return [
+      { text: "Loading public models.dev metadata…" },
+      { text: "One GET request maximum. Press q to cancel the installer." },
+      { text: "No provider account, subscription, or model access is being verified." }
+    ];
+  }
+  if (state.overlay?.type === "catalog-providers") {
+    const info = catalogPageInfo(state, catalogSize);
+    return [
+      { text: `Search providers (local literal match): [${state.catalog.providerQuery || "type to search"}]` },
+      { text: `${info.records.length} provider result${info.records.length === 1 ? "" : "s"}` },
+      ...(info.visible.length ? info.visible.map((provider) => {
+        const selected = info.records[info.selection]?.id === provider.id;
+        return { text: `${marker(selected)} ${provider.id} — ${provider.label}`, action: { type: "CATALOG_SELECT_PROVIDER", id: provider.id }, focused: selected };
+      }) : [{ text: "No providers match this query." }])
+    ];
+  }
+  if (state.overlay?.type === "catalog-models") {
+    const provider = selectedCatalogProvider(state);
+    const info = catalogPageInfo(state, catalogSize);
+    return [
+      { text: `Provider: ${provider?.id ?? "unknown"} — ${provider?.label ?? "unknown"}` },
+      { text: `Search this provider's models (local literal match): [${state.catalog.modelQuery || "type to search"}]` },
+      { text: `${info.records.length} model result${info.records.length === 1 ? "" : "s"}` },
+      ...(info.visible.length ? info.visible.map((model) => {
+        const selected = info.records[info.selection]?.id === model.id;
+        return { text: `${marker(selected)} ${model.id} — ${model.label}`, action: { type: "CATALOG_SELECT_MODEL", id: model.id }, focused: selected };
+      }) : [{ text: "No models match this provider-specific query." }])
+    ];
+  }
+  if (state.overlay?.type === "catalog-target") {
+    const provider = selectedCatalogProvider(state);
+    const model = provider?.models.find((item) => item.id === state.catalog.selectedModelId);
+    const qualified = provider && model ? `${provider.id}/${model.id}` : "unavailable";
+    const targetEntry = (control, label) => ({ text: `${marker(focus === control)} ${label}`, action: { type: "FOCUS_CONTROL", control }, focused: focus === control });
+    return [
+      { text: `Assign exact ID: ${qualified}` },
+      { text: "Provenance: catalog-listed (not account-verified)." },
+      targetEntry("catalog-target-wildcard", "Wildcard primary"),
+      targetEntry("catalog-target-orchestrator", "Orchestrator primary"),
+      targetEntry("catalog-target-developer", "Developer primary"),
+      targetEntry("catalog-target-fallback", "Append new global fallback")
+    ];
+  }
   if (state.overlay?.type === "model-editor") {
     const editorValue = (control, value, placeholder) => {
       if (state.editing?.control !== control) return value || placeholder;
@@ -887,18 +1252,25 @@ function bodyEntries(state) {
       return parts.join("") || "▏";
     };
     const editingTag = (control) => state.editing?.control === control ? " [EDITING]" : "";
+    const provenanceTag = (control) => {
+      const fallback = /^model:fallback:(\d+)$/.exec(control);
+      const value = fallback ? state.modelProvenance.fallbacks[Number(fallback[1])] : state.modelProvenance[control.slice(6)];
+      return ` [${value ?? "manual"}]`;
+    };
     const validation = validateCustomModelsDraft(d.customModels);
     return [
       { text: "Manual model assignment · opaque IDs are kept exactly; provider calls: 0." },
       { text: "Select field → Enter → type → Enter to save." },
+      ...(state.catalog.error ? [{ text: state.catalog.error, tone: state.catalog.status === "failure" ? "blocker" : "normal" }] : []),
       ...validation.errors.map((error) => ({ text: `Blocker: ${error}`, tone: "blocker" })),
-      { text: `${marker(focus === "model:wildcard")} Wildcard primary (required)${editingTag("model:wildcard")}: [${editorValue("model:wildcard", d.customModels.wildcard, "empty")}]`, action: { type: "FOCUS_CONTROL", control: "model:wildcard" }, focused: focus === "model:wildcard" },
-      { text: `${marker(focus === "model:orchestrator")} Orchestrator primary (optional)${editingTag("model:orchestrator")}: [${editorValue("model:orchestrator", d.customModels.orchestrator, "uses wildcard")}]`, action: { type: "FOCUS_CONTROL", control: "model:orchestrator" }, focused: focus === "model:orchestrator" },
-      { text: `${marker(focus === "model:developer")} Developer primary (optional)${editingTag("model:developer")}: [${editorValue("model:developer", d.customModels.developer, "uses wildcard")}]`, action: { type: "FOCUS_CONTROL", control: "model:developer" }, focused: focus === "model:developer" },
+      { text: `${marker(focus === "model:wildcard")} Wildcard primary (required)${provenanceTag("model:wildcard")}${editingTag("model:wildcard")}: [${editorValue("model:wildcard", d.customModels.wildcard, "empty")}]`, action: { type: "FOCUS_CONTROL", control: "model:wildcard" }, focused: focus === "model:wildcard" },
+      { text: `${marker(focus === "model:orchestrator")} Orchestrator primary (optional)${provenanceTag("model:orchestrator")}${editingTag("model:orchestrator")}: [${editorValue("model:orchestrator", d.customModels.orchestrator, "uses wildcard")}]`, action: { type: "FOCUS_CONTROL", control: "model:orchestrator" }, focused: focus === "model:orchestrator" },
+      { text: `${marker(focus === "model:developer")} Developer primary (optional)${provenanceTag("model:developer")}${editingTag("model:developer")}: [${editorValue("model:developer", d.customModels.developer, "uses wildcard")}]`, action: { type: "FOCUS_CONTROL", control: "model:developer" }, focused: focus === "model:developer" },
       ...d.customModels.fallbacks.map((value, index) => {
         const control = `model:fallback:${index}`;
-        return { text: `${marker(focus === control)} Fallback ${index + 1}${editingTag(control)}: [${editorValue(control, value, "empty")}]`, action: { type: "FOCUS_CONTROL", control }, focused: focus === control };
+        return { text: `${marker(focus === control)} Fallback ${index + 1}${provenanceTag(control)}${editingTag(control)}: [${editorValue(control, value, "empty")}]`, action: { type: "FOCUS_CONTROL", control }, focused: focus === control };
       }),
+      { text: `${marker(focus === "catalog-browse")} [Enter] Browse models.dev catalog…`, action: { type: "FOCUS_CONTROL", control: "catalog-browse" }, focused: focus === "catalog-browse", tone: "approval" },
       { text: `${marker(focus === "fallback-add")} Add fallback`, action: { type: "FOCUS_CONTROL", control: "fallback-add" }, focused: focus === "fallback-add" },
       { text: `${marker(focus === "fallback-remove")} Remove selected fallback`, action: { type: "FOCUS_CONTROL", control: "fallback-remove" }, focused: focus === "fallback-remove" },
       { text: `${marker(focus === "fallback-up")} Move selected fallback up`, action: { type: "FOCUS_CONTROL", control: "fallback-up" }, focused: focus === "fallback-up" },
@@ -1386,13 +1758,22 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
     const page = Math.min(state.overlay.page, pageCount - 1);
     entries = all.slice(page * pageSize, (page + 1) * pageSize).map((text) => ({ text }));
     pageLabel = ` | page ${page + 1}/${pageCount}`;
-  } else entries = bodyEntries(state);
+  } else if (["catalog-providers", "catalog-models"].includes(state.overlay?.type)) {
+    const size = catalogPageSize({ rows: height });
+    const info = catalogPageInfo(state, size);
+    entries = bodyEntries(state, size);
+    pageLabel = ` | page ${info.page + 1}/${info.pageCount}`;
+  } else entries = bodyEntries(state, catalogPageSize({ rows: height }));
   const focusedControl = controlsFor(state)[boundedFocus(state)];
   const footer = [
     `Phase ${phaseIndex + 1}/${PHASES.length}: ${state.phase}${state.overlay ? ` | ${state.overlay.type}${pageLabel}` : ""} | layout: ${layout} | provider calls: 0`,
     `Preview: ${previewModel(state.decisions, state.discovery).concise}`,
     state.overlay?.type === "model-editor"
       ? (state.editing ? "Keys: ←→ cursor;Enter commit;Esc cancel;Backspace/Delete edit" : "Keys: ↑↓ move;Enter edit/action;Esc close;p Preview;q quit")
+      : state.overlay?.type === "catalog-consent" ? "Keys: ↑↓ choose;Enter decide;Esc back;q cancel"
+        : state.overlay?.type === "catalog-loading" ? "Keys: Esc return to manual editor;q cancel"
+          : ["catalog-providers", "catalog-models"].includes(state.overlay?.type) ? "Keys: type search;↑↓ select;←→ page;Enter choose;Esc back;q cancel"
+            : state.overlay?.type === "catalog-target" ? "Keys: ↑↓ target;Enter assign exact ID;Esc back;q cancel"
       : state.overlay ? "Keys: Esc close;arrows page;p Preview;w Why;q cancel"
         : focusedControl === "models-edit" ? "Keys: ↑↓ move;Enter edit models;b back;p full Preview;q quit"
           : "Keys: ↑↓ move;←→ edit;Space toggle;Enter select;b back;p full Preview;q quit"
@@ -1420,13 +1801,24 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
   } else {
     const minimumContentHeight = layout === "inline" ? 1 : MIN_PANEL_CONTENT_HEIGHT;
     const contentHeight = Math.min(availableContentHeight, Math.max(minimumContentHeight, entriesHeight(entries, width - 2)));
-    const single = panel(state.overlay?.type === "why" ? "Rationale" : state.overlay?.type === "preview" ? "Preview" : state.overlay?.type === "model-plan-review" ? "Exact models.json" : state.overlay?.type === "model-editor" ? "Manual model editor" : state.phase, entries, width, contentHeight, { color, yOffset: 1 });
+    const overlayTitles = {
+      why: "Rationale",
+      preview: "Preview",
+      "model-plan-review": "Exact models.json",
+      "model-editor": "Manual model editor",
+      "catalog-consent": "models.dev consent",
+      "catalog-loading": "Loading models.dev",
+      "catalog-providers": "Choose catalog provider",
+      "catalog-models": "Choose provider model",
+      "catalog-target": "Assign catalog model"
+    };
+    const single = panel(overlayTitles[state.overlay?.type] ?? state.phase, entries, width, contentHeight, { color, yOffset: 1 });
     lines.push(...single.lines);
     hitRegions.push(...single.hitRegions);
   }
   if (layout === "fullscreen") while (lines.length < renderHeight - footer.length) lines.push("");
   for (const line of footer) lines.push(clipAnsi(sanitizeTerminalText(line), width));
-  return { text: sanitizeTerminalOutput(lines.slice(0, renderHeight).join("\n")), hitRegions, providerCalls: 0, provider_calls: 0 };
+  return { text: sanitizeTerminalOutput(lines.slice(0, renderHeight).join("\n")), hitRegions: layout === "fullscreen" ? hitRegions : [], providerCalls: 0, provider_calls: 0 };
 }
 
 function shellQuote(value) { return sanitizeTerminalText(value).replace(/'/g, "'\\''"); }

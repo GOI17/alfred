@@ -42,6 +42,7 @@ MODEL_STRATEGY="configure-later"
 MODEL_WRITE_APPROVED=false
 MODEL_PLAN_SHA256=""
 MODEL_CONFIG_WRITTEN=false
+CATALOG_TRACE_AGGREGATE='{"consent":"not-decided","outcome":"not-requested","bytes_bucket":"none","provider_count_bucket":"none","model_count_bucket":"none","duration_bucket":"none","catalog_metadata_requests":0}'
 
 log() { printf '[alfred-install] %s\n' "$*"; }
 err() { printf '[alfred-install][error] %s\n' "$*" 1>&2; exit 1; }
@@ -321,6 +322,7 @@ EOFTUI
 
 APP_TUI_PRIVATE_DIR=""
 APP_MODEL_PLAN_FILE=""
+APP_CATALOG_EVENTS_FILE=""
 
 cleanup_app_tui_private_dir() {
   if [ -n "$APP_TUI_PRIVATE_DIR" ] && [ -d "$APP_TUI_PRIVATE_DIR" ]; then
@@ -328,6 +330,7 @@ cleanup_app_tui_private_dir() {
   fi
   APP_TUI_PRIVATE_DIR=""
   APP_MODEL_PLAN_FILE=""
+  APP_CATALOG_EVENTS_FILE=""
 }
 
 validate_commit_sha() {
@@ -407,6 +410,84 @@ validate_app_tui_result() {
   done
 }
 
+validate_catalog_events() {
+  catalog_events_file="$1"
+  node --input-type=module - "$catalog_events_file" 2>/dev/null <<'NODECATALOG'
+import fs from "node:fs";
+import path from "node:path";
+
+const target = path.resolve(process.argv[2]);
+if (path.basename(target) !== "catalog-events.jsonl") process.exit(1);
+const parent = path.dirname(target);
+const effectiveUid = typeof process.geteuid === "function" ? process.geteuid() : null;
+const parentStats = fs.lstatSync(parent);
+const pathStats = fs.lstatSync(target);
+if (!parentStats.isDirectory() || parentStats.isSymbolicLink() || (parentStats.mode & 0o777) !== 0o700) process.exit(1);
+if (!pathStats.isFile() || pathStats.isSymbolicLink() || (pathStats.mode & 0o777) !== 0o600 || pathStats.size > 8192) process.exit(1);
+if (effectiveUid !== null && (parentStats.uid !== effectiveUid || pathStats.uid !== effectiveUid)) process.exit(1);
+const noFollow = typeof fs.constants.O_NOFOLLOW === "number" ? fs.constants.O_NOFOLLOW : 0;
+let descriptor;
+let text;
+try {
+  descriptor = fs.openSync(target, fs.constants.O_RDONLY | noFollow);
+  const opened = fs.fstatSync(descriptor);
+  if (!opened.isFile() || (opened.mode & 0o777) !== 0o600 || opened.dev !== pathStats.dev || opened.ino !== pathStats.ino) process.exit(1);
+  if (effectiveUid !== null && opened.uid !== effectiveUid) process.exit(1);
+  text = fs.readFileSync(descriptor, "utf8");
+} finally {
+  if (descriptor !== undefined) fs.closeSync(descriptor);
+}
+if (text && !text.endsWith("\n")) process.exit(1);
+const lines = text ? text.slice(0, -1).split("\n") : [];
+const maxDeclines = 6;
+const maxEvents = maxDeclines + 2;
+if (lines.length > maxEvents || lines.some((line) => Buffer.byteLength(line) > 1024 || !line)) process.exit(1);
+const exactKeys = (value, keys) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join("\0") === [...keys].sort().join("\0");
+const outcomes = new Set(["success", "timeout", "aborted", "aborted-before-request", "network", "http", "redirect", "content-type", "oversized", "malformed", "schema"]);
+const bytes = new Set(["none", "under-64k", "64k-1m", "1m-4m", "4m-8m"]);
+const counts = new Set(["none", "1-10", "11-100", "101-1000", "1001-plus"]);
+const durations = new Set(["none", "under-100ms", "100-499ms", "500-999ms", "1-5s", "over-5s"]);
+let state = "initial";
+let consent = "not-decided";
+let fetchEvent = null;
+let declineCount = 0;
+for (const line of lines) {
+  let event;
+  try { event = JSON.parse(line); } catch { process.exit(1); }
+  if (JSON.stringify(event) !== line) process.exit(1);
+  if (event.event === "catalog_consent_decided") {
+    if (!exactKeys(event, ["event", "consent"]) || !["allowed", "declined"].includes(event.consent)) process.exit(1);
+    if (event.consent === "declined") {
+      if (!["initial", "declined"].includes(state) || ++declineCount > maxDeclines) process.exit(1);
+      consent = "declined";
+      state = "declined";
+      continue;
+    }
+    if (!["initial", "declined"].includes(state)) process.exit(1);
+    consent = "allowed";
+    state = "allowed";
+    continue;
+  }
+  if (state !== "allowed" || !exactKeys(event, ["event", "outcome", "bytes_bucket", "provider_count_bucket", "model_count_bucket", "duration_bucket", "catalog_metadata_requests"]) || event.event !== "catalog_fetch_completed") process.exit(1);
+  const expectedMetadataRequests = event.outcome === "aborted-before-request" ? 0 : 1;
+  if (!outcomes.has(event.outcome) || !bytes.has(event.bytes_bucket) || !counts.has(event.provider_count_bucket) || !counts.has(event.model_count_bucket) || !durations.has(event.duration_bucket) || event.catalog_metadata_requests !== expectedMetadataRequests) process.exit(1);
+  fetchEvent = event;
+  state = "completed";
+}
+if (state === "allowed") process.exit(1);
+const aggregate = {
+  consent,
+  outcome: fetchEvent?.outcome ?? "not-requested",
+  bytes_bucket: fetchEvent?.bytes_bucket ?? "none",
+  provider_count_bucket: fetchEvent?.provider_count_bucket ?? "none",
+  model_count_bucket: fetchEvent?.model_count_bucket ?? "none",
+  duration_bucket: fetchEvent?.duration_bucket ?? "none",
+  catalog_metadata_requests: fetchEvent?.catalog_metadata_requests ?? 0
+};
+process.stdout.write(JSON.stringify(aggregate));
+NODECATALOG
+}
+
 run_app_tui_if_available() {
   if [ "$HAD_ARGS" = true ] && [ "${ALFRED_INSTALL_FORCE_TUI:-}" != "1" ]; then
     return 1
@@ -434,6 +515,11 @@ run_app_tui_if_available() {
     cleanup_app_tui_private_dir
     return 1
   fi
+  APP_CATALOG_EVENTS_FILE="$APP_TUI_PRIVATE_DIR/catalog-events.jsonl"
+  if ! (umask 077; : > "$APP_CATALOG_EVENTS_FILE") || ! chmod 0600 "$APP_CATALOG_EVENTS_FILE"; then
+    cleanup_app_tui_private_dir
+    return 1
+  fi
   trap 'cleanup_app_tui_private_dir' EXIT
   trap 'cleanup_app_tui_private_dir; exit 129' HUP
   trap 'cleanup_app_tui_private_dir; exit 130' INT
@@ -456,6 +542,7 @@ run_app_tui_if_available() {
       ! tar -xzf "$app_tui_snapshot" -C "$app_tui_snapshot_dir" --strip-components=1 2>/dev/null || \
       ! cp "$app_tui_snapshot_dir/scripts/tui/install-app.mjs" "$app_tui_script" || \
       ! cp "$app_tui_snapshot_dir/scripts/tui/install-pathfinder.mjs" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" || \
+      ! cp "$app_tui_snapshot_dir/scripts/tui/models-dev-catalog.mjs" "$APP_TUI_PRIVATE_DIR/models-dev-catalog.mjs" || \
       ! cp "$app_tui_snapshot_dir/scripts/tui/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" || \
       ! cp "$app_tui_snapshot_dir/packages/profile-manager/src/index.js" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" || \
       ! cp "$app_tui_snapshot_dir/packages/core/src/model-assignment.js" "$APP_TUI_PRIVATE_DIR/model-assignment.mjs"
@@ -468,6 +555,7 @@ run_app_tui_if_available() {
   else
     if ! cp "$app_tui_source_dir/scripts/tui/install-app.mjs" "$app_tui_script" || \
       ! cp "$app_tui_source_dir/scripts/tui/install-pathfinder.mjs" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" || \
+      ! cp "$app_tui_source_dir/scripts/tui/models-dev-catalog.mjs" "$APP_TUI_PRIVATE_DIR/models-dev-catalog.mjs" || \
       ! cp "$app_tui_source_dir/scripts/tui/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" || \
       ! cp "$app_tui_source_dir/packages/profile-manager/src/index.js" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" || \
       ! cp "$app_tui_source_dir/packages/core/src/model-assignment.js" "$APP_TUI_PRIVATE_DIR/model-assignment.mjs"
@@ -479,7 +567,7 @@ run_app_tui_if_available() {
   fi
 
   chmod 0600 "$app_tui_script" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" \
-    "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" \
+    "$APP_TUI_PRIVATE_DIR/models-dev-catalog.mjs" "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" \
     "$APP_TUI_PRIVATE_DIR/model-assignment.mjs" || {
       cleanup_app_tui_private_dir
       reset_app_tui_cleanup_traps
@@ -523,6 +611,7 @@ run_app_tui_if_available() {
       ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
       ALFRED_INSTALL_DISCOVERY_FILE="$app_discovery_file" \
       ALFRED_INSTALL_MODEL_PLAN_FILE="$APP_MODEL_PLAN_FILE" \
+      ALFRED_INSTALL_CATALOG_EVENTS_FILE="$APP_CATALOG_EVENTS_FILE" \
       node "$app_tui_script" > "$app_tui_out"
     then
       app_tui_status=0
@@ -540,6 +629,7 @@ run_app_tui_if_available() {
       ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
       ALFRED_INSTALL_DISCOVERY_FILE="$app_discovery_file" \
       ALFRED_INSTALL_MODEL_PLAN_FILE="$APP_MODEL_PLAN_FILE" \
+      ALFRED_INSTALL_CATALOG_EVENTS_FILE="$APP_CATALOG_EVENTS_FILE" \
       ALFRED_INSTALL_APP_TUI_RESULT_FILE="$app_tui_out" \
       node "$app_tui_script" < /dev/tty > /dev/tty
     then
@@ -558,6 +648,7 @@ run_app_tui_if_available() {
       ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
       ALFRED_INSTALL_DISCOVERY_FILE="$app_discovery_file" \
       ALFRED_INSTALL_MODEL_PLAN_FILE="$APP_MODEL_PLAN_FILE" \
+      ALFRED_INSTALL_CATALOG_EVENTS_FILE="$APP_CATALOG_EVENTS_FILE" \
       node "$app_tui_script" > "$app_tui_out"
     then
       app_tui_status=0
@@ -569,6 +660,13 @@ run_app_tui_if_available() {
     cleanup_app_tui_private_dir
     reset_app_tui_cleanup_traps
     return "$app_tui_status"
+  fi
+  if catalog_aggregate="$(validate_catalog_events "$APP_CATALOG_EVENTS_FILE")"; then
+    CATALOG_TRACE_AGGREGATE="$catalog_aggregate"
+  else
+    cleanup_app_tui_private_dir
+    reset_app_tui_cleanup_traps
+    err "Rejected unsafe catalog event trace"
   fi
   if [ "$app_tui_status" -eq 0 ] && [ -s "$app_tui_out" ]; then
     if ! validate_app_tui_result "$app_tui_out"; then
@@ -1386,6 +1484,7 @@ cat > "$TRACE_TMP" <<EOFTRACE
     "model_strategy": "$MODEL_STRATEGY",
     "model_write_approved": $MODEL_WRITE_APPROVED,
     "model_config_written": $MODEL_CONFIG_WRITTEN,
+    "catalog": $CATALOG_TRACE_AGGREGATE,
     "trace_events": $INSTALL_TRACE_EVENTS,
     "components": "$COMPONENT_PLAN",
     "status": "pass",
