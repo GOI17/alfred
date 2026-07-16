@@ -9,10 +9,13 @@ import { pathToFileURL } from "node:url";
 const root = process.cwd();
 const installSh = resolve(root, "install.sh");
 const appTui = resolve(root, "scripts/tui/install-app.mjs");
+const appTuiTest = resolve(root, "scripts/tui/install-app.test.mjs");
 const pathfinder = resolve(root, "scripts/tui/install-pathfinder.mjs");
 const pathfinderTest = resolve(root, "scripts/tui/install-pathfinder.test.mjs");
 const discovery = resolve(root, "scripts/tui/install-discovery.mjs");
 const discoveryTest = resolve(root, "scripts/tui/install-discovery.test.mjs");
+const catalogAdapter = resolve(root, "scripts/tui/models-dev-catalog.mjs");
+const catalogAdapterTest = resolve(root, "scripts/tui/models-dev-catalog.test.mjs");
 const fixture = mkdtempSync(join(tmpdir(), "alfred-suite-install-"));
 const home = join(fixture, "home");
 const cwd = join(fixture, "workspace");
@@ -117,6 +120,23 @@ import termios
 import time
 
 node, app, discovery = sys.argv[1], sys.argv[2], sys.argv[3]
+catalog_runner = ${JSON.stringify(`
+  import { pathToFileURL } from "node:url";
+  const appPath = process.argv[2];
+  const eventsFile = process.argv[3];
+  const { runInteractive } = await import(pathToFileURL(appPath).href);
+  const result = {
+    providers: [{ id: "amazon-bedrock", label: "Amazon Bedrock", models: [{ id: "anthropic.claude-sonnet", label: "Claude Sonnet" }] }],
+    stats: { bytes: 2048, providers: 1, models: 1, duration_ms: 25 },
+    metadata_requests: 1,
+    provider_calls: 0
+  };
+  let requests = 0;
+  await runInteractive({
+    fetchCatalogImpl: async () => { requests += 1; if (requests > 1) throw new Error("duplicate catalog request"); return result; },
+    catalogEventsFile: eventsFile
+  });
+`)}
 enter = b"\x1b[?1049h"
 restore = b"\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l"
 mouse_enable = b"\x1b[?1000h\x1b[?1006h"
@@ -139,23 +159,31 @@ def assert_terminal_output_safe(output, layout, label):
 def run_case(layout, mode, expected):
     plan_dir = discovery + "." + layout + "." + mode + ".private"
     plan_path = os.path.join(plan_dir, "model-plan.json")
-    if mode == "custom":
+    events_path = os.path.join(plan_dir, "catalog-events.jsonl")
+    if mode in ("custom", "catalog"):
         os.mkdir(plan_dir, 0o700)
         with open(plan_path, "w", encoding="utf8") as plan_file:
             plan_file.write("")
         os.chmod(plan_path, 0o600)
+    if mode == "catalog":
+        with open(events_path, "w", encoding="utf8") as events_file:
+            events_file.write("")
+        os.chmod(events_path, 0o600)
     pid, fd = pty.fork()
     if pid == 0:
         env = os.environ.copy()
         env["ALFRED_INSTALL_APP_TUI_LAYOUT"] = layout
         env["ALFRED_INSTALL_DISCOVERY_FILE"] = discovery
-        if mode == "custom":
+        if mode in ("custom", "catalog"):
             env["ALFRED_INSTALL_MODEL_PLAN_FILE"] = plan_path
+        if mode == "catalog":
+            os.execve(node, [node, "--input-type=module", "--eval", catalog_runner, "catalog-runner", app, events_path], env)
         os.execve(node, [node, app], env)
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
     output = bytearray()
     sent = False
     custom_stage = 0
+    catalog_stage = 0
     status = None
     deadline = time.monotonic() + 4.0
     while time.monotonic() < deadline:
@@ -174,22 +202,23 @@ def run_case(layout, mode, expected):
             elif mode == "custom":
                 os.write(fd, b"\x1b[B\r" + b"\x1b[B" * 6 + b"\r\x1b[C\r\rZ")
                 custom_stage = 1
+            elif mode == "catalog":
+                os.write(fd, b"\x1b[B\r" + b"\x1b[B" * 6 + b"\r\x1b[C\r" + b"\x1b[B" * 4 + b"\r")
+                catalog_stage = 1
             elif mode == "cancel":
                 os.write(fd, b"q")
             else:
                 os.kill(pid, signal.SIGTERM)
             sent = True
         if mode == "custom" and custom_stage == 1 and b"ollama/qwenZ" in output:
-            os.write(fd, b"\x1b")
-            time.sleep(0.06)
             os.write(fd,
-                b"\rX\r" +
+                b"\x7fX\r" +
                 b"\x1b[B\r provider/orchestrator \r" +
                 b"\x1b[B\rprovider/developer\r" +
                 b"\x1b[B\r-edited\r" +
-                b"\x1b[B\r provider/second \r" +
-                b"\x1b[B\rprovider/remove\r" +
-                b"\x1b[B" * 3 + b"\r" +
+                b"\x1b[B" * 2 + b"\r provider/second \r" +
+                b"\x1b[B" * 2 + b"\rprovider/remove\r" +
+                b"\x1b[B" * 4 + b"\r" +
                 b"\x1b[B\r" +
                 b"\x1b[A" * 2 + b"\r" +
                 b"\x1b[B" * 2 + b"\r")
@@ -210,6 +239,29 @@ def run_case(layout, mode, expected):
             time.sleep(0.06)
             os.write(fd, b"\x1b[B\r\x1b[B\r\x1b[B\r")
             custom_stage = 5
+        if mode == "catalog" and catalog_stage == 1 and b"catalog-consent" in output[-5000:]:
+            os.write(fd, b"\x1b[B\r")
+            catalog_stage = 2
+        if mode == "catalog" and catalog_stage == 2 and b"catalog-providers" in output[-5000:]:
+            os.write(fd, b"Amazon Bedrock\r")
+            catalog_stage = 3
+        if mode == "catalog" and catalog_stage == 3 and b"catalog-models" in output[-5000:]:
+            os.write(fd, b"Claude Sonnet\r")
+            catalog_stage = 4
+        if mode == "catalog" and catalog_stage == 4 and b"catalog-target" in output[-5000:]:
+            os.write(fd, b"\r")
+            catalog_stage = 5
+        if mode == "catalog" and catalog_stage == 5 and b"amazon-bedrock/anthropic.claude-sonnet" in output[-5000:] and b"model-editor" in output[-5000:]:
+            os.write(fd, b"\x1b[B" * 9 + b"\r" + b"\x1b[B" * 3 + b"\x1b[C\x1b[B\r\r")
+            catalog_stage = 6
+        if mode == "catalog" and catalog_stage == 6 and b"model-plan-review" in output[-5000:]:
+            os.write(fd, b"\x1b")
+            time.sleep(0.06)
+            os.write(fd, b"\x1b[B\r\x1b[B\r")
+            catalog_stage = 7
+        if mode == "catalog" and catalog_stage == 7 and b"Phase 5/5: Apply" in output[-5000:]:
+            os.write(fd, b"\x1b[B\r")
+            catalog_stage = 8
         waited, candidate = os.waitpid(pid, os.WNOHANG)
         if waited == pid:
             status = candidate
@@ -245,7 +297,7 @@ def run_case(layout, mode, expected):
         assert b"\x1b[2K" in output, mode + " inline did not erase owned rows during redraw/cleanup"
         assert b"A" in output, mode + " inline did not use cursor-up ownership movement"
     assert_terminal_output_safe(bytes(output), layout, layout + " " + mode)
-    if mode in ("normal", "keyboard", "custom"):
+    if mode in ("normal", "keyboard", "custom", "catalog"):
         assert b"TUI_MODE='app'" in output, mode + " PTY completion lost result assignments"
     if mode == "keyboard":
         assert b"HARNESS='opencode'" in output, layout + " arrow escape toggled the harness like Enter"
@@ -260,11 +312,25 @@ def run_case(layout, mode, expected):
         with open(plan_path, "r", encoding="utf8") as plan_file:
             plan = json.load(plan_file)
         assert plan["strategy"] == "custom-models" and plan["provider_calls"] == 0
-        assert plan["models"]["*"]["primary"] == "ollama/qwenX", layout + " custom PTY did not commit text editing"
+        assert plan["models"]["*"]["primary"] == "ollama/qwenX", layout + " custom PTY did not commit text editing: " + repr(plan["models"]["*"]["primary"])
         assert plan["models"]["orchestrator"]["primary"] == " provider/orchestrator ", layout + " custom PTY rewrote orchestrator whitespace"
         assert plan["models"]["developer"]["primary"] == "provider/developer", layout + " custom PTY did not navigate developer"
         assert plan["models"]["fallbacks"] == ["fallback/one-edited", " provider/second "], layout + " custom PTY did not exercise ordered fallback add/remove/move controls"
         assert b"NAME='acme-pty'" in output and b"TARGET_PATH='/tmp/pty'" in output, layout + " custom PTY did not navigate install text fields"
+    if mode == "catalog":
+        assert b"GET https://models.dev/api.json" in output, layout + " catalog PTY omitted exact consent URL"
+        assert "catalog-listed ≠ account-verified".encode("utf8") in output, layout + " catalog PTY omitted entitlement warning"
+        assert b"Amazon Bedrock" in output and b"Claude Sonnet" in output, layout + " catalog PTY did not preserve literal search spaces"
+        assert b"MODEL_STRATEGY='custom-models'" in output and b"MODEL_WRITE_APPROVED='true'" in output
+        assert re.search(br"MODEL_PLAN_SHA256='[0-9a-f]{64}'", output), layout + " catalog PTY omitted reviewed plan digest"
+        with open(plan_path, "r", encoding="utf8") as plan_file:
+            plan = json.load(plan_file)
+        assert plan["models"]["*"]["primary"] == "amazon-bedrock/anthropic.claude-sonnet", layout + " catalog PTY lost exact Amazon Bedrock model identity"
+        assert "provenance" not in plan and "catalog" not in plan, layout + " catalog metadata leaked into model plan"
+        with open(events_path, "r", encoding="utf8") as events_file:
+            events = [json.loads(line) for line in events_file if line.strip()]
+        assert [event["event"] for event in events] == ["catalog_consent_decided", "catalog_fetch_completed"]
+        assert events[0]["consent"] == "allowed" and events[1]["catalog_metadata_requests"] == 1
 
 def set_size(fd, columns, rows):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
@@ -375,6 +441,7 @@ for layout in ("fullscreen", "inline"):
     run_case(layout, "normal", 0)
     run_case(layout, "keyboard", 0)
     run_case(layout, "custom", 0)
+    run_case(layout, "catalog", 0)
     run_case(layout, "cancel", 130)
     run_case(layout, "signal", 143)
 run_inline_resize_case("cancel", 130)
@@ -514,6 +581,12 @@ try {
   assert.equal(pathfinderSyntax.status, 0, pathfinderSyntax.stderr);
   const discoverySyntax = spawnSync("node", ["--check", discovery], { encoding: "utf8" });
   assert.equal(discoverySyntax.status, 0, discoverySyntax.stderr);
+  const catalogSyntax = spawnSync("node", ["--check", catalogAdapter], { encoding: "utf8" });
+  assert.equal(catalogSyntax.status, 0, catalogSyntax.stderr);
+  const catalogTests = spawnSync("node", [catalogAdapterTest], { encoding: "utf8" });
+  assert.equal(catalogTests.status, 0, catalogTests.stderr);
+  const appTests = spawnSync("node", [appTuiTest], { encoding: "utf8" });
+  assert.equal(appTests.status, 0, appTests.stderr);
   const discoveryTests = spawnSync("node", [discoveryTest], { encoding: "utf8" });
   assert.equal(discoveryTests.status, 0, discoveryTests.stderr);
   const pathfinderTests = spawnSync("node", [pathfinderTest], { encoding: "utf8" });
@@ -656,8 +729,10 @@ case "$1" in
     dir_mode=$(stat -f '%Lp' "$private_dir" 2>/dev/null || stat -c '%a' "$private_dir")
     discovery_mode=$(stat -f '%Lp' "$private_dir/discovery.json" 2>/dev/null || stat -c '%a' "$private_dir/discovery.json")
     plan_mode=$(stat -f '%Lp' "$private_dir/model-plan.json" 2>/dev/null || stat -c '%a' "$private_dir/model-plan.json")
+    events_mode=$(stat -f '%Lp' "$private_dir/catalog-events.jsonl" 2>/dev/null || stat -c '%a' "$private_dir/catalog-events.jsonl")
+    catalog_mode=$(stat -f '%Lp' "$private_dir/models-dev-catalog.mjs" 2>/dev/null || stat -c '%a' "$private_dir/models-dev-catalog.mjs")
     canonical_mode=$(stat -f '%Lp' "$private_dir/model-assignment.mjs" 2>/dev/null || stat -c '%a' "$private_dir/model-assignment.mjs")
-    printf '%s %s %s %s\\n' "$dir_mode" "$discovery_mode" "$plan_mode" "$canonical_mode" > "$ALFRED_TEST_MODE_MARKER"
+    printf '%s %s %s %s %s %s\\n' "$dir_mode" "$discovery_mode" "$plan_mode" "$events_mode" "$catalog_mode" "$canonical_mode" > "$ALFRED_TEST_MODE_MARKER"
     ;;
 esac
 exec ${shellQuote(process.execPath)} "$@"
@@ -673,8 +748,300 @@ exec ${shellQuote(process.execPath)} "$@"
     }
   });
   assert.equal(modePreview.status, 0, modePreview.stderr);
-  assert.equal(readFileSync(modeMarker, "utf8").trim(), "700 600 600 600");
+  assert.equal(readFileSync(modeMarker, "utf8").trim(), "700 600 600 600 600 600");
   assert.deepEqual(readdirSync(modeTuiTemp), [], "private mode probe must still clean staged files");
+
+  const catalogTraceHome = join(fixture, "catalog-trace-home");
+  const catalogTraceTarget = join(fixture, "catalog-trace-target");
+  const catalogTraceTmp = join(fixture, "catalog-trace-tmp");
+  const catalogTraceBin = join(fixture, "catalog-trace-bin");
+  for (const directory of [catalogTraceHome, catalogTraceTarget, catalogTraceTmp, catalogTraceBin]) mkdirSync(directory, { recursive: true });
+  writeFileSync(join(catalogTraceBin, "node"), `#!/bin/sh
+case "$1" in
+  *install-app.mjs)
+    ${shellQuote(process.execPath)} "$@" || exit $?
+    cat > "$ALFRED_INSTALL_CATALOG_EVENTS_FILE" <<'EOFCATALOG'
+{"event":"catalog_consent_decided","consent":"declined"}
+{"event":"catalog_consent_decided","consent":"allowed"}
+{"event":"catalog_fetch_completed","outcome":"success","bytes_bucket":"1m-4m","provider_count_bucket":"101-1000","model_count_bucket":"1001-plus","duration_bucket":"500-999ms","catalog_metadata_requests":1}
+EOFCATALOG
+    exit 0
+    ;;
+esac
+exec ${shellQuote(process.execPath)} "$@"
+`);
+  chmodSync(join(catalogTraceBin, "node"), 0o755);
+  const catalogTraceApply = run(["--path", catalogTraceTarget, "--no-clone"], {
+    env: {
+      HOME: catalogTraceHome,
+      PATH: `${catalogTraceBin}:${process.env.PATH ?? ""}`,
+      TMPDIR: catalogTraceTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "set:apply=true,submit",
+      ALFRED_INSTALL_HANDOFF_INPUT: "1"
+    }
+  });
+  assert.equal(catalogTraceApply.status, 0, catalogTraceApply.stderr);
+  const catalogInstallTrace = JSON.parse(readFileSync(join(catalogTraceHome, ".alfred", "observability", "install-trace.json"), "utf8"));
+  assert.deepEqual(catalogInstallTrace.data.catalog, {
+    consent: "allowed",
+    outcome: "success",
+    bytes_bucket: "1m-4m",
+    provider_count_bucket: "101-1000",
+    model_count_bucket: "1001-plus",
+    duration_bucket: "500-999ms",
+    catalog_metadata_requests: 1
+  }, "Decline, reopen, Allow once, and success aggregate from one event file");
+  assert.equal(catalogInstallTrace.data.provider_calls, 0);
+  assert.doesNotMatch(JSON.stringify(catalogInstallTrace), /openrouter|anthropic|claude-sonnet|query|authorization|cookie/i);
+  assert.deepEqual(readdirSync(catalogTraceTmp), [], "catalog event file and private staging are cleaned after apply");
+
+  const catalogCancelRaceHome = join(fixture, "catalog-cancel-race-home");
+  const catalogCancelRaceTarget = join(fixture, "catalog-cancel-race-target");
+  const catalogCancelRaceTmp = join(fixture, "catalog-cancel-race-tmp");
+  const catalogCancelRaceBin = join(fixture, "catalog-cancel-race-bin");
+  for (const directory of [catalogCancelRaceHome, catalogCancelRaceTarget, catalogCancelRaceTmp, catalogCancelRaceBin]) mkdirSync(directory, { recursive: true });
+  const catalogCancelRaceRunner = `
+    import assert from "node:assert/strict";
+    import { pathToFileURL } from "node:url";
+    const appPath = process.argv[2];
+    const eventsFile = process.argv[3];
+    const { createCatalogRequestCoordinator } = await import(pathToFileURL(appPath).href);
+    const { fetchCatalog } = await import(new URL("./models-dev-catalog.mjs", pathToFileURL(appPath)).href);
+    let adapterCalls = 0;
+    let fetchCalls = 0;
+    const coordinator = createCatalogRequestCoordinator({
+      eventsFile,
+      fetchCatalogImpl: ({ signal }) => {
+        adapterCalls += 1;
+        return fetchCatalog({
+          signal,
+          clock: () => 0,
+          fetchImpl: async () => {
+            fetchCalls += 1;
+            throw new Error("fetchImpl must not start");
+          }
+        });
+      }
+    });
+    coordinator.observe({ catalog: { decisionNonce: 1, consent: "allowed", status: "requested", requestNonce: 1 } });
+    coordinator.abort();
+    assert.equal(adapterCalls, 0, "cancellation must precede the queued adapter microtask");
+    await coordinator.wait();
+    assert.equal(adapterCalls, 1);
+    assert.equal(fetchCalls, 0, "the metadata request must not begin");
+  `;
+  writeFileSync(join(catalogCancelRaceBin, "node"), `#!/bin/sh
+case "$1" in
+  *install-app.mjs)
+    ${shellQuote(process.execPath)} "$@" || exit $?
+    ${shellQuote(process.execPath)} --input-type=module --eval ${shellQuote(catalogCancelRaceRunner)} catalog-cancel-race "$1" "$ALFRED_INSTALL_CATALOG_EVENTS_FILE" || exit $?
+    exit 0
+    ;;
+esac
+exec ${shellQuote(process.execPath)} "$@"
+`);
+  chmodSync(join(catalogCancelRaceBin, "node"), 0o755);
+  const catalogCancelRaceApply = run(["--path", catalogCancelRaceTarget, "--no-clone"], {
+    env: {
+      HOME: catalogCancelRaceHome,
+      PATH: `${catalogCancelRaceBin}:${process.env.PATH ?? ""}`,
+      TMPDIR: catalogCancelRaceTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "set:apply=true,submit",
+      ALFRED_INSTALL_HANDOFF_INPUT: "1"
+    }
+  });
+  assert.equal(catalogCancelRaceApply.status, 0, catalogCancelRaceApply.stderr);
+  const catalogCancelRaceTrace = JSON.parse(readFileSync(join(catalogCancelRaceHome, ".alfred", "observability", "install-trace.json"), "utf8"));
+  assert.deepEqual(catalogCancelRaceTrace.data.catalog, {
+    consent: "allowed",
+    outcome: "aborted-before-request",
+    bytes_bucket: "none",
+    provider_count_bucket: "none",
+    model_count_bucket: "none",
+    duration_bucket: "none",
+    catalog_metadata_requests: 0
+  }, "pre-request cancellation preserves allowed consent without claiming a metadata request");
+  assert.deepEqual(readdirSync(catalogCancelRaceTmp), [], "pre-request cancellation is shell-validated and private staging is cleaned after apply");
+
+  const hostileCatalogBin = join(fixture, "hostile-catalog-bin");
+  mkdirSync(hostileCatalogBin, { recursive: true });
+  writeFileSync(join(hostileCatalogBin, "node"), `#!/bin/sh
+case "$1" in
+  *install-app.mjs)
+    ${shellQuote(process.execPath)} "$@" || exit $?
+    events="$ALFRED_INSTALL_CATALOG_EVENTS_FILE"
+    case "$ALFRED_TEST_CATALOG_ATTACK" in
+      mode) chmod 0644 "$events" ;;
+      symlink) rm -f "$events"; ln -s "$ALFRED_TEST_CATALOG_OUTSIDE" "$events" ;;
+      schema) printf '%s\\n' '{"event":"catalog_consent_decided","consent":"allowed","provider_id":"openrouter"}' > "$events" ;;
+      count) i=0; : > "$events"; while [ "$i" -lt 9 ]; do printf '%s\\n' '{"event":"catalog_consent_decided","consent":"declined"}' >> "$events"; i=$((i + 1)); done ;;
+      decline-overflow) i=0; : > "$events"; while [ "$i" -lt 7 ]; do printf '%s\\n' '{"event":"catalog_consent_decided","consent":"declined"}' >> "$events"; i=$((i + 1)); done ;;
+      oversized) ${shellQuote(process.execPath)} -e 'require("fs").writeFileSync(process.argv[1], "x".repeat(9000))' "$events" ;;
+      hostile) printf '%s\\n' '{"event":"catalog_consent_decided","consent":"allowed;$(touch should-not-run)"}' > "$events" ;;
+      malformed) printf '%s\\n' '{' > "$events" ;;
+      unknown) printf '%s\\n' '{"event":"catalog_fetch_started"}' > "$events" ;;
+      allowed-declined-success) cat > "$events" <<'EOFSEQUENCE'
+{"event":"catalog_consent_decided","consent":"allowed"}
+{"event":"catalog_consent_decided","consent":"declined"}
+{"event":"catalog_fetch_completed","outcome":"success","bytes_bucket":"under-64k","provider_count_bucket":"1-10","model_count_bucket":"1-10","duration_bucket":"under-100ms","catalog_metadata_requests":1}
+EOFSEQUENCE
+        ;;
+      allowed-http-zero) cat > "$events" <<'EOFSEQUENCE'
+{"event":"catalog_consent_decided","consent":"allowed"}
+{"event":"catalog_fetch_completed","outcome":"http","bytes_bucket":"none","provider_count_bucket":"none","model_count_bucket":"none","duration_bucket":"under-100ms","catalog_metadata_requests":0}
+EOFSEQUENCE
+        ;;
+      aborted-before-request-one) cat > "$events" <<'EOFSEQUENCE'
+{"event":"catalog_consent_decided","consent":"allowed"}
+{"event":"catalog_fetch_completed","outcome":"aborted-before-request","bytes_bucket":"none","provider_count_bucket":"none","model_count_bucket":"none","duration_bucket":"none","catalog_metadata_requests":1}
+EOFSEQUENCE
+        ;;
+      fetch-before-consent) cat > "$events" <<'EOFSEQUENCE'
+{"event":"catalog_fetch_completed","outcome":"success","bytes_bucket":"under-64k","provider_count_bucket":"1-10","model_count_bucket":"1-10","duration_bucket":"under-100ms","catalog_metadata_requests":1}
+{"event":"catalog_consent_decided","consent":"allowed"}
+EOFSEQUENCE
+        ;;
+      declined-fetch) cat > "$events" <<'EOFSEQUENCE'
+{"event":"catalog_consent_decided","consent":"declined"}
+{"event":"catalog_fetch_completed","outcome":"network","bytes_bucket":"none","provider_count_bucket":"none","model_count_bucket":"none","duration_bucket":"under-100ms","catalog_metadata_requests":1}
+EOFSEQUENCE
+        ;;
+      duplicate-consent) cat > "$events" <<'EOFSEQUENCE'
+{"event":"catalog_consent_decided","consent":"allowed"}
+{"event":"catalog_consent_decided","consent":"allowed"}
+EOFSEQUENCE
+        ;;
+      duplicate-completion) cat > "$events" <<'EOFSEQUENCE'
+{"event":"catalog_consent_decided","consent":"allowed"}
+{"event":"catalog_fetch_completed","outcome":"network","bytes_bucket":"none","provider_count_bucket":"none","model_count_bucket":"none","duration_bucket":"under-100ms","catalog_metadata_requests":1}
+{"event":"catalog_fetch_completed","outcome":"network","bytes_bucket":"none","provider_count_bucket":"none","model_count_bucket":"none","duration_bucket":"under-100ms","catalog_metadata_requests":1}
+EOFSEQUENCE
+        ;;
+      allowed-without-completion) printf '%s\\n' '{"event":"catalog_consent_decided","consent":"allowed"}' > "$events" ;;
+      valid-decline) printf '%s\\n' '{"event":"catalog_consent_decided","consent":"declined"}' > "$events" ;;
+      valid-repeat-decline) i=0; : > "$events"; while [ "$i" -lt 6 ]; do printf '%s\\n' '{"event":"catalog_consent_decided","consent":"declined"}' >> "$events"; i=$((i + 1)); done ;;
+      valid-allowed-error) cat > "$events" <<'EOFSEQUENCE'
+{"event":"catalog_consent_decided","consent":"allowed"}
+{"event":"catalog_fetch_completed","outcome":"http","bytes_bucket":"none","provider_count_bucket":"none","model_count_bucket":"none","duration_bucket":"under-100ms","catalog_metadata_requests":1}
+EOFSEQUENCE
+        ;;
+    esac
+    exit 0
+    ;;
+esac
+exec ${shellQuote(process.execPath)} "$@"
+`);
+  chmodSync(join(hostileCatalogBin, "node"), 0o755);
+  for (const attack of [
+    "mode", "symlink", "schema", "count", "decline-overflow", "oversized", "hostile", "malformed", "unknown",
+    "allowed-declined-success", "allowed-http-zero", "aborted-before-request-one", "fetch-before-consent", "declined-fetch",
+    "duplicate-consent", "duplicate-completion", "allowed-without-completion"
+  ]) {
+    const attackTmp = join(fixture, `catalog-${attack}-tmp`);
+    const outside = join(fixture, `catalog-${attack}-outside.jsonl`);
+    const marker = join(cwd, "should-not-run");
+    mkdirSync(attackTmp, { recursive: true });
+    writeFileSync(outside, "", { mode: 0o600 });
+    const attacked = run([], {
+      env: {
+        PATH: `${hostileCatalogBin}:${process.env.PATH ?? ""}`,
+        TMPDIR: attackTmp,
+        ALFRED_INSTALL_FORCE_TUI: "1",
+        ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
+        ALFRED_TEST_CATALOG_ATTACK: attack,
+        ALFRED_TEST_CATALOG_OUTSIDE: outside
+      }
+    });
+    assert.notEqual(attacked.status, 0, `${attack} catalog JSONL must fail closed`);
+    assert.match(attacked.stderr, /Rejected unsafe catalog event trace/);
+    assert.equal(existsSync(marker), false, "hostile JSONL is never sourced or evaluated");
+    assert.deepEqual(readdirSync(attackTmp), [], `${attack} catalog validation cleans private staging`);
+  }
+
+  for (const [sequence, expectedCatalog] of [
+    ["valid-decline", {
+      consent: "declined",
+      outcome: "not-requested",
+      bytes_bucket: "none",
+      provider_count_bucket: "none",
+      model_count_bucket: "none",
+      duration_bucket: "none",
+      catalog_metadata_requests: 0
+    }],
+    ["valid-repeat-decline", {
+      consent: "declined",
+      outcome: "not-requested",
+      bytes_bucket: "none",
+      provider_count_bucket: "none",
+      model_count_bucket: "none",
+      duration_bucket: "none",
+      catalog_metadata_requests: 0
+    }],
+    ["valid-allowed-error", {
+      consent: "allowed",
+      outcome: "http",
+      bytes_bucket: "none",
+      provider_count_bucket: "none",
+      model_count_bucket: "none",
+      duration_bucket: "under-100ms",
+      catalog_metadata_requests: 1
+    }]
+  ]) {
+    const sequenceHome = join(fixture, `${sequence}-home`);
+    const sequenceTarget = join(fixture, `${sequence}-target`);
+    const sequenceTmp = join(fixture, `${sequence}-tmp`);
+    mkdirSync(sequenceHome, { recursive: true });
+    mkdirSync(sequenceTarget, { recursive: true });
+    mkdirSync(sequenceTmp, { recursive: true });
+    const accepted = run(["--path", sequenceTarget, "--no-clone"], {
+      env: {
+        HOME: sequenceHome,
+        PATH: `${hostileCatalogBin}:${process.env.PATH ?? ""}`,
+        TMPDIR: sequenceTmp,
+        ALFRED_INSTALL_FORCE_TUI: "1",
+        ALFRED_INSTALL_APP_TUI_EVENTS: "set:apply=true,submit",
+        ALFRED_INSTALL_HANDOFF_INPUT: "1",
+        ALFRED_TEST_CATALOG_ATTACK: sequence
+      }
+    });
+    assert.equal(accepted.status, 0, `${sequence} must be accepted: ${accepted.stderr}`);
+    const trace = JSON.parse(readFileSync(join(sequenceHome, ".alfred", "observability", "install-trace.json"), "utf8"));
+    assert.deepEqual(trace.data.catalog, expectedCatalog, `${sequence} aggregate must remain internally consistent`);
+    assert.deepEqual(readdirSync(sequenceTmp), [], `${sequence} catalog validation cleans private staging`);
+  }
+
+  const incompleteSource = join(fixture, "incomplete-catalog-source");
+  const incompleteTmp = join(fixture, "incomplete-catalog-tmp");
+  const incompleteCwd = join(fixture, "incomplete-catalog-cwd");
+  mkdirSync(incompleteTmp, { recursive: true });
+  mkdirSync(incompleteCwd, { recursive: true });
+  for (const relativePath of [
+    "install.sh",
+    "scripts/tui/install-app.mjs",
+    "scripts/tui/install-pathfinder.mjs",
+    "scripts/tui/install-discovery.mjs",
+    "packages/profile-manager/src/index.js",
+    "packages/core/src/model-assignment.js"
+  ]) {
+    const destination = join(incompleteSource, relativePath);
+    mkdirSync(dirname(destination), { recursive: true });
+    copyFileSync(join(root, relativePath), destination);
+  }
+  const incompleteStage = run([], {
+    installSh: join(incompleteSource, "install.sh"),
+    cwd: incompleteCwd,
+    env: {
+      TMPDIR: incompleteTmp,
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_TUI_INPUT: "1\n5\n1\nincomplete-stage\nn"
+    }
+  });
+  assert.equal(incompleteStage.status, 0, incompleteStage.stderr);
+  assert.match(incompleteStage.stderr, /using text installer/i, "missing catalog adapter atomically rejects app TUI staging");
+  assert.match(incompleteStage.stdout, /TUI mode:\s+text/);
+  assert.deepEqual(readdirSync(incompleteTmp), [], "partial app staging is fully cleaned when the catalog module is missing");
 
   const guidedQuickPath = spawnSync("node", [appTui], {
     cwd,
@@ -1124,6 +1491,7 @@ EOFRESULT
 
   const installSource = readFileSync(installSh, "utf8");
   for (const requiredRemote of [
+    "scripts/tui/models-dev-catalog.mjs",
     "scripts/tui/install-discovery.mjs",
     "packages/profile-manager/src/index.js",
     "packages/core/src/model-assignment.js"
@@ -1131,6 +1499,10 @@ EOFRESULT
   assert.match(installSource, /chmod 0700 "\$APP_TUI_PRIVATE_DIR"/);
   assert.match(installSource, /chmod 0600 "\$app_discovery_file"/);
   assert.match(installSource, /ALFRED_INSTALL_DISCOVERY_FILE=/);
+  assert.match(installSource, /ALFRED_INSTALL_CATALOG_EVENTS_FILE=/);
+  assert.match(installSource, /parentStats\.uid !== effectiveUid \|\| pathStats\.uid !== effectiveUid/, "catalog event validation enforces ownership");
+  assert.match(installSource, /JSON\.parse\(line\)/, "catalog JSONL is parsed as data");
+  assert.doesNotMatch(installSource, /\.\s+"\$APP_CATALOG_EVENTS_FILE"|source\s+"?\$APP_CATALOG_EVENTS_FILE/, "catalog JSONL is never sourced or evaluated by shell");
   assert.match(installSource, /MODEL_PLAN_SHA256/);
   assert.match(installSource, /O_NOFOLLOW/);
   assert.match(installSource, /fstatSync\(planDescriptor\)/);
@@ -1156,6 +1528,7 @@ EOFRESULT
   for (const relativePath of [
     "scripts/tui/install-app.mjs",
     "scripts/tui/install-pathfinder.mjs",
+    "scripts/tui/models-dev-catalog.mjs",
     "scripts/tui/install-discovery.mjs",
     "packages/profile-manager/src/index.js",
     "packages/core/src/model-assignment.js"

@@ -10,6 +10,8 @@ import {
   availableModelStrategies,
   buildCustomModelsConfig,
   canonicalModelsJson,
+  catalogLiteralSearch,
+  catalogPageSize,
   abbreviateHomePath,
   clipAnsi,
   controlsFor,
@@ -147,6 +149,131 @@ assert.match(editingRender, /\[EDITING\].*▏|▏.*\[EDITING\]/, "the active fie
 noSignalModels = transition(noSignalModels, { type: "ACTIVATE" });
 assert.equal(noSignalModels.decisions.customModels.wildcard, "ollama/qwen2.5-coder:7b", "explicit edit mode commits the wildcard model ID");
 
+const catalogProviders = [
+  ...Array.from({ length: 9 }, (_, index) => ({ id: `provider-${index}`, label: `Provider ${index}`, models: [{ id: `model-${index}`, label: `Model ${index}` }] })),
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    models: [
+      { id: "anthropic/claude-sonnet-4.6", label: "Claude Sonnet 4.6" },
+      { id: "openai/gpt-4.1", label: "GPT 4.1" },
+      ...Array.from({ length: 8 }, (_, index) => ({ id: `test/model-${index}`, label: `Test Model ${index}` }))
+    ]
+  },
+  { id: "anthropic", label: "Anthropic", models: [{ id: "claude-sonnet-4.6", label: "Claude Sonnet 4.6" }] },
+  { id: "amazon-bedrock", label: "Amazon Bedrock", models: [{ id: "anthropic.claude-sonnet", label: "Claude Sonnet" }] }
+];
+assert.deepEqual(catalogLiteralSearch(catalogProviders, "PROVIDER 1").map(({ id }) => id), ["provider-1"], "catalog search is stable, literal, and case-folded");
+assert.deepEqual(catalogLiteralSearch(catalogProviders, ".*").map(({ id }) => id), [], "catalog search never interprets regular expressions");
+assert.deepEqual(catalogLiteralSearch(catalogProviders, "amazon bedrock").map(({ id }) => id), ["amazon-bedrock"], "catalog search preserves and case-folds literal spaces");
+assert.equal(catalogPageSize({ rows: 24 }), 8);
+
+let catalogState = focusControl(noSignalModels, "catalog-browse");
+catalogState = transition(catalogState, { type: "ACTIVATE" });
+assert.equal(catalogState.overlay?.type, "catalog-consent");
+assert.equal(controlsFor(catalogState)[catalogState.focus], "catalog-consent-decline", "catalog consent defaults to Decline");
+const consentRender = stripAnsi(render(catalogState, { columns: 80, rows: 24 }).text);
+assert.match(consentRender, /GET https:\/\/models\.dev\/api\.json/);
+assert.match(consentRender, /public model metadata for this private session/);
+assert.match(consentRender, /At most one metadata request/);
+assert.match(consentRender, /catalog-listed ≠ account-verified/);
+assert.equal(catalogState.catalog.requestNonce, 0, "opening consent creates no request intent");
+let declinedCatalog = transition(catalogState, { type: "ACTIVATE" });
+assert.equal(declinedCatalog.catalog.consent, "declined");
+assert.equal(declinedCatalog.catalog.requestNonce, 0, "default Decline creates no request intent");
+assert.equal(declinedCatalog.overlay?.type, "model-editor");
+
+catalogState = transition(focusControl(declinedCatalog, "catalog-browse"), { type: "ACTIVATE" });
+catalogState = focusControl(catalogState, "catalog-consent-allow");
+catalogState = transition(catalogState, { type: "ACTIVATE" });
+assert.equal(catalogState.catalog.status, "requested");
+assert.equal(catalogState.catalog.requestNonce, 1, "Allow once emits exactly one request nonce");
+catalogState = transition(catalogState, { type: "CATALOG_REQUEST_STARTED", nonce: 1 });
+assert.equal(catalogState.overlay?.type, "catalog-loading");
+catalogState = transition(catalogState, { type: "CATALOG_REQUEST_SUCCEEDED", nonce: 1, result: { providers: catalogProviders } });
+assert.equal(catalogState.overlay?.type, "catalog-providers");
+let literalSpaceState = transition(catalogState, { type: "CATALOG_INPUT", text: "Amazon" });
+literalSpaceState = transition(literalSpaceState, { type: "SPACE" });
+assert.equal(literalSpaceState.catalog.providerQuery, "Amazon ", "Space is inserted without trimming");
+literalSpaceState = transition(literalSpaceState, { type: "BACKSPACE" });
+assert.equal(literalSpaceState.catalog.providerQuery, "Amazon", "Backspace removes an inserted query space normally");
+literalSpaceState = transition(literalSpaceState, { type: "SPACE" });
+literalSpaceState = transition(literalSpaceState, { type: "CATALOG_INPUT", text: "Bedrock" });
+assert.equal(literalSpaceState.catalog.providerQuery, "Amazon Bedrock", "Space is literal provider-query text");
+assert.deepEqual(catalogLiteralSearch(catalogProviders, literalSpaceState.catalog.providerQuery).map(({ id }) => id), ["amazon-bedrock"]);
+literalSpaceState = transition(literalSpaceState, { type: "BACKSPACE" });
+assert.equal(literalSpaceState.catalog.providerQuery, "Amazon Bedroc", "Backspace removes a query space or character normally");
+literalSpaceState = transition(literalSpaceState, { type: "CATALOG_INPUT", text: "k" });
+literalSpaceState = transition(literalSpaceState, { type: "ACTIVATE" });
+literalSpaceState = transition(literalSpaceState, { type: "CATALOG_INPUT", text: "Claude" });
+literalSpaceState = transition(literalSpaceState, { type: "SPACE" });
+literalSpaceState = transition(literalSpaceState, { type: "CATALOG_INPUT", text: "Sonnet" });
+assert.equal(literalSpaceState.catalog.modelQuery, "Claude Sonnet", "Space is literal model-query text");
+assert.match(stripAnsi(render(literalSpaceState, { columns: 80, rows: 24 }).text), /anthropic\.claude-sonnet — Claude Sonnet/);
+catalogState = transition(catalogState, { type: "CATALOG_PAGE", delta: 1, pageSize: 8 });
+assert.equal(catalogState.catalog.providerPage, 1, "provider results support keyboard paging");
+catalogState = transition(catalogState, { type: "CATALOG_SET_QUERY", value: "OPENROUTER" });
+assert.equal(catalogState.catalog.providerPage, 0, "provider query edits reset paging");
+assert.match(stripAnsi(render(catalogState, { columns: 80, rows: 24 }).text), /openrouter — OpenRouter/);
+catalogState = transition(catalogState, { type: "ACTIVATE" });
+assert.equal(catalogState.catalog.selectedProviderId, "openrouter");
+assert.equal(catalogState.overlay?.type, "catalog-models");
+catalogState = transition(catalogState, { type: "CATALOG_PAGE", delta: 1, pageSize: 8 });
+assert.equal(catalogState.catalog.modelPage, 1, "model results support keyboard paging");
+catalogState = transition(catalogState, { type: "INPUT", text: "SONNET" });
+assert.equal(catalogState.catalog.modelPage, 0, "model query edits reset paging");
+assert.match(stripAnsi(render(catalogState, { columns: 80, rows: 24 }).text), /anthropic\/claude-sonnet-4\.6 — Claude Sonnet 4\.6/);
+const modelsBack = transition(catalogState, { type: "CATALOG_BACK" });
+assert.equal(modelsBack.overlay?.type, "catalog-providers", "Back from models returns to provider browser");
+catalogState = transition(catalogState, { type: "ACTIVATE" });
+assert.equal(catalogState.overlay?.type, "catalog-target");
+const targetBack = transition(catalogState, { type: "CATALOG_BACK" });
+assert.equal(targetBack.overlay?.type, "catalog-models", "Back from target chooser returns to model browser");
+catalogState = focusControl(catalogState, "catalog-target-developer");
+const catalogRevision = catalogState.modelRevision;
+catalogState = transition(catalogState, { type: "ACTIVATE" });
+assert.equal(catalogState.decisions.customModels.developer, "openrouter/anthropic/claude-sonnet-4.6", "OpenRouter stores the exact provider-qualified model ID");
+assert.equal(catalogState.modelProvenance.developer, "catalog-listed");
+assert.equal(catalogState.modelRevision, catalogRevision + 1);
+assert.equal(catalogState.decisions.modelWriteApproved, false);
+assert.equal(catalogState.reviewedModelRevision, null);
+assert.equal(catalogState.modelInspection, null);
+assert.equal(catalogState.reviewVisited, false);
+assert.equal(catalogState.overlay?.type, "model-editor");
+
+let appendFallback = transition(focusControl(catalogState, "catalog-browse"), { type: "ACTIVATE" });
+appendFallback = transition(appendFallback, { type: "CATALOG_SET_QUERY", value: "anthropic" });
+appendFallback = transition(appendFallback, { type: "ACTIVATE" });
+appendFallback = transition(appendFallback, { type: "ACTIVATE" });
+appendFallback = focusControl(appendFallback, "catalog-target-fallback");
+appendFallback = transition(appendFallback, { type: "ACTIVATE" });
+assert.equal(appendFallback.decisions.customModels.fallbacks.at(-1), "anthropic/claude-sonnet-4.6", "provider selection never infers or crosses providers");
+assert.equal(appendFallback.modelProvenance.fallbacks.at(-1), "catalog-listed");
+
+let failedCatalog = { ...createPathfinderState(), phase: "Configure" };
+failedCatalog = transition(failedCatalog, { type: "PATCH", key: "modelStrategy", value: "custom-models" });
+failedCatalog = transition(failedCatalog, { type: "OPEN_MODEL_EDITOR" });
+failedCatalog = transition(failedCatalog, { type: "OPEN_CATALOG" });
+failedCatalog = focusControl(failedCatalog, "catalog-consent-allow");
+failedCatalog = transition(failedCatalog, { type: "ACTIVATE" });
+failedCatalog = transition(failedCatalog, { type: "CATALOG_REQUEST_STARTED", nonce: 1 });
+failedCatalog = transition(failedCatalog, { type: "CATALOG_REQUEST_FAILED", nonce: 1, category: "timeout" });
+assert.equal(failedCatalog.overlay?.type, "model-editor", "catalog failure returns to manual editing");
+assert.match(stripAnsi(render(failedCatalog, { columns: 80, rows: 24 }).text), /timed out.*manual editing remains available/i);
+failedCatalog = transition(failedCatalog, { type: "PATCH", key: "modelWildcard", value: "manual/provider-model" });
+assert.equal(failedCatalog.modelProvenance.wildcard, "manual", "manual editing remains available and marks manual provenance");
+assert.equal(createPathfinderState({ discovery }).modelProvenance.wildcard, "locally-detected", "locally seeded values carry locally-detected provenance");
+
+for (const layout of ["fullscreen", "inline"]) {
+  for (const overlayState of [catalogState, targetBack, modelsBack, failedCatalog]) {
+    const rendered = render(overlayState, { columns: 80, rows: 24, color: false, layout });
+    assert.ok(rendered.text.split("\n").length <= (layout === "fullscreen" ? 23 : 24), `${layout} catalog flow fits 80x24`);
+    assert.ok(rendered.text.split("\n").every((line) => displayWidth(line) <= (layout === "fullscreen" ? 80 : 79)), `${layout} catalog flow avoids terminal autowrap`);
+    if (layout === "inline") assert.equal(rendered.hitRegions.length, 0, "inline catalog flow is mouse-free");
+  }
+}
+assert.ok(render(modelsBack, { columns: 80, rows: 24, layout: "fullscreen" }).hitRegions.some(({ action }) => action.type === "CATALOG_SELECT_PROVIDER"), "fullscreen provider results expose mouse hit regions");
+
 const strategyMatrix = [
   [createPathfinderState(), ["custom-models", "configure-later"]],
   [createPathfinderState({ discovery }), ["smart-defaults", "custom-models", "configure-later"]],
@@ -253,6 +380,7 @@ const customAssignments = serializeAssignments(approvedCustom.decisions, approve
 assert.match(customAssignments, /^MODEL_STRATEGY='custom-models'$/m);
 assert.match(customAssignments, /^MODEL_WRITE_APPROVED='true'$/m);
 assert.doesNotMatch(customAssignments, /provider\/|model-plan|MODEL_PLAN|\$HOME/, "raw model IDs and plan paths never enter result IPC");
+assert.doesNotMatch(customAssignments, /catalog|provenance|account-verified|models\.dev/i, "catalog metadata and provenance never enter result IPC");
 const expectedPlanDigest = "a".repeat(64);
 const customDigestAssignments = serializeAssignments(approvedCustom.decisions, { ...approvedCustom, modelPlanSha256: expectedPlanDigest });
 assert.match(customDigestAssignments, new RegExp(`^MODEL_PLAN_SHA256='${expectedPlanDigest}'$`, "m"), "approved custom output carries only the plan digest");
@@ -321,7 +449,8 @@ for (const layout of ["fullscreen", "inline"]) {
     reachable = { ...reachable, focus: index };
     const rendered = render(reachable, { columns: 80, rows: 24, color: false, layout });
     assert.ok(rendered.text.split("\n").length <= (layout === "fullscreen" ? 23 : 24), `${layout} model editor fits 80x24`);
-    assert.ok(rendered.hitRegions.some(({ action }) => action.control === controlsFor(reachable)[index]), `${layout} model editor keeps focused control reachable`);
+    if (layout === "fullscreen") assert.ok(rendered.hitRegions.some(({ action }) => action.control === controlsFor(reachable)[index]), `${layout} model editor keeps focused control reachable`);
+    else assert.equal(rendered.hitRegions.length, 0, "inline model editor remains mouse-free");
   }
 }
 
@@ -709,7 +838,7 @@ for (const layout of ["fullscreen", "inline"]) {
     }
     assert.match(lines.at(-3), new RegExp(`layout: ${layout}`), `${layout} ${phase} identifies its layout`);
     assert.equal(rendered.text.match(/^Keys:/gm)?.length, 1, `${layout} ${phase} has one Keys line`);
-    assert.equal(rendered.hitRegions.length, controlsFor(phaseState).length, `${layout} ${phase} keeps every active control visible at 80x24`);
+    assert.equal(rendered.hitRegions.length, layout === "fullscreen" ? controlsFor(phaseState).length : 0, `${layout} ${phase} exposes mouse regions only in fullscreen`);
     assert.ok(rendered.hitRegions.every(({ y1, y2 }) => y1 <= y2 && y1 > 0 && y2 <= lines.length), `${layout} ${phase} hit regions retain rendered y coordinates`);
     if (layout === "inline") assert.equal(lines.findLastIndex((line) => /└─+┘/.test(line)) + 4, lines.length, `${phase} inline footer immediately follows its natural panel height`);
   }
@@ -833,7 +962,7 @@ for (const layout of ["fullscreen", "inline"]) {
   for (const expectedControl of controlsFor(customConfigure)) {
     assert.equal(controlsFor(reachable)[reachable.focus], expectedControl, `${layout} Down reaches ${expectedControl} in order`);
     const rendered = render(reachable, { columns: 80, rows: 24, color: false, layout });
-    assert.equal(rendered.hitRegions.length, controlsFor(reachable).length, `${layout} custom Configure keeps every control reachable at 80x24`);
+    assert.equal(rendered.hitRegions.length, layout === "fullscreen" ? controlsFor(reachable).length : 0, `${layout} custom Configure exposes mouse regions only in fullscreen`);
     reachable = transition(reachable, { type: "MOVE", delta: 1 });
   }
 }
@@ -916,6 +1045,12 @@ assert.deepEqual(terminalTokenAction({ ...routingEditor, editing: { draft: "ab",
 for (const type of ["why", "preview", "model-plan-review"]) {
   assert.deepEqual(terminalTokenAction({ overlay: { type } }, "down", 8), { type: "PAGE", delta: 1, pageSize: 8 }, `${type} Down paginates`);
 }
+assert.deepEqual(terminalTokenAction({ overlay: { type: "catalog-providers" } }, "down", 8), { type: "CATALOG_MOVE", delta: 1, pageSize: 8 });
+assert.deepEqual(terminalTokenAction({ overlay: { type: "catalog-models" } }, "right", 8), { type: "CATALOG_PAGE", delta: 1, pageSize: 8 });
+assert.deepEqual(terminalTokenAction({ overlay: { type: "catalog-providers" } }, "space", 8), { type: "CATALOG_INPUT", text: " " }, "provider search routes Space as literal input");
+assert.deepEqual(terminalTokenAction({ overlay: { type: "catalog-models" } }, "space", 8), { type: "CATALOG_INPUT", text: " " }, "model search routes Space as literal input");
+assert.equal(terminalTokenAction({ overlay: { type: "catalog-target" } }, "space", 8), null, "other overlay Space routing remains unchanged");
+assert.deepEqual(terminalTokenAction({ overlay: { type: "catalog-target" } }, "esc", 8), { type: "CATALOG_BACK" });
 assert.deepEqual(terminalTokenAction({ ...routingEditor, editing: { draft: "changed" } }, "esc", 8), { type: "ESCAPE" }, "Escape cancels an active edit first");
 assert.deepEqual(terminalTokenAction(routingEditor, "esc", 8), { type: "CLOSE_OVERLAY" }, "Escape closes the model editor only after editing ends");
 assert.equal(decodeTerminalEvent("\x1b[200~").type, "ignore", "complete unsupported CSI is ignored");

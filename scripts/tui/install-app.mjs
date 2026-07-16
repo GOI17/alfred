@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { closeSync, constants, fchmodSync, fsyncSync, lstatSync, openSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, openSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { StringDecoder } from "node:string_decoder";
@@ -26,6 +26,18 @@ import {
   transition,
   validateCustomModelsDraft
 } from "./install-pathfinder.mjs";
+import { catalogErrorCategory, fetchCatalog } from "./models-dev-catalog.mjs";
+
+const MAX_CATALOG_EVENT_BYTES = 8 * 1024;
+// Shell aggregation accepts at most six declines plus one allow and completion.
+const MAX_CATALOG_EVENTS = 8;
+const CATALOG_BUCKETS = Object.freeze({
+  bytes: [
+    [0, "none"], [64 * 1024, "under-64k"], [1024 * 1024, "64k-1m"], [4 * 1024 * 1024, "1m-4m"], [Infinity, "4m-8m"]
+  ],
+  count: [[0, "none"], [10, "1-10"], [100, "11-100"], [1000, "101-1000"], [Infinity, "1001-plus"]],
+  duration: [[100, "under-100ms"], [500, "100-499ms"], [1000, "500-999ms"], [5000, "1-5s"], [Infinity, "over-5s"]]
+});
 
 export function decodeTerminalEvent(buffer, { flushEscape = false } = {}) {
   if (!buffer) return { type: "incomplete", length: 0 };
@@ -97,6 +109,153 @@ function parseHarnessStatus(raw = process.env.ALFRED_INSTALL_HARNESS_STATUS || "
 }
 
 const harnessStatus = parseHarnessStatus();
+
+function numericBucket(value, ranges, none = "none") {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return none;
+  for (const [maximum, label] of ranges) if (number <= maximum) return label;
+  return ranges.at(-1)?.[1] ?? none;
+}
+
+function catalogEventForConsent(consent) {
+  return { event: "catalog_consent_decided", consent: consent === "allowed" ? "allowed" : "declined" };
+}
+
+function catalogEventForResult(result) {
+  return {
+    event: "catalog_fetch_completed",
+    outcome: "success",
+    bytes_bucket: numericBucket(result?.stats?.bytes, CATALOG_BUCKETS.bytes.slice(1)),
+    provider_count_bucket: numericBucket(result?.stats?.providers, CATALOG_BUCKETS.count.slice(1)),
+    model_count_bucket: numericBucket(result?.stats?.models, CATALOG_BUCKETS.count.slice(1)),
+    duration_bucket: numericBucket(result?.stats?.duration_ms, CATALOG_BUCKETS.duration),
+    catalog_metadata_requests: result?.metadata_requests === 1 ? 1 : 0
+  };
+}
+
+function catalogEventForFailure(error) {
+  const category = catalogErrorCategory(error);
+  const metadataRequests = error?.metadata_requests === 1 ? 1 : 0;
+  return {
+    event: "catalog_fetch_completed",
+    outcome: category === "aborted" && metadataRequests === 0 ? "aborted-before-request" : category,
+    bytes_bucket: "none",
+    provider_count_bucket: "none",
+    model_count_bucket: "none",
+    duration_bucket: "none",
+    catalog_metadata_requests: metadataRequests
+  };
+}
+
+function validateCatalogEvent(event) {
+  if (!event || typeof event !== "object" || Array.isArray(event)) throw new Error("invalid catalog event");
+  if (event.event === "catalog_consent_decided") {
+    if (JSON.stringify(Object.keys(event).sort()) !== JSON.stringify(["consent", "event"]) || !["allowed", "declined"].includes(event.consent)) throw new Error("invalid catalog consent event");
+    return event;
+  }
+  const keys = ["bytes_bucket", "catalog_metadata_requests", "duration_bucket", "event", "model_count_bucket", "outcome", "provider_count_bucket"];
+  if (event.event !== "catalog_fetch_completed" || JSON.stringify(Object.keys(event).sort()) !== JSON.stringify(keys)) throw new Error("invalid catalog fetch event");
+  const outcomes = new Set(["success", "timeout", "aborted", "aborted-before-request", "network", "http", "redirect", "content-type", "oversized", "malformed", "schema"]);
+  const byteBuckets = new Set(["none", "under-64k", "64k-1m", "1m-4m", "4m-8m"]);
+  const countBuckets = new Set(["none", "1-10", "11-100", "101-1000", "1001-plus"]);
+  const durationBuckets = new Set(["none", "under-100ms", "100-499ms", "500-999ms", "1-5s", "over-5s"]);
+  const expectedMetadataRequests = event.outcome === "aborted-before-request" ? 0 : 1;
+  if (!outcomes.has(event.outcome) || !byteBuckets.has(event.bytes_bucket) || !countBuckets.has(event.provider_count_bucket) || !countBuckets.has(event.model_count_bucket) || !durationBuckets.has(event.duration_bucket) || event.catalog_metadata_requests !== expectedMetadataRequests) throw new Error("invalid catalog fetch event");
+  return event;
+}
+
+export function appendCatalogEvent(filePath, event) {
+  if (!filePath) throw new Error("catalog event file is unavailable");
+  const target = resolve(filePath);
+  const parent = dirname(target);
+  if (basename(target) !== "catalog-events.jsonl") throw new Error("catalog event path must use the fixed filename");
+  const effectiveUid = typeof process.geteuid === "function" ? process.geteuid() : null;
+  const parentStats = lstatSync(parent);
+  if (!parentStats.isDirectory() || parentStats.isSymbolicLink() || (parentStats.mode & 0o777) !== 0o700) throw new Error("catalog event parent is not private");
+  if (effectiveUid !== null && parentStats.uid !== effectiveUid) throw new Error("catalog event parent ownership is invalid");
+  const pathStats = lstatSync(target);
+  if (!pathStats.isFile() || pathStats.isSymbolicLink() || (pathStats.mode & 0o777) !== 0o600) throw new Error("catalog event file is not private");
+  if (effectiveUid !== null && pathStats.uid !== effectiveUid) throw new Error("catalog event ownership is invalid");
+  const line = `${JSON.stringify(validateCatalogEvent(event))}\n`;
+  if (Buffer.byteLength(line) > 1024) throw new Error("catalog event is too large");
+  const noFollow = typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
+  let descriptor;
+  try {
+    descriptor = openSync(target, constants.O_RDWR | constants.O_APPEND | noFollow);
+    const opened = fstatSync(descriptor);
+    if (!opened.isFile() || (opened.mode & 0o777) !== 0o600 || opened.dev !== pathStats.dev || opened.ino !== pathStats.ino) throw new Error("catalog event file changed before append");
+    if (effectiveUid !== null && opened.uid !== effectiveUid) throw new Error("catalog event ownership is invalid");
+    if (opened.size + Buffer.byteLength(line) > MAX_CATALOG_EVENT_BYTES) throw new Error("catalog event file is full");
+    const existing = opened.size ? readFileSync(descriptor, "utf8") : "";
+    if (existing && !existing.endsWith("\n")) throw new Error("catalog event file is malformed");
+    const count = existing ? existing.split("\n").length - 1 : 0;
+    if (count >= MAX_CATALOG_EVENTS) throw new Error("catalog event count exceeded");
+    writeFileSync(descriptor, line);
+    fsyncSync(descriptor);
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+}
+
+export function createCatalogRequestCoordinator({
+  fetchCatalogImpl = fetchCatalog,
+  eventsFile = process.env.ALFRED_INSTALL_CATALOG_EVENTS_FILE,
+  onDispatch = () => {},
+  onRedraw = () => {}
+} = {}) {
+  let decisionNonce = 0;
+  let declineRecorded = false;
+  let requestStarted = false;
+  let pending = null;
+  const controller = new AbortController();
+  const safeDispatch = (action) => { onDispatch(action); onRedraw(); };
+  return {
+    observe(currentState) {
+      const catalog = currentState?.catalog;
+      if (!catalog) return;
+      if (catalog.decisionNonce > decisionNonce) {
+        decisionNonce = catalog.decisionNonce;
+        const repeatedDecline = catalog.consent === "declined" && declineRecorded;
+        if (!repeatedDecline) {
+          try {
+            appendCatalogEvent(eventsFile, catalogEventForConsent(catalog.consent));
+            if (catalog.consent === "declined") declineRecorded = true;
+          } catch {
+            if (catalog.consent === "allowed") safeDispatch({ type: "CATALOG_REQUEST_FAILED", nonce: catalog.requestNonce, category: "trace" });
+            return;
+          }
+        }
+      }
+      if (requestStarted || catalog.status !== "requested" || catalog.consent !== "allowed") return;
+      requestStarted = true;
+      const nonce = catalog.requestNonce;
+      safeDispatch({ type: "CATALOG_REQUEST_STARTED", nonce });
+      pending = Promise.resolve()
+        .then(() => fetchCatalogImpl({ signal: controller.signal }))
+        .then((result) => {
+          try {
+            appendCatalogEvent(eventsFile, catalogEventForResult(result));
+          } catch {
+            safeDispatch({ type: "CATALOG_REQUEST_FAILED", nonce, category: "trace" });
+            return;
+          }
+          safeDispatch({ type: "CATALOG_REQUEST_SUCCEEDED", nonce, result });
+        }, (error) => {
+          try {
+            appendCatalogEvent(eventsFile, catalogEventForFailure(error));
+          } catch {
+            safeDispatch({ type: "CATALOG_REQUEST_FAILED", nonce, category: "trace" });
+            return;
+          }
+          safeDispatch({ type: "CATALOG_REQUEST_FAILED", nonce, category: catalogErrorCategory(error) });
+        });
+    },
+    abort() { controller.abort(); },
+    wait() { return pending ?? Promise.resolve(); },
+    get requestStarted() { return requestStarted; }
+  };
+}
+
 function readDiscovery(filePath) {
   if (!filePath) return normalizeDiscovery(null, harnessStatus);
   try {
@@ -128,6 +287,7 @@ let legacyHarnessFocus = 0;
 let pendingInput = "";
 const inputDecoder = new StringDecoder("utf8");
 const selectedTuiLayout = normalizeTuiLayout(process.env.ALFRED_INSTALL_APP_TUI_LAYOUT);
+let catalogCoordinator = null;
 
 function dimension(...values) {
   for (const value of values) {
@@ -219,6 +379,8 @@ export function inlineClearSequence(ownedFrame = null, currentColumns = ownedFra
 
 function dispatch(action) {
   state = transition(state, action);
+  if (state.done) catalogCoordinator?.abort();
+  else catalogCoordinator?.observe(state);
 }
 
 function setValue(pair) {
@@ -320,7 +482,7 @@ function handleInteractiveMouse(event) {
 }
 
 function textFocused() {
-  return textEditingActive(state);
+  return textEditingActive(state) || ["catalog-providers", "catalog-models"].includes(state.overlay?.type);
 }
 
 function pagedOverlay(state) {
@@ -328,17 +490,22 @@ function pagedOverlay(state) {
 }
 
 export function terminalTokenAction(currentState, token, pageSize = 8) {
+  if (["catalog-providers", "catalog-models"].includes(currentState.overlay?.type) && token === "space") return { type: "CATALOG_INPUT", text: " " };
+  if (["catalog-consent", "catalog-loading", "catalog-providers", "catalog-models", "catalog-target"].includes(currentState.overlay?.type) && token === "esc") return { type: "CATALOG_BACK" };
   if (token === "esc") return currentState.editing
     ? { type: "ESCAPE" }
     : currentState.overlay
       ? { type: "CLOSE_OVERLAY" }
       : { type: "BACK" };
   if (token === "up" || token === "down") {
+    if (["catalog-providers", "catalog-models"].includes(currentState.overlay?.type)) return { type: "CATALOG_MOVE", delta: token === "up" ? -1 : 1, pageSize };
+    if (["catalog-consent", "catalog-target"].includes(currentState.overlay?.type)) return { type: "MOVE", delta: token === "up" ? -1 : 1 };
     if (pagedOverlay(currentState)) return { type: "PAGE", delta: token === "up" ? -1 : 1, pageSize };
     if (!currentState.overlay || currentState.overlay.type === "model-editor") return { type: "MOVE", delta: token === "up" ? -1 : 1 };
     return null;
   }
   if (token === "left" || token === "right") {
+    if (["catalog-providers", "catalog-models"].includes(currentState.overlay?.type)) return { type: "CATALOG_PAGE", delta: token === "left" ? -1 : 1, pageSize };
     if (pagedOverlay(currentState)) return { type: "PAGE", delta: token === "left" ? -1 : 1, pageSize };
     if (!currentState.overlay || currentState.overlay.type === "model-editor") return { type: "CHANGE", delta: token === "left" ? -1 : 1 };
     return null;
@@ -365,7 +532,7 @@ function handleToken(token, { playback = false } = {}) {
     const action = terminalTokenAction(state, token, previewPageSize(dimensions()));
     return action ? dispatch(action) : undefined;
   }
-  if (token === "space") return dispatch({ type: "SPACE" });
+  if (token === "space") return dispatch(terminalTokenAction(state, token, previewPageSize(dimensions())) ?? { type: "SPACE" });
   if (token === "enter") return dispatch({ type: "ACTIVATE" });
   if (token === "backspace") return dispatch({ type: "BACKSPACE" });
   if (token === "delete") return dispatch({ type: "DELETE" });
@@ -465,7 +632,12 @@ async function writeAssignments() {
   else process.stdout.write(output);
 }
 
-async function runPlayback() {
+export async function runPlayback({ fetchCatalogImpl = fetchCatalog, catalogEventsFile = process.env.ALFRED_INSTALL_CATALOG_EVENTS_FILE } = {}) {
+  catalogCoordinator = createCatalogRequestCoordinator({
+    fetchCatalogImpl,
+    eventsFile: catalogEventsFile,
+    onDispatch: (action) => { if (!state.done) state = transition(state, action); }
+  });
   const script = process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT || "";
   const tokens = script.split(/[,\n]+/).flatMap((item) => {
     const withoutLeadingSeparatorSpace = item.replace(/^\s+/, "");
@@ -473,16 +645,30 @@ async function runPlayback() {
     const token = item.trim();
     return token ? [token] : [];
   });
-  for (const token of tokens) handleToken(token, { playback: true });
-  if (process.env.ALFRED_INSTALL_APP_TUI_RENDER === "1") process.stderr.write(`${screen(process.stderr)}\n`);
-  if (state.cancelled) {
-    process.exitCode = 130;
-    return;
+  try {
+    for (const token of tokens) {
+      if (token === "catalog-wait") await catalogCoordinator.wait();
+      else handleToken(token, { playback: true });
+    }
+    if (process.env.ALFRED_INSTALL_APP_TUI_RENDER === "1") process.stderr.write(`${screen(process.stderr)}\n`);
+    if (state.cancelled) {
+      process.exitCode = 130;
+      return;
+    }
+    await writeAssignments();
+  } finally {
+    if (state.cancelled) catalogCoordinator.abort();
+    catalogCoordinator = null;
   }
-  await writeAssignments();
 }
 
-export async function runInteractive({ stdin = process.stdin, stdout = process.stdout, layout: layoutInput = selectedTuiLayout } = {}) {
+export async function runInteractive({
+  stdin = process.stdin,
+  stdout = process.stdout,
+  layout: layoutInput = selectedTuiLayout,
+  fetchCatalogImpl = fetchCatalog,
+  catalogEventsFile = process.env.ALFRED_INSTALL_CATALOG_EVENTS_FILE
+} = {}) {
   if (!stdin.isTTY || !stdout.isTTY) {
     process.stderr.write("App TUI requires a TTY. Falling back to text installer.\n");
     process.exitCode = 2;
@@ -510,6 +696,12 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
       ownedFrame = inlineFrameInfo(content, viewport);
     }
   };
+  catalogCoordinator = createCatalogRequestCoordinator({
+    fetchCatalogImpl,
+    eventsFile: catalogEventsFile,
+    onDispatch: (action) => { if (!state.done) state = transition(state, action); },
+    onRedraw: () => { if (!state.done) redraw(); }
+  });
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
@@ -574,12 +766,14 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
     else redraw();
     await session;
   } finally {
+    catalogCoordinator?.abort();
     if (onData) stdin.off("data", onData);
     cleanup();
     stdin.off("error", onError);
     stdout.off("error", onError);
     if (onResize) stdout.off("resize", onResize);
     for (const [signal, handler] of signalHandlers) process.off(signal, handler);
+    catalogCoordinator = null;
   }
   if (terminationCode) process.exitCode = terminationCode;
   else if (state.cancelled) process.exitCode = 130;
