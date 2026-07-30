@@ -38,6 +38,7 @@ You are an AI agent working in an Alfred workspace. Start here to find your next
 ```
 packages/
 ├── core/        # Domain, use cases, ports, policies (harness-agnostic)
+├── installer-tui/ # OpenTUI adapter for the guided installer
 ├── memory/      # Vendor-agnostic persistent memory MVP
 ├── profile-manager/ # Runtime profiles for PATH/provider/model/plugin portability
 ├── pi-adapter/  # Pi.dev runtime integration

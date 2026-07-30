@@ -72,6 +72,15 @@
         <li>macOS, Linux, or WSL2</li>
       </ul>
 
+      <div class="doc-callout">
+        <strong>OpenTUI with a safe fallback.</strong> The guided installer
+        prefers a checksum-verified OpenTUI executable, using the same native
+        terminal framework that powers OpenCode. Node 22+ remains supported:
+        when a compatible OpenTUI artifact or runtime is unavailable, Alfred
+        automatically uses its dependency-free Node terminal adapter with the
+        same decisions and approval gates.
+      </div>
+
       <h2 id="profiles">Choose an edition</h2>
       <p>
         For human installs, start with the guided flow:
@@ -110,6 +119,9 @@
         </div>
 <pre><span class="c"># Guided human-first install; starts preview-first</span>
 <span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh
+
+<span class="c"># Force the dependency-free compatibility backend for diagnostics</span>
+<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> ALFRED_INSTALL_TUI_BACKEND=node sh
 
 <span class="c"># Automation fallback when choices are already known</span>
 <span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme --harness=opencode,codex-cli --apply

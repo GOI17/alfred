@@ -15,6 +15,7 @@
 set -e
 
 VERSION="0.4.1.1"
+OPENTUI_INSTALLER_VERSION="0.1.0"
 REPO_URL="https://github.com/GOI17/alfred.git"
 DEFAULT_BRANCH="main"
 NODE_MIN="22"
@@ -321,6 +322,9 @@ EOFTUI
 
 APP_TUI_PRIVATE_DIR=""
 APP_MODEL_PLAN_FILE=""
+APP_TUI_BACKEND="node"
+APP_TUI_EXECUTABLE=""
+APP_TUI_OPENTUI_SOURCE=""
 
 cleanup_app_tui_private_dir() {
   if [ -n "$APP_TUI_PRIVATE_DIR" ] && [ -d "$APP_TUI_PRIVATE_DIR" ]; then
@@ -328,7 +332,156 @@ cleanup_app_tui_private_dir() {
   fi
   APP_TUI_PRIVATE_DIR=""
   APP_MODEL_PLAN_FILE=""
+  APP_TUI_BACKEND="node"
+  APP_TUI_EXECUTABLE=""
+  APP_TUI_OPENTUI_SOURCE=""
 }
+
+opentui_asset_name() {
+  case "$(uname -s 2>/dev/null):$(uname -m 2>/dev/null)" in
+    Darwin:arm64|Darwin:aarch64) printf '%s' "alfred-installer-tui-darwin-arm64" ;;
+    Darwin:x86_64|Darwin:amd64) printf '%s' "alfred-installer-tui-darwin-x64" ;;
+    Linux:arm64|Linux:aarch64) printf '%s' "alfred-installer-tui-linux-arm64" ;;
+    Linux:x86_64|Linux:amd64) printf '%s' "alfred-installer-tui-linux-x64" ;;
+    *) return 1 ;;
+  esac
+}
+
+sha256_for_file() {
+  digest_target="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$digest_target" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$digest_target" | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 "$digest_target" | sed 's/^.*= *//'
+  else
+    return 1
+  fi
+}
+
+validate_sha256_digest() {
+  [ "${#1}" -eq 64 ] || return 1
+  case "$1" in
+    *[!0123456789abcdef]*) return 1 ;;
+  esac
+}
+
+verify_opentui_executable() {
+  executable_path="$1"
+  checksum_path="$2"
+  [ -f "$executable_path" ] && [ ! -L "$executable_path" ] && [ -f "$checksum_path" ] && [ ! -L "$checksum_path" ] || return 1
+  expected_digest="$(sed -n '1s/[[:space:]].*$//p' "$checksum_path")"
+  validate_sha256_digest "$expected_digest" || return 1
+  actual_digest="$(sha256_for_file "$executable_path")" || return 1
+  [ "$expected_digest" = "$actual_digest" ] || return 1
+}
+
+node_supports_opentui() {
+  node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 26 || (major === 26 && minor >= 4) ? 0 : 1)' >/dev/null 2>&1
+}
+
+select_app_tui_backend() {
+  source_dir="$1"
+  source_is_remote="$2"
+  preference="${ALFRED_INSTALL_TUI_BACKEND:-auto}"
+  case "$preference" in
+    auto|opentui|node) ;;
+    *)
+      log "Unknown ALFRED_INSTALL_TUI_BACKEND value '$preference'; using the Node TUI." 1>&2
+      preference="node"
+      ;;
+  esac
+  APP_TUI_BACKEND="node"
+  APP_TUI_EXECUTABLE=""
+  APP_TUI_OPENTUI_SOURCE=""
+  if [ "$preference" = "node" ] || [ -n "${ALFRED_INSTALL_APP_TUI_EVENTS:-}${ALFRED_INSTALL_APP_TUI_SCRIPT:-}" ] || [ "${ALFRED_INSTALL_APP_TUI_LAYOUT:-fullscreen}" = "inline" ]; then
+    return 0
+  fi
+
+  asset_name="$(opentui_asset_name)" || {
+    if [ "$preference" = "opentui" ]; then log "OpenTUI has no standalone target for this platform; using the Node TUI." 1>&2; fi
+    return 0
+  }
+  local_binary=""
+  local_checksum=""
+  if [ -n "${ALFRED_INSTALL_OPENTUI_BINARY:-}" ]; then
+    local_binary="$ALFRED_INSTALL_OPENTUI_BINARY"
+    local_checksum="${ALFRED_INSTALL_OPENTUI_CHECKSUM_FILE:-$ALFRED_INSTALL_OPENTUI_BINARY.sha256}"
+  elif [ "$source_is_remote" != true ] && [ -f "$source_dir/packages/installer-tui/dist/$asset_name" ]; then
+    local_binary="$source_dir/packages/installer-tui/dist/$asset_name"
+    local_checksum="$local_binary.sha256"
+  fi
+  if [ -n "$local_binary" ]; then
+    staged_local_binary="$APP_TUI_PRIVATE_DIR/$asset_name"
+    staged_local_checksum="$APP_TUI_PRIVATE_DIR/$asset_name.sha256"
+    if cp "$local_binary" "$staged_local_binary" 2>/dev/null && \
+      cp "$local_checksum" "$staged_local_checksum" 2>/dev/null && \
+      chmod 0600 "$staged_local_binary" "$staged_local_checksum" && \
+      verify_opentui_executable "$staged_local_binary" "$staged_local_checksum"
+    then
+      chmod 0700 "$staged_local_binary" || return 0
+      APP_TUI_EXECUTABLE="$staged_local_binary"
+      APP_TUI_BACKEND="opentui-binary"
+      return 0
+    fi
+    rm -f "$staged_local_binary" "$staged_local_checksum"
+  fi
+
+  if [ "$source_is_remote" != true ] && node_supports_opentui && [ -f "$source_dir/packages/installer-tui/src/installer-opentui.mjs" ] && [ -d "$source_dir/node_modules/@opentui/core" ]; then
+    APP_TUI_OPENTUI_SOURCE="$source_dir/packages/installer-tui/src/installer-opentui.mjs"
+    APP_TUI_BACKEND="opentui-node"
+    return 0
+  fi
+
+  release_base="${ALFRED_INSTALL_OPENTUI_RELEASE_BASE:-https://github.com/GOI17/alfred/releases/download/installer-tui-v$OPENTUI_INSTALLER_VERSION}"
+  downloaded_binary="$APP_TUI_PRIVATE_DIR/$asset_name"
+  downloaded_checksum="$APP_TUI_PRIVATE_DIR/$asset_name.sha256"
+  if command -v curl >/dev/null 2>&1 && \
+    curl -fsSL "$release_base/$asset_name" -o "$downloaded_binary" 2>/dev/null && \
+    curl -fsSL "$release_base/$asset_name.sha256" -o "$downloaded_checksum" 2>/dev/null && \
+    chmod 0600 "$downloaded_binary" "$downloaded_checksum" && \
+    verify_opentui_executable "$downloaded_binary" "$downloaded_checksum"
+  then
+    chmod 0700 "$downloaded_binary" || return 0
+    APP_TUI_EXECUTABLE="$downloaded_binary"
+    APP_TUI_BACKEND="opentui-binary"
+    return 0
+  fi
+  rm -f "$downloaded_binary" "$downloaded_checksum"
+  if [ "$preference" = "opentui" ]; then
+    log "A verified OpenTUI runtime is unavailable; using the Node TUI." 1>&2
+  fi
+}
+
+execute_selected_app_tui() {
+  case "$APP_TUI_BACKEND" in
+    opentui-binary) "$APP_TUI_EXECUTABLE" ;;
+    opentui-node) node --experimental-ffi "$APP_TUI_OPENTUI_SOURCE" ;;
+    *) node "$app_tui_script" ;;
+  esac
+}
+
+launch_selected_app_tui() (
+  export ALFRED_INSTALL_CURRENT_EDITION="$EDITION"
+  export ALFRED_INSTALL_CURRENT_HARNESS="$HARNESS"
+  export ALFRED_INSTALL_CURRENT_PROFILE="$PROFILE_STRATEGY"
+  export ALFRED_INSTALL_CURRENT_MEMORY="$MEMORY_SETUP"
+  export ALFRED_INSTALL_CURRENT_NAME="$NAME"
+  export ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH"
+  export ALFRED_INSTALL_CURRENT_APPLY="$APPLY"
+  export ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS"
+  export ALFRED_INSTALL_DISCOVERY_FILE="$app_discovery_file"
+  export ALFRED_INSTALL_MODEL_PLAN_FILE="$APP_MODEL_PLAN_FILE"
+  if [ -n "${ALFRED_INSTALL_APP_TUI_EVENTS:-}${ALFRED_INSTALL_APP_TUI_SCRIPT:-}" ]; then
+    execute_selected_app_tui > "$app_tui_out"
+  elif has_dev_tty; then
+    export ALFRED_INSTALL_APP_TUI_RESULT_FILE="$app_tui_out"
+    execute_selected_app_tui < /dev/tty > /dev/tty
+  else
+    execute_selected_app_tui > "$app_tui_out"
+  fi
+)
 
 validate_commit_sha() {
   [ "${#1}" -eq 40 ] || return 1
@@ -456,6 +609,7 @@ run_app_tui_if_available() {
       ! tar -xzf "$app_tui_snapshot" -C "$app_tui_snapshot_dir" --strip-components=1 2>/dev/null || \
       ! cp "$app_tui_snapshot_dir/scripts/tui/install-app.mjs" "$app_tui_script" || \
       ! cp "$app_tui_snapshot_dir/scripts/tui/install-pathfinder.mjs" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" || \
+      ! cp "$app_tui_snapshot_dir/scripts/tui/install-model-plan.mjs" "$APP_TUI_PRIVATE_DIR/install-model-plan.mjs" || \
       ! cp "$app_tui_snapshot_dir/scripts/tui/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" || \
       ! cp "$app_tui_snapshot_dir/packages/profile-manager/src/index.js" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" || \
       ! cp "$app_tui_snapshot_dir/packages/core/src/model-assignment.js" "$APP_TUI_PRIVATE_DIR/model-assignment.mjs"
@@ -468,6 +622,7 @@ run_app_tui_if_available() {
   else
     if ! cp "$app_tui_source_dir/scripts/tui/install-app.mjs" "$app_tui_script" || \
       ! cp "$app_tui_source_dir/scripts/tui/install-pathfinder.mjs" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" || \
+      ! cp "$app_tui_source_dir/scripts/tui/install-model-plan.mjs" "$APP_TUI_PRIVATE_DIR/install-model-plan.mjs" || \
       ! cp "$app_tui_source_dir/scripts/tui/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" || \
       ! cp "$app_tui_source_dir/packages/profile-manager/src/index.js" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" || \
       ! cp "$app_tui_source_dir/packages/core/src/model-assignment.js" "$APP_TUI_PRIVATE_DIR/model-assignment.mjs"
@@ -478,7 +633,7 @@ run_app_tui_if_available() {
     fi
   fi
 
-  chmod 0600 "$app_tui_script" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" \
+  chmod 0600 "$app_tui_script" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" "$APP_TUI_PRIVATE_DIR/install-model-plan.mjs" \
     "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" \
     "$APP_TUI_PRIVATE_DIR/model-assignment.mjs" || {
       cleanup_app_tui_private_dir
@@ -511,55 +666,26 @@ run_app_tui_if_available() {
   }
 
   app_tui_out="$APP_TUI_PRIVATE_DIR/result.env"
+  select_app_tui_backend "$app_tui_source_dir" "$app_tui_remote"
+  if [ "$APP_TUI_BACKEND" != "node" ]; then
+    log "Using the OpenTUI installer backend." 1>&2
+  fi
   app_tui_status=1
-  if [ -n "${ALFRED_INSTALL_APP_TUI_EVENTS:-}${ALFRED_INSTALL_APP_TUI_SCRIPT:-}" ]; then
-    if ALFRED_INSTALL_CURRENT_EDITION="$EDITION" \
-      ALFRED_INSTALL_CURRENT_HARNESS="$HARNESS" \
-      ALFRED_INSTALL_CURRENT_PROFILE="$PROFILE_STRATEGY" \
-      ALFRED_INSTALL_CURRENT_MEMORY="$MEMORY_SETUP" \
-      ALFRED_INSTALL_CURRENT_NAME="$NAME" \
-      ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH" \
-      ALFRED_INSTALL_CURRENT_APPLY="$APPLY" \
-      ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
-      ALFRED_INSTALL_DISCOVERY_FILE="$app_discovery_file" \
-      ALFRED_INSTALL_MODEL_PLAN_FILE="$APP_MODEL_PLAN_FILE" \
-      node "$app_tui_script" > "$app_tui_out"
-    then
-      app_tui_status=0
-    else
-      app_tui_status=$?
-    fi
-  elif has_dev_tty; then
-    if ALFRED_INSTALL_CURRENT_EDITION="$EDITION" \
-      ALFRED_INSTALL_CURRENT_HARNESS="$HARNESS" \
-      ALFRED_INSTALL_CURRENT_PROFILE="$PROFILE_STRATEGY" \
-      ALFRED_INSTALL_CURRENT_MEMORY="$MEMORY_SETUP" \
-      ALFRED_INSTALL_CURRENT_NAME="$NAME" \
-      ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH" \
-      ALFRED_INSTALL_CURRENT_APPLY="$APPLY" \
-      ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
-      ALFRED_INSTALL_DISCOVERY_FILE="$app_discovery_file" \
-      ALFRED_INSTALL_MODEL_PLAN_FILE="$APP_MODEL_PLAN_FILE" \
-      ALFRED_INSTALL_APP_TUI_RESULT_FILE="$app_tui_out" \
-      node "$app_tui_script" < /dev/tty > /dev/tty
-    then
-      app_tui_status=0
-    else
-      app_tui_status=$?
-    fi
+  if launch_selected_app_tui; then
+    app_tui_status=0
   else
-    if ALFRED_INSTALL_CURRENT_EDITION="$EDITION" \
-      ALFRED_INSTALL_CURRENT_HARNESS="$HARNESS" \
-      ALFRED_INSTALL_CURRENT_PROFILE="$PROFILE_STRATEGY" \
-      ALFRED_INSTALL_CURRENT_MEMORY="$MEMORY_SETUP" \
-      ALFRED_INSTALL_CURRENT_NAME="$NAME" \
-      ALFRED_INSTALL_CURRENT_PATH="$TARGET_PATH" \
-      ALFRED_INSTALL_CURRENT_APPLY="$APPLY" \
-      ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS" \
-      ALFRED_INSTALL_DISCOVERY_FILE="$app_discovery_file" \
-      ALFRED_INSTALL_MODEL_PLAN_FILE="$APP_MODEL_PLAN_FILE" \
-      node "$app_tui_script" > "$app_tui_out"
-    then
+    app_tui_status=$?
+  fi
+  if [ "$APP_TUI_BACKEND" != "node" ] && [ "$app_tui_status" -ne 0 ] && [ "$app_tui_status" -lt 128 ]; then
+    log "OpenTUI could not complete; continuing with the compatible Node TUI." 1>&2
+    APP_TUI_BACKEND="node"
+    rm -f "$app_tui_out"
+    if ! (umask 077; : > "$APP_MODEL_PLAN_FILE") || ! chmod 0600 "$APP_MODEL_PLAN_FILE"; then
+      cleanup_app_tui_private_dir
+      reset_app_tui_cleanup_traps
+      return 1
+    fi
+    if launch_selected_app_tui; then
       app_tui_status=0
     else
       app_tui_status=$?

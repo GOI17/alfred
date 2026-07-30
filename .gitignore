@@ -18,6 +18,9 @@
 .atl/
 .playwright-mcp/
 .pnpm-store/
+node_modules/
+packages/installer-tui/dist/
+ffi_otui_*.log
 *.sqlite
 !packages/memory-server/migrations/*.sqlite
 !packages/memory-server/test/fixtures/*.sqlite
