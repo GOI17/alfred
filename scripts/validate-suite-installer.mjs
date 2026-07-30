@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync, chmodSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -676,6 +677,43 @@ exec ${shellQuote(process.execPath)} "$@"
   assert.equal(readFileSync(modeMarker, "utf8").trim(), "700 600 600 600");
   assert.deepEqual(readdirSync(modeTuiTemp), [], "private mode probe must still clean staged files");
 
+  const fakeOpenTui = join(fixture, "alfred-installer-tui-fake");
+  const fakeOpenTuiChecksum = `${fakeOpenTui}.sha256`;
+  writeFileSync(fakeOpenTui, `#!/bin/sh
+printf '%s\\n' "EDITION='coding'" "HARNESS='none'" "PROFILE_STRATEGY='runtime-profiles'" "MEMORY_SETUP='not-needed-for-coding-edition'" "NAME='opentui-test'" "APPLY='false'" "SKIP_PROFILE_MANAGER='false'" "TUI_USED='true'" "TUI_MODE='app'" "MODEL_STRATEGY='configure-later'" "MODEL_WRITE_APPROVED='false'"
+`);
+  chmodSync(fakeOpenTui, 0o755);
+  writeFileSync(fakeOpenTuiChecksum, `${createHash("sha256").update(readFileSync(fakeOpenTui)).digest("hex")}  ${fakeOpenTui.split("/").at(-1)}\n`);
+  const openTuiBackendPreview = run([], {
+    env: {
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_TUI_BACKEND: "opentui",
+      ALFRED_INSTALL_OPENTUI_BINARY: fakeOpenTui,
+      ALFRED_INSTALL_OPENTUI_CHECKSUM_FILE: fakeOpenTuiChecksum
+    }
+  });
+  assert.equal(openTuiBackendPreview.status, 0, openTuiBackendPreview.stderr);
+  assert.match(openTuiBackendPreview.stderr, /Using the OpenTUI installer backend/);
+  assert.match(openTuiBackendPreview.stdout, /Name:\s+opentui-test/);
+  assert.match(openTuiBackendPreview.stdout, /TUI mode:\s+app/);
+
+  const failingOpenTui = join(fixture, "alfred-installer-tui-failing");
+  const failingOpenTuiChecksum = `${failingOpenTui}.sha256`;
+  writeFileSync(failingOpenTui, "#!/bin/sh\nexit 1\n");
+  chmodSync(failingOpenTui, 0o755);
+  writeFileSync(failingOpenTuiChecksum, `${createHash("sha256").update(readFileSync(failingOpenTui)).digest("hex")}  ${failingOpenTui.split("/").at(-1)}\n`);
+  const openTuiFallback = run([], {
+    env: {
+      ALFRED_INSTALL_FORCE_TUI: "1",
+      ALFRED_INSTALL_TUI_BACKEND: "opentui",
+      ALFRED_INSTALL_OPENTUI_BINARY: failingOpenTui,
+      ALFRED_INSTALL_OPENTUI_CHECKSUM_FILE: failingOpenTuiChecksum
+    }
+  });
+  assert.equal(openTuiFallback.status, 0, openTuiFallback.stderr);
+  assert.match(openTuiFallback.stderr, /OpenTUI could not complete; continuing with the compatible Node TUI/);
+  assert.match(openTuiFallback.stdout, /TUI mode:\s+text/);
+
   const guidedQuickPath = spawnSync("node", [appTui], {
     cwd,
     env: {
@@ -1125,6 +1163,7 @@ EOFRESULT
   const installSource = readFileSync(installSh, "utf8");
   for (const requiredRemote of [
     "scripts/tui/install-discovery.mjs",
+    "scripts/tui/install-model-plan.mjs",
     "packages/profile-manager/src/index.js",
     "packages/core/src/model-assignment.js"
   ]) assert.match(installSource, new RegExp(requiredRemote.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -1156,6 +1195,7 @@ EOFRESULT
   for (const relativePath of [
     "scripts/tui/install-app.mjs",
     "scripts/tui/install-pathfinder.mjs",
+    "scripts/tui/install-model-plan.mjs",
     "scripts/tui/install-discovery.mjs",
     "packages/profile-manager/src/index.js",
     "packages/core/src/model-assignment.js"
