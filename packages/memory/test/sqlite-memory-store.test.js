@@ -57,6 +57,31 @@ test("update mutates only specified columns", async () => {
   assert.deepEqual(got.tags, ["updated"]);
 });
 
+test("SQLite persists, updates, and filters structured attribution", async () => {
+  const store = freshStore();
+  await store.create({
+    id: "story", userId: "u1", namespace: "personal", type: "decision",
+    content: "Shared history", tags: [], source: "codex", metadata: {},
+    attribution: { harness: "codex", actor: "Codex", reason: "Useful across sessions." },
+    createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z"
+  });
+  assert.equal((await store.get("u1", "story")).attribution.actor, "Codex");
+  assert.equal((await store.list("u1", { limit: 10, offset: 0, harness: "codex" })).items.length, 1);
+  assert.equal((await store.list("u1", { limit: 10, offset: 0, harness: "gemini" })).items.length, 0);
+
+  await store.update("u1", "story", {
+    projectId: "alfred",
+    expiresAt: "2027-01-01T00:00:00.000Z",
+    attribution: { harness: "codex", actor: "Codex", reason: "Updated rationale." },
+    updatedAt: "2026-01-02T00:00:00.000Z"
+  });
+  const updated = await store.get("u1", "story");
+  assert.equal(updated.projectId, "alfred");
+  assert.equal(updated.expiresAt, "2027-01-01T00:00:00.000Z");
+  assert.equal(updated.updatedAt, "2026-01-02T00:00:00.000Z");
+  assert.equal(updated.attribution.reason, "Updated rationale.");
+});
+
 test("delete returns true when row exists, false otherwise", async () => {
   const store = freshStore();
   await store.create({ id: "a", userId: "u1", namespace: "personal", type: "preference", content: "x", tags: [], source: "s", metadata: {}, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' });

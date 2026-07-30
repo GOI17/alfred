@@ -74,7 +74,8 @@ function queryOptions(url) {
     type: url.searchParams.get("type") ?? undefined,
     namespace: url.searchParams.get("namespace") ?? undefined,
     projectId: url.searchParams.get("projectId") ?? undefined,
-    tag: url.searchParams.get("tag") ?? undefined
+    tag: url.searchParams.get("tag") ?? undefined,
+    harness: url.searchParams.get("harness") ?? undefined
   };
 }
 

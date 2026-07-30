@@ -62,6 +62,7 @@ export const DEFAULT_TENANT_MIGRATIONS = {
       tags TEXT[] NOT NULL DEFAULT '{}',
       source TEXT NOT NULL,
       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      attribution JSONB,
       confidence DOUBLE PRECISION CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
       expires_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -79,6 +80,12 @@ export const DEFAULT_TENANT_MIGRATIONS = {
       ON alfred_memories(user_id, project_id);
     CREATE INDEX IF NOT EXISTS alfred_memories_tags_idx
       ON alfred_memories USING GIN(tags);
+  `,
+  "alfred_memories_attribution": `
+    ALTER TABLE alfred_memories
+      ADD COLUMN IF NOT EXISTS attribution JSONB;
+    CREATE INDEX IF NOT EXISTS alfred_memories_attribution_harness_idx
+      ON alfred_memories ((attribution->>'harness'));
   `,
   "alfred_sessions": `
     CREATE TABLE IF NOT EXISTS alfred_sessions (

@@ -58,6 +58,24 @@ components:
         - correction
         - source
 
+    MemoryAttribution:
+      type: object
+      description: "Who recorded the memory and the concise reason durable persistence was useful. Never include private chain-of-thought."
+      required:
+        - harness
+        - actor
+        - reason
+      properties:
+        harness:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9:_-]{0,63}$'
+        actor:
+          type: string
+        reason:
+          type: string
+        sessionId:
+          type: string
+
     MemoryRecord:
       type: object
       required:
@@ -92,6 +110,10 @@ components:
           nullable: true
         metadata:
           type: object
+          nullable: true
+        attribution:
+          allOf:
+            - $ref: '#/components/schemas/MemoryAttribution'
           nullable: true
         confidence:
           type: number
@@ -133,6 +155,8 @@ components:
           type: string
         metadata:
           type: object
+        attribution:
+          $ref: '#/components/schemas/MemoryAttribution'
         confidence:
           type: number
           minimum: 0
@@ -160,6 +184,10 @@ components:
           nullable: true
         metadata:
           type: object
+          nullable: true
+        attribution:
+          allOf:
+            - $ref: '#/components/schemas/MemoryAttribution'
           nullable: true
         confidence:
           type: number

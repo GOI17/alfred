@@ -15,6 +15,7 @@ const DEFAULT_NAMESPACE = "personal";
 const NAMESPACE_MAX_LENGTH = 120;
 const safeNamespacePattern = /^[a-z0-9][a-z0-9:_-]{0,119}$/;
 const partitionedNamespacePattern = /^(project|team):[a-z0-9][a-z0-9_-]*$/;
+const safeHarnessPattern = /^[a-z0-9][a-z0-9:_-]{0,63}$/;
 
 export class MemoryValidationError extends Error {
   constructor(message, details = []) {
@@ -114,6 +115,38 @@ function normalizeMetadata(value, details, allowUndefined = true) {
   return value;
 }
 
+function normalizeAttribution(value, details, allowUndefined = true) {
+  if (value === undefined) return allowUndefined ? undefined : undefined;
+  if (value === null) return null;
+  if (!isPlainObject(value)) {
+    details.push({ field: "attribution", message: "attribution must be an object when provided." });
+    return undefined;
+  }
+
+  const harness = normalizeHarness(value.harness, "attribution.harness", details);
+  const actor = requireString(value.actor, "attribution.actor", details);
+  const reason = requireString(value.reason, "attribution.reason", details);
+  const sessionId = optionalString(value.sessionId, "attribution.sessionId", details);
+  const allowedFields = new Set(["harness", "actor", "reason", "sessionId"]);
+  for (const field of Object.keys(value)) {
+    if (!allowedFields.has(field)) {
+      details.push({ field: `attribution.${field}`, message: `attribution.${field} is not supported.` });
+    }
+  }
+  return removeUndefined({ harness, actor, reason, sessionId });
+}
+
+function normalizeHarness(value, field, details) {
+  const harness = requireString(value, field, details);
+  if (harness && !safeHarnessPattern.test(harness)) {
+    details.push({
+      field,
+      message: `${field} must be a lowercase identifier using letters, numbers, '-', '_', or ':'.`
+    });
+  }
+  return harness;
+}
+
 function normalizeConfidence(value, details) {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== "number" || Number.isNaN(value) || value < 0 || value > 1) {
@@ -171,6 +204,7 @@ export function normalizeCreateMemoryInput(input, { userId, now = new Date(), id
   const projectId = optionalString(body.projectId, "projectId", details);
   const namespace = deriveNamespace(body, projectId, details);
   const metadata = normalizeMetadata(body.metadata, details, false) ?? {};
+  const attribution = normalizeAttribution(body.attribution, details);
   const confidence = normalizeConfidence(body.confidence, details);
   const expiresAt = normalizeInstant(body.expiresAt, "expiresAt", details);
   const nowIso = normalizeInstant(now.toISOString(), "now", details);
@@ -187,6 +221,7 @@ export function normalizeCreateMemoryInput(input, { userId, now = new Date(), id
     tags,
     source,
     metadata,
+    attribution,
     confidence,
     expiresAt,
     createdAt: nowIso,
@@ -210,6 +245,7 @@ export function normalizeUpdateMemoryInput(input, { now = new Date() } = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(body, "projectId")) patch.projectId = optionalString(body.projectId, "projectId", details) ?? null;
   if (Object.prototype.hasOwnProperty.call(body, "metadata")) patch.metadata = normalizeMetadata(body.metadata, details);
+  if (Object.prototype.hasOwnProperty.call(body, "attribution")) patch.attribution = normalizeAttribution(body.attribution, details);
   if (Object.prototype.hasOwnProperty.call(body, "confidence")) patch.confidence = normalizeConfidence(body.confidence, details) ?? null;
   if (Object.prototype.hasOwnProperty.call(body, "expiresAt")) patch.expiresAt = normalizeInstant(body.expiresAt, "expiresAt", details) ?? null;
 
@@ -230,8 +266,9 @@ export function normalizeListOptions(options = {}) {
   const projectId = optionalString(options.projectId, "projectId", details);
   const namespace = options.namespace === undefined ? undefined : normalizeNamespace(options.namespace, "namespace", details);
   const tag = optionalString(options.tag, "tag", details);
+  const harness = options.harness === undefined ? undefined : normalizeHarness(options.harness, "harness", details);
   throwIfInvalid(details);
-  return removeUndefined({ limit, offset, type, projectId, namespace, tag });
+  return removeUndefined({ limit, offset, type, projectId, namespace, tag, harness });
 }
 
 export function normalizeSearchOptions(options = {}) {

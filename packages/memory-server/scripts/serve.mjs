@@ -89,7 +89,8 @@ export async function run(argv = [], env = process.env) {
     userService, tenantService, config,
     ...consoleOpts,
     registry,
-    sharedUrl: process.env.ALFRED_SAAS_DATABASE_URL ?? null
+    sharedUrl: process.env.ALFRED_SAAS_DATABASE_URL ?? null,
+    getMemoryService: memoryFactory
   });
   const openapiRouter = createOpenapiRouter({
     userService,

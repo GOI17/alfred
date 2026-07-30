@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Added optional structured memory attribution (`harness`, `actor`, `reason`,
+  and optional `sessionId`) across the domain, stores, client types, MCP, and
+  OpenAPI contracts.
+- Added harness filtering and additive SQLite/Postgres migrations.
+- Fixed SQLite camelCase-to-column mapping for `projectId`, `expiresAt`, and
+  `updatedAt` updates.
+- Added a tenant-scoped Console history and closed cross-tenant Console
+  tenant/key authorization gaps.
+- Persistence reasons are user-readable summaries only; private
+  chain-of-thought is explicitly out of scope.
+
 ## 0.3.0
 
 Multi-tenant extension of the v0.2.0 memory MVP. Backwards-compatible. Adds:

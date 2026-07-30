@@ -72,6 +72,16 @@ test("zod schema adapter returns Standard Schema objects instead of raw shapes",
       shape,
       strict() {
         return this;
+      },
+      optional() {
+        return { kind: "optional-object", shape };
+      },
+      nullable() {
+        return {
+          kind: "nullable-object",
+          shape,
+          optional: () => ({ kind: "optional-nullable-object", shape })
+        };
       }
     };
   }
@@ -164,6 +174,25 @@ test("memory_create calls createMemory without MemoryPolicy", async () => {
   ]);
   assert.equal("MemoryPolicy" in result.structuredContent, false);
   assert.equal("createMemoryPolicy" in result.structuredContent, false);
+});
+
+test("memory_create forwards safe cross-harness attribution", async () => {
+  const { server, memoryClient } = register();
+  const attribution = {
+    harness: "opencode",
+    actor: "OpenCode",
+    reason: "The implementation decision affects future sessions."
+  };
+
+  await tool(server, "memory_create").handler({
+    type: "decision",
+    content: "Use additive migrations.",
+    source: "opencode",
+    attribution
+  });
+
+  assert.deepEqual(memoryClient.calls[0].input.attribution, attribution);
+  assert.match(tool(server, "memory_create").config.description, /Never store private chain-of-thought/);
 });
 
 test("memory_update rejects namespace patch", async () => {

@@ -7,6 +7,7 @@ function applyFilters(memory, options) {
   if (options.namespace && memory.namespace !== options.namespace) return false;
   if (options.projectId && memory.projectId !== options.projectId) return false;
   if (options.tag && !memory.tags.includes(options.tag)) return false;
+  if (options.harness && memory.attribution?.harness !== options.harness) return false;
   return true;
 }
 
@@ -18,7 +19,8 @@ function memorySearchText(memory) {
     memory.namespace,
     memory.projectId,
     ...(memory.tags ?? []),
-    JSON.stringify(memory.metadata ?? {})
+    JSON.stringify(memory.metadata ?? {}),
+    JSON.stringify(memory.attribution ?? {})
   ]
     .filter(Boolean)
     .join(" ")
@@ -56,6 +58,7 @@ const editableMemoryFields = Object.freeze([
   "tags",
   "source",
   "metadata",
+  "attribution",
   "confidence",
   "expiresAt",
   "updatedAt"

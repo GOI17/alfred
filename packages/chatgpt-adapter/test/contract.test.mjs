@@ -53,6 +53,17 @@ test("OpenAPI MemoryRecord schema requires id, type, content, source", () => {
   }
 });
 
+test("OpenAPI exposes safe shared-memory attribution", () => {
+  const spec = JSON.parse(readFileSync(openapiPath, "utf8"));
+  const attribution = spec.components.schemas.MemoryAttribution;
+  assert.deepEqual(attribution.required, ["harness", "actor", "reason"]);
+  assert.match(attribution.description, /Never include private chain-of-thought/);
+  assert.equal(
+    spec.components.schemas.CreateMemoryInput.properties.attribution.$ref,
+    "#/components/schemas/MemoryAttribution"
+  );
+});
+
 // ---------------------------------------------------------------------------
 // Bridge tests (via fake req/res — sandbox blocks real listeners)
 // ---------------------------------------------------------------------------

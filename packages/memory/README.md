@@ -73,9 +73,19 @@ const memory = await memoryService.createMemory(tenant.id, {
   type: "preference",
   content: "Local-first by default.",
   tags: ["policy"],
-  source: "codex"
+  source: "codex",
+  attribution: {
+    harness: "codex",
+    actor: "Codex",
+    reason: "Future harness sessions need the same local-first constraint."
+  }
 });
 ```
+
+`attribution.reason` is a concise explanation of why the memory is useful
+later. Do not store hidden chain-of-thought, raw private reasoning, secrets, or
+temporary transcripts. Memories created by older clients remain readable
+without attribution.
 
 ## API surface
 
@@ -114,7 +124,9 @@ Test counts:
 |---|---|
 | `migrations/001_create_memory_tables.sql` | Initial tables. |
 | `migrations/002_add_memory_namespace.sql` | Adds `namespace` column. |
+| `migrations/003_add_memory_attribution.sql` | Adds structured harness/actor/reason attribution. |
 | `migrations/sqlite/001_memory.sqlite.sql` | SQLite twin for local tenants. |
+| `migrations/sqlite/002_memory_attribution.sqlite.sql` | Adds attribution to existing SQLite tenants. |
 
 For multi-tenant SQLite, the `alfred_registry` lives separately in `../memory-server/migrations/000_alfred_registry.sql`.
 

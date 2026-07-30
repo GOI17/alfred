@@ -97,6 +97,54 @@ beforeEach(startTestServer);
 afterEach(stopTestServer);
 
 describe("Alfred Memory HTTP API and SDK", () => {
+  test("round-trips attribution and filters history by harness", async () => {
+    const client = createMemoryClient({ baseUrl, apiKey: "alice-key" });
+    const created = await client.createMemory({
+      type: "decision",
+      content: "Share one tenant across connected harnesses.",
+      source: "codex",
+      attribution: {
+        harness: "codex",
+        actor: "Codex",
+        reason: "Future agents need the same tenant boundary.",
+        sessionId: "session-1"
+      }
+    });
+
+    assert.equal(created.attribution.actor, "Codex");
+    assert.equal(created.attribution.reason, "Future agents need the same tenant boundary.");
+    assert.equal((await client.listMemories({ harness: "codex" })).items.length, 1);
+    assert.equal((await client.listMemories({ harness: "gemini" })).items.length, 0);
+
+    const updated = await client.updateMemory(created.id, {
+      attribution: {
+        harness: "codex",
+        actor: "Codex",
+        reason: "The boundary is required for cross-harness recall."
+      }
+    });
+    assert.match(updated.attribution.reason, /cross-harness recall/);
+  });
+
+  test("rejects partial, unsafe, or private attribution shapes", async () => {
+    const client = createMemoryClient({ baseUrl, apiKey: "alice-key" });
+    for (const attribution of [
+      { harness: "Codex", actor: "Codex", reason: "Useful later." },
+      { harness: "codex", actor: "Codex" },
+      { harness: "codex", actor: "Codex", reason: "Useful later.", chainOfThought: "private" }
+    ]) {
+      await assert.rejects(
+        () => client.createMemory({
+          type: "fact",
+          content: "Invalid attribution must be rejected.",
+          source: "test",
+          attribution
+        }),
+        { name: "MemoryApiError", status: 400, code: "validation_error" }
+      );
+    }
+  });
+
   test("partitions list and search by namespace while direct id access stays user-scoped", async () => {
     const client = createMemoryClient({ baseUrl, apiKey: "alice-key" });
 

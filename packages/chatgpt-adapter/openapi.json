@@ -20,6 +20,17 @@
       }
     },
     "schemas": {
+      "MemoryAttribution": {
+        "type": "object",
+        "description": "Who recorded the memory and why durable persistence was useful. Never include private chain-of-thought.",
+        "required": ["harness", "actor", "reason"],
+        "properties": {
+          "harness": { "type": "string", "pattern": "^[a-z0-9][a-z0-9:_-]{0,63}$" },
+          "actor": { "type": "string" },
+          "reason": { "type": "string" },
+          "sessionId": { "type": "string" }
+        }
+      },
       "MemoryRecord": {
         "type": "object",
         "required": ["id", "userId", "namespace", "type", "content", "tags", "source", "createdAt", "updatedAt"],
@@ -33,6 +44,7 @@
           "tags": { "type": "array", "items": { "type": "string" } },
           "source": { "type": "string" },
           "metadata": { "type": "object", "additionalProperties": true },
+          "attribution": { "anyOf": [{ "$ref": "#/components/schemas/MemoryAttribution" }, { "type": "null" }] },
           "confidence": { "type": ["number", "null"] },
           "expiresAt": { "type": ["string", "null"] },
           "createdAt": { "type": "string", "format": "date-time" },
@@ -64,7 +76,8 @@
           "content": { "type": "string" },
           "tags": { "type": "array", "items": { "type": "string" } },
           "source": { "type": "string" },
-          "metadata": { "type": "object" }
+          "metadata": { "type": "object" },
+          "attribution": { "$ref": "#/components/schemas/MemoryAttribution" }
         }
       }
     }

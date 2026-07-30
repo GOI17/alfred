@@ -297,7 +297,7 @@ export function createOpenapiRouter({
 
           if (segs.length === 1 && req.method === "GET") {
             const opts = {};
-            for (const k of ["limit", "offset", "type", "namespace", "tag", "q"]) {
+            for (const k of ["limit", "offset", "type", "namespace", "projectId", "tag", "harness", "q"]) {
               if (url.searchParams.has(k)) opts[k] = url.searchParams.get(k);
             }
             const list = await memoryService.listMemories(tenantId, opts);

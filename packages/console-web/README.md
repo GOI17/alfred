@@ -9,6 +9,10 @@ that talks to your self-hosted Alfred Memory Server. Deployable to:
 - **Cloudflare Pages** — point Pages at this directory
 - **Any static host** (S3, nginx, etc.) — `npm run build` then upload `dist/`
 
+The unlocked Console includes a tenant-scoped shared-memory history. It shows
+which harness/actor saved each memory, the concise reason it was persisted,
+and when it happened. It never requests or displays private chain-of-thought.
+
 ## Build
 
 ```bash
@@ -89,7 +93,8 @@ Without that, the browser will block API calls from the console.
 The console asks the user to paste an API key (`alk_...`). The key is
 stored in `localStorage` only — never sent to anyone except the Alfred
 server the SPA is pointed at. The "Unlock" button validates the key by
-calling `/console/api/tenants` and falling back to a known-endpoint check.
+calling `/console/api/tenants`. All tenant, key, and history routes resolve
+the full key and enforce that its tenant matches the requested resource.
 
 ## Deploy on GitHub Pages (most common)
 

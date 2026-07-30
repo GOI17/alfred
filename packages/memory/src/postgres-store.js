@@ -10,6 +10,7 @@ function toMemory(row) {
     tags: row.tags ?? [],
     source: row.source,
     metadata: row.metadata ?? {},
+    attribution: row.attribution ?? undefined,
     confidence: row.confidence === null ? undefined : row.confidence,
     expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : undefined,
     createdAt: new Date(row.created_at).toISOString(),
@@ -38,6 +39,10 @@ function addFilters(parts, values, options) {
     values.push(options.tag);
     parts.push(`$${values.length} = ANY(tags)`);
   }
+  if (options.harness) {
+    values.push(options.harness);
+    parts.push(`attribution->>'harness' = $${values.length}`);
+  }
 }
 
 function paginationFrom(row, options) {
@@ -62,8 +67,8 @@ export function createPostgresMemoryStore(client) {
     async create(memory) {
       const result = await client.query(
         `INSERT INTO alfred_memories (
-          id, user_id, namespace, project_id, type, content, tags, source, metadata, confidence, expires_at, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13)
+          id, user_id, namespace, project_id, type, content, tags, source, metadata, attribution, confidence, expires_at, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, $14)
         RETURNING *`,
         [
           memory.id,
@@ -75,6 +80,7 @@ export function createPostgresMemoryStore(client) {
           memory.tags,
           memory.source,
           JSON.stringify(memory.metadata ?? {}),
+          memory.attribution === undefined ? null : JSON.stringify(memory.attribution),
           memory.confidence ?? null,
           memory.expiresAt ?? null,
           memory.createdAt,
@@ -121,6 +127,7 @@ export function createPostgresMemoryStore(client) {
         OR project_id ILIKE $${likeQueryIndex}
         OR array_to_string(tags, ' ') ILIKE $${likeQueryIndex}
         OR metadata::text ILIKE $${likeQueryIndex}
+        OR attribution::text ILIKE $${likeQueryIndex}
       )`);
       values.push(options.limit, options.offset);
       const result = await client.query(
@@ -156,6 +163,7 @@ export function createPostgresMemoryStore(client) {
         tags: "tags",
         source: "source",
         metadata: "metadata",
+        attribution: "attribution",
         confidence: "confidence",
         expiresAt: "expires_at",
         updatedAt: "updated_at"
@@ -163,8 +171,9 @@ export function createPostgresMemoryStore(client) {
 
       for (const [field, column] of Object.entries(fieldMap)) {
         if (Object.prototype.hasOwnProperty.call(patch, field)) {
-          values.push(field === "metadata" ? JSON.stringify(patch[field] ?? {}) : patch[field]);
-          columns.push(`${column} = $${values.length}${field === "metadata" ? "::jsonb" : ""}`);
+          const isJson = field === "metadata" || field === "attribution";
+          values.push(isJson ? JSON.stringify(patch[field]) : patch[field]);
+          columns.push(`${column} = $${values.length}${isJson ? "::jsonb" : ""}`);
         }
       }
 

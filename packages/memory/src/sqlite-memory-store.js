@@ -31,6 +31,7 @@ function toRow(row) {
     tags: row.tags ? JSON.parse(row.tags) : [],
     source: row.source,
     metadata: row.metadata ? JSON.parse(row.metadata) : {},
+    attribution: row.attribution ? JSON.parse(row.attribution) : undefined,
     confidence: row.confidence === null ? undefined : Number(row.confidence),
     expiresAt: row.expires_at ? new Date(row.expires_at).toISOString() : undefined,
     createdAt: new Date(row.created_at).toISOString(),
@@ -43,6 +44,7 @@ function applyWhere(where, values, options) {
   if (options.namespace) { values.push(options.namespace); where.push(`namespace = ?`); }
   if (options.projectId) { values.push(options.projectId); where.push(`project_id = ?`); }
   if (options.tag) { values.push(options.tag); where.push(`EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)`); }
+  if (options.harness) { values.push(options.harness); where.push(`json_extract(attribution, '$.harness') = ?`); }
 }
 
 export function createSqliteMemoryStore(client) {
@@ -58,8 +60,8 @@ export function createSqliteMemoryStore(client) {
     async create(memory) {
       client.prepare(`
         INSERT INTO alfred_memories (
-          id, user_id, namespace, project_id, type, content, tags, source, metadata, confidence, expires_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, user_id, namespace, project_id, type, content, tags, source, metadata, attribution, confidence, expires_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         memory.id,
         memory.userId,
@@ -70,6 +72,7 @@ export function createSqliteMemoryStore(client) {
         JSON.stringify(memory.tags ?? []),
         memory.source,
         JSON.stringify(memory.metadata ?? {}),
+        memory.attribution === undefined ? null : JSON.stringify(memory.attribution),
         memory.confidence ?? null,
         memory.expiresAt ?? null,
         memory.createdAt,
@@ -104,8 +107,8 @@ export function createSqliteMemoryStore(client) {
       const values = [userId];
       applyWhere(where, values, options);
       const likePattern = `%${options.q}%`;
-      where.push(`(content LIKE ? OR source LIKE ? OR type LIKE ? OR namespace LIKE ? OR project_id LIKE ? OR tags LIKE ? OR metadata LIKE ?)`);
-      for (let i = 0; i < 7; i += 1) values.push(likePattern);
+      where.push(`(content LIKE ? OR source LIKE ? OR type LIKE ? OR namespace LIKE ? OR project_id LIKE ? OR tags LIKE ? OR metadata LIKE ? OR attribution LIKE ?)`);
+      for (let i = 0; i < 8; i += 1) values.push(likePattern);
       values.push(options.limit, options.offset);
       const rows = client.prepare(`
         SELECT * FROM alfred_memories
@@ -137,14 +140,27 @@ export function createSqliteMemoryStore(client) {
     },
 
     async update(userId, id, patch) {
-      const editable = ["type", "content", "tags", "source", "project_id", "metadata", "confidence", "expires_at", "updated_at"];
+      const editable = {
+        type: "type",
+        content: "content",
+        tags: "tags",
+        source: "source",
+        projectId: "project_id",
+        metadata: "metadata",
+        attribution: "attribution",
+        confidence: "confidence",
+        expiresAt: "expires_at",
+        updatedAt: "updated_at"
+      };
       const cols = [];
       const values = [];
-      for (const k of editable) {
-        if (Object.prototype.hasOwnProperty.call(patch, k)) {
-          let v = patch[k];
-          if (k === "tags" || k === "metadata") v = JSON.stringify(v ?? []);
-          cols.push(`${k} = ?`);
+      for (const [field, column] of Object.entries(editable)) {
+        if (Object.prototype.hasOwnProperty.call(patch, field)) {
+          let v = patch[field];
+          if (field === "tags") v = JSON.stringify(v ?? []);
+          if (field === "metadata") v = JSON.stringify(v ?? {});
+          if (field === "attribution") v = v === null ? null : JSON.stringify(v);
+          cols.push(`${column} = ?`);
           values.push(v);
         }
       }
@@ -173,10 +189,13 @@ export function openSqliteMemoryStore(dbPath, { fromMigrations = true } = {}) {
     throw new TypeError("openSqliteMemoryStore requires a string dbPath.");
   }
   const db = new DatabaseSync(dbPath);
-  // Apply migrations 001 and 002 (the namespace migration).
+  // Apply additive, idempotent SQLite migrations.
   if (fromMigrations) {
     const m1 = readFileSync(join(sqliteMigrationsDir, "001_memory.sqlite.sql"), "utf8");
     db.exec(m1);
+    const m2 = readFileSync(join(sqliteMigrationsDir, "002_memory_attribution.sqlite.sql"), "utf8");
+    const columns = db.prepare("PRAGMA table_info(alfred_memories)").all().map((row) => row.name);
+    if (!columns.includes("attribution")) db.exec(m2);
   }
   return createSqliteMemoryStore(db);
 }

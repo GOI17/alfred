@@ -65,7 +65,7 @@
         "packages/memory/test/sqlite-memory-store.test.js"
       ],
       "command": "node --test packages/memory/test/sqlite-memory-store.test.js",
-      "expected_test_count": 9,
+      "expected_test_count": 10,
       "blocked_on_failure": true
     },
     {
@@ -84,12 +84,12 @@
     },
     {
       "id": "memory-server-console-handlers",
-      "description": "Console surface: bootstrap, verify, recover, semantic search, CAPTCHA, email",
+      "description": "Console surface: tenant auth, shared history, bootstrap, verify, recover, semantic search, CAPTCHA, email",
       "files": [
         "packages/memory-server/test/console.test.mjs"
       ],
       "command": "node --test packages/memory-server/test/console.test.mjs",
-      "expected_test_count": 97,
+      "expected_test_count": 99,
       "blocked_on_failure": true
     },
     {
@@ -104,12 +104,12 @@
     },
     {
       "id": "chatgpt-adapter-contract",
-      "description": "OpenAPI 3.1 + bridge forwarding",
+      "description": "OpenAPI 3.1 + shared attribution + bridge forwarding",
       "files": [
         "packages/chatgpt-adapter/test/contract.test.mjs"
       ],
       "command": "node --test packages/chatgpt-adapter/test/contract.test.mjs",
-      "expected_test_count": 11,
+      "expected_test_count": 12,
       "blocked_on_failure": true
     },
     {
@@ -124,12 +124,12 @@
     },
     {
       "id": "gemini-adapter-contract",
-      "description": "OpenAPI 3.0 + bridge forwarding for Google AI Studio",
+      "description": "OpenAPI 3.0 + shared attribution + bridge forwarding for Google AI Studio",
       "files": [
         "packages/gemini-adapter/test/contract.test.mjs"
       ],
       "command": "node --test packages/gemini-adapter/test/contract.test.mjs",
-      "expected_test_count": 10,
+      "expected_test_count": 11,
       "blocked_on_failure": true
     },
     {
@@ -214,6 +214,6 @@
   ],
   "totals": {
     "files_validated": 5,
-    "tests_total": 257
+    "tests_total": 262
   }
 }

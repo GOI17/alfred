@@ -1,6 +1,13 @@
 export type MemoryType = "preference" | "fact" | "decision" | "workflow" | "project" | "correction" | "source";
 export type MemoryNamespace = string;
 
+export interface MemoryAttribution {
+  harness: string;
+  actor: string;
+  reason: string;
+  sessionId?: string;
+}
+
 export interface MemoryRecord {
   id: string;
   userId: string;
@@ -13,6 +20,7 @@ export interface MemoryRecord {
   updatedAt: string;
   projectId?: string | null;
   metadata?: Record<string, unknown> | null;
+  attribution?: MemoryAttribution | null;
   confidence?: number | null;
   expiresAt?: string | null;
 }
@@ -25,6 +33,7 @@ export interface CreateMemoryInput {
   source: string;
   projectId?: string;
   metadata?: Record<string, unknown>;
+  attribution?: MemoryAttribution;
   confidence?: number;
   expiresAt?: string;
 }
@@ -36,6 +45,7 @@ export interface UpdateMemoryInput {
   source?: string;
   projectId?: string | null;
   metadata?: Record<string, unknown> | null;
+  attribution?: MemoryAttribution | null;
   confidence?: number | null;
   expiresAt?: string | null;
 }
@@ -56,6 +66,7 @@ export interface MemoryListOptions {
   namespace?: MemoryNamespace;
   projectId?: string;
   tag?: string;
+  harness?: string;
 }
 
 export interface MemorySearchOptions extends MemoryListOptions {

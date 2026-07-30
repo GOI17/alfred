@@ -74,17 +74,30 @@
     pre { background: #0b0d11; padding: 10px; border-radius: 6px; overflow-x: auto; font: 12px ui-monospace, monospace; }
     .step-num { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; background: var(--accent); color: #0b1015; border-radius: 50%; font-weight: 600; margin-right: 8px; }
     .step { margin: 12px 0; }
+    .history-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+    .filter {
+      background: transparent; color: var(--muted); border: 1px solid var(--border);
+      border-radius: 999px; padding: 5px 10px; cursor: pointer;
+    }
+    .filter.active { color: var(--text); border-color: var(--accent); background: #172638; }
+    .story { border-left: 2px solid var(--accent); padding: 2px 0 14px 14px; margin: 0 0 12px 4px; }
+    .story:last-child { margin-bottom: 0; }
+    .story-head { font-size: 13px; margin-bottom: 6px; }
+    .story-content { font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .story-reason { color: var(--muted); font-size: 12px; margin-top: 7px; }
+    .story-meta { color: var(--muted); font-size: 11px; margin-top: 5px; }
   </style>
 <!-- /* __ALFRED_BUILD_INJECT__ */ -->
 <script>
   window.ALFRED_API_BASE = "http://localhost:3000";
-  window.ALFRED_BUILD_VERSION = "2026-07-02";
+  window.ALFRED_BUILD_VERSION = "2026-07-30";
 </script>
 </head>
 <body>
 
 <div class="topbar">
   <div class="brand">Alfred <span class="dot">·</span> Memory Console</div>
+  <div id="apiStatus" class="small">locked</div>
 </div>
 
 <div class="container">
@@ -158,8 +171,29 @@
     </div>
 
     <div class="panel">
+      <div class="row">
+        <div>
+          <h2>Shared memory history</h2>
+          <p class="hint">See what each connected agent saved, why it was useful to remember, and when it happened.</p>
+        </div>
+        <div class="spacer"></div>
+        <button class="btn secondary" onclick="loadHistory()">Refresh</button>
+      </div>
+      <div class="history-toolbar" aria-label="Filter memory history by harness">
+        <button class="filter active" data-harness="" onclick="setHistoryHarness(this)">All</button>
+        <button class="filter" data-harness="chatgpt" onclick="setHistoryHarness(this)">ChatGPT</button>
+        <button class="filter" data-harness="gemini" onclick="setHistoryHarness(this)">Gemini</button>
+        <button class="filter" data-harness="codex" onclick="setHistoryHarness(this)">Codex</button>
+        <button class="filter" data-harness="opencode" onclick="setHistoryHarness(this)">OpenCode</button>
+      </div>
+      <div id="historyBody" aria-live="polite">
+        <div class="empty">Loading shared history…</div>
+      </div>
+    </div>
+
+    <div class="panel">
       <h2>Connected services</h2>
-      <p class="hint">Set up ChatGPT, Claude Desktop, or Gemini to use the same memory. Each adapter needs a tenant API key.</p>
+      <p class="hint">Connect every harness to this same tenant. Issue one labeled key per harness so access can be revoked independently.</p>
 
       <div class="step">
         <span class="step-num">1</span><strong>ChatGPT (Plus/Pro)</strong>
@@ -179,30 +213,7 @@
       </div>
 
       <div class="step">
-        <span class="step-num">2</span><strong>Claude Desktop (MCP)</strong>
-        <details>
-          <summary>Show steps</summary>
-          <pre>
-Edit ~/Library/Application Support/Claude/claude_desktop_config.json:
-{
-  "mcpServers": {
-    "alfred-memory": {
-      "command": "node",
-      "args": ["&lt;abs path&gt;/packages/anthropic-adapter/bin/alfred-mcp.mjs"],
-      "env": {
-        "ALFRED_MEMORY_API_KEY": "&lt;paste alk_...&gt;",
-        "ALFRED_MEMORY_BASE_URL": "&lt;your-server&gt;"
-      }
-    }
-  }
-}
-
-Restart Claude Desktop. Tools appear in the conversation panel.</pre>
-        </details>
-      </div>
-
-      <div class="step">
-        <span class="step-num">3</span><strong>Google Gemini / AI Studio</strong>
+        <span class="step-num">2</span><strong>Google Gemini / AI Studio</strong>
         <details>
           <summary>Show steps</summary>
           <pre>
@@ -217,15 +228,39 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
       </div>
 
       <div class="step">
-        <span class="step-num">4</span><strong>Coding agents (opencode / Codex / Pi)</strong>
+        <span class="step-num">3</span><strong>Codex (MCP)</strong>
         <details>
           <summary>Show steps</summary>
           <pre>
-1. cd into your project directory.
-2. Run: alfred init --profile=coding --name=&lt;project-name&gt;
-3. This writes .alfred/config.json in cwd with your API key.
-4. The agent reads it on every session start.
-5. Run the server: alfred serve</pre>
+Add an MCP server named "alfred-memory" in Codex:
+{
+  "command": "alfred-memory-mcp",
+  "env": {
+    "ALFRED_MEMORY_API_KEY": "&lt;Codex tenant key&gt;",
+    "ALFRED_MEMORY_BASE_URL": "&lt;your server&gt;"
+  }
+}
+
+Restart the harness and verify that memory_list is available.</pre>
+        </details>
+      </div>
+
+      <div class="step">
+        <span class="step-num">4</span><strong>OpenCode (MCP)</strong>
+        <details>
+          <summary>Show steps</summary>
+          <pre>
+Add an MCP server named "alfred-memory" in OpenCode:
+{
+  "command": "alfred-memory-mcp",
+  "env": {
+    "ALFRED_MEMORY_API_KEY": "&lt;OpenCode tenant key&gt;",
+    "ALFRED_MEMORY_BASE_URL": "&lt;your server&gt;"
+  }
+}
+
+Restart the harness and verify that memory_list is available.
+Both harnesses now read the same tenant history.</pre>
         </details>
       </div>
     </div>
@@ -233,7 +268,7 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
     <div class="panel">
       <h2>What is this?</h2>
       <p class="hint">Alfred Memory is a multi-tenant memory store. The console manages which agents can talk to it and with which credentials.</p>
-      <p class="hint">Memory is never written here — it lives in each tenant's database (Postgres or SQLite). This page only shows the keys and connections.</p>
+      <p class="hint">Memories live in the tenant database (Postgres or SQLite). This page reads that tenant's safe history; it does not expose private chain-of-thought.</p>
     </div>
 
   </div>
@@ -242,6 +277,7 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
 <script>
 let API_KEY = "";
 let CURRENT_TENANT = "";
+let HISTORY_HARNESS = "";
 
 function renderTurnstile() {
   // If the server build injected a site key, render the Turnstile widget.
@@ -375,7 +411,10 @@ function pill(kind) {
 }
 
 async function loadAll() {
-  try { await loadTenants(); }
+  try {
+    await loadTenants();
+    await Promise.all([loadKeys(), loadHistory()]);
+  }
   catch (err) { showError(err); }
 }
 
@@ -406,7 +445,53 @@ async function loadTenants() {
     sel.appendChild(opt);
   }
   CURRENT_TENANT = tenants[0].id;
-  loadKeys();
+}
+
+function setHistoryHarness(button) {
+  HISTORY_HARNESS = button.dataset.harness || "";
+  for (const item of document.querySelectorAll(".filter")) item.classList.toggle("active", item === button);
+  loadHistory();
+}
+
+async function loadHistory() {
+  const body = document.getElementById("historyBody");
+  if (!CURRENT_TENANT || !body) return;
+  body.innerHTML = '<div class="empty">Loading shared history…</div>';
+  try {
+    const query = new URLSearchParams({ limit: "50" });
+    if (HISTORY_HARNESS) query.set("harness", HISTORY_HARNESS);
+    const res = await api("/console/api/history?" + query.toString());
+    const items = res.items || [];
+    if (items.length === 0) {
+      body.innerHTML = '<div class="empty">No memories match this view yet.</div>';
+      return;
+    }
+    body.innerHTML = items.map(renderHistoryItem).join("");
+  } catch (err) {
+    body.innerHTML = '<div class="error">Could not load memory history: ' + escapeHtml(err.message) + '</div>';
+  }
+}
+
+function renderHistoryItem(memory) {
+  const story = memory.story || {};
+  const actor = story.actor || memory.source || "Unknown";
+  const harness = story.harness || "unknown";
+  const action = story.action || "saved a memory";
+  const reason = story.reason || "Not recorded by the legacy client.";
+  const timestamp = new Date(memory.createdAt).toLocaleString();
+  return '<article class="story">' +
+    '<div class="story-head"><strong>' + escapeHtml(actor) + '</strong> ' + escapeHtml(action) +
+    ' <span class="pill">' + escapeHtml(harness) + '</span></div>' +
+    '<div class="story-content">' + escapeHtml(memory.content) + '</div>' +
+    '<div class="story-reason"><strong>Why it was saved:</strong> ' + escapeHtml(reason) + '</div>' +
+    '<div class="story-meta">' + escapeHtml(memory.type) + ' · ' + escapeHtml(memory.namespace) + ' · ' + escapeHtml(timestamp) + '</div>' +
+    '</article>';
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, function (char) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char];
+  });
 }
 
 async function loadKeys() {

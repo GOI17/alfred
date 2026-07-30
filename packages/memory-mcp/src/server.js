@@ -32,7 +32,7 @@ export function registerMemoryTools(server, options = {}) {
 
   registerTool("memory_create", {
     title: "Create memory",
-    description: "Create an Alfred memory through the Memory API.",
+    description: "Create an Alfred memory with a concise persistence reason. Never store private chain-of-thought.",
     inputSchema: schema.createInput
   }, async (input) => withSafeErrors(() => memoryClient.createMemory(normalizeCreateInput(input))));
 
@@ -82,6 +82,7 @@ export function createPlainSchemaAdapter() {
       source: { type: "string", required: true },
       projectId: { type: "string", optional: true },
       metadata: { type: "record", optional: true },
+      attribution: attributionPlainSchema(),
       confidence: { type: "number", optional: true },
       expiresAt: { type: "string", optional: true }
     },
@@ -104,6 +105,12 @@ export function createZodSchemaAdapter(zod) {
   const z = zod.z ?? zod.default ?? zod;
   const memoryType = z.enum(MEMORY_TYPES);
   const metadata = z.record(z.string(), z.unknown());
+  const attribution = z.object({
+    harness: z.string().min(1),
+    actor: z.string().min(1),
+    reason: z.string().min(1),
+    sessionId: z.string().min(1).optional()
+  }).strict();
 
   return {
     searchInput: z.object({
@@ -118,6 +125,7 @@ export function createZodSchemaAdapter(zod) {
       source: z.string().min(1),
       projectId: z.string().min(1).optional(),
       metadata: metadata.optional(),
+      attribution: attribution.optional(),
       confidence: z.number().optional(),
       expiresAt: z.string().min(1).optional()
     }),
@@ -130,6 +138,7 @@ export function createZodSchemaAdapter(zod) {
         source: z.string().min(1).optional(),
         projectId: z.string().min(1).nullable().optional(),
         metadata: metadata.nullable().optional(),
+        attribution: attribution.nullable().optional(),
         confidence: z.number().nullable().optional(),
         expiresAt: z.string().min(1).nullable().optional()
       }).strict()
@@ -148,7 +157,8 @@ function zodListSchemaFields(z, memoryType) {
     type: memoryType.optional(),
     namespace: z.string().min(1).optional(),
     projectId: z.string().min(1).optional(),
-    tag: z.string().min(1).optional()
+    tag: z.string().min(1).optional(),
+    harness: z.string().min(1).optional()
   };
 }
 
@@ -159,7 +169,8 @@ function listSchemaFields() {
     type: { enum: MEMORY_TYPES, optional: true },
     namespace: { type: "string", optional: true },
     projectId: { type: "string", optional: true },
-    tag: { type: "string", optional: true }
+    tag: { type: "string", optional: true },
+    harness: { type: "string", optional: true }
   };
 }
 
@@ -171,8 +182,22 @@ function updatePatchSchemaFields() {
     source: { type: "string", optional: true },
     projectId: { type: "string|null", optional: true },
     metadata: { type: "record|null", optional: true },
+    attribution: { ...attributionPlainSchema(), nullable: true },
     confidence: { type: "number|null", optional: true },
     expiresAt: { type: "string|null", optional: true }
+  };
+}
+
+function attributionPlainSchema() {
+  return {
+    type: "object",
+    optional: true,
+    fields: {
+      harness: { type: "string", required: true },
+      actor: { type: "string", required: true },
+      reason: { type: "string", required: true },
+      sessionId: { type: "string", optional: true }
+    }
   };
 }
 

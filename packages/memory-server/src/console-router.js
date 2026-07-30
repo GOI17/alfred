@@ -104,13 +104,38 @@ function html(res, status, body, contentType = "text/html; charset=utf-8") {
   res.end(body);
 }
 
-function authenticate(req, userService) {
+async function authenticate(req, userService) {
   const auth = req.headers.authorization;
   const apiKey = typeof auth === "string" && auth.startsWith("Bearer ")
     ? auth.slice("Bearer ".length).trim()
     : (typeof req.headers["x-api-key"] === "string" ? req.headers["x-api-key"] : null);
   if (!apiKey) return { error: { code: "unauthorized", message: "API key required." } };
-  return { apiKey };
+  const resolved = await userService.resolveApiKey(apiKey);
+  if (!resolved) return { error: { code: "unauthorized", message: "Invalid or revoked API key." } };
+  return { apiKey, ...resolved };
+}
+
+function forbidden(res) {
+  return json(res, 403, { error: { code: "forbidden", message: "This API key cannot access the requested tenant." } });
+}
+
+function historyItem(memory) {
+  const attribution = memory.attribution ?? {};
+  const harness = typeof attribution.harness === "string" && attribution.harness ? attribution.harness : "unknown";
+  const actor = typeof attribution.actor === "string" && attribution.actor ? attribution.actor : (memory.source || "Unknown");
+  const reason = typeof attribution.reason === "string" && attribution.reason
+    ? attribution.reason
+    : "Not recorded by the legacy client.";
+  return {
+    ...memory,
+    story: {
+      harness,
+      actor,
+      reason,
+      sessionId: attribution.sessionId ?? null,
+      action: memory.type === "decision" ? "recorded a decision" : "saved a memory"
+    }
+  };
 }
 
 async function readJsonBody(req) {
@@ -144,7 +169,8 @@ export function createConsoleRouter({
   consoleDirOverride = null,
   consoleUrl = null,
   registry = null,                          // v0.3.1: needed for bootstrap_attempts
-  sharedUrl = process.env.ALFRED_SAAS_DATABASE_URL ?? null
+  sharedUrl = process.env.ALFRED_SAAS_DATABASE_URL ?? null,
+  getMemoryService = null
 } = {}) {
   if (!userService) throw new TypeError("userService required");
   if (!tenantService) throw new TypeError("tenantService required");
@@ -363,20 +389,50 @@ export function createConsoleRouter({
 
     // API: list tenants
     if (url.pathname === "/console/api/tenants" && req.method === "GET") {
+      const auth = await authenticate(req, userService);
+      if (auth.error) return json(res, 401, { error: auth.error });
       try {
-        const result = await tenantService.listTenants({ limit: 100, offset: 0 });
-        return json(res, 200, result);
+        const tenant = await tenantService.getTenant(auth.tenant_id);
+        return json(res, 200, {
+          items: [tenant],
+          pagination: { limit: 1, offset: 0, total: 1 }
+        });
       } catch (err) {
         return json(res, 500, { error: { code: "internal_error", message: err.message } });
+      }
+    }
+
+    // API: chronological, tenant-scoped memory history
+    if (url.pathname === "/console/api/history" && req.method === "GET") {
+      const auth = await authenticate(req, userService);
+      if (auth.error) return json(res, 401, { error: auth.error });
+      if (typeof getMemoryService !== "function") {
+        return json(res, 503, { error: { code: "history_not_configured", message: "Memory history is not configured on this server." } });
+      }
+      const options = {};
+      for (const key of ["limit", "offset", "type", "namespace", "projectId", "tag", "harness"]) {
+        if (url.searchParams.has(key)) options[key] = url.searchParams.get(key);
+      }
+      try {
+        const memoryService = await getMemoryService(auth.tenant_id);
+        const result = await memoryService.listMemories(auth.tenant_id, options);
+        return json(res, 200, {
+          ...result,
+          items: result.items.map(historyItem),
+          provider_calls: 0
+        });
+      } catch (err) {
+        return json(res, err.status || 500, { error: { code: err.code || "internal_error", message: err.message, details: err.details } });
       }
     }
 
     // API: list keys for a tenant
     const listKeysMatch = url.pathname.match(/^\/console\/api\/tenants\/([^/]+)\/keys$/);
     if (listKeysMatch && req.method === "GET") {
-      const auth = authenticate(req, userService);
+      const auth = await authenticate(req, userService);
       if (auth.error) return json(res, 401, { error: auth.error });
       const tenantId = decodeURIComponent(listKeysMatch[1]);
+      if (auth.tenant_id !== tenantId) return forbidden(res);
       const includeRevoked = url.searchParams.get("include_revoked") === "true";
       try {
         const keys = await userService.listApiKeys(tenantId, { includeRevoked });
@@ -388,9 +444,10 @@ export function createConsoleRouter({
 
     // API: issue new key for a tenant
     if (listKeysMatch && req.method === "POST") {
-      const auth = authenticate(req, userService);
+      const auth = await authenticate(req, userService);
       if (auth.error) return json(res, 401, { error: auth.error });
       const tenantId = decodeURIComponent(listKeysMatch[1]);
+      if (auth.tenant_id !== tenantId) return forbidden(res);
       let body = {};
       try { body = await readJsonBody(req); }
       catch (err) { return json(res, 400, { error: { code: "validation_error", message: err.message } }); }
@@ -410,10 +467,12 @@ export function createConsoleRouter({
     // API: revoke a key by id
     const revokeMatch = url.pathname.match(/^\/console\/api\/keys\/([^/]+)$/);
     if (revokeMatch && req.method === "DELETE") {
-      const auth = authenticate(req, userService);
+      const auth = await authenticate(req, userService);
       if (auth.error) return json(res, 401, { error: auth.error });
       const keyId = decodeURIComponent(revokeMatch[1]);
       try {
+        const keys = await userService.listApiKeys(auth.tenant_id, { includeRevoked: true });
+        if (!keys.some((key) => key.id === keyId)) return forbidden(res);
         const result = await userService.revokeApiKey(keyId, { reason: "console revoke" });
         return json(res, 200, { ok: true, ...result });
       } catch (err) {

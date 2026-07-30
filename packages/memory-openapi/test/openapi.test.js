@@ -132,6 +132,7 @@ describe("memory-openapi schema", () => {
     const schemas = Object.keys(spec.components?.schemas ?? {});
     for (const name of [
       "MemoryRecord",
+      "MemoryAttribution",
       "CreateMemoryInput",
       "UpdateMemoryInput",
       "MemoryPage",
