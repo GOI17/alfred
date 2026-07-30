@@ -6,7 +6,9 @@ import {
   createInstallerState,
   frameForState,
   keyEventAction,
-  lineTone
+  lineTone,
+  openTuiViewForState,
+  responsiveLayout
 } from "../src/installer-opentui.mjs";
 
 function key(name, sequence = name, extra = {}) {
@@ -28,7 +30,7 @@ test("maps overlay arrows to deterministic paging", () => {
   assert.deepEqual(keyEventAction(key("right", "\u001b[C"), state, { columns: 80, rows: 24 }), {
     type: "PAGE",
     delta: 1,
-    pageSize: 8
+    pageSize: 10
   });
 });
 
@@ -53,9 +55,47 @@ test("uses accessible Kanagawa tones with non-color markers intact", () => {
 test("renders the shared 80x24 Pathfinder frame without provider calls", () => {
   const result = frameForState(createInstallerState({}), { columns: 80, rows: 24 });
   assert.equal(result.provider_calls, 0);
-  assert.ok(result.lines.length <= 23);
-  assert.match(result.lines.join("\n"), /Alfred installer/);
+  assert.ok(result.lines.length <= 24);
+  assert.match(result.lines.join("\n"), /ALFRED INSTALLER/);
+  assert.match(result.lines.join("\n"), /PREVIEW MODE/);
+  assert.match(result.lines.join("\n"), /Provider calls: 0|PROVIDERS 0/i);
   assert.ok(result.hitRegions.length > 0);
+});
+
+test("bounds and adapts the visual shell instead of stretching it", () => {
+  assert.deepEqual(responsiveLayout({ columns: 80, rows: 24 }), {
+    mode: "compact",
+    columns: 80,
+    rows: 24,
+    width: 80,
+    height: 24,
+    headerHeight: 4,
+    footerHeight: 4
+  });
+  assert.equal(responsiveLayout({ columns: 110, rows: 40 }).mode, "medium");
+  assert.equal(responsiveLayout({ columns: 240, rows: 70 }).mode, "wide");
+  assert.equal(responsiveLayout({ columns: 240, rows: 70 }).width, 148);
+  assert.equal(responsiveLayout({ columns: 240, rows: 70 }).height, 34);
+});
+
+test("exposes navigation, decisions, and persistent preview in the wide view", () => {
+  let state = createInstallerState({});
+  state = transition(state, { type: "CUSTOMIZE" });
+  const view = openTuiViewForState(state, { columns: 180, rows: 40 });
+  assert.equal(view.layout.mode, "wide");
+  assert.equal(view.steps.find(({ phase }) => phase === "Discover").status, "complete");
+  assert.equal(view.steps.find(({ phase }) => phase === "Choose").status, "current");
+  assert.match(view.main.rows.map(({ text }) => text).join("\n"), /\[suggested\]/);
+  assert.match(view.preview.rows.map(({ text }) => text).join("\n"), /Preview-first/);
+  assert.equal(view.provider_calls, 0);
+});
+
+test("marks user overrides separately from suggested values", () => {
+  let state = createInstallerState({});
+  state = transition(state, { type: "CUSTOMIZE" });
+  state = transition(state, { type: "CHANGE", delta: 1 });
+  const view = openTuiViewForState(state, { columns: 120, rows: 30 });
+  assert.match(view.main.rows.map(({ text }) => text).join("\n"), /\[chosen\]/);
 });
 
 test("serializes the established app TUI contract", () => {

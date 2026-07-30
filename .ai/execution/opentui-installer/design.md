@@ -81,6 +81,22 @@ backend, not a replacement for the dependency-free Node backend.
 2. Run the existing Pathfinder, discovery, and suite installer validators.
 3. Add package check/test scripts to the root quality gates.
 
+### R7: OpenTUI visual shell
+
+1. Replace the legacy text-frame projection with a native OpenTUI component
+   hierarchy while preserving the Pathfinder state machine.
+2. Center the installer within a bounded canvas on large terminals instead of
+   stretching controls across the full viewport.
+3. On wide terminals, show step navigation, the active decision surface, and a
+   persistent live preview as three distinct regions.
+4. On medium terminals, retain step navigation and the decision surface while
+   reducing the preview to a persistent summary.
+5. At 80x24, collapse navigation into a compact stepper and keep every focused
+   control reachable without horizontal scrolling.
+6. Mark detected, suggested, selected, changed, blocked, and approved values
+   with text as well as color.
+7. Keep contextual keyboard help visible and preserve mouse activation.
+
 ## Interfaces
 
 ```text
@@ -108,6 +124,8 @@ OpenTUI executable environment inputs remain the existing
 - [x] Standalone build script and CI artifact matrix implemented.
 - [x] Runtime and release process documented.
 - [x] Package and installer validation suites pass.
+- [x] Responsive OpenTUI visual shell implemented.
+- [x] Visual shell tests and native PTY verification pass.
 
 ## References
 
