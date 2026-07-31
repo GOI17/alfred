@@ -80,10 +80,13 @@ CREATE TABLE IF NOT EXISTS tenant_api_keys (
   key_hash TEXT NOT NULL,
   key_algorithm TEXT NOT NULL DEFAULT 'scrypt',
   label TEXT,
+  harness TEXT,
+  actor TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   last_used_at TEXT,
   revoked_at TEXT,
-  UNIQUE (tenant_id, key_prefix)
+  UNIQUE (tenant_id, key_prefix),
+  CHECK ((harness IS NULL AND actor IS NULL) OR (harness IS NOT NULL AND actor IS NOT NULL))
 );
 
 CREATE INDEX IF NOT EXISTS tenant_api_keys_prefix_idx ON tenant_api_keys(key_prefix);

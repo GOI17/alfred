@@ -91,6 +91,18 @@ export function createInMemoryUserStore({
           }
         }
       }
+      if (row.harness) {
+        const tenantKeys = keysByTenant.get(row.tenant_id) ?? new Set();
+        for (const id of tenantKeys) {
+          const existing = keys.get(id);
+          if (existing?.harness === row.harness && !existing.revoked_at) {
+            const e = new Error(`An active ${row.harness} connection already exists for this tenant.`);
+            e.code = "tenant_conflict";
+            e.status = 409;
+            throw e;
+          }
+        }
+      }
       keys.set(row.id, { ...row });
       indexKey({ ...row });
       return clone(row);

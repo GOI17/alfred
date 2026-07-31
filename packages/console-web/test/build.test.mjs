@@ -28,8 +28,8 @@ test("npm run build creates dist/index.html", () => {
   assert.equal(result.status, 0, "build failed: " + result.stderr);
   assert.ok(existsSync(join(distDir, "index.html")));
   const text = readFileSync(join(distDir, "index.html"), "utf8");
-  // The build script injects window.ALFRED_API_BASE with the default.
-  assert.match(text, /window\.ALFRED_API_BASE = "http:\/\/localhost:3000"/);
+  // Inline Console builds use the serving origin unless a remote API is explicit.
+  assert.match(text, /window\.ALFRED_API_BASE = ""/);
   assert.match(text, /window\.ALFRED_BUILD_VERSION = /);
 });
 

@@ -121,6 +121,78 @@ test("POST /console/api/tenants/<id>/keys issues a new key", async () => {
   const body = JSON.parse(res.body);
   assert.ok(body.api_key.startsWith("alk_"));
   assert.equal(body.key.label, "console-test");
+  assert.equal(Object.hasOwn(body.key, "key_hash"), false);
+});
+
+test("Console previews four harness connections without issuing keys", async () => {
+  const services = makeServices();
+  const tenant = await services.tenantService.provisionTenant({
+    kind: "coding_agent_only", storage_backend: "sqlite", db_path: "/tmp/connections.sqlite"
+  });
+  const apiKey = await authorizeTenant(services, tenant);
+  const router = createConsoleRouter({ ...services, config: {}, consoleDirOverride: "" });
+  const list = await invoke(router, makeReq({
+    url: "/console/api/connections",
+    headers: { authorization: `Bearer ${apiKey}`, host: "127.0.0.1:3000" }
+  }));
+  assert.equal(list.statusCode, 200);
+  const body = JSON.parse(list.body);
+  assert.deepEqual(body.items.map((item) => item.harness), ["chatgpt", "gemini", "codex", "opencode"]);
+  assert.ok(body.items.every((item) => item.status === "not_connected"));
+  const keys = await services.userService.listApiKeys(tenant.id, { includeRevoked: true });
+  assert.equal(keys.length, 1, "preview/list must not create a key");
+
+  const preview = await invoke(router, makeReq({
+    url: "/console/api/connections/chatgpt",
+    headers: { authorization: `Bearer ${apiKey}`, host: "127.0.0.1:3000" }
+  }));
+  const previewBody = JSON.parse(preview.body);
+  assert.equal(previewBody.writes, 0);
+  assert.equal(previewBody.provider_calls, 0);
+  assert.match(previewBody.preview.warning, /cannot reach localhost/);
+
+  const opencodePreview = await invoke(router, makeReq({
+    url: "/console/api/connections/opencode",
+    headers: { authorization: `Bearer ${apiKey}`, host: "127.0.0.1:3000" }
+  }));
+  const opencodePreviewBody = JSON.parse(opencodePreview.body).preview;
+  const opencodeConfig = JSON.parse(opencodePreviewBody.configuration.content);
+  assert.deepEqual(opencodeConfig.mcp["alfred-memory"].command.slice(0, 1), ["node"]);
+  assert.equal(opencodeConfig.mcp["alfred-memory"].enabled, true);
+  const opencodeV2Config = JSON.parse(opencodePreviewBody.configuration.alternatives[0].content);
+  assert.deepEqual(opencodeV2Config.mcp.servers["alfred-memory"].command.slice(0, 1), ["node"]);
+});
+
+test("Console creates one server-bound key per explicitly approved harness", async () => {
+  const services = makeServices();
+  const tenant = await services.tenantService.provisionTenant({
+    kind: "coding_agent_only", storage_backend: "sqlite", db_path: "/tmp/connection-create.sqlite"
+  });
+  const apiKey = await authorizeTenant(services, tenant);
+  const router = createConsoleRouter({ ...services, config: {}, consoleDirOverride: "" });
+  const created = await invoke(router, makeReq({
+    method: "POST",
+    url: "/console/api/connections/codex",
+    headers: { authorization: `Bearer ${apiKey}`, host: "127.0.0.1:3000" },
+    body: {}
+  }));
+  assert.equal(created.statusCode, 201);
+  const body = JSON.parse(created.body);
+  assert.equal(body.key.harness, "codex");
+  assert.equal(body.key.actor, "Codex");
+  assert.equal(body.connection.status, "awaiting_first_use");
+  assert.equal(body.setup.configuration.format, "toml");
+  assert.match(body.setup.configuration.content, /\[mcp_servers\.alfred-memory\]/);
+  assert.match(body.setup.configuration.content, new RegExp(body.api_key));
+  assert.equal(Object.hasOwn(body.key, "key_hash"), false);
+
+  const duplicate = await invoke(router, makeReq({
+    method: "POST",
+    url: "/console/api/connections/codex",
+    headers: { authorization: `Bearer ${apiKey}`, host: "127.0.0.1:3000" },
+    body: {}
+  }));
+  assert.equal(duplicate.statusCode, 409);
 });
 
 test("POST /console/api/tenants/<id>/keys without Authorization returns 401", async () => {
@@ -152,6 +224,37 @@ test("GET /console/api/tenants/<id>/keys returns keys list", async () => {
   const body = JSON.parse(res.body);
   assert.equal(body.keys.length, 2);
   assert.ok(body.keys.some((key) => key.label === "first"));
+  assert.ok(body.keys.every((key) => !Object.hasOwn(key, "key_hash")));
+});
+
+test("Harness connection keys cannot administer Alfred Console", async () => {
+  const services = makeServices();
+  const tenant = await services.tenantService.provisionTenant({
+    kind: "coding_agent_only", storage_backend: "sqlite", db_path: "/tmp/connection-scope.sqlite"
+  });
+  await authorizeTenant(services, tenant);
+  const { apiKey } = await services.userService.provisionApiKey({
+    tenant_id: tenant.id,
+    label: "codex-connection",
+    harness: "codex",
+    actor: "Codex"
+  });
+  const router = createConsoleRouter({ ...services, config: {}, consoleDirOverride: "" });
+
+  const tenants = await invoke(router, makeReq({
+    url: "/console/api/tenants",
+    headers: { authorization: `Bearer ${apiKey}` }
+  }));
+  assert.equal(tenants.statusCode, 403);
+  assert.equal(JSON.parse(tenants.body).error.code, "connection_key_forbidden");
+
+  const createConnection = await invoke(router, makeReq({
+    method: "POST",
+    url: "/console/api/connections/gemini",
+    headers: { authorization: `Bearer ${apiKey}` },
+    body: {}
+  }));
+  assert.equal(createConnection.statusCode, 403);
 });
 
 test("DELETE /console/api/keys/<id> revokes the key", async () => {
@@ -1575,6 +1678,55 @@ test("/memories POST creates a memory with valid API key", async () => {
   const body = JSON.parse(res.body);
   assert.ok(body.id);
   assert.equal(body.type, "fact");
+});
+
+test("connection-bound writes require a reason and override spoofed authorship", async () => {
+  const { userService, tenantService, userStore, memoryService } = await makeOpenapiServices();
+  const tenant = await tenantService.provisionTenant({
+    kind: "coding_agent_only", storage_backend: "sqlite", db_path: "/tmp/trusted.sqlite"
+  });
+  userStore.addTenantStub(tenant);
+  const { apiKey } = await userService.provisionApiKey({
+    tenant_id: tenant.id,
+    harness: "codex",
+    actor: "Codex",
+    label: "codex-connection"
+  });
+  const router = createOpenapiRouter({
+    userService,
+    getMemoryService: async () => memoryService,
+    projectRoot: makeProjectRoot()
+  });
+
+  const missingReason = await invoke(router, makeReq({
+    method: "POST", url: "/memories",
+    headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+    body: { type: "decision", content: "Keep tenant scope.", source: "gemini" }
+  }));
+  assert.equal(missingReason.statusCode, 400);
+
+  const created = await invoke(router, makeReq({
+    method: "POST", url: "/memories",
+    headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+    body: {
+      type: "decision",
+      content: "Keep tenant scope.",
+      source: "gemini",
+      attribution: { harness: "gemini", actor: "Gemini", reason: "Future agents need the same boundary." }
+    }
+  }));
+  assert.equal(created.statusCode, 201);
+  const memory = JSON.parse(created.body);
+  assert.equal(memory.attribution.harness, "codex");
+  assert.equal(memory.attribution.actor, "Codex");
+  assert.equal(memory.attribution.reason, "Future agents need the same boundary.");
+
+  const identity = await invoke(router, makeReq({
+    url: "/connection",
+    headers: { authorization: `Bearer ${apiKey}` }
+  }));
+  assert.equal(identity.statusCode, 200);
+  assert.equal(JSON.parse(identity.body).identity, "key_bound");
 });
 
 test("/memories GET returns the tenant's memories", async () => {

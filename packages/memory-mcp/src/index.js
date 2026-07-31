@@ -1,4 +1,5 @@
 export {
+  MEMORY_MCP_INSTRUCTIONS,
   MEMORY_MCP_SERVER_INFO,
   createMemoryMcpServer,
   createPlainSchemaAdapter,

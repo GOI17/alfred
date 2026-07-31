@@ -31,6 +31,12 @@ import {
 } from "./bootstrap/index.js";
 import { dirname, resolve, join, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  buildHarnessConnectionPreview,
+  connectionStatusFor,
+  getHarnessConnection,
+  listHarnessConnections
+} from "./harness-connections.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -119,6 +125,17 @@ function forbidden(res) {
   return json(res, 403, { error: { code: "forbidden", message: "This API key cannot access the requested tenant." } });
 }
 
+function requireConsoleOwner(auth, res) {
+  if (!auth.harness) return true;
+  json(res, 403, {
+    error: {
+      code: "connection_key_forbidden",
+      message: "Harness connection keys can access shared memory, but cannot administer Alfred Console. Use an owner API key."
+    }
+  });
+  return false;
+}
+
 function historyItem(memory) {
   const attribution = memory.attribution ?? {};
   const harness = typeof attribution.harness === "string" && attribution.harness ? attribution.harness : "unknown";
@@ -136,6 +153,32 @@ function historyItem(memory) {
       action: memory.type === "decision" ? "recorded a decision" : "saved a memory"
     }
   };
+}
+
+function publicApiKey(key) {
+  if (!key) return null;
+  return {
+    id: key.id,
+    tenant_id: key.tenant_id,
+    key_prefix: key.key_prefix,
+    label: key.label ?? null,
+    harness: key.harness ?? null,
+    actor: key.actor ?? null,
+    created_at: key.created_at,
+    last_used_at: key.last_used_at ?? null,
+    revoked_at: key.revoked_at ?? null
+  };
+}
+
+function requestBaseUrl(req) {
+  const forwardedProto = typeof req.headers["x-forwarded-proto"] === "string"
+    ? req.headers["x-forwarded-proto"].split(",")[0].trim()
+    : null;
+  const protocol = forwardedProto || (req.socket?.encrypted ? "https" : "http");
+  const host = typeof req.headers.host === "string" && req.headers.host
+    ? req.headers.host
+    : "127.0.0.1:3000";
+  return `${protocol}://${host}`;
 }
 
 async function readJsonBody(req) {
@@ -391,6 +434,7 @@ export function createConsoleRouter({
     if (url.pathname === "/console/api/tenants" && req.method === "GET") {
       const auth = await authenticate(req, userService);
       if (auth.error) return json(res, 401, { error: auth.error });
+      if (!requireConsoleOwner(auth, res)) return;
       try {
         const tenant = await tenantService.getTenant(auth.tenant_id);
         return json(res, 200, {
@@ -406,6 +450,7 @@ export function createConsoleRouter({
     if (url.pathname === "/console/api/history" && req.method === "GET") {
       const auth = await authenticate(req, userService);
       if (auth.error) return json(res, 401, { error: auth.error });
+      if (!requireConsoleOwner(auth, res)) return;
       if (typeof getMemoryService !== "function") {
         return json(res, 503, { error: { code: "history_not_configured", message: "Memory history is not configured on this server." } });
       }
@@ -426,17 +471,100 @@ export function createConsoleRouter({
       }
     }
 
+    // API: preview and create trusted harness connections.
+    if (url.pathname === "/console/api/connections" && req.method === "GET") {
+      const auth = await authenticate(req, userService);
+      if (auth.error) return json(res, 401, { error: auth.error });
+      if (!requireConsoleOwner(auth, res)) return;
+      try {
+        const keys = await userService.listApiKeys(auth.tenant_id, { includeRevoked: true });
+        const items = listHarnessConnections().map((definition) => {
+          const { status, key } = connectionStatusFor(definition, keys);
+          return {
+            ...definition,
+            status,
+            key: key ? {
+              id: key.id,
+              key_prefix: key.key_prefix,
+              label: key.label,
+              created_at: key.created_at,
+              last_used_at: key.last_used_at
+            } : null
+          };
+        });
+        return json(res, 200, { items, provider_calls: 0 });
+      } catch (err) {
+        return json(res, err.status || 500, { error: { code: err.code || "internal_error", message: err.message } });
+      }
+    }
+
+    const connectionMatch = url.pathname.match(/^\/console\/api\/connections\/([^/]+)$/);
+    if (connectionMatch && (req.method === "GET" || req.method === "POST")) {
+      const auth = await authenticate(req, userService);
+      if (auth.error) return json(res, 401, { error: auth.error });
+      if (!requireConsoleOwner(auth, res)) return;
+      const harness = decodeURIComponent(connectionMatch[1]).toLowerCase();
+      const definition = getHarnessConnection(harness);
+      if (!definition) {
+        return json(res, 400, { error: { code: "validation_error", message: `Unsupported harness '${harness}'.` } });
+      }
+      const baseUrl = requestBaseUrl(req);
+      const mcpCliPath = resolve(here, "..", "..", "memory-mcp", "src", "cli.js");
+      if (req.method === "GET") {
+        return json(res, 200, {
+          ok: true,
+          preview: buildHarnessConnectionPreview(harness, { baseUrl, mcpCliPath }),
+          provider_calls: 0,
+          writes: 0
+        });
+      }
+      try {
+        const keys = await userService.listApiKeys(auth.tenant_id, { includeRevoked: false });
+        const existing = keys.find((key) => key.harness === harness && !key.revoked_at);
+        if (existing) {
+          return json(res, 409, {
+            error: {
+              code: "connection_exists",
+              message: `${definition.name} already has an active connection. Revoke it before creating a replacement.`,
+              key_prefix: existing.key_prefix
+            }
+          });
+        }
+        const result = await userService.provisionApiKey({
+          tenant_id: auth.tenant_id,
+          label: `${harness}-connection`,
+          harness,
+          actor: definition.actor
+        });
+        return json(res, 201, {
+          ok: true,
+          api_key: result.apiKey,
+          key: publicApiKey(result.key),
+          connection: {
+            harness,
+            actor: definition.actor,
+            status: "awaiting_first_use"
+          },
+          setup: buildHarnessConnectionPreview(harness, { baseUrl, apiKey: result.apiKey, mcpCliPath }),
+          provider_calls: 0
+        });
+      } catch (err) {
+        return json(res, err.status || 500, { error: { code: err.code || "internal_error", message: err.message, details: err.details } });
+      }
+    }
+
     // API: list keys for a tenant
     const listKeysMatch = url.pathname.match(/^\/console\/api\/tenants\/([^/]+)\/keys$/);
     if (listKeysMatch && req.method === "GET") {
       const auth = await authenticate(req, userService);
       if (auth.error) return json(res, 401, { error: auth.error });
+      if (!requireConsoleOwner(auth, res)) return;
       const tenantId = decodeURIComponent(listKeysMatch[1]);
       if (auth.tenant_id !== tenantId) return forbidden(res);
       const includeRevoked = url.searchParams.get("include_revoked") === "true";
       try {
         const keys = await userService.listApiKeys(tenantId, { includeRevoked });
-        return json(res, 200, { ok: true, tenant_id: tenantId, keys });
+        return json(res, 200, { ok: true, tenant_id: tenantId, keys: keys.map(publicApiKey) });
       } catch (err) {
         return json(res, err.status || 500, { error: { code: err.code || "internal_error", message: err.message } });
       }
@@ -446,6 +574,7 @@ export function createConsoleRouter({
     if (listKeysMatch && req.method === "POST") {
       const auth = await authenticate(req, userService);
       if (auth.error) return json(res, 401, { error: auth.error });
+      if (!requireConsoleOwner(auth, res)) return;
       const tenantId = decodeURIComponent(listKeysMatch[1]);
       if (auth.tenant_id !== tenantId) return forbidden(res);
       let body = {};
@@ -456,7 +585,7 @@ export function createConsoleRouter({
         return json(res, 201, {
           ok: true,
           api_key: result.apiKey,
-          key: result.key,
+          key: publicApiKey(result.key),
           tenant_id: tenantId
         });
       } catch (err) {
@@ -469,12 +598,13 @@ export function createConsoleRouter({
     if (revokeMatch && req.method === "DELETE") {
       const auth = await authenticate(req, userService);
       if (auth.error) return json(res, 401, { error: auth.error });
+      if (!requireConsoleOwner(auth, res)) return;
       const keyId = decodeURIComponent(revokeMatch[1]);
       try {
         const keys = await userService.listApiKeys(auth.tenant_id, { includeRevoked: true });
         if (!keys.some((key) => key.id === keyId)) return forbidden(res);
         const result = await userService.revokeApiKey(keyId, { reason: "console revoke" });
-        return json(res, 200, { ok: true, ...result });
+        return json(res, 200, { ok: true, key: publicApiKey(result.key), already_revoked: result.already_revoked });
       } catch (err) {
         return json(res, err.status || 500, { error: { code: err.code || "internal_error", message: err.message } });
       }

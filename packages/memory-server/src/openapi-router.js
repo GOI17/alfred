@@ -192,12 +192,35 @@ export function createOpenapiRouter({
     };
   }
 
+  function bindConnectionAttribution(body, resolved, { patch = false } = {}) {
+    if (!resolved.harness) return body;
+    if (patch && !Object.hasOwn(body, "attribution")) return body;
+    const attribution = body.attribution && typeof body.attribution === "object" ? body.attribution : {};
+    const reason = typeof attribution.reason === "string" ? attribution.reason.trim() : "";
+    if (!reason) {
+      const error = new Error("Connected agents must explain why this memory is useful to retain.");
+      error.code = "validation_error";
+      error.status = 400;
+      error.details = [{ field: "attribution.reason", message: "A concise persistence reason is required." }];
+      throw error;
+    }
+    return {
+      ...body,
+      attribution: {
+        ...attribution,
+        harness: resolved.harness,
+        actor: resolved.actor || resolved.harness
+      }
+    };
+  }
+
   return async function openapiHandler(req, res) {
     const url = new URL(req.url ?? "/", "http://localhost");
 
     // CORS for browser-based GPT testers
     if (url.pathname.startsWith("/agents/") || url.pathname.startsWith("/skills/") ||
         url.pathname === "/health" || url.pathname === "/policies/check" ||
+        url.pathname === "/connection" ||
         url.pathname.startsWith("/memories") || url.pathname === "/search") {
       const origin = req.headers.origin;
       if (origin) {
@@ -244,6 +267,18 @@ export function createOpenapiRouter({
       const resolved = await userService.resolveApiKey(auth.apiKey);
       if (!resolved) return json(res, 401, { error: { code: "unauthorized", message: "Invalid API key." } });
       const tenantId = resolved.tenant_id;
+
+      if (url.pathname === "/connection" && req.method === "GET") {
+        return json(res, 200, {
+          ok: true,
+          tenant_id: tenantId,
+          key_id: resolved.key_id,
+          harness: resolved.harness,
+          actor: resolved.actor,
+          identity: resolved.harness ? "key_bound" : "legacy_unbound",
+          provider_calls: 0
+        });
+      }
 
       // Rate limit
       const rl = await enforceRateLimit(auth.apiKey, url.pathname, req.method);
@@ -311,7 +346,7 @@ export function createOpenapiRouter({
               if (rl.record) await rl.record("validation_error", "invalid_json");
               return json(res, 400, { error: { code: "validation_error", message: "Invalid JSON body." } });
             }
-            const m = await memoryService.createMemory(tenantId, body);
+            const m = await memoryService.createMemory(tenantId, bindConnectionAttribution(body, resolved));
             if (rl.record) await rl.record("success");
             return json(res, 201, m);
           }
@@ -334,7 +369,7 @@ export function createOpenapiRouter({
             }
             // namespace is immutable
             if ("namespace" in body) delete body.namespace;
-            const m = await memoryService.updateMemory(tenantId, segs[1], body);
+            const m = await memoryService.updateMemory(tenantId, segs[1], bindConnectionAttribution(body, resolved, { patch: true }));
             if (!m) {
               if (rl.record) await rl.record("not_found");
               return json(res, 404, { error: { code: "not_found", message: "Memory not found." } });

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import { readMemoryMcpConfigFromEnv } from "../src/cli.js";
-import { createZodSchemaAdapter, memoryToolNames, registerMemoryTools } from "../src/index.js";
+import { createZodSchemaAdapter, MEMORY_MCP_INSTRUCTIONS, memoryToolNames, registerMemoryTools } from "../src/index.js";
 
 function createFakeServer() {
   return {
@@ -63,6 +63,12 @@ test("registers exactly five tools", () => {
     ["memory_search", "memory_create", "memory_update", "memory_delete", "memory_list"]
   );
   assert.deepEqual(memoryToolNames(), server.tools.map((entry) => entry.name));
+});
+
+test("server instructions define the automatic safe memory lifecycle", () => {
+  assert.match(MEMORY_MCP_INSTRUCTIONS, /Before work.*memory_search/);
+  assert.match(MEMORY_MCP_INSTRUCTIONS, /durable decision.*memory_create/);
+  assert.match(MEMORY_MCP_INSTRUCTIONS, /Never store private chain-of-thought/);
 });
 
 test("zod schema adapter returns Standard Schema objects instead of raw shapes", () => {

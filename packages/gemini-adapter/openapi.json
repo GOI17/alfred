@@ -58,7 +58,7 @@
       },
       "CreateMemoryInput": {
         "type": "object",
-        "required": ["type","content","source"],
+        "required": ["type","content","source","attribution"],
         "properties": {
           "namespace": { "type": "string" },
           "projectId": { "type": "string" },

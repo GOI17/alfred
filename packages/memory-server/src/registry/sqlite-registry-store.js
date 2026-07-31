@@ -27,6 +27,14 @@ function applySchema(db) {
   db.exec("PRAGMA busy_timeout = 5000;");
   const sql = readFileSync(resolve(MIG_DIR, "sqlite_registry.sql"), "utf8");
   db.exec(sql);
+  const keyColumns = new Set(db.prepare("PRAGMA table_info(tenant_api_keys)").all().map((row) => row.name));
+  if (!keyColumns.has("harness")) db.exec("ALTER TABLE tenant_api_keys ADD COLUMN harness TEXT;");
+  if (!keyColumns.has("actor")) db.exec("ALTER TABLE tenant_api_keys ADD COLUMN actor TEXT;");
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS tenant_api_keys_active_harness_idx
+    ON tenant_api_keys(tenant_id, harness)
+    WHERE revoked_at IS NULL AND harness IS NOT NULL;
+  `);
 }
 
 // =============================================================================
@@ -83,6 +91,8 @@ function apiKeyFromRow(row) {
     key_hash: row.key_hash,
     key_algorithm: row.key_algorithm,
     label: row.label ?? null,
+    harness: row.harness ?? null,
+    actor: row.actor ?? null,
     created_at: row.created_at,
     last_used_at: row.last_used_at ?? null,
     revoked_at: row.revoked_at ?? null
@@ -304,13 +314,16 @@ function createUserStoreContract(db) {
     async createApiKey(row) {
       try {
         db.prepare(`
-          INSERT INTO tenant_api_keys (id, tenant_id, key_prefix, key_hash, key_algorithm, label, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(row.id, row.tenant_id, row.key_prefix, row.key_hash, row.key_algorithm, row.label, row.created_at);
+          INSERT INTO tenant_api_keys (id, tenant_id, key_prefix, key_hash, key_algorithm, label, harness, actor, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(row.id, row.tenant_id, row.key_prefix, row.key_hash, row.key_algorithm, row.label, row.harness ?? null, row.actor ?? null, row.created_at);
       } catch (err) {
         if (err.message.includes("UNIQUE")) {
-          const e = new Error("Key prefix collision for this tenant.");
+          const e = new Error(row.harness
+            ? `An active ${row.harness} connection already exists for this tenant.`
+            : "Key prefix collision for this tenant.");
           e.code = "tenant_conflict";
+          e.status = 409;
           throw e;
         }
         throw err;

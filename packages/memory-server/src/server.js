@@ -120,6 +120,7 @@ export function createApp({
       url.pathname === "/skills/manifest" ||
       url.pathname === "/policies/check" ||
       url.pathname === "/search" ||
+      url.pathname === "/connection" ||
       url.pathname === "/memories" ||
       url.pathname.startsWith("/memories/")
     )) {

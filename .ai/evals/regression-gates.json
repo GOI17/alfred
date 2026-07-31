@@ -45,7 +45,7 @@
         "packages/memory/test/users.test.js"
       ],
       "command": "node --test packages/memory/test/users.test.js",
-      "expected_test_count": 17,
+      "expected_test_count": 19,
       "blocked_on_failure": true
     },
     {
@@ -79,7 +79,7 @@
         "packages/memory-server/test/migrate-sqlite.test.mjs"
       ],
       "command": "node --test packages/memory-server/test/{server,init,cli,registry-sqlite-store,migrate-sqlite}.test.mjs",
-      "expected_test_count": 47,
+      "expected_test_count": 48,
       "blocked_on_failure": true
     },
     {
@@ -89,7 +89,7 @@
         "packages/memory-server/test/console.test.mjs"
       ],
       "command": "node --test packages/memory-server/test/console.test.mjs",
-      "expected_test_count": 99,
+      "expected_test_count": 103,
       "blocked_on_failure": true
     },
     {

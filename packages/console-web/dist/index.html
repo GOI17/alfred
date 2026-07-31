@@ -86,11 +86,20 @@
     .story-content { font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
     .story-reason { color: var(--muted); font-size: 12px; margin-top: 7px; }
     .story-meta { color: var(--muted); font-size: 11px; margin-top: 5px; }
+    .connections { display: grid; grid-template-columns: repeat(auto-fit, minmax(245px, 1fr)); gap: 12px; }
+    .connection { border: 1px solid var(--border); border-radius: 8px; padding: 14px; background: #13161c; }
+    .connection-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+    .connection-head h3 { margin: 0; font-size: 15px; }
+    .connection-status { margin-left: auto; white-space: nowrap; }
+    .connection-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .connection-detail { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+    .connection-detail ol, .connection-detail ul { padding-left: 20px; }
+    .connection-detail pre { max-height: 260px; }
   </style>
 <!-- /* __ALFRED_BUILD_INJECT__ */ -->
 <script>
-  window.ALFRED_API_BASE = "http://localhost:3000";
-  window.ALFRED_BUILD_VERSION = "2026-07-30";
+  window.ALFRED_API_BASE = "";
+  window.ALFRED_BUILD_VERSION = "2026-07-31";
 </script>
 </head>
 <body>
@@ -193,75 +202,9 @@
 
     <div class="panel">
       <h2>Connected services</h2>
-      <p class="hint">Connect every harness to this same tenant. Issue one labeled key per harness so access can be revoked independently.</p>
-
-      <div class="step">
-        <span class="step-num">1</span><strong>ChatGPT (Plus/Pro)</strong>
-        <div class="small" style="margin-top: 4px;">Import <code>openapi.json</code> as Custom GPT Actions.</div>
-        <details>
-          <summary>Show steps</summary>
-          <pre>
-1. Run the bridge:
-   ALFRED_MEMORY_BASE_URL=&lt;your-server&gt; ALFRED_MEMORY_API_KEY=&lt;key&gt; \
-     node packages/chatgpt-adapter/src/bridge.mjs &amp;
-
-2. In ChatGPT: My GPTs → Create → Configure → Actions → Import OpenAPI.
-3. Upload: packages/chatgpt-adapter/openapi.json
-4. Auth: API Key · Bearer · paste the alk_... key
-5. Save and test: ask the GPT "list my last 5 memories"</pre>
-        </details>
-      </div>
-
-      <div class="step">
-        <span class="step-num">2</span><strong>Google Gemini / AI Studio</strong>
-        <details>
-          <summary>Show steps</summary>
-          <pre>
-1. Run the bridge:
-   ALFRED_MEMORY_BASE_URL=&lt;your-server&gt; ALFRED_MEMORY_API_KEY=&lt;key&gt; \
-     node packages/gemini-adapter/bin/bridge.mjs &amp;
-
-2. In AI Studio: Tools → Extensions → Create Extension.
-3. Upload: packages/gemini-adapter/openapi.json
-4. Auth: API Key · header x-api-key · paste alk_...</pre>
-        </details>
-      </div>
-
-      <div class="step">
-        <span class="step-num">3</span><strong>Codex (MCP)</strong>
-        <details>
-          <summary>Show steps</summary>
-          <pre>
-Add an MCP server named "alfred-memory" in Codex:
-{
-  "command": "alfred-memory-mcp",
-  "env": {
-    "ALFRED_MEMORY_API_KEY": "&lt;Codex tenant key&gt;",
-    "ALFRED_MEMORY_BASE_URL": "&lt;your server&gt;"
-  }
-}
-
-Restart the harness and verify that memory_list is available.</pre>
-        </details>
-      </div>
-
-      <div class="step">
-        <span class="step-num">4</span><strong>OpenCode (MCP)</strong>
-        <details>
-          <summary>Show steps</summary>
-          <pre>
-Add an MCP server named "alfred-memory" in OpenCode:
-{
-  "command": "alfred-memory-mcp",
-  "env": {
-    "ALFRED_MEMORY_API_KEY": "&lt;OpenCode tenant key&gt;",
-    "ALFRED_MEMORY_BASE_URL": "&lt;your server&gt;"
-  }
-}
-
-Restart the harness and verify that memory_list is available.
-Both harnesses now read the same tenant history.</pre>
-        </details>
+      <p class="hint">Preview each connection before creating a dedicated key. Alfred binds every new memory to the authenticated agent and keeps all agents inside this tenant.</p>
+      <div id="connectionsBody" class="connections" aria-live="polite">
+        <div class="empty">Loading connections…</div>
       </div>
     </div>
 
@@ -355,15 +298,25 @@ function showErrorInline(elementId, message) {
   el.innerHTML = '<span style="color: var(--bad);">' + message + '</span>';
 }
 
-function setKey() {
+async function setKey() {
   const input = document.getElementById("apiKey");
-  API_KEY = input.value.trim();
-  if (!API_KEY) return;
-  document.getElementById("apiStatus").textContent = "✓ unlocked";
-  document.getElementById("locked").style.display = "none";
-  document.getElementById("unlocked").style.display = "block";
-  localStorage.setItem("alfred_api_key", API_KEY);
-  loadAll();
+  const candidate = input.value.trim();
+  if (!candidate) return;
+  API_KEY = candidate;
+  document.getElementById("apiStatus").textContent = "verifying…";
+  try {
+    await api("/console/api/tenants");
+    document.getElementById("apiStatus").textContent = "✓ unlocked";
+    document.getElementById("locked").style.display = "none";
+    document.getElementById("unlocked").style.display = "block";
+    localStorage.setItem("alfred_api_key", API_KEY);
+    await loadAll();
+  } catch (err) {
+    API_KEY = "";
+    localStorage.removeItem("alfred_api_key");
+    document.getElementById("apiStatus").textContent = "locked";
+    showErrorInline("signupHint", "Could not unlock Console: " + err.message);
+  }
 }
 
 // Render the Turnstile widget if a site key is configured.
@@ -413,9 +366,100 @@ function pill(kind) {
 async function loadAll() {
   try {
     await loadTenants();
-    await Promise.all([loadKeys(), loadHistory()]);
+    await Promise.all([loadKeys(), loadHistory(), loadConnections()]);
   }
   catch (err) { showError(err); }
+}
+
+function connectionStatusLabel(status) {
+  if (status === "connected") return "✓ connected";
+  if (status === "awaiting_first_use") return "○ awaiting first use";
+  return "○ not connected";
+}
+
+function renderConnectionCard(connection) {
+  const note = connection.publicEndpointRequired
+    ? '<div class="small" style="color:var(--warn);margin-top:8px;">Requires a public HTTPS Alfred endpoint.</div>'
+    : '<div class="small" style="margin-top:8px;">Runs locally through Alfred Memory MCP.</div>';
+  const key = connection.key
+    ? '<div class="small mono">Key: ' + escapeHtml(connection.key.key_prefix) + '…</div>' +
+      '<div class="small">Last seen: ' + escapeHtml(connection.key.last_used_at ? new Date(connection.key.last_used_at).toLocaleString() : "never") + '</div>'
+    : '';
+  return '<section class="connection" data-status="' + escapeHtml(connection.status) + '" id="connection-' + escapeHtml(connection.harness) + '">' +
+    '<div class="connection-head"><div><h3>' + escapeHtml(connection.name) + '</h3><div class="small">' + escapeHtml(connection.transport.toUpperCase()) + '</div></div>' +
+    '<span class="connection-status pill">' + escapeHtml(connectionStatusLabel(connection.status)) + '</span></div>' +
+    '<div class="small">Reads and writes the same tenant memory with server-bound identity.</div>' + note + key +
+    '<div class="connection-actions"><button class="btn secondary" onclick="previewConnection(\'' + escapeHtml(connection.harness) + '\')">' +
+    (connection.status === "not_connected" ? "Preview connection" : "View setup") + '</button></div>' +
+    '<div class="connection-detail" style="display:none;"></div></section>';
+}
+
+async function loadConnections() {
+  const body = document.getElementById("connectionsBody");
+  if (!body) return;
+  try {
+    const res = await api("/console/api/connections");
+    body.innerHTML = (res.items || []).map(renderConnectionCard).join("");
+  } catch (err) {
+    body.innerHTML = '<div class="error">Could not load connections: ' + escapeHtml(err.message) + '</div>';
+  }
+}
+
+function renderConnectionPreview(preview, { approved = false } = {}) {
+  const consequences = (preview.consequences || []).map((item) => '<li>' + escapeHtml(item) + '</li>').join("");
+  const behavior = (preview.behavior || []).map((item) => '<li>' + escapeHtml(item) + '</li>').join("");
+  const steps = (preview.steps || []).map((item) => '<li>' + escapeHtml(item) + '</li>').join("");
+  const warning = preview.warning ? '<div class="error" style="color:var(--warn);">' + escapeHtml(preview.warning) + '</div>' : '';
+  const approval = approved ? '' : '<button onclick="connectHarness(\'' + escapeHtml(preview.harness) + '\')">Approve and create key</button>';
+  const configuration = preview.configuration || {};
+  const configurationText = typeof configuration.content === "string" ? configuration.content : JSON.stringify(configuration, null, 2);
+  const target = configuration.target ? '<div class="small">Target: <code>' + escapeHtml(configuration.target) + '</code></div>' : '';
+  const alternatives = (configuration.alternatives || []).map((alternative) =>
+    '<details><summary>' + escapeHtml(alternative.name) + ' alternative</summary>' +
+    '<div class="small">Target: <code>' + escapeHtml(alternative.target || configuration.target || "") + '</code></div>' +
+    '<pre>' + escapeHtml(alternative.content || "") + '</pre></details>'
+  ).join("");
+  return warning + '<strong>Consequences</strong><ul>' + consequences + '</ul>' +
+    '<strong>Agent memory policy</strong><ul>' + behavior + '</ul>' +
+    '<strong>Setup</strong><ol>' + steps + '</ol>' + target +
+    '<pre>' + escapeHtml(configurationText) + '</pre>' + alternatives +
+    '<div class="small">Provider calls: 0 · Writes before approval: ' + escapeHtml(preview.writes_before_approval || 0) + '</div>' +
+    '<div class="connection-actions">' + approval + '</div>';
+}
+
+async function previewConnection(harness) {
+  const card = document.getElementById("connection-" + harness);
+  const detail = card && card.querySelector(".connection-detail");
+  if (!detail) return;
+  detail.style.display = "block";
+  detail.innerHTML = '<div class="empty">Preparing preview…</div>';
+  try {
+    const res = await api("/console/api/connections/" + encodeURIComponent(harness));
+    detail.innerHTML = renderConnectionPreview(res.preview, { approved: card.dataset.status !== "not_connected" });
+  } catch (err) {
+    detail.innerHTML = '<div class="error">Could not preview connection: ' + escapeHtml(err.message) + '</div>';
+  }
+}
+
+async function connectHarness(harness) {
+  if (!confirm("Create a dedicated, revocable key for " + harness + "?")) return;
+  const card = document.getElementById("connection-" + harness);
+  const detail = card && card.querySelector(".connection-detail");
+  if (!detail) return;
+  detail.innerHTML = '<div class="empty">Creating connection…</div>';
+  try {
+    const res = await api("/console/api/connections/" + encodeURIComponent(harness), { method: "POST", body: "{}" });
+    detail.innerHTML = '<div class="panel" style="background:#1a2a1a;border-color:var(--good);">' +
+      '<strong class="ok">Copy this key now. It will not be shown again.</strong>' +
+      '<div class="key-display">' + escapeHtml(res.api_key) + '</div></div>' +
+      renderConnectionPreview(res.setup, { approved: true });
+    const status = card.querySelector(".connection-status");
+    if (status) status.textContent = connectionStatusLabel("awaiting_first_use");
+    card.dataset.status = "awaiting_first_use";
+    await loadKeys();
+  } catch (err) {
+    detail.innerHTML = '<div class="error">Could not create connection: ' + escapeHtml(err.message) + '</div>';
+  }
 }
 
 async function loadTenants() {
@@ -509,13 +553,14 @@ async function loadKeys() {
     rows += "<tr>" +
       "<td class='mono'>" + k.key_prefix + "...</td>" +
       "<td>" + (k.label || "—") + "</td>" +
+      "<td>" + (k.harness ? "<span class='pill'>" + escapeHtml(k.harness) + "</span>" : "—") + "</td>" +
       "<td class='small'>" + (k.created_at || "").slice(0, 16).replace("T", " ") + "</td>" +
       "<td class='small'>" + (k.last_used_at ? k.last_used_at.slice(0, 16).replace("T", " ") : "—") + "</td>" +
       "<td>" + (isRevoked ? "<span class='pill archived'>revoked</span>" : "<span class='pill coding'>active</span>") + "</td>" +
       "<td>" + (isRevoked ? "" : "<button class='btn danger' onclick='revokeKey(\"" + k.id + "\")'>Revoke</button>") + "</td>" +
       "</tr>";
   }
-  document.getElementById("keysBody").innerHTML = '<table><thead><tr><th>Prefix</th><th>Label</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr></thead><tbody>' + rows + "</tbody></table>";
+  document.getElementById("keysBody").innerHTML = '<table><thead><tr><th>Prefix</th><th>Label</th><th>Agent</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr></thead><tbody>' + rows + "</tbody></table>";
 }
 
 async function issueKey() {

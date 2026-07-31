@@ -29,8 +29,12 @@ export interface CreateMemoryMcpServerOptions {
   memoryClient: MemoryClient;
   server?: ServerLike;
   schema?: MemoryMcpSchemaAdapter;
-  McpServer?: new (serverInfo: { name: string; version: string }) => ServerLike;
+  McpServer?: new (
+    serverInfo: { name: string; version: string },
+    options?: { instructions?: string }
+  ) => ServerLike;
   serverInfo?: { name: string; version: string };
+  instructions?: string;
 }
 
 export interface RegisterMemoryToolsOptions {
@@ -47,6 +51,7 @@ export interface MemoryMcpSchemaAdapter {
 }
 
 export const MEMORY_MCP_SERVER_INFO: Readonly<{ name: "alfred-memory-mcp"; version: "0.0.0" }>;
+export const MEMORY_MCP_INSTRUCTIONS: string;
 
 export function createMemoryMcpServer(options: CreateMemoryMcpServerOptions): Promise<ServerLike>;
 export function registerMemoryTools(server: ServerLike, options: RegisterMemoryToolsOptions): ServerLike;

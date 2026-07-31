@@ -5,6 +5,8 @@ export const MEMORY_MCP_SERVER_INFO = Object.freeze({
   version: "0.0.0"
 });
 
+export const MEMORY_MCP_INSTRUCTIONS = "Use Alfred Memory as durable shared context. Before work where prior decisions may matter, call memory_search. After a durable decision, correction, preference, fact, or workflow is established, call memory_create with structured attribution and a concise reason explaining why future agents need it. Never store private chain-of-thought, secrets, or temporary conversation. Ask for explicit human approval before deleting memory.";
+
 const MEMORY_TYPES = ["preference", "fact", "decision", "workflow", "project", "correction", "source"];
 const TOOL_NAMES = ["memory_search", "memory_create", "memory_update", "memory_delete", "memory_list"];
 
@@ -12,7 +14,8 @@ export async function createMemoryMcpServer(options = {}) {
   const memoryClient = requiredMemoryClient(options.memoryClient);
   const schema = options.schema ?? createZodSchemaAdapter(await loadZod());
   const server = options.server ?? new (options.McpServer ?? (await loadMcpServer()))(
-    options.serverInfo ?? MEMORY_MCP_SERVER_INFO
+    options.serverInfo ?? MEMORY_MCP_SERVER_INFO,
+    { instructions: options.instructions ?? MEMORY_MCP_INSTRUCTIONS }
   );
 
   registerMemoryTools(server, { memoryClient, schema });
@@ -82,7 +85,7 @@ export function createPlainSchemaAdapter() {
       source: { type: "string", required: true },
       projectId: { type: "string", optional: true },
       metadata: { type: "record", optional: true },
-      attribution: attributionPlainSchema(),
+      attribution: { ...attributionPlainSchema(), optional: false, required: true },
       confidence: { type: "number", optional: true },
       expiresAt: { type: "string", optional: true }
     },
@@ -125,7 +128,7 @@ export function createZodSchemaAdapter(zod) {
       source: z.string().min(1),
       projectId: z.string().min(1).optional(),
       metadata: metadata.optional(),
-      attribution: attribution.optional(),
+      attribution,
       confidence: z.number().optional(),
       expiresAt: z.string().min(1).optional()
     }),

@@ -5,7 +5,7 @@
 // runtime API base URL (from ALFRED_API_BASE env var) and a build version.
 //
 // Usage:
-//   npm run build                      # default API base
+//   npm run build                      # same-origin API
 //   ALFRED_API_BASE=https://alfred.example.com npm run build
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
@@ -18,7 +18,7 @@ const DIST_DIR = join(here, "..", "dist");
 const SRC_HTML = join(SRC_DIR, "index.html");
 const DIST_HTML = join(DIST_DIR, "index.html");
 
-const API_BASE = process.env.ALFRED_API_BASE ?? "http://localhost:3000";
+const API_BASE = process.env.ALFRED_API_BASE ?? "";
 const BUILD_VERSION = new Date().toISOString().slice(0, 10);
 
 function build() {

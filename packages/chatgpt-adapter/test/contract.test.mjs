@@ -62,6 +62,7 @@ test("OpenAPI exposes safe shared-memory attribution", () => {
     spec.components.schemas.CreateMemoryInput.properties.attribution.$ref,
     "#/components/schemas/MemoryAttribution"
   );
+  assert.ok(spec.components.schemas.CreateMemoryInput.required.includes("attribution"));
 });
 
 // ---------------------------------------------------------------------------

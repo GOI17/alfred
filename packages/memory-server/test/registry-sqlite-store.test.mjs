@@ -1,10 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 
-const { createSqliteRegistryStore } = await import("../src/registry/sqlite-registry-store.js");
+const { createSqliteRegistryStore, applySqliteRegistrySchema } = await import("../src/registry/sqlite-registry-store.js");
 
 function freshDir() {
   const dir = mkdtempSync(join(tmpdir(), "alfred-reg-"));
@@ -45,6 +46,31 @@ test("applySchema creates all expected tables and triggers", async () => {
       assert.ok(tables.includes(expected), `expected schema piece: ${expected}`);
     }
   } finally { cleanup({ dir: null, store }); }
+});
+
+test("applySchema upgrades legacy keys and enforces one active key per harness", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const db = new DatabaseSync(":memory:");
+  try {
+    const legacySchema = readFileSync(join(fileURLToPath(new URL(".", import.meta.url)), "sqlite_registry.sql"), "utf8");
+    db.exec(legacySchema);
+    applySqliteRegistrySchema(db);
+    const columns = db.prepare("PRAGMA table_info(tenant_api_keys)").all().map((row) => row.name);
+    assert.ok(columns.includes("harness"));
+    assert.ok(columns.includes("actor"));
+
+    db.prepare("INSERT INTO tenants (id, kind, storage_backend, db_path) VALUES (?, ?, ?, ?)")
+      .run("t-connection", "coding_agent_only", "sqlite", "/tmp/t-connection.sqlite");
+    db.prepare("INSERT INTO tenant_api_keys (id, tenant_id, key_prefix, key_hash, harness, actor) VALUES (?, ?, ?, ?, ?, ?)")
+      .run("k1", "t-connection", "alk_one", "hash-one", "codex", "Codex");
+    assert.throws(
+      () => db.prepare("INSERT INTO tenant_api_keys (id, tenant_id, key_prefix, key_hash, harness, actor) VALUES (?, ?, ?, ?, ?, ?)")
+        .run("k2", "t-connection", "alk_two", "hash-two", "codex", "Codex"),
+      /UNIQUE/i
+    );
+  } finally {
+    db.close();
+  }
 });
 
 test("createTenant + listTenants roundtrip", async () => {

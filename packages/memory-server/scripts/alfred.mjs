@@ -91,7 +91,7 @@ async function main(argv, env = process.env) {
 }
 
 async function runKey(rest, env) {
-  const [, sub, ...args] = rest;
+  const [sub, ...args] = rest;
   switch (sub) {
     case "rotate":
       return await (await import("./key-rotate.mjs")).run(args, env);

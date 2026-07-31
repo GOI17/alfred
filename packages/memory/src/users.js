@@ -126,8 +126,21 @@ export function normalizeProvisionUserInput(input) {
   }
   const label = input.label === undefined ? null : (typeof input.label === "string" ? input.label.trim() : (details.push({ field: "label", message: "label must be a string." }), null));
   const algorithm = input.algorithm === undefined ? "scrypt" : (["scrypt", "sha256"].includes(input.algorithm) ? input.algorithm : (details.push({ field: "algorithm", message: "algorithm must be one of: scrypt, sha256." }), "scrypt"));
+  const harness = input.harness === undefined || input.harness === null
+    ? null
+    : (typeof input.harness === "string" && /^[a-z0-9][a-z0-9_:-]*$/.test(input.harness.trim())
+      ? input.harness.trim()
+      : (details.push({ field: "harness", message: "harness must be a lowercase identifier." }), null));
+  const actor = input.actor === undefined || input.actor === null
+    ? null
+    : (typeof input.actor === "string" && input.actor.trim()
+      ? input.actor.trim()
+      : (details.push({ field: "actor", message: "actor must be a non-empty string." }), null));
+  if ((harness && !actor) || (!harness && actor)) {
+    details.push({ field: "connection_identity", message: "harness and actor must be provided together." });
+  }
   if (details.length > 0) return { valid: false, details };
-  return { valid: true, value: { tenant_id: input.tenant_id.trim(), label, algorithm } };
+  return { valid: true, value: { tenant_id: input.tenant_id.trim(), label, algorithm, harness, actor } };
 }
 
 export function createUserService({
@@ -162,6 +175,8 @@ export function createUserService({
         key_hash: hash,
         key_algorithm: algorithm,
         label: result.value.label,
+        harness: result.value.harness,
+        actor: result.value.actor,
         created_at: nowIso,
         last_used_at: null,
         revoked_at: null
@@ -173,6 +188,8 @@ export function createUserService({
         key_id: stored.id,
         key_prefix: stored.key_prefix,
         key_algorithm: stored.key_algorithm,
+        harness: stored.harness ?? null,
+        actor: stored.actor ?? null,
         ctx: traceContext
       });
       return { apiKey, key: stored, tenant };
@@ -195,7 +212,13 @@ export function createUserService({
         });
         // Update last_used_at; do not fail if it does not exist
         await store.updateApiKey(row.id, { last_used_at: now().toISOString() }).catch(() => undefined);
-        return { tenant_id: row.tenant_id, key_id: row.id, algorithm: row.key_algorithm };
+        return {
+          tenant_id: row.tenant_id,
+          key_id: row.id,
+          algorithm: row.key_algorithm,
+          harness: row.harness ?? null,
+          actor: row.actor ?? null
+        };
       }
       trace({ event: "apikey.resolve.miss", prefix, ctx: traceContext });
       return null;
@@ -228,6 +251,8 @@ export function createUserService({
         key_hash: hash,
         key_algorithm: algorithm,
         label: result.value.label,
+        harness: result.value.harness,
+        actor: result.value.actor,
         created_at: nowIso,
         last_used_at: null,
         revoked_at: null
@@ -238,6 +263,8 @@ export function createUserService({
         tenant_id: row.tenant_id,
         revoked: active.length,
         new_key_id: stored.id,
+        harness: stored.harness ?? null,
+        actor: stored.actor ?? null,
         ctx: traceContext
       });
       return { apiKey, key: stored, tenant, revokedCount: active.length };

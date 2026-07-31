@@ -55,6 +55,29 @@ test("resolveApiKey returns tenant_id for a valid key", async () => {
   assert.equal(resolved.tenant_id, stubTenant.id);
 });
 
+test("connection-bound keys round-trip trusted harness identity", async () => {
+  const { service } = makeService();
+  const { apiKey, key } = await service.provisionApiKey({
+    tenant_id: stubTenant.id,
+    label: "codex-connection",
+    harness: "codex",
+    actor: "Codex"
+  });
+  assert.equal(key.harness, "codex");
+  assert.equal(key.actor, "Codex");
+  const resolved = await service.resolveApiKey(apiKey);
+  assert.equal(resolved.harness, "codex");
+  assert.equal(resolved.actor, "Codex");
+});
+
+test("connection identity requires harness and actor together", async () => {
+  const { service } = makeService();
+  await assert.rejects(
+    () => service.provisionApiKey({ tenant_id: stubTenant.id, harness: "codex" }),
+    (err) => err.code === "validation_error" && err.details.some((detail) => detail.field === "connection_identity")
+  );
+});
+
 test("resolveApiKey returns null for wrong key", async () => {
   const { service } = makeService();
   const { apiKey } = await service.provisionApiKey({ tenant_id: stubTenant.id });

@@ -25,7 +25,7 @@
 //   It is shown ONCE. Save it.
 
 import { writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import {
   createTenantService,
@@ -54,7 +54,12 @@ function parseArgs(argv) {
         k = a.slice(2);
         v = argv[i + 1];
       }
-      if (v === undefined || v.startsWith("--")) { out[k] = true; } else { out[k] = v; i += 1; }
+      if (v === undefined || v.startsWith("--")) {
+        out[k] = true;
+      } else {
+        out[k] = v;
+        if (eq === -1) i += 1;
+      }
     } else { out._.push(a); }
   }
   return out;
@@ -147,6 +152,9 @@ export async function run(argv = [], env = process.env) {
   }
 
   // Execute.
+  if (plan.storage === "sqlite" && plan.db_path) {
+    mkdirSync(dirname(plan.db_path), { recursive: true });
+  }
   const registry = await openRegistry();
   try {
     const tenantService = createTenantService({ store: registry.tenants });

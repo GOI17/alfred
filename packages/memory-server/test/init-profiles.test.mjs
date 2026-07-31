@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
 const { run: init } = await import("../scripts/init.mjs");
@@ -46,8 +46,10 @@ test("init coding profile creates sqlite tenant + workspace + config.json", asyn
     assert.ok(json.api_key.startsWith("alk_"));
     assert.ok(existsSync(json.config_path));
     const cfg = JSON.parse(readFileSync(json.config_path, "utf8"));
+    assert.equal(cfg.tenant.db_path, join(dir, ".alfred", "tenants", "acme.sqlite"));
     assert.equal(cfg.tenant.id, json.tenant_id);
     assert.equal(cfg.api_key, json.api_key);
+    assert.ok(existsSync(dirname(cfg.tenant.db_path)), "init must prepare the SQLite tenant directory");
   });
 });
 

@@ -33,6 +33,12 @@ Environment variables are read only by `src/cli.js`:
 
 Each successful tool result returns text content and `structuredContent`.
 
+The MCP initialization response also supplies server instructions for the safe
+memory lifecycle: search when prior durable context matters; save durable
+decisions, corrections, preferences, facts, and workflows with a concise
+persistence reason; never save private chain-of-thought, secrets, or temporary
+conversation; and require explicit approval before deletion.
+
 Operational `MemoryClientError` failures return safe MCP error results:
 
 ```json
@@ -155,7 +161,12 @@ Input:
   "content": "Alfred Memory MCP can create and retrieve memories through the official client.",
   "source": "manual-e2e",
   "namespace": "project:alfred",
-  "tags": ["mcp", "e2e"]
+  "tags": ["mcp", "e2e"],
+  "attribution": {
+    "harness": "codex",
+    "actor": "Codex",
+    "reason": "Future agents need to know the MCP integration was validated."
+  }
 }
 ```
 

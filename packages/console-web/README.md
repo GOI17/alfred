@@ -13,10 +13,16 @@ The unlocked Console includes a tenant-scoped shared-memory history. It shows
 which harness/actor saved each memory, the concise reason it was persisted,
 and when it happened. It never requests or displays private chain-of-thought.
 
+The **Connected services** area provides preview-first onboarding for ChatGPT,
+Gemini, Codex, and OpenCode. Approval issues a dedicated revocable key whose
+harness identity is enforced by the server. Connection status moves from
+`not_connected` to `awaiting_first_use` and then `connected` when that key is
+seen by the Memory API.
+
 ## Build
 
 ```bash
-# Build with default API base (http://localhost:3000)
+# Build for same-origin use with `alfred serve`
 npm run build
 
 # Build pointing at your production Alfred server
@@ -35,7 +41,7 @@ npm run serve
 # open http://localhost:4321
 ```
 
-Set `ALFREED_API_BASE` before serving to point at your server.
+Build with `ALFRED_API_BASE` when the Console and API use different origins.
 
 ## Deployment modes
 
@@ -62,7 +68,7 @@ the console and point the server at the `dist/` directory:
 
 ```bash
 # Build
-ALFRED_API_BASE=https://alfred.example.com npm run build
+npm run build
 
 # Run the server with the dist path
 export ALFRED_CONSOLE_DIR=/opt/alfred/console-web/dist
@@ -70,6 +76,19 @@ alfred serve
 ```
 
 The server serves the same-origin HTML and the API from the same port.
+
+## Agent connection behavior
+
+- Codex receives project/global `config.toml` setup for the bundled Memory MCP
+  adapter.
+- OpenCode receives an `opencode.json`/`opencode.jsonc` MCP block for 1.x plus
+  a separately labeled V2 alternative.
+- ChatGPT and Gemini receive their OpenAPI schema, authentication, and server
+  setup. Because they run in the cloud, the Alfred API must be published over
+  HTTPS; they cannot reach a laptop-only `localhost` endpoint.
+- Every first-party connection requires a concise persistence reason and the
+  server replaces client-supplied actor/harness values with key-bound identity.
+- Preview calls make zero writes and zero provider calls.
 
 ### Local development
 
@@ -95,6 +114,8 @@ stored in `localStorage` only — never sent to anyone except the Alfred
 server the SPA is pointed at. The "Unlock" button validates the key by
 calling `/console/api/tenants`. All tenant, key, and history routes resolve
 the full key and enforce that its tenant matches the requested resource.
+Harness-bound connection keys are intentionally rejected by Console
+administration routes; use an unbound owner key to manage connections.
 
 ## Deploy on GitHub Pages (most common)
 
@@ -146,4 +167,4 @@ After deploying, set a CNAME in your DNS to point at the host:
 - GitHub Pages: `CNAME alfred-console.example.com -> <user>.github.io`
 - Vercel/Netlify: use their dashboard
 
-Then set `ALFREED_API_BASE` to `https://alfred.example.com` and re-build.
+Then set `ALFRED_API_BASE` to `https://alfred.example.com` and re-build.
