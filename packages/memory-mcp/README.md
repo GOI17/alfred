@@ -21,6 +21,12 @@ Environment variables are read only by `src/cli.js`:
 - `ALFRED_MEMORY_BASE_URL`
 - `ALFRED_MEMORY_API_KEY`
 
+The CLI uses a dependency-free MCP stdio transport and falls back to the
+sibling `memory-client` source package when workspace dependencies have not
+been installed. Generated Codex/OpenCode commands therefore work from a normal
+Alfred checkout without running a package installation step first. The
+SDK-backed exports remain available to embedded consumers.
+
 ## Tools
 
 | Tool | Memory client call |

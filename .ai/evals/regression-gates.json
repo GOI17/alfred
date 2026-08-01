@@ -69,6 +69,16 @@
       "blocked_on_failure": true
     },
     {
+      "id": "memory-mcp-checkout-runtime",
+      "description": "MCP server tools, safe lifecycle, and dependency-free checkout stdio runtime",
+      "files": [
+        "packages/memory-mcp/test/memory-mcp.test.js"
+      ],
+      "command": "node --test packages/memory-mcp/test/memory-mcp.test.js",
+      "expected_test_count": 20,
+      "blocked_on_failure": true
+    },
+    {
       "id": "memory-server-core-handlers",
       "description": "Server handlers, init, CLI, migrate, registry store (non-console surface)",
       "files": [

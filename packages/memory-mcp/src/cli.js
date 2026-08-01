@@ -2,7 +2,7 @@
 
 import { pathToFileURL } from "node:url";
 
-import { createMemoryMcpServer } from "./server.js";
+import { runStandaloneMcpStdio } from "./stdio.js";
 
 export function readMemoryMcpConfigFromEnv(env = process.env) {
   const baseUrl = normalizeEnvString(env.ALFRED_MEMORY_BASE_URL, "ALFRED_MEMORY_BASE_URL");
@@ -10,8 +10,18 @@ export function readMemoryMcpConfigFromEnv(env = process.env) {
   return { baseUrl, apiKey };
 }
 
-export async function createMemoryClientFromConfig(config) {
-  const { createMemoryClient } = await import("@alfred-labs/memory-client");
+export async function createMemoryClientFromConfig(config, {
+  packageImporter = () => import("@alfred-labs/memory-client"),
+  workspaceImporter = () => import(new URL("../../memory-client/src/index.js", import.meta.url))
+} = {}) {
+  let clientModule;
+  try {
+    clientModule = await packageImporter();
+  } catch (error) {
+    if (error?.code !== "ERR_MODULE_NOT_FOUND" || !String(error.message).includes("@alfred-labs/memory-client")) throw error;
+    clientModule = await workspaceImporter();
+  }
+  const { createMemoryClient } = clientModule;
   return createMemoryClient(config);
 }
 
@@ -19,9 +29,7 @@ export async function runMemoryMcpCli({ env = process.env, stderr = process.stde
   try {
     const config = readMemoryMcpConfigFromEnv(env);
     const memoryClient = await createMemoryClientFromConfig(config);
-    const server = await createMemoryMcpServer({ memoryClient });
-    const { StdioServerTransport } = await import("@modelcontextprotocol/sdk/server/stdio.js");
-    await server.connect(new StdioServerTransport());
+    await runStandaloneMcpStdio({ memoryClient });
   } catch (error) {
     stderr.write(`${safeCliErrorMessage(error)}\n`);
     process.exitCode = 1;

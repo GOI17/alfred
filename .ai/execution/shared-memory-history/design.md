@@ -112,6 +112,17 @@ Generated setup explains that a connected agent must:
 3. include a concise user-readable persistence reason;
 4. never persist private chain-of-thought, secrets, or temporary chatter.
 
+### R6: Checkout-safe local MCP startup
+
+- generated Codex/OpenCode commands must start from a normal Alfred checkout
+  even when workspace dependencies have not been installed;
+- the stdio entrypoint must not require provider calls or network package
+  installation at connection time;
+- MCP initialization, tool discovery, and tool calls preserve the same five
+  memory operations and safe server instructions as the SDK-backed adapter;
+- package resolution may fall back only to Alfred's sibling `memory-client`
+  package and must not import Memory domain internals.
+
 ## Adapter contract
 
 - MCP create/update accepts `attribution`.
@@ -138,6 +149,8 @@ calls. Rationale text is returned only within the authenticated tenant.
 - connection preview performs no writes and connection creation requires
   authenticated tenant ownership;
 - connection-bound keys cannot access Console administration routes;
+- the generated local MCP command completes initialization and lists all five
+  tools without an installed workspace `node_modules` directory;
 - bound keys cannot spoof actor or harness and cannot omit the persistence
   reason;
 - Console renders connection status and one-time setup output;
@@ -153,4 +166,6 @@ calls. Rationale text is returned only within the authenticated tenant.
 - [x] Server-enforced attribution is covered by cross-harness tests.
 - [x] A newly initialized local tenant can open empty history without manual
       filesystem repair.
+- [x] Generated local MCP commands initialize and expose all five tools without
+      installed workspace dependencies.
 - [x] Provider calls remain zero.

@@ -61,3 +61,18 @@ export function memoryToolNames(): string[];
 export function isMemoryClientError(error: unknown): boolean;
 export function errorResult(error: unknown): McpToolResult<{ error: unknown }>;
 export function validationErrorResult(message: string, details?: unknown): McpToolResult<{ error: unknown }>;
+export function createStandaloneMcpProtocol(options: {
+  memoryClient: MemoryClient;
+  serverInfo?: { name: string; version: string };
+  instructions?: string;
+}): {
+  tools: unknown[];
+  handle(message: unknown): Promise<unknown>;
+};
+export function runStandaloneMcpStdio(options: {
+  memoryClient: MemoryClient;
+  input?: NodeJS.ReadableStream;
+  output?: NodeJS.WritableStream;
+  serverInfo?: { name: string; version: string };
+  instructions?: string;
+}): Promise<void>;

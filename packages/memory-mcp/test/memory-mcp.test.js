@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
-import { readMemoryMcpConfigFromEnv } from "../src/cli.js";
-import { createZodSchemaAdapter, MEMORY_MCP_INSTRUCTIONS, memoryToolNames, registerMemoryTools } from "../src/index.js";
+import { createMemoryClientFromConfig, readMemoryMcpConfigFromEnv } from "../src/cli.js";
+import { createStandaloneMcpProtocol, createZodSchemaAdapter, MEMORY_MCP_INSTRUCTIONS, memoryToolNames, registerMemoryTools } from "../src/index.js";
 
 function createFakeServer() {
   return {
@@ -318,6 +318,48 @@ test("CLI config helper fails if env vars are missing", () => {
   );
 });
 
+test("CLI falls back to sibling memory-client when workspace links are absent", async () => {
+  const missing = Object.assign(new Error("Cannot find package '@alfred-labs/memory-client'"), { code: "ERR_MODULE_NOT_FOUND" });
+  const client = await createMemoryClientFromConfig(
+    { baseUrl: "https://memory.example.test", apiKey: "key" },
+    {
+      packageImporter: async () => { throw missing; },
+      workspaceImporter: async () => ({ createMemoryClient: (config) => ({ config, fallback: true }) })
+    }
+  );
+  assert.equal(client.fallback, true);
+  assert.equal(client.config.apiKey, "key");
+});
+
+test("dependency-free stdio protocol initializes and exposes five tools", async () => {
+  const protocol = createStandaloneMcpProtocol({ memoryClient: createFakeMemoryClient() });
+  const initialized = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: { protocolVersion: "2025-06-18" }
+  });
+  assert.equal(initialized.result.serverInfo.name, "alfred-memory-mcp");
+  assert.match(initialized.result.instructions, /memory_create/);
+
+  const listed = await protocol.handle({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+  assert.deepEqual(listed.result.tools.map((entry) => entry.name), memoryToolNames());
+  assert.equal(listed.result.tools.find((entry) => entry.name === "memory_create").inputSchema.required.includes("attribution"), true);
+});
+
+test("dependency-free stdio protocol dispatches memory tool calls", async () => {
+  const memoryClient = createFakeMemoryClient();
+  const protocol = createStandaloneMcpProtocol({ memoryClient });
+  const response = await protocol.handle({
+    jsonrpc: "2.0",
+    id: 3,
+    method: "tools/call",
+    params: { name: "memory_search", arguments: { q: "shared decision" } }
+  });
+  assert.equal(response.result.structuredContent.items[0].content, "shared decision");
+  assert.deepEqual(memoryClient.calls, [{ method: "searchMemories", input: { q: "shared decision" } }]);
+});
+
 test("does not import from packages/memory", async () => {
   const sources = await readSourceFiles();
 
@@ -352,7 +394,7 @@ test("repeated tool calls invoke memoryClient each time", async () => {
 });
 
 async function readSourceFiles() {
-  const files = ["../src/errors.js", "../src/server.js", "../src/index.js", "../src/cli.js"];
+  const files = ["../src/errors.js", "../src/server.js", "../src/stdio.js", "../src/index.js", "../src/cli.js"];
   return Promise.all(
     files.map(async (file) => [file, await readFile(new URL(file, import.meta.url), "utf8")])
   );
