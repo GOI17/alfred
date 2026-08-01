@@ -1680,6 +1680,35 @@ test("/memories POST creates a memory with valid API key", async () => {
   assert.equal(body.type, "fact");
 });
 
+test("GET /memories/search preserves the Memory Client search contract", async () => {
+  const { userService, tenantService, userStore, memoryService } = await makeOpenapiServices();
+  const tenant = await tenantService.provisionTenant({
+    kind: "coding_agent_only", storage_backend: "sqlite", db_path: "/tmp/client-search.sqlite"
+  });
+  userStore.addTenantStub(tenant);
+  const { apiKey } = await userService.provisionApiKey({ tenant_id: tenant.id, label: "opencode-search" });
+  await memoryService.createMemory(tenant.id, {
+    type: "fact",
+    content: "Estamos probando nuestra memoria",
+    source: "opencode"
+  });
+  const router = createOpenapiRouter({
+    userService,
+    getMemoryService: async () => memoryService,
+    projectRoot: makeProjectRoot()
+  });
+
+  const response = await invoke(router, makeReq({
+    method: "GET",
+    url: "/memories/search?q=Estamos%20probando%20nuestra%20memoria&limit=10",
+    headers: { authorization: `Bearer ${apiKey}` }
+  }));
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body);
+  assert.equal(body.items.length, 1);
+  assert.equal(body.items[0].content, "Estamos probando nuestra memoria");
+});
+
 test("connection-bound writes require a reason and override spoofed authorship", async () => {
   const { userService, tenantService, userStore, memoryService } = await makeOpenapiServices();
   const tenant = await tenantService.provisionTenant({

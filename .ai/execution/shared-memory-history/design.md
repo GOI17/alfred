@@ -120,6 +120,8 @@ Generated setup explains that a connected agent must:
   installation at connection time;
 - MCP initialization, tool discovery, and tool calls preserve the same five
   memory operations and safe server instructions as the SDK-backed adapter;
+- the server accepts the existing Memory Client `GET /memories/search` contract
+  in addition to the richer `POST /search` endpoint;
 - package resolution may fall back only to Alfred's sibling `memory-client`
   package and must not import Memory domain internals.
 
@@ -151,6 +153,8 @@ calls. Rationale text is returned only within the authenticated tenant.
 - connection-bound keys cannot access Console administration routes;
 - the generated local MCP command completes initialization and lists all five
   tools without an installed workspace `node_modules` directory;
+- an MCP `memory_search` call reaches the compatibility search route instead
+  of being interpreted as a memory id;
 - bound keys cannot spoof actor or harness and cannot omit the persistence
   reason;
 - Console renders connection status and one-time setup output;

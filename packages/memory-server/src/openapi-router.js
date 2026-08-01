@@ -11,6 +11,7 @@
 //                                    is allowed under current policy
 //   GET  /memories                -- auth, list
 //   POST /memories                -- auth, create
+//   GET  /memories/search         -- auth, Memory Client compatibility search
 //   GET  /memories/{id}           -- auth, read one
 //   PATCH /memories/{id}          -- auth, update
 //   DELETE /memories/{id}         -- auth, delete
@@ -349,6 +350,16 @@ export function createOpenapiRouter({
             const m = await memoryService.createMemory(tenantId, bindConnectionAttribution(body, resolved));
             if (rl.record) await rl.record("success");
             return json(res, 201, m);
+          }
+
+          if (segs.length === 2 && segs[1] === "search" && req.method === "GET") {
+            const opts = {};
+            for (const k of ["q", "limit", "offset", "type", "namespace", "projectId", "tag", "harness"]) {
+              if (url.searchParams.has(k)) opts[k] = url.searchParams.get(k);
+            }
+            const result = await memoryService.searchMemories(tenantId, opts);
+            if (rl.record) await rl.record("success");
+            return json(res, 200, result);
           }
 
           if (segs.length === 2 && req.method === "GET") {

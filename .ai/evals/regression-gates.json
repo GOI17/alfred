@@ -99,7 +99,7 @@
         "packages/memory-server/test/console.test.mjs"
       ],
       "command": "node --test packages/memory-server/test/console.test.mjs",
-      "expected_test_count": 103,
+      "expected_test_count": 104,
       "blocked_on_failure": true
     },
     {
