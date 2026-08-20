@@ -286,7 +286,7 @@ resolve_invoking_project_root() {
 resolve_invoking_project_root
 
 has_dev_tty() {
-  { : < /dev/tty > /dev/tty; } 2>/dev/null
+  [ -t 1 ] && { : < /dev/tty > /dev/tty; } 2>/dev/null
 }
 
 tui_ask() {

@@ -11,6 +11,9 @@
     "./server": "./src/server.js",
     "./registry": "./src/registry/store-factory.js"
   },
+  "dependencies": {
+    "pg": "^8.13.0"
+  },
   "scripts": {
     "check": "node --check src/server.js && node --check src/init.js && node --check src/registry/sqlite-registry-store.js && node --check src/registry/store-factory.js && for f in scripts/*.mjs; do node --check \"$f\" || exit 1; done",
     "test": "node --test test/*.mjs"

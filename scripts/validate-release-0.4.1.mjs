@@ -35,7 +35,7 @@ for (const gate of gates.gates) {
   const testCount = match ? Number(match[1]) : undefined;
   const ok = proc.status === 0 && (gate.expected_test_count === undefined || testCount === gate.expected_test_count);
   results.push({ id: gate.id, ok, tests: testCount, expected: gate.expected_test_count });
-  process.stderr.write(out.split("\n").slice(-5).join("\n") + "\n");
+  process.stderr.write(ok ? out.split("\n").slice(-5).join("\n") + "\n" : out);
   if (!ok) failed += 1;
 }
 

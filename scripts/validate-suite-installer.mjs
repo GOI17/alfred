@@ -654,10 +654,10 @@ try {
 case "$1" in
   *install-app.mjs)
     private_dir=$(dirname "$1")
-    dir_mode=$(stat -f '%Lp' "$private_dir" 2>/dev/null || stat -c '%a' "$private_dir")
-    discovery_mode=$(stat -f '%Lp' "$private_dir/discovery.json" 2>/dev/null || stat -c '%a' "$private_dir/discovery.json")
-    plan_mode=$(stat -f '%Lp' "$private_dir/model-plan.json" 2>/dev/null || stat -c '%a' "$private_dir/model-plan.json")
-    canonical_mode=$(stat -f '%Lp' "$private_dir/model-assignment.mjs" 2>/dev/null || stat -c '%a' "$private_dir/model-assignment.mjs")
+    dir_mode=$(stat -c '%a' "$private_dir" 2>/dev/null || stat -f '%Lp' "$private_dir")
+    discovery_mode=$(stat -c '%a' "$private_dir/discovery.json" 2>/dev/null || stat -f '%Lp' "$private_dir/discovery.json")
+    plan_mode=$(stat -c '%a' "$private_dir/model-plan.json" 2>/dev/null || stat -f '%Lp' "$private_dir/model-plan.json")
+    canonical_mode=$(stat -c '%a' "$private_dir/model-assignment.mjs" 2>/dev/null || stat -f '%Lp' "$private_dir/model-assignment.mjs")
     printf '%s %s %s %s\\n' "$dir_mode" "$discovery_mode" "$plan_mode" "$canonical_mode" > "$ALFRED_TEST_MODE_MARKER"
     ;;
 esac
@@ -680,6 +680,9 @@ exec ${shellQuote(process.execPath)} "$@"
   const fakeOpenTui = join(fixture, "alfred-installer-tui-fake");
   const fakeOpenTuiChecksum = `${fakeOpenTui}.sha256`;
   writeFileSync(fakeOpenTui, `#!/bin/sh
+if [ -n "\${ALFRED_INSTALL_APP_TUI_RESULT_FILE:-}" ]; then
+  exec > "$ALFRED_INSTALL_APP_TUI_RESULT_FILE"
+fi
 printf '%s\\n' "EDITION='coding'" "HARNESS='none'" "PROFILE_STRATEGY='runtime-profiles'" "MEMORY_SETUP='not-needed-for-coding-edition'" "NAME='opentui-test'" "APPLY='false'" "SKIP_PROFILE_MANAGER='false'" "TUI_USED='true'" "TUI_MODE='app'" "MODEL_STRATEGY='configure-later'" "MODEL_WRITE_APPROVED='false'"
 `);
   chmodSync(fakeOpenTui, 0o755);
