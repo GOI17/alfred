@@ -153,7 +153,8 @@ export function createOpenapiRouter({
   searchServiceFactory,  // () => SearchService (lazy, so we don't load transformers at startup)
   projectRoot,           // repo root for manifest loaders
   registry = null,       // optional; if provided, rate limiter is enabled
-  requireAuth = true
+  requireAuth = true,
+  allowedOrigins = []
 } = {}) {
   if (!userService) throw new TypeError("createOpenapiRouter requires userService");
   if (typeof getMemoryService !== "function") throw new TypeError("createOpenapiRouter requires getMemoryService");
@@ -200,7 +201,7 @@ export function createOpenapiRouter({
         url.pathname === "/health" || url.pathname === "/policies/check" ||
         url.pathname.startsWith("/memories") || url.pathname === "/search") {
       const origin = req.headers.origin;
-      if (origin) {
+      if (origin && (allowedOrigins.length === 0 || allowedOrigins.includes(origin))) {
         res.setHeader("access-control-allow-origin", origin);
         res.setHeader("vary", "Origin");
         res.setHeader("access-control-allow-headers", "content-type, authorization, x-api-key");

@@ -96,8 +96,9 @@
     <div id="signupBlock">
       <p class="hint"><strong>No terminal? No problem.</strong> Create a free tenant in 10 seconds.</p>
       <div class="row" style="margin-bottom: 8px;">
-        <input id="signupName" placeholder="display name (e.g. my-mem)" style="flex: 1; background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace;" />
+        <input id="signupName" maxlength="64" pattern="[A-Za-z0-9 _-]{1,64}" aria-describedby="signupNameHelp" placeholder="display name (e.g. my-mem)" style="flex: 1; background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace;" />
       </div>
+      <p class="small" id="signupNameHelp" style="margin: -4px 0 8px;">Use 1–64 letters, numbers, spaces, hyphens, or underscores.</p>
       <div class="row" style="margin-bottom: 8px;">
         <input id="signupEmail" type="email" placeholder="email (optional, for key recovery)" style="flex: 1; background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace;" />
       </div>
@@ -242,6 +243,23 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
 <script>
 let API_KEY = "";
 let CURRENT_TENANT = "";
+const TENANT_NAME_RE = /^[A-Za-z0-9 _-]{1,64}$/;
+
+function validateTenantName(name) {
+  if (!name) return "Pick a display name first.";
+  if (!TENANT_NAME_RE.test(name)) {
+    return "Use 1–64 letters, numbers, spaces, hyphens, or underscores. Apostrophes and other symbols are not supported.";
+  }
+  return null;
+}
+
+function tenantSchema(tenant) {
+  let metadata = tenant && tenant.metadata;
+  if (typeof metadata === "string") {
+    try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
+  }
+  return metadata && typeof metadata.schema === "string" ? metadata.schema : "ready";
+}
 
 function renderTurnstile() {
   // If the server build injected a site key, render the Turnstile widget.
@@ -267,8 +285,10 @@ async function signup() {
   const name = document.getElementById("signupName").value.trim();
   const kindRadio = document.querySelector('input[name="signupKind"]:checked');
   const kind = kindRadio ? kindRadio.value : "human_agent";
-  if (!name) { showErrorInline("signupHint", "Pick a display name first."); return; }
+  const nameError = validateTenantName(name);
+  if (nameError) { showErrorInline("signupHint", nameError); return; }
   const hint = document.getElementById("signupHint");
+  hint.style.color = "";
   hint.textContent = "Creating tenant…";
   try {
     const token = window.alfredTurnstileToken || null;
@@ -279,6 +299,12 @@ async function signup() {
       headers,
       body: JSON.stringify({ display_name: name, kind, turnstile_token: token, email: emailValue })
     });
+    if (!res || typeof res.api_key !== "string" || !res.tenant || typeof res.tenant.id !== "string") {
+      throw new ApiError("Alfred created an incomplete response. No credentials were stored; please retry.", {
+        status: 502,
+        code: "invalid_response"
+      });
+    }
     API_KEY = res.api_key;
     document.getElementById("apiStatus").textContent = "✓ unlocked";
     document.getElementById("locked").style.display = "none";
@@ -289,11 +315,14 @@ async function signup() {
       '<div class="panel" style="background: #1a2a1a; border-color: var(--good);">' +
       '<strong class="ok">Welcome! Your new API key for tenant ' + res.tenant.id + '</strong><br>' +
       '<div class="key-display">' + res.api_key + '</div>' +
-      '<div class="small">Copy this key now. It will not be shown again. Schema: <code>' + (res.tenant.db_connection || "").split("search_path=")[1] + '</code></div>' +
+      '<div class="small">Copy this key now. It will not be shown again. Schema: <code>' + tenantSchema(res.tenant) + '</code></div>' +
       '</div>';
-    loadAll();
+    hint.textContent = "Memory created successfully. Copy your API key now.";
+    hint.style.color = "var(--good)";
+    await loadAll();
   } catch (err) {
-    hint.innerHTML = '<span style="color: var(--bad);">' + err.message + '</span>';
+    hint.textContent = err && err.message ? err.message : "Alfred could not create the tenant. Please try again.";
+    hint.style.color = "var(--bad)";
   }
 }
 
@@ -301,22 +330,25 @@ async function requestRecovery() {
   const emailEl = document.getElementById("recoverEmail");
   const hint = document.getElementById("recoverHint");
   const email = emailEl.value.trim();
-  if (!email) { hint.innerHTML = '<span style="color: var(--bad);">Enter the email you used at signup.</span>'; return; }
+  if (!email) { showErrorInline("recoverHint", "Enter the email you used at signup."); return; }
+  hint.style.color = "";
   hint.textContent = "Sending recovery link…";
   try {
     await api("/console/api/recover", {
       method: "POST",
       body: JSON.stringify({ email })
     });
-    hint.innerHTML = '<span class="ok">If the email is registered, a recovery link has been sent. Check your inbox.</span>';
+    hint.textContent = "If the email is registered, a recovery link has been sent. Check your inbox.";
+    hint.style.color = "var(--good)";
   } catch (err) {
-    hint.innerHTML = '<span style="color: var(--bad);">' + err.message + '</span>';
+    showErrorInline("recoverHint", err && err.message ? err.message : "Alfred could not send the recovery link.");
   }
 }
 
 function showErrorInline(elementId, message) {
   const el = document.getElementById(elementId);
-  el.innerHTML = '<span style="color: var(--bad);">' + message + '</span>';
+  el.textContent = message || "Alfred could not complete the request.";
+  el.style.color = "var(--bad)";
 }
 
 function setKey() {
@@ -360,13 +392,36 @@ async function api(path, options = {}) {
   if (options.body) headers["content-type"] = "application/json";
   const url = apiBase(path);
   const res = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(res.status + " " + res.statusText + ": " + text);
+  const text = await res.text();
+  let payload = null;
+  if (text) {
+    try { payload = JSON.parse(text); } catch { payload = null; }
   }
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return res.json();
-  return res.text();
+  if (!res.ok) {
+    const details = Array.isArray(payload && payload.error && payload.error.details)
+      ? payload.error.details.map(function (detail) { return detail.message; }).filter(Boolean)
+      : [];
+    const message = details.join(" ") ||
+      (payload && payload.error && payload.error.message) ||
+      (text && text.trim()) ||
+      ("Request failed with HTTP " + res.status + ".");
+    throw new ApiError(message, {
+      status: res.status,
+      code: payload && payload.error ? payload.error.code : "http_error",
+      details
+    });
+  }
+  return payload !== null ? payload : text;
+}
+
+class ApiError extends Error {
+  constructor(message, { status = 0, code = "unknown_error", details = [] } = {}) {
+    super(message || "Alfred could not complete the request.");
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
 }
 
 function pill(kind) {
@@ -395,11 +450,11 @@ async function loadTenants() {
       "<td>" + (t.display_name || "—") + "</td>" +
       "<td>" + pill(t.kind) + "</td>" +
       "<td>" + t.storage_backend + "</td>" +
-      "<td class='small'>" + (t.db_path || t.db_connection || "—") + "</td>" +
-      "<td class='small'>" + t.created_at.slice(0, 10) + "</td>" +
+      "<td class='small'>" + tenantSchema(t) + "</td>" +
+      "<td class='small'>" + (t.created_at || "").slice(0, 10) + "</td>" +
       "</tr>";
   }
-  document.getElementById("tenantsBody").innerHTML = '<table><thead><tr><th>ID</th><th>Name</th><th>Kind</th><th>Backend</th><th>DB</th><th>Created</th></tr></thead><tbody>' + rows + "</tbody></table>";
+  document.getElementById("tenantsBody").innerHTML = '<table><thead><tr><th>ID</th><th>Name</th><th>Kind</th><th>Backend</th><th>Schema</th><th>Created</th></tr></thead><tbody>' + rows + "</tbody></table>";
   for (const t of tenants) {
     const opt = document.createElement("option");
     opt.value = t.id; opt.textContent = (t.display_name || t.id) + "  [" + t.kind + "]";
@@ -446,7 +501,7 @@ async function issueKey() {
       '<div class="panel" style="background: #1a2a1a; border-color: var(--good);">' +
       '<strong class="ok">New API key for tenant ' + tenantId + '</strong><br>' +
       '<div class="key-display">' + res.api_key + '</div>' +
-      '<div class="small">Copy this key now. It will not be shown again. The key is <code>' + res.key_prefix + '...</code></div>' +
+      '<div class="small">Copy this key now. It will not be shown again. The key is <code>' + res.key.key_prefix + '...</code></div>' +
       '</div>';
     loadKeys();
   } catch (err) { showError(err); }
@@ -463,7 +518,7 @@ async function revokeKey(keyId) {
 function showError(err) {
   const el = document.createElement("div");
   el.className = "error";
-  el.textContent = err.message;
+  el.textContent = err && err.message ? err.message : "Alfred could not complete the request.";
   document.querySelector(".container").prepend(el);
   setTimeout(() => el.remove(), 8000);
 }

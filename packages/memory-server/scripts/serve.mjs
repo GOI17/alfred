@@ -155,7 +155,8 @@ export async function run(argv = [], env = process.env) {
     searchServiceFactory: null,  // v0.4.1: keyword fallback only; semantic+hybrid in v0.4.0 wired separately
     projectRoot: process.cwd(),
     registry,
-    requireAuth: true
+    requireAuth: true,
+    allowedOrigins: config.allowedOrigins
   });
   const app = createApp({
     tenantService,
