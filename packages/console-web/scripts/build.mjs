@@ -9,17 +9,19 @@
 //   ALFRED_API_BASE=https://alfred.example.com npm run build
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC_DIR = join(here, "..", "src");
-const DIST_DIR = join(here, "..", "dist");
+const DIST_DIR = process.env.ALFRED_CONSOLE_OUTPUT_DIR
+  ? resolve(process.env.ALFRED_CONSOLE_OUTPUT_DIR)
+  : join(here, "..", "dist");
 const SRC_HTML = join(SRC_DIR, "index.html");
 const DIST_HTML = join(DIST_DIR, "index.html");
 
 const API_BASE = process.env.ALFRED_API_BASE ?? "http://localhost:3000";
-const BUILD_VERSION = new Date().toISOString().slice(0, 10);
+const BUILD_VERSION = process.env.ALFRED_BUILD_VERSION ?? new Date().toISOString().slice(0, 10);
 
 function build() {
   if (!existsSync(SRC_HTML)) {

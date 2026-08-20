@@ -47,6 +47,8 @@
     "profile-manager:test": "cd packages/profile-manager && npm test",
     "installer-tui:check": "cd packages/installer-tui && npm run check",
     "installer-tui:test": "cd packages/installer-tui && npm test",
-    "validate:suite-installer": "node scripts/validate-suite-installer.mjs"
+    "validate:suite-installer": "node scripts/validate-suite-installer.mjs",
+    "pages:build": "node scripts/build-pages-site.mjs",
+    "pages:check": "node scripts/check-pages-site.mjs"
   }
 }

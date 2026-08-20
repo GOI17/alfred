@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, rmSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -34,14 +35,25 @@ test("npm run build creates dist/index.html", () => {
 });
 
 test("build honors ALFRED_API_BASE env var", () => {
-  const result = spawnSync("node", ["scripts/build.mjs"], {
-    cwd: pkgRoot,
-    env: { ...process.env, ALFRED_API_BASE: "https://alfred.example.com" },
-    encoding: "utf8"
-  });
-  assert.equal(result.status, 0, "build failed: " + result.stderr);
-  const text = readFileSync(join(distDir, "index.html"), "utf8");
-  assert.match(text, /window\.ALFRED_API_BASE = "https:\/\/alfred\.example\.com"/);
+  const customDir = mkdtempSync(join(tmpdir(), "alfred-console-build-"));
+  try {
+    const result = spawnSync("node", ["scripts/build.mjs"], {
+      cwd: pkgRoot,
+      env: {
+        ...process.env,
+        ALFRED_API_BASE: "https://alfred.example.com",
+        ALFRED_BUILD_VERSION: "test-build",
+        ALFRED_CONSOLE_OUTPUT_DIR: customDir
+      },
+      encoding: "utf8"
+    });
+    assert.equal(result.status, 0, "build failed: " + result.stderr);
+    const text = readFileSync(join(customDir, "index.html"), "utf8");
+    assert.match(text, /window\.ALFRED_API_BASE = "https:\/\/alfred\.example\.com"/);
+    assert.match(text, /window\.ALFRED_BUILD_VERSION = "test-build"/);
+  } finally {
+    rmSync(customDir, { recursive: true, force: true });
+  }
 });
 
 test("build is idempotent: second build replaces the first", () => {

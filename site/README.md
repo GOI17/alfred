@@ -1,7 +1,13 @@
 # Alfred — Pages site
 
-Static, no-build landing + docs + memory-console for Alfred, served
-from **https://goi17.github.io/alfred/** via GitHub Pages.
+Static landing, documentation, and Memory Console for Alfred.
+
+- Current rollback host: **https://goi17.github.io/alfred/**
+- Target host: Cloudflare Pages at the domain root
+
+The checked-in HTML remains compatible with the GitHub Pages `/alfred/`
+subpath. `npm run pages:build` creates the root-hosted Cloudflare artifact in
+`dist/cloudflare-pages/` without changing the source pages.
 
 ## Deployed layout
 
@@ -19,31 +25,17 @@ The memory console is the existing standalone SPA from
 `main` (or via manual `workflow_dispatch` with a custom
 `ALFRED_API_BASE`).
 
-All internal links in `site/` are **absolute under `/alfred/`** so
-they resolve correctly under the Pages subpath.
+All internal links in `site/` are **absolute under `/alfred/`** for the
+rollback deployment. The Cloudflare build rewrites that prefix to
+`SITE_BASE_PATH` (`/` by default).
 
 ## Local preview
 
 ```sh
-cd site
-python3 -m http.server 8080
-# open http://localhost:8080/landing/   (landing)
-# open http://localhost:8080/landing/docs/
-# open http://localhost:8080/landing/memory/
-# open http://localhost:8080/landing/memory/app/
-```
-
-> **Note:** when previewing locally the absolute `/alfred/` paths
-> point to `localhost:8080/alfred/`, not the root. Either symlink it
-> (`ln -s . alfred`) or use the option below.
-
-### Serve as if under `/alfred/`
-
-```sh
-cd site
-mkdir -p .serve && ln -sfn .. alfred
-python3 -m http.server 8080
-# now /alfred/ resolves to site/
+ALFRED_API_BASE=http://localhost:3000 npm run pages:build
+npm run pages:check
+python3 -m http.server 8080 --directory dist/cloudflare-pages
+# open http://localhost:8080/
 ```
 
 ## Build the memory console with a real API base
@@ -51,26 +43,74 @@ python3 -m http.server 8080
 The console SPA needs to know the URL of your self-hosted
 `alfred serve` instance. Two ways to set it:
 
-### Local dev (default)
+### Local dev
 
 ```sh
-# builds with ALFRED_API_BASE=http://localhost:3000
-cd packages/console-web && npm run build
-cp dist/index.html ../../site/memory/app/index.html
+ALFRED_API_BASE=http://localhost:3000 npm run pages:build
 ```
 
 ### Production (deployed Pages)
 
 ```sh
-cd packages/console-web
-ALFRED_API_BASE="https://alfred.example.com" npm run build
-cp dist/index.html ../../site/memory/app/index.html
+ALFRED_API_BASE="https://alfred-labs-memory.fly.dev" npm run pages:build
+npm run pages:check
 ```
 
-Then commit `site/memory/app/index.html` and push, or just push
-`packages/console-web/**` and let the workflow rebuild.
+The generated artifact is ignored by Git. The deployment workflow always
+rebuilds it from source.
 
-## Deployment
+## Cloudflare Pages deployment
+
+The workflow `.github/workflows/cloudflare-pages-deploy.yml` builds every
+relevant pull request and deploys it when Cloudflare credentials are present.
+`main` is production; other branches become preview deployments.
+
+### One-time Cloudflare setup
+
+1. Create a Direct Upload Pages project named `alfred` with production branch
+   `main`:
+
+   ```sh
+   npx wrangler pages project create alfred --production-branch main
+   ```
+
+2. Add these GitHub Actions secrets:
+
+   - `CLOUDFLARE_ACCOUNT_ID`
+   - `CLOUDFLARE_API_TOKEN` with Cloudflare Pages edit permission
+
+3. Optionally add these GitHub repository variables:
+
+   - `CLOUDFLARE_PAGES_PROJECT=alfred`
+   - `CLOUDFLARE_PAGES_BASE_PATH=/`
+   - `ALFRED_API_BASE=https://alfred-labs-memory.fly.dev`
+
+4. Add the production Pages origin to the Memory server and redeploy it:
+
+   ```sh
+   ALFRED_MEMORY_ALLOWED_ORIGINS=https://alfred.pages.dev
+   ALFRED_CONSOLE_URL=https://alfred.pages.dev/memory/app/
+   ```
+
+   Include the custom-domain origin too when one is attached. The server uses
+   exact origins, so a preview alias must be listed before testing authenticated
+   Console calls from that preview.
+
+### Verification and cutover
+
+1. Run the workflow manually and verify `/`, `/docs/`, `/memory/`, and
+   `/memory/app/` at the returned `pages.dev` URL.
+2. Unlock the Console with an owner key and verify tenant/history requests.
+3. Attach the custom domain in Cloudflare and repeat the checks.
+4. Only then disable `.github/workflows/pages-deploy.yml` or GitHub Pages.
+
+### Rollback
+
+Keep GitHub Pages enabled until the custom domain has been stable. To roll back,
+restore the previous DNS target; the `/alfred/` source paths and GitHub workflow
+remain intact throughout the migration.
+
+## GitHub Pages rollback deployment
 
 Push to `main` (or run the workflow manually):
 
@@ -107,6 +147,8 @@ that block.
 ```
 site/
 ├── .nojekyll
+├── _headers               ← Cloudflare response headers
+├── _redirects             ← canonical trailing-slash routes
 ├── index.html              ← landing
 ├── README.md
 ├── assets/
