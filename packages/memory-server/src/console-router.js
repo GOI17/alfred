@@ -99,18 +99,56 @@ function json(res, status, body) {
   res.end(JSON.stringify(body) + "\n");
 }
 
+function errorMessage(error, fallback = "Alfred could not complete the request.") {
+  return typeof error?.message === "string" && error.message.trim() !== ""
+    ? error.message
+    : fallback;
+}
+
 function html(res, status, body, contentType = "text/html; charset=utf-8") {
   res.writeHead(status, { "content-type": contentType });
   res.end(body);
 }
 
-function authenticate(req, userService) {
+function publicTenant(tenant) {
+  if (!tenant) return tenant;
+  let metadata = tenant.metadata;
+  if (typeof metadata === "string") {
+    try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
+  }
+  return {
+    id: tenant.id,
+    display_name: tenant.display_name ?? null,
+    kind: tenant.kind,
+    storage_backend: tenant.storage_backend,
+    created_at: tenant.created_at,
+    updated_at: tenant.updated_at,
+    archived_at: tenant.archived_at ?? null,
+    metadata: typeof metadata?.schema === "string" ? { schema: metadata.schema } : {}
+  };
+}
+
+function publicApiKey(key) {
+  return {
+    id: key.id,
+    tenant_id: key.tenant_id,
+    key_prefix: key.key_prefix,
+    label: key.label ?? null,
+    created_at: key.created_at,
+    last_used_at: key.last_used_at ?? null,
+    revoked_at: key.revoked_at ?? null
+  };
+}
+
+async function authenticate(req, userService) {
   const auth = req.headers.authorization;
   const apiKey = typeof auth === "string" && auth.startsWith("Bearer ")
     ? auth.slice("Bearer ".length).trim()
     : (typeof req.headers["x-api-key"] === "string" ? req.headers["x-api-key"] : null);
   if (!apiKey) return { error: { code: "unauthorized", message: "API key required." } };
-  return { apiKey };
+  const resolved = await userService.resolveApiKey(apiKey);
+  if (!resolved) return { error: { code: "unauthorized", message: "Invalid or revoked API key." } };
+  return { apiKey, tenant_id: resolved.tenant_id, key_id: resolved.key_id };
 }
 
 async function readJsonBody(req) {
@@ -208,11 +246,12 @@ export function createConsoleRouter({
   return async function consoleHandler(req, res) {
     const url = new URL(req.url ?? "/", "http://localhost");
 
-    // CORS for /console/api/*. Same-origin for inline-deploy; cross-origin
-    // for upstream deploys (any origin allowed).
+    // CORS for /console/api/*. Same-origin for inline deploys; configured
+    // origins only for cross-origin production deploys.
     if (url.pathname.startsWith("/console/api/")) {
       const origin = req.headers.origin;
-      if (origin) {
+      const allowedOrigins = Array.isArray(config?.allowedOrigins) ? config.allowedOrigins : [];
+      if (origin && (allowedOrigins.length === 0 || allowedOrigins.includes(origin))) {
         res.setHeader("access-control-allow-origin", origin);
         res.setHeader("vary", "Origin");
         res.setHeader("access-control-allow-headers", "content-type, authorization, x-api-key");
@@ -240,7 +279,7 @@ export function createConsoleRouter({
         const htmlText = readFileSync(indexPath, "utf8");
         return html(res, 200, htmlText);
       } catch (err) {
-        return json(res, 500, { error: { code: "read_error", message: err.message } });
+        return json(res, 500, { error: { code: "read_error", message: errorMessage(err) } });
       }
     }
 
@@ -265,7 +304,7 @@ export function createConsoleRouter({
       if (!recovery) return json(res, 503, { error: { code: "recovery_not_configured", message: "Recovery is not configured on this server." } });
       let body = {};
       try { body = await readJsonBody(req); }
-      catch (err) { return json(res, 400, { error: { code: "validation_error", message: err.message } }); }
+      catch (err) { return json(res, 400, { error: { code: "validation_error", message: errorMessage(err, "Invalid request body.") } }); }
       const ip = clientIpFromReq(req);
       try {
         const result = await recovery.requestRecovery({ ip, email: body.email });
@@ -273,12 +312,12 @@ export function createConsoleRouter({
         return json(res, 200, { ok: true, message: "If the email is registered, a recovery link has been sent." });
       } catch (err) {
         if (err instanceof RecoveryValidationError) {
-          return json(res, 400, { error: { code: err.code, message: err.message, details: err.details } });
+          return json(res, 400, { error: { code: err.code, message: errorMessage(err), details: err.details } });
         }
         if (err instanceof RecoveryRateLimitedError) {
-          return json(res, 429, { error: { code: err.code, message: err.message, retry_after_minutes: err.retryAfterMinutes } });
+          return json(res, 429, { error: { code: err.code, message: errorMessage(err), retry_after_minutes: err.retryAfterMinutes } });
         }
-        return json(res, 500, { error: { code: "internal_error", message: err.message } });
+        return json(res, 500, { error: { code: "internal_error", message: errorMessage(err) } });
       }
     }
 
@@ -319,7 +358,7 @@ export function createConsoleRouter({
       }
       let body = {};
       try { body = await readJsonBody(req); }
-      catch (err) { return json(res, 400, { error: { code: "validation_error", message: err.message } }); }
+      catch (err) { return json(res, 400, { error: { code: "validation_error", message: errorMessage(err, "Invalid request body.") } }); }
       const ip = clientIpFromReq(req);
       // CAPTCHA token: prefer header, fall back to body field.
       const turnstileToken = (typeof req.headers["x-turnstile-token"] === "string" && req.headers["x-turnstile-token"])
@@ -337,7 +376,7 @@ export function createConsoleRouter({
         try { await rateLimiter?.record({ ip, displayName: body.display_name, kind: body.kind, result: "success", tenantId: result.tenant.id }); } catch {}
         return json(res, 201, {
           ok: true,
-          tenant: result.tenant,
+          tenant: publicTenant(result.tenant),
           api_key: result.api_key,
           key_prefix: result.key_prefix,
           key_id: result.key_id,
@@ -346,78 +385,93 @@ export function createConsoleRouter({
       } catch (err) {
         if (err instanceof BootstrapValidationError) {
           try { await rateLimiter?.record({ ip, displayName: body.display_name, kind: body.kind, result: "validation_error", errorCode: err.code }); } catch {}
-          return json(res, 400, { error: { code: err.code, message: err.message, details: err.details } });
+          return json(res, 400, { error: { code: err.code, message: errorMessage(err), details: err.details } });
         }
         if (err instanceof BootstrapConfigError) {
           try { await rateLimiter?.record({ ip, displayName: body.display_name, kind: body.kind, result: "config_error", errorCode: err.code }); } catch {}
-          return json(res, 503, { error: { code: err.code, message: err.message } });
+          return json(res, 503, { error: { code: err.code, message: errorMessage(err) } });
         }
         if (err instanceof BootstrapRateLimitedError) {
           try { await rateLimiter?.record({ ip, displayName: body.display_name, kind: body.kind, result: "rate_limited", errorCode: err.code }); } catch {}
-          return json(res, 429, { error: { code: err.code, message: err.message, retry_after_minutes: err.retryAfterMinutes } });
+          return json(res, 429, { error: { code: err.code, message: errorMessage(err), retry_after_minutes: err.retryAfterMinutes } });
         }
-        try { await rateLimiter?.record({ ip, displayName: body.display_name, kind: body.kind, result: "internal_error", errorCode: err.code || "internal_error" }); } catch {}
-        return json(res, 500, { error: { code: "internal_error", message: err.message } });
+        try { await rateLimiter?.record({ ip, displayName: body.display_name, kind: body.kind, result: "internal_error", errorCode: err?.code || "internal_error" }); } catch {}
+        return json(res, 500, { error: { code: "internal_error", message: errorMessage(err) } });
       }
     }
 
     // API: list tenants
     if (url.pathname === "/console/api/tenants" && req.method === "GET") {
+      const auth = await authenticate(req, userService);
+      if (auth.error) return json(res, 401, { error: auth.error });
       try {
-        const result = await tenantService.listTenants({ limit: 100, offset: 0 });
-        return json(res, 200, result);
+        const tenant = await tenantService.getTenant(auth.tenant_id);
+        return json(res, 200, {
+          items: [publicTenant(tenant)],
+          pagination: { limit: 1, offset: 0, total: 1 }
+        });
       } catch (err) {
-        return json(res, 500, { error: { code: "internal_error", message: err.message } });
+        return json(res, 500, { error: { code: "internal_error", message: errorMessage(err) } });
       }
     }
 
     // API: list keys for a tenant
     const listKeysMatch = url.pathname.match(/^\/console\/api\/tenants\/([^/]+)\/keys$/);
     if (listKeysMatch && req.method === "GET") {
-      const auth = authenticate(req, userService);
+      const auth = await authenticate(req, userService);
       if (auth.error) return json(res, 401, { error: auth.error });
       const tenantId = decodeURIComponent(listKeysMatch[1]);
+      if (tenantId !== auth.tenant_id) {
+        return json(res, 403, { error: { code: "forbidden", message: "This API key cannot access another tenant." } });
+      }
       const includeRevoked = url.searchParams.get("include_revoked") === "true";
       try {
         const keys = await userService.listApiKeys(tenantId, { includeRevoked });
-        return json(res, 200, { ok: true, tenant_id: tenantId, keys });
+        return json(res, 200, { ok: true, tenant_id: tenantId, keys: keys.map(publicApiKey) });
       } catch (err) {
-        return json(res, err.status || 500, { error: { code: err.code || "internal_error", message: err.message } });
+        return json(res, err?.status || 500, { error: { code: err?.code || "internal_error", message: errorMessage(err) } });
       }
     }
 
     // API: issue new key for a tenant
     if (listKeysMatch && req.method === "POST") {
-      const auth = authenticate(req, userService);
+      const auth = await authenticate(req, userService);
       if (auth.error) return json(res, 401, { error: auth.error });
       const tenantId = decodeURIComponent(listKeysMatch[1]);
+      if (tenantId !== auth.tenant_id) {
+        return json(res, 403, { error: { code: "forbidden", message: "This API key cannot access another tenant." } });
+      }
       let body = {};
       try { body = await readJsonBody(req); }
-      catch (err) { return json(res, 400, { error: { code: "validation_error", message: err.message } }); }
+      catch (err) { return json(res, 400, { error: { code: "validation_error", message: errorMessage(err, "Invalid request body.") } }); }
       try {
         const result = await userService.provisionApiKey({ tenant_id: tenantId, label: body.label || null });
         return json(res, 201, {
           ok: true,
           api_key: result.apiKey,
-          key: result.key,
+          key: publicApiKey(result.key),
           tenant_id: tenantId
         });
       } catch (err) {
-        return json(res, err.status || 500, { error: { code: err.code || "internal_error", message: err.message } });
+        return json(res, err?.status || 500, { error: { code: err?.code || "internal_error", message: errorMessage(err) } });
       }
     }
 
     // API: revoke a key by id
     const revokeMatch = url.pathname.match(/^\/console\/api\/keys\/([^/]+)$/);
     if (revokeMatch && req.method === "DELETE") {
-      const auth = authenticate(req, userService);
+      const auth = await authenticate(req, userService);
       if (auth.error) return json(res, 401, { error: auth.error });
       const keyId = decodeURIComponent(revokeMatch[1]);
       try {
+        const ownKeys = await userService.listApiKeys(auth.tenant_id, { includeRevoked: true });
+        if (!ownKeys.some((key) => key.id === keyId)) {
+          return json(res, 404, { error: { code: "not_found", message: "API key was not found." } });
+        }
         const result = await userService.revokeApiKey(keyId, { reason: "console revoke" });
-        return json(res, 200, { ok: true, ...result });
+        return json(res, 200, { ok: true, ...result, key: publicApiKey(result.key) });
       } catch (err) {
-        return json(res, err.status || 500, { error: { code: err.code || "internal_error", message: err.message } });
+        return json(res, err?.status || 500, { error: { code: err?.code || "internal_error", message: errorMessage(err) } });
       }
     }
 

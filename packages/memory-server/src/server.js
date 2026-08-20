@@ -29,6 +29,31 @@ export class ServerConfigError extends Error {
   }
 }
 
+function booleanFromEnv(value, fallback, name) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (value === true || value === "true" || value === "1") return true;
+  if (value === false || value === "false" || value === "0") return false;
+  throw new ServerConfigError(`${name} must be true or false.`);
+}
+
+function publicTenant(tenant) {
+  if (!tenant) return tenant;
+  let metadata = tenant.metadata;
+  if (typeof metadata === "string") {
+    try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
+  }
+  return {
+    id: tenant.id,
+    display_name: tenant.display_name ?? null,
+    kind: tenant.kind,
+    storage_backend: tenant.storage_backend,
+    created_at: tenant.created_at,
+    updated_at: tenant.updated_at,
+    archived_at: tenant.archived_at ?? null,
+    metadata: typeof metadata?.schema === "string" ? { schema: metadata.schema } : {}
+  };
+}
+
 export function loadServerConfig(env = process.env) {
   const mode = env.ALFRED_MEMORY_HOSTING ?? "local";
   if (!["local", "self-hosted"].includes(mode)) {
@@ -42,7 +67,7 @@ export function loadServerConfig(env = process.env) {
     tlsCert: env.ALFRED_MEMORY_TLS_CERT ?? null,
     tlsKey: env.ALFRED_MEMORY_TLS_KEY ?? null,
     registryPath: env.ALFRED_MEMORY_REGISTRY ?? `${process.env.HOME ?? "/tmp"}/.alfred/registry.sqlite`,
-    requireAuth: mode === "self-hosted"
+    requireAuth: booleanFromEnv(env.ALFRED_MEMORY_REQUIRE_AUTH, mode === "self-hosted", "ALFRED_MEMORY_REQUIRE_AUTH")
   };
   if (cfg.mode === "self-hosted") {
     if (!cfg.tlsCert || !existsSync(cfg.tlsCert)) {
@@ -128,8 +153,23 @@ export function createApp({
 
     if (url.pathname === "/tenants") {
       if (req.method !== "GET") return json(res, 405, { error: { code: "method_not_allowed" } });
-      const result = await tenantService.listTenants({});
-      return json(res, 200, result);
+      try {
+        if (config?.requireAuth) {
+          const auth = authenticate(req, config, userService);
+          if (auth.error) return json(res, 401, { error: auth.error });
+          const resolved = await userService.resolveApiKey(auth.apiKey);
+          if (!resolved) return json(res, 401, { error: { code: "unauthorized", message: "Invalid or revoked API key." } });
+          const tenant = await tenantService.getTenant(resolved.tenant_id);
+          return json(res, 200, {
+            items: [publicTenant(tenant)],
+            pagination: { limit: 1, offset: 0, total: 1 }
+          });
+        }
+        const result = await tenantService.listTenants({});
+        return json(res, 200, { ...result, items: result.items.map(publicTenant) });
+      } catch (err) {
+        return json(res, err?.status || 500, { error: { code: err?.code || "internal_error", message: err?.message || "Alfred could not list tenants." } });
+      }
     }
 
     if (url.pathname === "/memories" || url.pathname.startsWith("/memories/")) {

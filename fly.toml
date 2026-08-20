@@ -38,6 +38,9 @@ primary_region = "gru"  # São Paulo. Alternatives: eze (Buenos Aires), iad (Vir
   PORT = "8080"
   ALFRED_MEMORY_PORT = "8080"
   ALFRED_MEMORY_BIND = "0.0.0.0"
+  # Fly terminates TLS at the edge; the app still requires a tenant API key.
+  ALFRED_MEMORY_REQUIRE_AUTH = "true"
+  ALFRED_MEMORY_ALLOWED_ORIGINS = "https://alfred-4cs.pages.dev"
   # The registry SQLite DB lives in /app/data on the persistent volume.
   ALFRED_MEMORY_REGISTRY = "/app/data/registry.sqlite"
   # The data directory needs to be a Fly volume for SQLite to survive restarts.

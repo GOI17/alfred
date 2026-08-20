@@ -79,7 +79,7 @@
         "packages/memory-server/test/migrate-sqlite.test.mjs"
       ],
       "command": "node --test packages/memory-server/test/{server,init,cli,registry-sqlite-store,migrate-sqlite}.test.mjs",
-      "expected_test_count": 47,
+      "expected_test_count": 50,
       "blocked_on_failure": true
     },
     {
@@ -89,7 +89,7 @@
         "packages/memory-server/test/console.test.mjs"
       ],
       "command": "node --test packages/memory-server/test/console.test.mjs",
-      "expected_test_count": 97,
+      "expected_test_count": 99,
       "blocked_on_failure": true
     },
     {
@@ -214,6 +214,6 @@
   ],
   "totals": {
     "files_validated": 5,
-    "tests_total": 257
+    "tests_total": 262
   }
 }

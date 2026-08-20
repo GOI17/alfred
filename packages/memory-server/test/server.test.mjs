@@ -118,6 +118,24 @@ test("loadServerConfig defaults to local mode and bind 127.0.0.1", () => {
   assert.equal(cfg.requireAuth, false);
 });
 
+test("loadServerConfig can require auth behind a TLS-terminating proxy", () => {
+  const cfg = loadServerConfig({
+    ALFRED_MEMORY_HOSTING: "local",
+    ALFRED_MEMORY_REQUIRE_AUTH: "true",
+    ALFRED_MEMORY_BIND: "0.0.0.0"
+  });
+  assert.equal(cfg.mode, "local");
+  assert.equal(cfg.requireAuth, true);
+  assert.equal(cfg.bind, "0.0.0.0");
+});
+
+test("loadServerConfig rejects an invalid ALFRED_MEMORY_REQUIRE_AUTH value", () => {
+  assert.throws(
+    () => loadServerConfig({ ALFRED_MEMORY_REQUIRE_AUTH: "sometimes" }),
+    (err) => err.name === "ServerConfigError"
+  );
+});
+
 test("loadServerConfig rejects unknown mode", () => {
   assert.throws(
     () => loadServerConfig({ ALFRED_MEMORY_HOSTING: "federated" }),
@@ -156,6 +174,32 @@ test("/policy responds 200 with validatePolicy report", async () => {
   assert.equal(res.statusCode, 200);
   const body = JSON.parse(res.body);
   assert.equal(body.ok, true);
+});
+
+test("/tenants requires a valid API key when auth is enabled and redacts storage secrets", async () => {
+  const services = makeWireServices();
+  const { tenant, apiKey } = await setupTenantAndKey(services);
+  const app = createApp({
+    ...services,
+    getMemoryService: services.getMemoryService,
+    config: { mode: "local", requireAuth: true, allowedOrigins: [], port: 0, bind: "0.0.0.0" }
+  });
+
+  const missing = await invoke(app, fakeReq({ method: "GET", url: "/tenants" }));
+  assert.equal(missing.statusCode, 401);
+
+  const valid = await invoke(app, fakeReq({
+    method: "GET",
+    url: "/tenants",
+    headers: { authorization: `Bearer ${apiKey}` }
+  }));
+  assert.equal(valid.statusCode, 200);
+  const body = JSON.parse(valid.body);
+  assert.equal(body.items.length, 1);
+  assert.equal(body.items[0].id, tenant.id);
+  assert.equal("db_path" in body.items[0], false);
+  assert.equal("db_connection" in body.items[0], false);
+  assert.deepEqual(body.items[0].metadata, {});
 });
 
 test("/memories requires API key when mode is self-hosted", async () => {

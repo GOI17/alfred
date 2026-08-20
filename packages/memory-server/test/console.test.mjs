@@ -22,6 +22,21 @@ function makeServices() {
   return { tenantService, userService, userStore, tenantStore };
 }
 
+async function provisionConsoleTenant(services, { displayName = "test-tenant" } = {}) {
+  const tenant = await services.tenantService.provisionTenant({
+    display_name: displayName,
+    kind: "coding_agent_only",
+    storage_backend: "sqlite",
+    db_path: "/tmp/x.sqlite"
+  });
+  await services.userStore.addTenantStub(tenant);
+  const { apiKey, key } = await services.userService.provisionApiKey({
+    tenant_id: tenant.id,
+    label: "first"
+  });
+  return { tenant, apiKey, key };
+}
+
 function captureRes() {
   const res = {
     statusCode: 200,
@@ -79,29 +94,42 @@ test("GET /console returns 200 with text/html", async () => {
 });
 
 test("GET /console/api/tenants returns a list", async () => {
-  const { tenantService, userService } = makeServices();
-  await tenantService.provisionTenant({
-    kind: "coding_agent_only", storage_backend: "sqlite", db_path: "/tmp/x.sqlite"
-  });
-  const router = createConsoleRouter({ userService, tenantService, config: {}, consoleDirOverride: "" });
-  const res = await invoke(router, makeReq({ url: "/console/api/tenants" }));
+  const services = makeServices();
+  const { tenant, apiKey } = await provisionConsoleTenant(services);
+  const router = createConsoleRouter({ userService: services.userService, tenantService: services.tenantService, config: {}, consoleDirOverride: "" });
+  const res = await invoke(router, makeReq({
+    url: "/console/api/tenants",
+    headers: { authorization: `Bearer ${apiKey}` }
+  }));
   assert.equal(res.statusCode, 200);
   const body = JSON.parse(res.body);
   assert.equal(body.items.length, 1);
+  assert.equal(body.items[0].id, tenant.id);
+  assert.equal("db_path" in body.items[0], false);
+  assert.equal("db_connection" in body.items[0], false);
+  assert.deepEqual(body.items[0].metadata, {});
+});
+
+test("GET /console/api/tenants rejects missing or invalid credentials", async () => {
+  const services = makeServices();
+  const router = createConsoleRouter({ userService: services.userService, tenantService: services.tenantService, config: {}, consoleDirOverride: "" });
+  const missing = await invoke(router, makeReq({ url: "/console/api/tenants" }));
+  assert.equal(missing.statusCode, 401);
+  const invalid = await invoke(router, makeReq({
+    url: "/console/api/tenants",
+    headers: { authorization: "Bearer alk_invalid" }
+  }));
+  assert.equal(invalid.statusCode, 401);
 });
 
 test("POST /console/api/tenants/<id>/keys issues a new key", async () => {
-  const { tenantService, userService, userStore, tenantStore } = makeServices();
-  const tenant = await tenantService.provisionTenant({
-    kind: "coding_agent_only", storage_backend: "sqlite", db_path: "/tmp/x.sqlite"
-  });
-  userStore.addTenantStub(tenant);
-  await userStore.addTenantStub(tenant);
-  const router = createConsoleRouter({ userService, tenantService, config: {}, consoleDirOverride: "" });
+  const services = makeServices();
+  const { tenant, apiKey } = await provisionConsoleTenant(services);
+  const router = createConsoleRouter({ userService: services.userService, tenantService: services.tenantService, config: {}, consoleDirOverride: "" });
   const res = await invoke(router, makeReq({
     method: "POST",
     url: `/console/api/tenants/${tenant.id}/keys`,
-    headers: { "authorization": "Bearer alk_does_not_matter" },
+    headers: { authorization: `Bearer ${apiKey}` },
     body: { label: "console-test" }
   }));
   assert.equal(res.statusCode, 201);
@@ -122,51 +150,69 @@ test("POST /console/api/tenants/<id>/keys without Authorization returns 401", as
 });
 
 test("GET /console/api/tenants/<id>/keys returns keys list", async () => {
-  const { tenantService, userService, userStore, tenantStore } = makeServices();
-  const tenant = await tenantService.provisionTenant({
-    kind: "coding_agent_only", storage_backend: "sqlite", db_path: "/tmp/x.sqlite"
-  });
-  userStore.addTenantStub(tenant);
-  await userStore.addTenantStub(tenant);
-  await userService.provisionApiKey({ tenant_id: tenant.id, label: "first" });
-  const router = createConsoleRouter({ userService, tenantService, config: {}, consoleDirOverride: "" });
+  const services = makeServices();
+  const { tenant, apiKey } = await provisionConsoleTenant(services);
+  const router = createConsoleRouter({ userService: services.userService, tenantService: services.tenantService, config: {}, consoleDirOverride: "" });
   const res = await invoke(router, makeReq({
     method: "GET",
     url: `/console/api/tenants/${tenant.id}/keys`,
-    headers: { "authorization": "Bearer alk_test" }
+    headers: { authorization: `Bearer ${apiKey}` }
   }));
   assert.equal(res.statusCode, 200);
   const body = JSON.parse(res.body);
   assert.equal(body.keys.length, 1);
   assert.equal(body.keys[0].label, "first");
+  assert.equal("key_hash" in body.keys[0], false);
+});
+
+test("console key management cannot cross tenant boundaries", async () => {
+  const services = makeServices();
+  const a = await provisionConsoleTenant(services, { displayName: "tenant-a" });
+  const b = await provisionConsoleTenant(services, { displayName: "tenant-b" });
+  const router = createConsoleRouter({ userService: services.userService, tenantService: services.tenantService, config: {}, consoleDirOverride: "" });
+
+  const listOther = await invoke(router, makeReq({
+    method: "GET",
+    url: `/console/api/tenants/${b.tenant.id}/keys`,
+    headers: { authorization: `Bearer ${a.apiKey}` }
+  }));
+  assert.equal(listOther.statusCode, 403);
+
+  const revokeOther = await invoke(router, makeReq({
+    method: "DELETE",
+    url: `/console/api/keys/${b.key.id}`,
+    headers: { authorization: `Bearer ${a.apiKey}` }
+  }));
+  assert.equal(revokeOther.statusCode, 404);
 });
 
 test("DELETE /console/api/keys/<id> revokes the key", async () => {
-  const { tenantService, userService, userStore, tenantStore } = makeServices();
-  const tenant = await tenantService.provisionTenant({
-    kind: "coding_agent_only", storage_backend: "sqlite", db_path: "/tmp/x.sqlite"
-  });
-  userStore.addTenantStub(tenant);
-  await userStore.addTenantStub(tenant);
-  const { key } = await userService.provisionApiKey({ tenant_id: tenant.id });
-  const router = createConsoleRouter({ userService, tenantService, config: {}, consoleDirOverride: "" });
+  const services = makeServices();
+  const { tenant, apiKey, key } = await provisionConsoleTenant(services);
+  const router = createConsoleRouter({ userService: services.userService, tenantService: services.tenantService, config: {}, consoleDirOverride: "" });
   const res = await invoke(router, makeReq({
     method: "DELETE",
     url: `/console/api/keys/${key.id}`,
-    headers: { "authorization": "Bearer alk_test" }
+    headers: { authorization: `Bearer ${apiKey}` }
   }));
   assert.equal(res.statusCode, 200);
   const body = JSON.parse(res.body);
   assert.equal(body.ok, true);
+  assert.equal("key_hash" in body.key, false);
   // Verify the key is now revoked.
-  const all = await userService.listApiKeys(tenant.id, { includeRevoked: true });
+  const all = await services.userService.listApiKeys(tenant.id, { includeRevoked: true });
   const k = all.find((x) => x.id === key.id);
   assert.ok(k.revoked_at);
 });
 
 test("OPTIONS preflight sets CORS headers", async () => {
   const { tenantService, userService } = makeServices();
-  const router = createConsoleRouter({ userService, tenantService, config: {}, consoleDirOverride: "" });
+  const router = createConsoleRouter({
+    userService,
+    tenantService,
+    config: { allowedOrigins: ["https://console.example.com"] },
+    consoleDirOverride: ""
+  });
   const res = await invoke(router, makeReq({
     method: "OPTIONS",
     url: "/console/api/tenants",
@@ -174,6 +220,13 @@ test("OPTIONS preflight sets CORS headers", async () => {
   }));
   assert.equal(res.statusCode, 204);
   assert.equal(res.headers["access-control-allow-origin"], "https://console.example.com");
+  const denied = await invoke(router, makeReq({
+    method: "OPTIONS",
+    url: "/console/api/tenants",
+    headers: { origin: "https://evil.example.com" }
+  }));
+  assert.equal(denied.statusCode, 204);
+  assert.equal(denied.headers["access-control-allow-origin"], undefined);
 });
 
 test("console index.html exists in source tree", () => {
@@ -309,9 +362,13 @@ test("GET /console/api/tenants works regardless of console install (API is alway
   const prev1 = process.env.ALFRED_CONSOLE_DIR;
   delete process.env.ALFRED_CONSOLE_DIR;
   try {
-    const { tenantService, userService } = makeServices();
-    const router = createConsoleRouter({ userService, tenantService, config: {}, consoleDirOverride: "" });
-    const res = await invoke(router, makeReq({ url: "/console/api/tenants" }));
+    const services = makeServices();
+    const { apiKey } = await provisionConsoleTenant(services);
+    const router = createConsoleRouter({ userService: services.userService, tenantService: services.tenantService, config: {}, consoleDirOverride: "" });
+    const res = await invoke(router, makeReq({
+      url: "/console/api/tenants",
+      headers: { authorization: `Bearer ${apiKey}` }
+    }));
     assert.equal(res.statusCode, 200);
     const body = JSON.parse(res.body);
     assert.ok(Array.isArray(body.items));
@@ -625,6 +682,15 @@ test("console-web index.html contains the signup form and the bootstrap endpoint
   assert.match(htmlText, /human_agent/);
   assert.match(htmlText, /hybrid_with_human/);
   assert.match(htmlText, /No terminal\? No problem\./);
+  assert.match(htmlText, /pattern="\[A-Za-z0-9 _-\]\{1,64\}"/);
+  assert.match(htmlText, /validateTenantName/);
+  assert.match(htmlText, /class ApiError extends Error/);
+  assert.match(htmlText, /payload\.error\.details/);
+  assert.doesNotMatch(htmlText, /db_connection \|\| ""/);
+  assert.doesNotMatch(htmlText, /t\.db_path \|\| t\.db_connection/);
+  assert.match(htmlText, /<th>Schema<\/th>/);
+  assert.match(htmlText, /res\.key\.key_prefix/);
+  assert.doesNotMatch(htmlText, /innerHTML = .*err\.message/);
 });
 
 
