@@ -23,6 +23,7 @@ test("cross-tenant isolation: tenant A's rows are invisible from tenant B's sche
   const pg = (await import("pg")).default;
   const { createInMemoryTenantStore, createInMemoryUserStore, createTenantService, createUserService } = await import("../../memory/src/index.js");
   const { createBootstrap, createSchemaProvisioner, createRateLimiter } = await import("../src/bootstrap/index.js");
+  const { createTenantMemoryStoreFactory } = await import("../scripts/serve.mjs");
 
   // ---- Setup: in-memory tenant + user stores + a fake registry ----
   const tenantStore = createInMemoryTenantStore();
@@ -71,30 +72,30 @@ test("cross-tenant isolation: tenant A's rows are invisible from tenant B's sche
   assert.ok(b.tenant.id);
   assert.notEqual(a.tenant.id, b.tenant.id);
 
-  // ---- Insert a memory in tenant A's schema ----
-  const clientA = await getPgClient();
-  // The connection string for tenant A already has search_path set in db_connection.
-  // We need a fresh client that uses that search_path.
-  const clientATenant = new pg.Client({ connectionString: a.tenant.db_connection });
-  await clientATenant.connect();
-  await clientATenant.query(`
-    INSERT INTO alfred_memory_users (id) VALUES ($1) ON CONFLICT DO NOTHING
-  `, [a.tenant.id]);
-  await clientATenant.query(`
-    INSERT INTO alfred_memories (id, user_id, type, content, source)
-    VALUES ($1, $2, $3, $4, $5)
-  `, ["mem_test_a", a.tenant.id, "fact", "Tenant A secret memory", "test"]);
-  await clientATenant.end();
+  // ---- Exercise the same runtime factory used by `alfred serve` ----
+  const memoryFactory = createTenantMemoryStoreFactory({ tenants: tenantStore });
+  const memoryA = await memoryFactory(a.tenant.id);
+  const memoryB = await memoryFactory(b.tenant.id);
+  const created = await memoryA.createMemory(a.tenant.id, {
+    namespace: "project:alfred",
+    type: "fact",
+    content: "Tenant A secret memory",
+    source: "codex",
+    metadata: { reason: "real Postgres runtime test" }
+  });
+  assert.ok(created.id);
 
-  // ---- Query tenant B's schema for the same memory id ----
-  const clientBTenant = new pg.Client({ connectionString: b.tenant.db_connection });
-  await clientBTenant.connect();
-  const result = await clientBTenant.query(`
-    SELECT id, content FROM alfred_memories WHERE id = $1
-  `, ["mem_test_a"]);
-  await clientBTenant.end();
+  const foundA = await memoryA.searchMemories(a.tenant.id, { q: "Tenant A secret memory" });
+  assert.equal(foundA.items.length, 1);
+  assert.equal(foundA.items[0].id, created.id);
 
-  assert.equal(result.rows.length, 0, "Tenant A's memory leaked into Tenant B's schema");
+  const foundB = await memoryB.searchMemories(b.tenant.id, { q: "Tenant A secret memory" });
+  assert.equal(foundB.items.length, 0, "Tenant A's memory leaked into Tenant B's schema");
+
+  await memoryA.deleteMemory(a.tenant.id, created.id);
+  const afterDelete = await memoryA.searchMemories(a.tenant.id, { q: "Tenant A secret memory" });
+  assert.equal(afterDelete.items.length, 0);
+  await memoryFactory.close();
 
   // Cleanup: drop both schemas. Use the provisioner's schemaNameFor() to derive
   // the schema name from each tenant id, not a string-parse of the connection
