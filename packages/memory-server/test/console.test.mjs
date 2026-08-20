@@ -543,11 +543,19 @@ test("createBootstrap issues a key with alk_ prefix and 12-char public prefix", 
 });
 
 test("schema provisioner builds tenant_<id> schema and search_path connection", async () => {
-  const provisioner = createSchemaProvisioner({ pgClient: async () => ({ query: async () => {}, end: async () => {} }) });
-  const schema = provisioner.schemaNameFor("usr_t_abc123abc123abc123abc123abc12345");
+  const queries = [];
+  const provisioner = createSchemaProvisioner({ pgClient: async () => ({
+    query: async (sql, values) => { queries.push({ sql, values }); },
+    end: async () => {}
+  }) });
+  const tenantId = "usr_t_abc123abc123abc123abc123abc12345";
+  const schema = provisioner.schemaNameFor(tenantId);
   assert.equal(schema, "tenant_abc123abc123abc123abc123abc12345");
   const conn = provisioner.buildTenantConnectionString("postgres://u:p@h/d", schema);
   assert.ok(/search_path[=%]3[Dd]tenant_/.test(conn) || /search_path=tenant_/.test(decodeURIComponent(conn)), "expected search_path=tenant_ in " + conn);
+  await provisioner.provision({ tenantId, sharedUrl: "postgres://u:p@h/d" });
+  const seed = queries.find((entry) => entry.sql.includes("INSERT INTO alfred_memory_users"));
+  assert.deepEqual(seed?.values, [tenantId]);
 });
 
 test("schema provisioner rejects invalid tenant ids", async () => {

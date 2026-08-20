@@ -176,6 +176,13 @@ export function createSchemaProvisioner({ pgClient, tenantMigrations = DEFAULT_T
         for (const [name, sql] of Object.entries(tenantMigrations)) {
           await client.query(sql);
         }
+        // 4. Seed the tenant's memory principal. alfred_memories.user_id is a
+        //    foreign key, so a newly bootstrapped API key must have this row
+        //    before its first write.
+        await client.query(
+          "INSERT INTO alfred_memory_users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING",
+          [tenantId]
+        );
         return { schema, connectionString: tenantConn };
       } finally {
         // pgClient returns a client we must close.
