@@ -1,13 +1,8 @@
 # syntax=docker/dockerfile:1.7
 # Alfred Memory v0.4.1 production image.
 #
-# Alfred Memory v0.4.1 has ZERO external npm dependencies — the server uses
-# only Node.js built-ins (node:sqlite, node:http, node:fs, node:crypto).
-# That means we can ship a single-stage image without npm/pnpm install,
-# keeping the build under 5 seconds and the image around 180MB.
-#
-# If a future version adds external deps, restore the multi-stage build
-# with pnpm install (see git history for the pnpm variant).
+# Alfred Memory uses Node.js built-ins for its local-first path and the `pg`
+# driver when SaaS tenant bootstrap is enabled with ALFRED_SAAS_DATABASE_URL.
 
 ARG NODE_VERSION=22-bookworm-slim
 
@@ -32,6 +27,8 @@ RUN groupadd --system --gid 1001 alfred \
 COPY --chown=alfred:alfred package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
 COPY --chown=alfred:alfred packages ./packages
 COPY --chown=alfred:alfred scripts ./scripts
+RUN corepack enable \
+  && pnpm install --prod --frozen-lockfile --filter @alfred-labs/memory-server
 # The openapi-router reads two registry files at runtime for /agents/manifest
 # and /skills/manifest. They live under .ai/ which is otherwise excluded.
 COPY --chown=alfred:alfred .ai/agents/registry.json ./.ai/agents/registry.json

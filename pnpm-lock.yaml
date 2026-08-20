@@ -68,7 +68,11 @@ importers:
 
   packages/memory-openapi: {}
 
-  packages/memory-server: {}
+  packages/memory-server:
+    dependencies:
+      pg:
+        specifier: ^8.13.0
+        version: 8.22.0
 
   packages/opencode-adapter:
     dependencies:
