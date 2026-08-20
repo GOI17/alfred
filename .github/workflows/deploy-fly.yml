@@ -41,6 +41,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+      - name: Configure test Git identity
+        run: |
+          git config --global user.name "Alfred CI"
+          git config --global user.email "ci@alfred.local"
       - name: Validate Node syntax
         # Alfred Memory v0.4.1.1 has zero external npm dependencies. There is
         # no pnpm-lock.yaml, so we skip pnpm install and instead run a syntax
