@@ -3,15 +3,15 @@
 --
 -- Each row is one embedding vector for one memory. The model is recorded
 -- so we can re-embed with a newer model if needed. The embedding is
--- stored as a BLOB (Float32Array serialized to bytes).
+-- stored as BYTEA (Float32Array serialized to bytes).
 
 CREATE TABLE IF NOT EXISTS memory_embeddings (
   memory_id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
   model TEXT NOT NULL,
   dim INTEGER NOT NULL,
-  embedding BLOB NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  embedding BYTEA NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS memory_embeddings_tenant_idx

@@ -42,7 +42,10 @@ jobs:
           node-version: "24"
       - name: Install pg
         run: cd packages/memory-server && npm install pg@^8.13.0
-      - name: Run cross-tenant isolation (real Postgres)
-        run: node --test packages/memory-server/test/cross-tenant-isolation-postgres.test.mjs
+      - name: Run migrations and cross-tenant isolation (real Postgres)
+        run: >-
+          node --test
+          packages/memory-server/test/postgres-migrations.test.mjs
+          packages/memory-server/test/cross-tenant-isolation-postgres.test.mjs
         env:
           ALFRED_TEST_POSTGRES_URL: postgres://alfred:testpass@localhost:5432/alfred_memory
