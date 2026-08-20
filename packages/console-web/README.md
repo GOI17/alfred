@@ -121,6 +121,28 @@ as static files.
    the build command and publish directory.
 3. Set the `ALFRED_API_BASE` env var in the Netlify dashboard.
 
+## Deploy on Cloudflare Pages
+
+The Alfred repository publishes the Console together with the landing page and
+documentation using `.github/workflows/cloudflare-pages-deploy.yml`. Configure
+`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` as GitHub Actions secrets,
+then set the repository variable:
+
+```text
+ALFRED_API_BASE=https://alfred-labs-memory.fly.dev
+```
+
+For a standalone Console deployment, build this package and upload `dist/`:
+
+```sh
+ALFRED_API_BASE=https://alfred-labs-memory.fly.dev npm run build
+npx wrangler pages deploy dist --project-name=alfred-console
+```
+
+Add the resulting `pages.dev` or custom-domain origin to
+`ALFRED_MEMORY_ALLOWED_ORIGINS` on the Memory server before unlocking the
+Console in a browser.
+
 ## Embedding the API key
 
 For an internal team, you can hardcode an admin key in the build so users
@@ -140,5 +162,7 @@ After deploying, set a CNAME in your DNS to point at the host:
 
 - GitHub Pages: `CNAME alfred-console.example.com -> <user>.github.io`
 - Vercel/Netlify: use their dashboard
+- Cloudflare Pages: attach the domain in Workers & Pages, then apply the DNS
+  record Cloudflare provides
 
 Then set `ALFREED_API_BASE` to `https://alfred.example.com` and re-build.

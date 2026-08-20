@@ -26,7 +26,7 @@ on:
       alfred_api_base:
         description: "Alfred Memory Server URL (where the memory console should point)"
         required: false
-        default: "http://localhost:3000"
+        default: "https://alfred-labs-memory.fly.dev"
 
 # Allow only one concurrent deploy; cancel in-flight runs on a new push.
 concurrency:
@@ -54,7 +54,7 @@ jobs:
       - name: Build memory console
         working-directory: packages/console-web
         env:
-          ALFRED_API_BASE: ${{ github.event.inputs.alfred_api_base || format('https://{0}.github.io/alfred/memory/app', github.repository_owner) }}
+          ALFRED_API_BASE: ${{ github.event.inputs.alfred_api_base || 'https://alfred-labs-memory.fly.dev' }}
         run: |
           npm run build
           mkdir -p ../../site/memory/app

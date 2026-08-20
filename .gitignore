@@ -20,6 +20,8 @@
 .pnpm-store/
 node_modules/
 packages/installer-tui/dist/
+dist/cloudflare-pages/
+dist/.cloudflare-pages-*/
 ffi_otui_*.log
 *.sqlite
 !packages/memory-server/migrations/*.sqlite
