@@ -1,0 +1,32 @@
+{
+  "event": "release_candidate_validated",
+  "release": "0.5.0",
+  "validated_commit_source": "pending",
+  "timestamp_utc": "2026-09-01",
+  "phase": "issue-118-homebrew-installation",
+  "issue": 118,
+  "branch": "issue-118-homebrew-installation",
+  "provider_calls": 0,
+  "network_operations": [
+    "github issue creation",
+    "official Homebrew documentation lookup"
+  ],
+  "local_validation": {
+    "formula_generator_tests": "4/4 pass",
+    "homebrew_contract": "pass",
+    "ruby_formula_syntax": "pass",
+    "homebrew_formula_style": "pass",
+    "pages_build": "pass",
+    "pages_check": "pass",
+    "git_diff_check": "pass"
+  },
+  "pending_external_validation": [
+    "merge release commit",
+    "create v0.5.0 tag and release",
+    "publish GOI17/homebrew-tap formula pinned to the tag commit",
+    "brew audit",
+    "brew install",
+    "brew test"
+  ],
+  "result": "candidate-pass"
+}

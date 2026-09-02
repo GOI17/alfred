@@ -4,6 +4,26 @@ Alfred handles the operational burden so humans focus on decisions.
 
 Alfred is a model-readable, harness-agnostic agent operations system for creating, testing, evaluating, securing, and porting agents, subagents, and skills.
 
+## Human Installation
+
+Collaborators with access to the private repositories can install the versioned
+CLI and guided installer through Homebrew:
+
+```sh
+gh auth login
+gh auth setup-git
+brew install GOI17/tap/alfred
+alfred version
+alfred-install
+```
+
+Use the fully qualified formula name: plain `brew install alfred` resolves to
+the unrelated Alfred macOS application cask. The formula itself writes no live
+harness configuration; `alfred-install` remains guided and preview-first.
+
+The existing `curl | sh` bootstrap remains available in the
+[install guide](https://alfred.alfredlabs.org/docs/install.html).
+
 ## Agent Entry Point
 
 You are an AI agent working in an Alfred workspace. Start here to find your next step.

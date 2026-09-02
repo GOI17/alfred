@@ -53,9 +53,11 @@
     <main class="docs-main">
       <h1>Install Alfred</h1>
       <p class="doc-lead">
-        One curl opens an app-like, human-first installer. Use arrow keys,
-        checkbox-style toggles, text inputs, and mouse clicks where supported.
-        Harness choices show installed/not-installed status and support selecting multiple targets before Alfred writes anything.
+        Homebrew installs the versioned Alfred CLI and its app-like,
+        human-first installer. The curl bootstrap remains available. Use arrow
+        keys, checkbox-style toggles, text inputs, and mouse clicks where
+        supported. Harness choices show installed/not-installed status and
+        support selecting multiple targets before Alfred writes anything.
       </p>
 
       <div class="doc-callout warn">
@@ -66,6 +68,7 @@
 
       <h2 id="requirements">Requirements</h2>
       <ul>
+        <li>Homebrew for the versioned macOS/Linux package</li>
         <li>Node.js <strong>22+</strong> (<code>node -v</code>)</li>
         <li>pnpm 10+ <em>(optional)</em> &mdash; only for monorepo development</li>
         <li>One of: opencode, Pi, Codex, Claude, VSCode</li>
@@ -79,6 +82,37 @@
         when a compatible OpenTUI artifact or runtime is unavailable, Alfred
         automatically uses its dependency-free Node terminal adapter with the
         same decisions and approval gates.
+      </div>
+
+      <h2 id="homebrew">Install with Homebrew</h2>
+      <p>
+        Alfred currently ships through a private tap. Authenticate the GitHub
+        CLI and its Git credential helper, then install the fully qualified
+        formula:
+      </p>
+      <div class="terminal" aria-label="Install Alfred with Homebrew">
+        <div class="terminal-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="title">zsh &mdash; Homebrew</span>
+        </div>
+<pre><span class="f">gh</span> auth login
+<span class="f">gh</span> auth setup-git
+<span class="f">brew</span> install GOI17/tap/alfred
+<span class="f">alfred</span> version
+<span class="f">alfred-install</span> <span class="c"># guided, preview-first configuration</span>
+
+<span class="c"># lifecycle</span>
+<span class="f">brew</span> update
+<span class="f">brew</span> upgrade GOI17/tap/alfred
+<span class="f">brew</span> uninstall GOI17/tap/alfred
+</pre>
+      </div>
+      <div class="doc-callout warn">
+        <strong>Use the full formula name.</strong> Plain
+        <code>brew install alfred</code> resolves to the unrelated Alfred macOS
+        application cask. Homebrew installs Alfred's commands but does not
+        write live harness configuration; that remains gated by
+        <code>alfred-install</code>.
       </div>
 
       <h2 id="profiles">Choose an edition</h2>
@@ -233,6 +267,9 @@ Apply changes? <span class="p">[y/N]</span>
           <span class="title">uninstall</span>
         </div>
 <pre><span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/uninstall.sh <span class="p">|</span> sh
+
+<span class="c"># Homebrew package</span>
+<span class="f">brew</span> uninstall GOI17/tap/alfred
 </pre>
       </div>
       <p>
@@ -250,6 +287,7 @@ Apply changes? <span class="p">[y/N]</span>
     <aside class="docs-toc" aria-label="On this page">
       <h6>On this page</h6>
       <a href="#requirements">Requirements</a>
+      <a href="#homebrew">Homebrew</a>
       <a href="#profiles">Editions</a>
       <a href="#coding">Coding edition</a>
       <a href="#models">Model assignment</a>

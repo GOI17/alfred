@@ -1,0 +1,49 @@
+name: homebrew
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "install.sh"
+      - "package.json"
+      - "packaging/homebrew/**"
+      - "packages/memory-server/scripts/alfred.mjs"
+      - "scripts/generate-homebrew-formula.mjs"
+      - "scripts/generate-homebrew-formula.test.mjs"
+      - "scripts/validate-homebrew.mjs"
+      - ".github/workflows/homebrew.yml"
+  pull_request:
+    paths:
+      - "install.sh"
+      - "package.json"
+      - "packaging/homebrew/**"
+      - "packages/memory-server/scripts/alfred.mjs"
+      - "scripts/generate-homebrew-formula.mjs"
+      - "scripts/generate-homebrew-formula.test.mjs"
+      - "scripts/validate-homebrew.mjs"
+      - ".github/workflows/homebrew.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Test formula generator
+        run: npm run homebrew:test
+      - name: Validate Homebrew contract
+        run: npm run validate:homebrew
+      - name: Style generated formula
+        run: |
+          brew tap-new alfred/preflight
+          node scripts/generate-homebrew-formula.mjs \
+            --version 0.5.0 \
+            --source git \
+            --revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+            --output "$(brew --repository alfred/preflight)/Formula/alfred.rb"
+          brew style alfred/preflight/alfred
