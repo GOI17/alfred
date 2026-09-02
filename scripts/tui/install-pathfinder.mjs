@@ -376,6 +376,7 @@ export function createPathfinderState(input = {}) {
     modelInspection: null,
     editing: null,
     selectedFallback: 0,
+    traceEvents: [recommendation.traceEvent],
     providerCalls: 0,
     provider_calls: 0
   };
@@ -403,9 +404,9 @@ export function controlsFor(state) {
   if (state.phase === "Review") return [
     ...(modelsApplicable(state.decisions) && state.decisions.modelStrategy === "custom-models" ? ["model-plan-review"] : []),
     ...(modelsApplicable(state.decisions) && ["smart-defaults", "custom-models"].includes(state.decisions.modelStrategy) ? ["model-approval"] : []),
-    "continue", "edit"
+    "review-apply", "review-preview", "edit", "cancel"
   ];
-  return [...(modelsApplicable(state.decisions) && ["smart-defaults", "custom-models"].includes(state.decisions.modelStrategy) ? ["model-approval"] : []), "confirm", "back"];
+  return [...(modelsApplicable(state.decisions) && ["smart-defaults", "custom-models"].includes(state.decisions.modelStrategy) ? ["model-approval"] : []), "confirm", "back", "cancel"];
 }
 
 function boundedFocus(state, focus = state.focus) { return Math.max(0, Math.min(controlsFor(state).length - 1, focus)); }
@@ -588,6 +589,29 @@ function canContinueReview(state) {
   if (state.reviewedModelRevision !== state.modelRevision || customPlanValidation(state).status !== "pass") return false;
   return state.decisions.modelStrategy !== "custom-models" || (modelPlanInspectionStatus(state).complete && state.decisions.modelWriteApproved);
 }
+function recordTraceEvent(state, event, data) {
+  return {
+    ...state,
+    traceEvents: [
+      ...(state.traceEvents || []),
+      { event, data: { ...data, provider_calls: 0 } }
+    ],
+    providerCalls: 0,
+    provider_calls: 0
+  };
+}
+function chooseReviewOutcome(state, applyIntent) {
+  if (state.phase !== "Review" || !APPLY_INTENTS.includes(applyIntent) || !canContinueReview(state)) return state;
+  const action = applyIntent === "apply-safe-steps" ? "apply-reviewed-settings" : "keep-preview-only";
+  const next = go({
+    ...state,
+    decisions: { ...state.decisions, applyIntent, apply: false }
+  }, "Apply");
+  return recordTraceEvent({ ...next, reviewVisited: true }, "installer_review_action_selected", {
+    action,
+    explicit_approval: false
+  });
+}
 function openModelPlanReview(state) {
   if (state.phase !== "Review" || state.decisions.modelStrategy !== "custom-models") return state;
   const currentInspection = state.modelInspection?.revision === state.modelRevision ? state.modelInspection : null;
@@ -649,10 +673,13 @@ function activate(state) {
   if (control === "model-plan-review") return openModelPlanReview(state);
   if (control === "model-approval") return canApproveModels(state) ? patchDecision(state, "modelWriteApproved", !state.decisions.modelWriteApproved) : state;
   if (control === "next") return transition(state, { type: "NEXT" });
+  if (control === "review-apply") return transition(state, { type: "REVIEW_DECISION", intent: "apply-safe-steps" });
+  if (control === "review-preview") return transition(state, { type: "REVIEW_DECISION", intent: "preview-only" });
   if (control === "continue") return transition(state, { type: "CONTINUE" });
   if (control === "edit") return go(state, "Configure");
   if (control === "confirm") return transition(state, { type: "CONFIRM" });
   if (control === "back") return back(state);
+  if (control === "cancel") return transition(state, { type: "CANCEL" });
   if (control === "name" || control === "path") return startInstallEditing(state, control);
   return state;
 }
@@ -765,16 +792,20 @@ export function transition(state, action = {}) {
   if (action.type === "EDIT" && state.phase === "Review") return go(state, "Configure");
   if (action.type === "NEXT" && state.phase === "Choose") return go(state, "Configure");
   if (action.type === "NEXT" && state.phase === "Configure") return { ...go(state, "Review"), reviewedModelRevision: state.modelRevision };
-  if (action.type === "CONTINUE" && state.phase === "Review" && canContinueReview(state)) return { ...go(state, "Apply"), reviewVisited: true };
+  if (action.type === "REVIEW_DECISION") return chooseReviewOutcome(state, action.intent);
+  if (action.type === "CONTINUE" && state.phase === "Review") return chooseReviewOutcome(state, state.decisions.applyIntent);
   if (action.type === "CONFIRM" && state.phase === "Apply" && state.reviewVisited && canContinueReview(state)) {
     const apply = state.decisions.applyIntent === "apply-safe-steps";
-    return {
+    return recordTraceEvent({
       ...state,
       decisions: { ...state.decisions, apply, modelWriteApproved: apply && state.decisions.modelWriteApproved },
       done: true,
       providerCalls: 0,
       provider_calls: 0
-    };
+    }, "installer_review_action_confirmed", {
+      action: apply ? "apply-reviewed-settings" : "keep-preview-only",
+      explicit_approval: apply
+    });
   }
   if (action.type === "INPUT" && state.compatibilityPlayback && state.phase === "Configure") {
     const control = controlsFor(state)[boundedFocus(state)];
@@ -984,8 +1015,10 @@ function bodyEntries(state) {
     else if (d.modelStrategy === "custom-models" && !d.modelWriteApproved) entries.push({ text: "Continue is blocked until the inspected current revision is explicitly approved.", tone: "blocker" });
     const continueReady = canContinueReview(state);
     entries.push(
-      { text: `${marker(focus === "continue")} ${continueReady ? "Continue to Apply confirmation" : "Continue blocked by model review"}`, action: { type: "CONTINUE" }, focused: focus === "continue", tone: continueReady ? "normal" : "blocker" },
-      { text: `${marker(focus === "edit")} Edit configuration`, action: { type: "EDIT" }, focused: focus === "edit" }
+      { text: `${marker(focus === "review-apply")} ${continueReady ? "Accept & apply reviewed settings" : "Apply blocked by model review"}`, action: { type: "REVIEW_DECISION", intent: "apply-safe-steps" }, focused: focus === "review-apply", tone: continueReady ? "approval" : "blocker" },
+      { text: `${marker(focus === "review-preview")} ${continueReady ? "Keep preview only (write nothing)" : "Preview blocked by model review"}`, action: { type: "REVIEW_DECISION", intent: "preview-only" }, focused: focus === "review-preview", tone: continueReady ? "safe" : "blocker" },
+      { text: `${marker(focus === "edit")} Edit settings / back`, action: { type: "EDIT" }, focused: focus === "edit" },
+      { text: `${marker(focus === "cancel")} Cancel setup`, action: { type: "CANCEL" }, focused: focus === "cancel", tone: "safe" }
     );
     return entries;
   }
@@ -999,7 +1032,8 @@ function bodyEntries(state) {
   });
   entries.push(
     { text: `${marker(focus === "confirm")} ${canContinueReview(state) ? `Confirm ${LABELS.intents[d.applyIntent]}` : "Confirm blocked by model review"}`, action: { type: "CONFIRM" }, focused: focus === "confirm", tone: canContinueReview(state) ? "normal" : "blocker" },
-    { text: `${marker(focus === "back")} Back to Review`, action: { type: "BACK" }, focused: focus === "back" }
+    { text: `${marker(focus === "back")} Back to Review`, action: { type: "BACK" }, focused: focus === "back" },
+    { text: `${marker(focus === "cancel")} Cancel setup`, action: { type: "CANCEL" }, focused: focus === "cancel", tone: "safe" }
   );
   return entries;
 }

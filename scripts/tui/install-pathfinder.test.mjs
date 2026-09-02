@@ -208,8 +208,8 @@ invalidReview = transition(invalidReview, { type: "PATCH", key: "modelStrategy",
 invalidReview = transition(invalidReview, { type: "NEXT" });
 invalidReview = focusControl(invalidReview, "model-approval");
 assert.equal(transition(invalidReview, { type: "ACTIVATE" }).decisions.modelWriteApproved, false, "approval is unavailable for an invalid custom plan");
-invalidReview = focusControl(invalidReview, "continue");
-assert.equal(transition(invalidReview, { type: "ACTIVATE" }).phase, "Review", "invalid custom Review cannot continue");
+invalidReview = focusControl(invalidReview, "review-apply");
+assert.equal(transition(invalidReview, { type: "ACTIVATE" }).phase, "Review", "invalid custom Review cannot apply");
 const invalidApply = { ...invalidReview, phase: "Apply", reviewVisited: true };
 assert.equal(transition(focusControl(invalidApply, "confirm"), { type: "ACTIVATE" }).done, false, "invalid custom Apply cannot confirm");
 
@@ -228,7 +228,7 @@ assert.equal(revisionState.decisions.modelWriteApproved, true);
 revisionState = transition(revisionState, { type: "PATCH", key: "modelWildcard", value: "provider/changed" });
 assert.equal(revisionState.decisions.modelWriteApproved, false, "any model edit clears approval");
 assert.equal(revisionState.reviewedModelRevision, null, "any model edit invalidates Review binding");
-assert.equal(transition(focusControl(revisionState, "continue"), { type: "ACTIVATE" }).phase, "Review", "stale Review cannot continue");
+assert.equal(transition(focusControl(revisionState, "review-apply"), { type: "ACTIVATE" }).phase, "Review", "stale Review cannot apply");
 
 let approvedCustom = { ...revisionState, phase: "Configure" };
 approvedCustom = transition(approvedCustom, { type: "NEXT" });
@@ -236,7 +236,7 @@ approvedCustom = inspectExactPlan(approvedCustom);
 approvedCustom = focusControl(approvedCustom, "model-approval");
 approvedCustom = transition(approvedCustom, { type: "ACTIVATE" });
 approvedCustom = transition(approvedCustom, { type: "PATCH", key: "applyIntent", value: "apply-safe-steps" });
-approvedCustom = focusControl(approvedCustom, "continue");
+approvedCustom = focusControl(approvedCustom, "review-apply");
 approvedCustom = transition(approvedCustom, { type: "ACTIVATE" });
 approvedCustom = focusControl(approvedCustom, "confirm");
 approvedCustom = transition(approvedCustom, { type: "ACTIVATE" });
@@ -281,19 +281,19 @@ inspectedPlan = transition(inspectedPlan, { type: "CLOSE_OVERLAY" });
 assert.match(modelPlanInspectionStatus(inspectedPlan).label, /^pages 1\//);
 inspectedPlan = focusControl(inspectedPlan, "model-approval");
 assert.equal(transition(inspectedPlan, { type: "ACTIVATE" }).decisions.modelWriteApproved, false, "approval is unavailable after viewing only one page");
-inspectedPlan = focusControl(inspectedPlan, "continue");
-assert.equal(transition(inspectedPlan, { type: "ACTIVATE" }).phase, "Review", "Continue is blocked before every exact page and approval");
+inspectedPlan = focusControl(inspectedPlan, "review-apply");
+assert.equal(transition(inspectedPlan, { type: "ACTIVATE" }).phase, "Review", "Apply is blocked before every exact page and approval");
 inspectedPlan = focusControl(inspectedPlan, "model-plan-review");
 inspectedPlan = transition(inspectedPlan, { type: "ACTIVATE" });
 for (let page = 1; page < modelPlanInspectionStatus(inspectedPlan).totalPages; page += 1) inspectedPlan = transition(inspectedPlan, { type: "PAGE", delta: 1, pageSize: 5 });
 assert.equal(modelPlanInspectionStatus(inspectedPlan).label, "inspected", "all exact pages viewed marks the current revision inspected");
 inspectedPlan = transition(inspectedPlan, { type: "CLOSE_OVERLAY" });
-inspectedPlan = focusControl(inspectedPlan, "continue");
+inspectedPlan = focusControl(inspectedPlan, "review-apply");
 assert.equal(transition(inspectedPlan, { type: "ACTIVATE" }).phase, "Review", "fully inspected custom Review still requires explicit approval");
 inspectedPlan = focusControl(inspectedPlan, "model-approval");
 inspectedPlan = transition(inspectedPlan, { type: "ACTIVATE" });
 assert.equal(inspectedPlan.decisions.modelWriteApproved, true);
-inspectedPlan = focusControl(inspectedPlan, "continue");
+inspectedPlan = focusControl(inspectedPlan, "review-apply");
 assert.equal(transition(inspectedPlan, { type: "ACTIVATE" }).phase, "Apply");
 const inspectedRevision = inspectedPlan.modelRevision;
 inspectedPlan = transition(inspectedPlan, { type: "PATCH", key: "modelDeveloper", value: " provider/changed " });
@@ -365,11 +365,44 @@ let quick = createPathfinderState({ current: {}, harnessStatus: { opencode: "ins
 quick = transition(quick, { type: "USE_RECOMMENDED" });
 assert.equal(quick.phase, "Review");
 assert.equal(quick.decisions.apply, false);
-quick = transition(quick, { type: "CONTINUE" });
+const reviewScreen = render(quick, { columns: 80, rows: 24, color: false }).text;
+assert.match(reviewScreen, /Accept & apply reviewed settings/);
+assert.match(reviewScreen, /Keep preview only \(write nothing\)/);
+assert.match(reviewScreen, /Edit settings \/ back/);
+assert.match(reviewScreen, /Cancel setup/);
+quick = transition(quick, { type: "REVIEW_DECISION", intent: "apply-safe-steps" });
 assert.equal(quick.phase, "Apply");
+assert.equal(quick.decisions.apply, false, "review selection cannot apply before final confirmation");
+assert.equal(quick.decisions.applyIntent, "apply-safe-steps");
+assert.deepEqual(quick.traceEvents.at(-1), {
+  event: "installer_review_action_selected",
+  data: { action: "apply-reviewed-settings", explicit_approval: false, provider_calls: 0 }
+});
+const returnedReview = transition(focusControl(quick, "back"), { type: "ACTIVATE" });
+assert.equal(returnedReview.phase, "Review");
+assert.equal(returnedReview.decisions.applyIntent, "apply-safe-steps", "Back preserves the selected review outcome");
 quick = transition(quick, { type: "CONFIRM" });
 assert.equal(quick.done, true);
-assert.equal(quick.decisions.apply, false);
+assert.equal(quick.decisions.apply, true);
+assert.deepEqual(quick.traceEvents.at(-1), {
+  event: "installer_review_action_confirmed",
+  data: { action: "apply-reviewed-settings", explicit_approval: true, provider_calls: 0 }
+});
+
+let previewOnly = transition(createPathfinderState(), { type: "USE_RECOMMENDED" });
+previewOnly = transition(previewOnly, { type: "REVIEW_DECISION", intent: "preview-only" });
+assert.equal(previewOnly.phase, "Apply");
+previewOnly = transition(previewOnly, { type: "CONFIRM" });
+assert.equal(previewOnly.done, true);
+assert.equal(previewOnly.decisions.apply, false);
+assert.deepEqual(previewOnly.traceEvents.at(-1), {
+  event: "installer_review_action_confirmed",
+  data: { action: "keep-preview-only", explicit_approval: false, provider_calls: 0 }
+});
+
+const compatibleContinue = transition(transition(createPathfinderState(), { type: "USE_RECOMMENDED" }), { type: "CONTINUE" });
+assert.equal(compatibleContinue.phase, "Apply", "legacy CONTINUE uses the existing execution intent");
+assert.equal(compatibleContinue.decisions.applyIntent, "preview-only");
 
 let custom = createPathfinderState();
 custom = transition(custom, { type: "CUSTOMIZE" });
@@ -449,12 +482,23 @@ assert.equal(transition(chooseNext, { type: "ACTIVATE" }).phase, "Configure", "E
 const configureNext = focusControl({ ...createPathfinderState({ discovery }), phase: "Configure" }, "next");
 assert.equal(transition(configureNext, { type: "CHANGE", delta: -1 }).phase, "Configure", "Left does not activate Configure Continue");
 assert.equal(transition(configureNext, { type: "ACTIVATE" }).phase, "Review", "Enter activates Configure Continue");
-const reviewContinue = focusControl(transition(createPathfinderState({ discovery }), { type: "USE_RECOMMENDED" }), "continue");
-assert.equal(transition(reviewContinue, { type: "CHANGE", delta: 1 }).phase, "Review", "Right does not activate Review Continue");
-assert.equal(transition(reviewContinue, { type: "ACTIVATE" }).phase, "Apply", "Enter activates Review Continue");
-const applyConfirm = focusControl(transition(reviewContinue, { type: "ACTIVATE" }), "confirm");
+const reviewApply = focusControl(transition(createPathfinderState({ discovery }), { type: "USE_RECOMMENDED" }), "review-apply");
+assert.equal(transition(reviewApply, { type: "CHANGE", delta: 1 }).phase, "Review", "Right does not activate Review Apply");
+const selectedApply = transition(reviewApply, { type: "ACTIVATE" });
+assert.equal(selectedApply.phase, "Apply", "Enter selects Apply from Review");
+assert.equal(selectedApply.decisions.applyIntent, "apply-safe-steps");
+const applyConfirm = focusControl(selectedApply, "confirm");
 assert.equal(transition(applyConfirm, { type: "CHANGE", delta: -1 }).done, false, "Left does not confirm Apply");
 assert.equal(transition(applyConfirm, { type: "ACTIVATE" }).done, true, "Enter confirms Apply");
+
+const reviewPreview = focusControl(transition(createPathfinderState(), { type: "USE_RECOMMENDED" }), "review-preview");
+assert.equal(transition(reviewPreview, { type: "ACTIVATE" }).decisions.applyIntent, "preview-only", "Review keeps preview-only explicit");
+const reviewEdit = focusControl(transition(createPathfinderState(), { type: "USE_RECOMMENDED" }), "edit");
+assert.equal(transition(reviewEdit, { type: "ACTIVATE" }).phase, "Configure", "Review can return to edit settings");
+const reviewCancel = focusControl(transition(createPathfinderState(), { type: "USE_RECOMMENDED" }), "cancel");
+assert.equal(transition(reviewCancel, { type: "ACTIVATE" }).cancelled, true, "Review exposes cancel");
+const applyCancel = focusControl(selectedApply, "cancel");
+assert.equal(transition(applyCancel, { type: "ACTIVATE" }).cancelled, true, "Apply confirmation exposes cancel");
 
 const modelApproval = focusControl(transition(createPathfinderState({ discovery }), { type: "USE_RECOMMENDED" }), "model-approval");
 for (const delta of [-1, 1]) {

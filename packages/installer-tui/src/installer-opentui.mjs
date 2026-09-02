@@ -438,12 +438,20 @@ function reviewRows(state) {
     section("Decision"),
     actionRow(
       state,
-      "continue",
-      ready ? "Continue to explicit confirmation  →" : "Continue blocked — complete required review",
-      { type: "CONTINUE" },
-      ready ? "blue" : "red"
+      "review-apply",
+      ready ? "Accept & apply reviewed settings  →" : "Apply blocked — complete required review",
+      { type: "REVIEW_DECISION", intent: "apply-safe-steps" },
+      ready ? "yellow" : "red"
     ),
-    actionRow(state, "edit", "Edit configuration", { type: "EDIT" })
+    actionRow(
+      state,
+      "review-preview",
+      ready ? "Keep preview only · write nothing  →" : "Preview blocked — complete required review",
+      { type: "REVIEW_DECISION", intent: "preview-only" },
+      ready ? "green" : "red"
+    ),
+    actionRow(state, "edit", "Edit settings / back", { type: "EDIT" }),
+    actionRow(state, "cancel", "Cancel setup", { type: "CANCEL" }, "green")
   );
   return rows;
 }
@@ -484,7 +492,8 @@ function applyRows(state) {
       { type: "CONFIRM" },
       ready ? (apply ? "yellow" : "green") : "red"
     ),
-    actionRow(state, "back", "Back to Review", { type: "BACK" })
+    actionRow(state, "back", "Back to Review", { type: "BACK" }),
+    actionRow(state, "cancel", "Cancel setup", { type: "CANCEL" }, "green")
   );
   return rows;
 }

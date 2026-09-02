@@ -98,6 +98,22 @@ test("marks user overrides separately from suggested values", () => {
   assert.match(view.main.rows.map(({ text }) => text).join("\n"), /\[chosen\]/);
 });
 
+test("keeps the final settings decision inside Review with explicit actions", () => {
+  const review = transition(createInstallerState({}), { type: "USE_RECOMMENDED" });
+  const view = openTuiViewForState(review, { columns: 120, rows: 30 });
+  const text = view.main.rows.map(({ text }) => text).join("\n");
+  assert.equal(view.state.phase, "Review");
+  assert.match(text, /Accept & apply reviewed settings/);
+  assert.match(text, /Keep preview only/);
+  assert.match(text, /Edit settings \/ back/);
+  assert.match(text, /Cancel setup/);
+
+  const selected = transition(review, { type: "REVIEW_DECISION", intent: "apply-safe-steps" });
+  assert.equal(selected.phase, "Apply");
+  assert.equal(selected.done, false, "review selection does not bypass final confirmation");
+  assert.equal(selected.decisions.apply, false);
+});
+
 test("serializes the established app TUI contract", () => {
   const state = {
     ...createInstallerState({}),

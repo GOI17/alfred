@@ -722,7 +722,7 @@ printf '%s\\n' "EDITION='coding'" "HARNESS='none'" "PROFILE_STRATEGY='runtime-pr
     env: {
       ...process.env,
       ALFRED_INSTALL_HARNESS_STATUS: "opencode=installed,codex-cli=not-installed,codex-app=installed,pi=not-installed",
-      ALFRED_INSTALL_APP_TUI_EVENTS: "r,enter,enter"
+      ALFRED_INSTALL_APP_TUI_EVENTS: "r,down,enter,enter"
     },
     encoding: "utf8"
   });
@@ -730,6 +730,30 @@ printf '%s\\n' "EDITION='coding'" "HARNESS='none'" "PROFILE_STRATEGY='runtime-pr
   assert.match(guidedQuickPath.stdout, /HARNESS='opencode,codex-app'/);
   assert.match(guidedQuickPath.stdout, /APPLY='false'/);
   assert.match(guidedQuickPath.stdout, /TUI_MODE='app'/);
+
+  const guidedApplyFromReview = spawnSync("node", [appTui], {
+    cwd,
+    env: {
+      ...process.env,
+      ALFRED_INSTALL_HARNESS_STATUS: "opencode=installed,codex-cli=not-installed,codex-app=not-installed,pi=not-installed",
+      ALFRED_INSTALL_APP_TUI_EVENTS: "r,enter,enter"
+    },
+    encoding: "utf8"
+  });
+  assert.equal(guidedApplyFromReview.status, 0, guidedApplyFromReview.stderr);
+  assert.match(guidedApplyFromReview.stdout, /APPLY='true'/, "Review exposes an explicit apply path");
+  assert.match(guidedApplyFromReview.stdout, /TUI_MODE='app'/);
+
+  const guidedCancelFromReview = spawnSync("node", [appTui], {
+    cwd,
+    env: {
+      ...process.env,
+      ALFRED_INSTALL_APP_TUI_EVENTS: "r,down,down,down,enter"
+    },
+    encoding: "utf8"
+  });
+  assert.equal(guidedCancelFromReview.status, 130, guidedCancelFromReview.stderr);
+  assert.equal(guidedCancelFromReview.stdout, "", "Review cancellation emits no result assignments");
 
   const guidedCustomizePath = spawnSync("node", [appTui], {
     cwd,
