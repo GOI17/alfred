@@ -84,14 +84,14 @@ source or release assets publicly remains a separate human decision.
 ## Completion conditions
 
 - [x] Formula generator tests pass.
-- [ ] Suite installer regression validation passes.
+- [x] Suite installer regression validation passes.
 - [x] `alfred version` reports `0.5.0` from the packaged manifest.
-- [ ] The private formula passes `brew audit`, installation, and `brew test`.
-- [ ] `alfred-install` previews the packaged version without cloning or live
+- [x] The private formula passes `brew audit`, installation, and `brew test`.
+- [x] `alfred-install` previews the packaged version without cloning or live
       harness writes.
 - [x] Private tap documentation explains authentication and the cask collision.
-- [ ] `GOI17/homebrew-tap` contains the verified formula.
-- [ ] Release and operation traces report `provider_calls: 0`.
+- [x] `GOI17/homebrew-tap` contains the verified formula.
+- [x] Release and operation traces report `provider_calls: 0`.
 
 ## References
 
