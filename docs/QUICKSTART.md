@@ -106,10 +106,13 @@ the same port (no CORS needed).
 ### ChatGPT (Plus / Pro / Enterprise)
 
 1. Open <https://chat.openai.com/gpts/editor> → Create a GPT.
-2. Configure → Actions → **Import OpenAPI** → upload
-   `~/.alfred/packages/chatgpt-adapter/openapi.json`.
-3. Authentication: **API Key** · **Bearer** · paste your `alk_...` key.
-4. Save, then in the GPT Builder test: "list my last 5 memories".
+2. Configure → Actions → **Import OpenAPI** → import
+   `https://alfred-labs-memory.fly.dev/openapi.yaml`.
+3. Authentication: **OAuth** using `/oauth/authorize`, `/oauth/token`, and
+   scopes `memory:read memory:write` from the same server.
+4. Save, choose **Sign in**, and enter your `alk_...` key only on Alfred's
+   consent page.
+5. In the GPT Builder test: "list my last 5 memories".
 
 ### Claude Desktop
 

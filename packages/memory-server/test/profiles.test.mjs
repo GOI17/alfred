@@ -99,7 +99,9 @@ test("nextStepsFor: web returns ChatGPT/Claude/Gemini steps", () => {
   assert.match(text, /Claude/);
   assert.match(text, /Gemini/);
   assert.match(text, /alk_xyz/);
-  assert.match(text, /openapi\.json/);
+  assert.match(text, /openapi\.yaml/);
+  assert.match(text, /Auth: OAuth/);
+  assert.doesNotMatch(text, /chatgpt-adapter\/src\/bridge/);
 });
 
 test("nextStepsFor: both includes both", () => {

@@ -104,6 +104,7 @@ export function createApp({
   config,
   consoleRouter,        // optional: created via createConsoleRouter
   openapiRouter,        // optional: created via createOpenapiRouter (v0.4.1)
+  oauthRouter,          // optional: OAuth 2.0 authorization/token endpoints
   registry = null       // v0.3.1: pass-through for /console/api/bootstrap
 }) {
   return async function app(req, res) {
@@ -139,10 +140,15 @@ export function createApp({
       }
     }
 
+    if (oauthRouter && url.pathname.startsWith("/oauth/")) {
+      return oauthRouter(req, res);
+    }
+
     if (openapiRouter && (
       url.pathname === "/health" ||
       url.pathname === "/agents/manifest" ||
       url.pathname === "/skills/manifest" ||
+      url.pathname === "/openapi.yaml" ||
       url.pathname === "/policies/check" ||
       url.pathname === "/search" ||
       url.pathname === "/memories" ||

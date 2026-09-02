@@ -1,10 +1,14 @@
-import { test } from "node:test";
+import { test as nodeTest } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 const { run: init } = await import("../scripts/init.mjs");
+
+// These tests temporarily replace process stdout/stderr and environment
+// variables, so they must not overlap inside the same process.
+const test = (name, fn) => nodeTest(name, { concurrency: false }, fn);
 
 function withFreshRegistry(fn) {
   const dir = mkdtempSync(join(tmpdir(), "alfred-init-"));
@@ -140,11 +144,15 @@ test("init unknown profile returns 2", async () => {
 // Helpers
 async function runWithCapture(fn, args) {
   const out = captureStderr();
-  const code = await Promise.resolve(fn(args)).catch((err) => {
-    out.err += err.message;
-    return 1;
-  });
-  return { code, output: out.all() };
+  try {
+    const code = await Promise.resolve(fn(args)).catch((err) => {
+      out.appendError(err.message);
+      return 1;
+    });
+    return { code, output: out.all() };
+  } finally {
+    out.restore();
+  }
 }
 function captureStderr() {
   let buf = "";
@@ -156,7 +164,12 @@ function captureStderr() {
   return {
     get err() { return buf; },
     get out() { return stdoutBuf; },
-    all() { return stdoutBuf + buf; }
+    appendError(message) { buf += String(message); },
+    all() { return stdoutBuf + buf; },
+    restore() {
+      process.stderr.write = origErr;
+      process.stdout.write = origOut;
+    }
   };
 }
 function extractJson(text) {
