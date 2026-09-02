@@ -19,4 +19,12 @@ for (const r of required) {
     process.exit(1);
   }
 }
+
+const declaredIds = new Set([...text.matchAll(/\bid=["']([^"']+)["']/g)].map((match) => match[1]));
+const referencedIds = new Set([...text.matchAll(/getElementById\(["']([^"']+)["']\)/g)].map((match) => match[1]));
+const missingIds = [...referencedIds].filter((id) => !declaredIds.has(id));
+if (missingIds.length > 0) {
+  console.error("JavaScript references missing HTML id(s): " + missingIds.join(", "));
+  process.exit(1);
+}
 console.log("src/index.html OK (" + text.length + " bytes)");
