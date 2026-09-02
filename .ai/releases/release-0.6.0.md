@@ -25,8 +25,15 @@ standalone command must use `alfred setup`.
 - CLI setup preview: pass.
 - Formula generator and contract tests: pass.
 - Generated formula style: pass.
-- Homebrew strict audit, upgrade, and test: pending release publication.
+- Homebrew strict audit, 0.5.0 to 0.6.0 upgrade, and test: pass.
+- `alfred version`: `alfred 0.6.0`.
+- Packaged `alfred setup` preview: pass; no files written.
+- Removed command check: `alfred-install` is absent from `PATH`.
 - Provider calls: 0.
+
+The formula is pinned to
+`GOI17/alfred@6f6a4da5964f1b0cc77c6b27813258269d7abfa9` and published at
+`GOI17/homebrew-tap@16de4548f4b3c884f293d1c16015f132a9b6a900`.
 
 ## Traceability
 
