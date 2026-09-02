@@ -3,7 +3,9 @@
 The Alfred Memory Server is the **self-hosted** deployment shape of Alfred Memory. It exposes:
 
 - `/memories` — CRUD for the durable memory store.
-- `/memories/search` — text search.
+- `/search` — keyword/semantic/hybrid search.
+- `/oauth/authorize` and `/oauth/token` — direct ChatGPT OAuth flow.
+- `/openapi.yaml` — canonical ChatGPT Actions schema.
 - `/policy` — run hosting-policy validation against the registry.
 - `/health` — liveness probe.
 - `/tenants` — list tenants registered to this installation.
@@ -33,7 +35,8 @@ ALFRED_MEMORY_ALLOWED_ORIGINS=https://chat.openai.com,https://claude.ai \
 Required:
 
 - `ALFRED_MEMORY_TLS_CERT` and `ALFRED_MEMORY_TLS_KEY` pointing to valid files.
-- API key in `Authorization: Bearer alk_...` header for every non-public route.
+- API key (`alk_...`) or OAuth access token (`alo_...`) in the standard
+  `Authorization: Bearer` header for every non-public route.
 - At least one origin in `ALFRED_MEMORY_ALLOWED_ORIGINS` for browser clients (Custom GPT, Claude web).
 
 ## CLI
@@ -100,6 +103,14 @@ Test counts:
 | `ALFRED_MEMORY_TLS_KEY` | none | **yes** |
 | `ALFRED_MEMORY_ALLOWED_ORIGINS` | none | optional (comma-separated) |
 | `ALFRED_MEMORY_REGISTRY` | `~/.alfred/registry.sqlite` | optional |
+| `ALFRED_PUBLIC_URL` | none | yes when OAuth is enabled |
+| `ALFRED_OAUTH_CLIENT_ID` | none | yes when OAuth is enabled |
+| `ALFRED_OAUTH_CLIENT_SECRET` | none | yes when OAuth is enabled; 32+ characters |
+| `ALFRED_OAUTH_REDIRECT_URIS` | none | yes when OAuth is enabled; comma-separated exact URLs |
+
+OAuth remains disabled when all three `ALFRED_OAUTH_*` settings are absent.
+Supplying only part of the OAuth configuration fails startup rather than
+falling back to an insecure mode.
 
 ## Web console
 

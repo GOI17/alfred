@@ -40,6 +40,9 @@ ALFRED_SMTP_FROM=alfred@YOUR_DOMAIN
 ALFRED_TURNSTILE_SITE_KEY=...                                             # optional
 ALFRED_TURNSTILE_SECRET_KEY=...
 ALFRED_PUBLIC_URL=https://YOUR_DOMAIN
+ALFRED_OAUTH_CLIENT_ID=alfred-chatgpt
+ALFRED_OAUTH_CLIENT_SECRET=<random value of at least 32 characters>
+ALFRED_OAUTH_REDIRECT_URIS=https://chatgpt.com/aip/g-YOUR-GPT-ID/oauth/callback,https://chat.openai.com/aip/g-YOUR-GPT-ID/oauth/callback
 ```
 
 `ALFRED_MEMORY_ALLOWED_ORIGINS` must include the ChatGPT origins for the
@@ -54,32 +57,8 @@ curl https://YOUR_DOMAIN/health
 
 ## 2. Serve the OpenAPI document
 
-The GPT fetches the OpenAPI schema from a public URL. The cleanest path is to
-add a static file route. The simplest implementation is to copy
-`packages/memory-openapi/openapi.yaml` to your web root and let your reverse
-proxy serve it:
-
-```nginx
-# /etc/nginx/sites-enabled/alfred
-server {
-  listen 443 ssl;
-  server_name YOUR_DOMAIN;
-
-  ssl_certificate     /etc/letsencrypt/live/YOUR_DOMAIN/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/YOUR_DOMAIN/privkey.pem;
-
-  location = /openapi.yaml {
-    root /opt/alfred/console/dist;     # copy openapi.yaml here
-    add_header Content-Type application/yaml;
-  }
-
-  location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $remote_addr;
-  }
-}
-```
+Alfred serves the canonical schema directly from `/openapi.yaml`; no static
+copy or bridge process is needed.
 
 Verify:
 
@@ -105,18 +84,21 @@ In ChatGPT:
    - Capabilities: **disable** Web Browsing, DALL·E, and Code Interpreter.
 3. **Actions** tab:
    - **Create new action**.
-   - Schema: paste the full contents of
-     `packages/memory-openapi/openapi.yaml`, OR set "Authentication" to
-     "None" and the "URL" field to `https://YOUR_DOMAIN/openapi.yaml` (ChatGPT
-     will fetch it).
+   - Schema: import `https://YOUR_DOMAIN/openapi.yaml` or paste the full
+     contents of `packages/memory-openapi/openapi.yaml`.
    - Authentication:
-     - Type: **API Key**
-     - Auth Type: **Bearer**
-     - (Or, if ChatGPT does not let you use Bearer, use **Custom** with
-       header name `Authorization` and value template `Bearer {{alfred_api_key}}`.)
+     - Type: **OAuth**
+     - Client ID: the same value as `ALFRED_OAUTH_CLIENT_ID`
+     - Client secret: the same value as `ALFRED_OAUTH_CLIENT_SECRET`
+     - Authorization URL: `https://YOUR_DOMAIN/oauth/authorize`
+     - Token URL: `https://YOUR_DOMAIN/oauth/token`
+     - Scope: `memory:read memory:write`
+   - Save the Action and copy the callback URLs shown by ChatGPT. Add those
+     exact URLs to `ALFRED_OAUTH_REDIRECT_URIS`, then restart Alfred. Both
+     current callback host variants may be allowlisted; do not use wildcards.
    - Click **Test** and verify the schema loads with all 10 operationIds:
-     `healthCheck, listAgents, listSkills, checkPolicy, searchMemoriesV2,
-     searchMemories, listMemories, createMemory, updateMemory, deleteMemory`.
+     `healthCheck, listAgents, listSkills, checkPolicy, searchMemories,
+     listMemories, getMemory, createMemory, updateMemory, deleteMemory`.
 4. Save the GPT. Test it with the conversation starters.
 
 ## 4. Publish to the GPT Store
@@ -135,13 +117,13 @@ In ChatGPT:
 
 ## 5. Rotation & secrets
 
-The GPT's API key is stored in ChatGPT's GPT configuration. If the user
-suspects the key leaked:
+The tenant API key is entered only on Alfred's consent page; it is not stored
+in the GPT configuration. If a user suspects the key leaked:
 
 ```sh
 # User-side: open https://YOUR_DOMAIN/console, click "Rotate my key".
 # This revokes the old key and issues a new alk_ key via email.
-# Then update the GPT's auth in the GPT editor.
+# Then choose Sign in on the GPT Action and authorize with the new key.
 ```
 
 Operators can also rotate any tenant's key directly:
@@ -157,7 +139,7 @@ sqlite3 ~/.alfred/registry.sqlite \
 |---|---|
 | `POST /console/api/bootstrap` | 5 per IP per 60 min (v0.3.1) |
 | `POST /console/api/recover`   | 3 per IP per hour (v0.4.0) |
-| All other `GET/POST/PATCH/DELETE` (Custom GPT Actions) | 100 per API key per 60 min (v0.4.1) |
+| All other `GET/POST/PATCH/DELETE` (Custom GPT Actions) | 100 per Bearer credential per 60 min (v0.4.1) |
 
 A 429 response includes a `Retry-After` header. The GPT's system prompt
 instructs it to surface the rate-limit message to the user.
@@ -169,7 +151,7 @@ instructs it to surface the rate-limit message to the user.
 - It cannot run skills locally. (That's v0.5.0.)
 - It cannot execute local code. (Disabled at the GPT capability level.)
 - It cannot read other tenants' memories. (Blocked by `policies/check` and
-  by the per-tenant API key.)
+  by the per-tenant OAuth access token.)
 
 If the user wants those, point them at the CLI:
 [`packages/memory-server/scripts/alfred.mjs`](../../packages/memory-server/scripts/alfred.mjs).

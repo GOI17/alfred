@@ -323,17 +323,14 @@ export function recommend({ current = {}, harnessStatus = {}, discovery: discove
   const memorySeed = current.memorySetup ?? current.memory;
   const profileStrategy = edition === "memory" ? "not-needed-for-memory-edition" : PROFILE_STRATEGIES.includes(profileSeed) ? profileSeed : "runtime-profiles";
   const memorySetup = edition === "coding" ? "not-needed-for-coding-edition" : MEMORY_SETUPS.some((item) => item.value === memorySeed) ? memorySeed : "decide-later";
-  const hasExistingModels = discovery.install.models_config_exists || discovery.models.existing_config;
-  const hasSmartDefaults = discovery.models.validation.status === "pass" && Boolean(discovery.models.proposed_config["*"]?.primary);
-  const modelStrategy = hasExistingModels ? "keep-existing" : hasSmartDefaults ? "smart-defaults" : "configure-later";
   const decisions = {
     edition,
     selectedHarnesses,
     profileStrategy,
     memorySetup,
-    modelStrategy,
+    modelStrategy: "configure-later",
     modelWriteApproved: false,
-    customModels: customModelsFromConfig(discovery.models.proposed_config),
+    customModels: customModelsFromConfig(),
     name: sanitizeTerminalText(current.name || "acme"),
     targetPath: sanitizeTerminalText(current.targetPath ?? current.path ?? ""),
     applyIntent: "preview-only",
@@ -344,7 +341,6 @@ export function recommend({ current = {}, harnessStatus = {}, discovery: discove
     explicitHarness ? "harness-explicit-selection" : selectedHarnesses.length ? "harness-installed-auto" : "harness-none-installed",
     edition === "memory" ? "profiles-not-needed" : profileSeed === "decide-later" ? "profiles-current-value" : "profiles-runtime-default",
     edition === "coding" ? "memory-not-needed" : MEMORY_SETUPS.some((item) => item.value === memorySeed) ? "memory-current-value" : "memory-decide-later-default",
-    hasExistingModels ? "models-keep-existing" : hasSmartDefaults ? "models-smart-defaults" : "models-configure-later",
     "execution-preview-default"
   ];
   return freezeRecommendation({
@@ -382,16 +378,26 @@ export function createPathfinderState(input = {}) {
   };
 }
 
-function modelsApplicable(decisions) { return decisions.edition !== "memory"; }
+// Model assignment is intentionally outside alfred setup. Keep the dormant
+// model helpers in this module for compatibility, but never expose the step.
+function modelsApplicable() { return false; }
 function memoryApplicable(decisions) { return decisions.edition !== "coding"; }
 function profilesApplicable(decisions) { return decisions.edition !== "memory"; }
 
+function withoutSetupModelAssignment(state) {
+  const legacyOverlay = ["model-editor", "model-plan-review"].includes(state.overlay?.type);
+  const legacyEditing = state.editing?.kind === "model";
+  const legacyDecision = state.decisions.modelStrategy !== "configure-later" || state.decisions.modelWriteApproved;
+  if (!legacyOverlay && !legacyEditing && !legacyDecision) return state;
+  return {
+    ...state,
+    overlay: legacyOverlay ? null : state.overlay,
+    editing: legacyEditing ? null : state.editing,
+    decisions: { ...state.decisions, modelStrategy: "configure-later", modelWriteApproved: false }
+  };
+}
+
 export function controlsFor(state) {
-  if (state.overlay?.type === "model-editor") return [
-    "model:wildcard", "model:orchestrator", "model:developer",
-    ...state.decisions.customModels.fallbacks.map((_, index) => `model:fallback:${index}`),
-    "fallback-add", "fallback-remove", "fallback-up", "fallback-down", "model-editor-done"
-  ];
   if (state.phase === "Discover") return ["recommended", "customize"];
   if (state.compatibilityPlayback && state.phase === "Choose") return ["edition", ...HARNESSES.map((item) => `harness:${item.value}`), "profile", "next"];
   if (state.compatibilityPlayback && state.phase === "Configure") return ["memory", "name", "path", "intent", "next"];
@@ -421,12 +427,7 @@ function cycle(values, value, delta) {
   return values[(index + delta + values.length) % values.length];
 }
 export function availableModelStrategies(state) {
-  if (!modelsApplicable(state.decisions)) return ["configure-later"];
-  const values = [];
-  if (state.discovery.install.models_config_exists || state.discovery.models.existing_config) values.push("keep-existing");
-  if (state.discovery.models.validation.status === "pass" && state.discovery.models.proposed_config["*"]?.primary) values.push("smart-defaults");
-  values.push("custom-models", "configure-later");
-  return values;
+  return ["configure-later"];
 }
 function withEdition(decisions, edition) {
   const next = { ...decisions, edition, modelWriteApproved: false };
@@ -613,7 +614,7 @@ function chooseReviewOutcome(state, applyIntent) {
   });
 }
 function openModelPlanReview(state) {
-  if (state.phase !== "Review" || state.decisions.modelStrategy !== "custom-models") return state;
+  if (!modelsApplicable(state.decisions) || state.phase !== "Review" || state.decisions.modelStrategy !== "custom-models") return state;
   const currentInspection = state.modelInspection?.revision === state.modelRevision ? state.modelInspection : null;
   const pageSize = currentInspection?.pageSize ?? PREVIEW_PAGE_SIZE;
   return transition(
@@ -691,6 +692,7 @@ function space(state) {
 
 export function transition(state, action = {}) {
   if (!state || state.done) return state;
+  state = withoutSetupModelAssignment(state);
   if (action.type === "CANCEL") return { ...state, done: true, cancelled: true, providerCalls: 0, provider_calls: 0 };
   if (action.type === "ESCAPE" && state.editing) return { ...state, editing: null };
   if (state.editing) {
@@ -757,21 +759,7 @@ export function transition(state, action = {}) {
     return state;
   }
   if (action.type === "PATCH") {
-    const customKeys = { modelWildcard: "model:wildcard", modelOrchestrator: "model:orchestrator", modelDeveloper: "model:developer" };
-    if (customKeys[action.key]) return replaceCustomModelValue(state, customKeys[action.key], String(action.value ?? ""));
-    if (action.key === "modelFallback") {
-      if (sanitizeModelInput(action.value) === null || !String(action.value).trim()) return state;
-      const fallbacks = [...state.decisions.customModels.fallbacks, String(action.value)];
-      return {
-        ...state,
-        selectedFallback: fallbacks.length - 1,
-        decisions: { ...state.decisions, customModels: { ...state.decisions.customModels, fallbacks }, modelWriteApproved: false },
-        modelRevision: state.modelRevision + 1,
-        reviewedModelRevision: null,
-        modelInspection: null,
-        reviewVisited: false
-      };
-    }
+    if (["models", "modelStrategy", "modelApproval", "modelWriteApproved", "modelWildcard", "modelOrchestrator", "modelDeveloper", "modelFallback"].includes(action.key)) return state;
     return patchDecision(state, action.key, action.value);
   }
   if (action.type === "TOGGLE_HARNESS" && HARNESSES.some((item) => item.value === action.value)) return toggleHarness(state, action.value);
@@ -893,7 +881,7 @@ export function previewModel(decisions, discoveryInput) {
     "Review is required before interactive confirmation."
   );
   return {
-    concise: sanitizeTerminalText(`${LABELS.editions[value.edition]} | ${harnesses} | ${modelsApplicable(value) ? LABELS.models[value.modelStrategy] : LABELS.memory[value.memorySetup]} | ${LABELS.intents[value.applyIntent]}`),
+    concise: sanitizeTerminalText(`${LABELS.editions[value.edition]} | ${harnesses} | ${LABELS.intents[value.applyIntent]}`),
     lines: lines.map(sanitizeTerminalText),
     providerCalls: 0,
     provider_calls: 0
@@ -939,14 +927,11 @@ function bodyEntries(state) {
   }
   if (state.phase === "Discover") {
     const harnesses = HARNESSES.filter((item) => discovery.harnesses[item.value] === "installed").map((item) => item.label);
-    const suggestions = discovery.models.suggestions.map((item) => `${item.model} (${item.source})`);
     return [
       { text: `OS: ${discovery.os.platform} ${discovery.os.release} · ${discovery.os.architecture}`, tone: "safe" },
       { text: `Node: ${discovery.node.version} · ${discovery.node.status} (requires ${discovery.node.required_major}+)`, tone: discovery.node.status === "ok" ? "safe" : "blocker" },
       { text: `Harnesses: ${harnesses.length ? harnesses.join(", ") : "none detected"}`, tone: harnesses.length ? "safe" : "normal" },
-      { text: `Provider/model suggestions: ${suggestions.length ? suggestions.join(", ") : "no safe local signals detected"}`, tone: suggestions.length ? "safe" : "normal" },
       { text: `Existing install: ${discovery.install.target_exists ? "found" : "not found"} at ${displayPath(discovery.install.selected_target)}`, tone: discovery.install.target_exists ? "safe" : "normal" },
-      { text: `Models config: ${discovery.install.models_config_exists ? "existing config found" : "not present"}`, tone: discovery.install.models_config_exists ? "safe" : "normal" },
       { text: `Git: ${discovery.git.repository_state} · ${discovery.git.linked_worktree_state} · ${displayPath(discovery.git.workspace_root)}`, tone: discovery.git.repository_state === "repository" ? "safe" : "normal" },
       { text: `Project root: ${displayPath(discovery.git.project_root)}`, tone: discovery.git.repository_state === "repository" ? "safe" : "normal" },
       { text: `${marker(focus === "recommended")} [r] Use recommended setup`, action: { type: "USE_RECOMMENDED" }, focused: focus === "recommended" },
@@ -997,7 +982,7 @@ function bodyEntries(state) {
   }
   if (state.phase === "Review") {
     const entries = [{ text: "Review every choice before final confirmation." }, ...previewModel(d, discovery).lines.slice(1).map((text) => ({ text }))];
-    if (d.modelStrategy === "custom-models") {
+    if (modelsApplicable(d) && d.modelStrategy === "custom-models") {
       const inspection = modelPlanInspectionStatus(state);
       entries.push({
         text: `${marker(focus === "model-plan-review")} Inspect exact models.json — ${inspection.label}`,
@@ -1010,9 +995,9 @@ function bodyEntries(state) {
       text: `${marker(focus === "model-approval")} [${d.modelWriteApproved ? "x" : " "}] Approve writing/replacing ${displayPath(discovery.install.models_config_path)}`,
       action: { type: "PATCH", key: "modelWriteApproved", value: !d.modelWriteApproved }, focused: focus === "model-approval", tone: canApproveModels(state) ? "approval" : "blocker"
     });
-    if (d.modelStrategy === "custom-models" && customPlanValidation(state).status === "fail") entries.push({ text: "Continue is blocked until the custom model plan is valid.", tone: "blocker" });
-    else if (d.modelStrategy === "custom-models" && !modelPlanInspectionStatus(state).complete) entries.push({ text: "Continue is blocked until every exact models.json page is inspected.", tone: "blocker" });
-    else if (d.modelStrategy === "custom-models" && !d.modelWriteApproved) entries.push({ text: "Continue is blocked until the inspected current revision is explicitly approved.", tone: "blocker" });
+    if (modelsApplicable(d) && d.modelStrategy === "custom-models" && customPlanValidation(state).status === "fail") entries.push({ text: "Continue is blocked until the custom model plan is valid.", tone: "blocker" });
+    else if (modelsApplicable(d) && d.modelStrategy === "custom-models" && !modelPlanInspectionStatus(state).complete) entries.push({ text: "Continue is blocked until every exact models.json page is inspected.", tone: "blocker" });
+    else if (modelsApplicable(d) && d.modelStrategy === "custom-models" && !d.modelWriteApproved) entries.push({ text: "Continue is blocked until the inspected current revision is explicitly approved.", tone: "blocker" });
     const continueReady = canContinueReview(state);
     entries.push(
       { text: `${marker(focus === "review-apply")} ${continueReady ? "Accept & apply reviewed settings" : "Apply blocked by model review"}`, action: { type: "REVIEW_DECISION", intent: "apply-safe-steps" }, focused: focus === "review-apply", tone: continueReady ? "approval" : "blocker" },
@@ -1023,8 +1008,7 @@ function bodyEntries(state) {
     return entries;
   }
   const entries = [
-    { text: d.applyIntent === "apply-safe-steps" ? "Explicitly confirm safe apply steps." : "Confirm preview-only output; no install files will be written.", tone: d.applyIntent === "apply-safe-steps" ? "approval" : "safe" },
-    { text: `Model write: ${d.modelWriteApproved ? "approved" : "not approved"}`, tone: d.modelWriteApproved ? "approval" : "safe" }
+    { text: d.applyIntent === "apply-safe-steps" ? "Explicitly confirm safe apply steps." : "Confirm preview-only output; no install files will be written.", tone: d.applyIntent === "apply-safe-steps" ? "approval" : "safe" }
   ];
   if (modelsApplicable(d) && ["smart-defaults", "custom-models"].includes(d.modelStrategy)) entries.push({
     text: `${marker(focus === "model-approval")} [${d.modelWriteApproved ? "x" : " "}] Approve writing/replacing ${displayPath(discovery.install.models_config_path)}`,
@@ -1071,7 +1055,7 @@ export function rationaleLines(state) {
     ...(["Review", "Apply"].includes(state.phase) && modelsApplicable(current) && ["smart-defaults", "custom-models"].includes(current.modelStrategy) ? [["modelWriteApproved", "Model write approval", { true: "Approved", false: "Not approved" }]] : []),
     ["applyIntent", "Execution", LABELS.intents]
   ];
-  const reasonIndexes = { edition: 0, selectedHarnesses: 1, profileStrategy: 2, memorySetup: 3, modelStrategy: 4, applyIntent: 5 };
+  const reasonIndexes = { edition: 0, selectedHarnesses: 1, profileStrategy: 2, memorySetup: 3, applyIntent: 4 };
   for (const [key, label, labels] of fields) {
     const normalize = key === "selectedHarnesses" ? (value) => [...value].sort() : (value) => value;
     const currentValue = key === "targetPath" ? effectiveTargetPath(current) : current[key];
@@ -1394,6 +1378,7 @@ function resizePrompt(width, height, layout) {
 }
 
 export function render(state, { columns = 80, rows = 24, color = false, layout: layoutInput = "fullscreen" } = {}) {
+  state = withoutSetupModelAssignment(state);
   const columnsAvailable = terminalDimension(columns, 80);
   const height = terminalDimension(rows, 24);
   const layout = normalizeTuiLayout(layoutInput);
@@ -1464,13 +1449,9 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
 }
 
 function shellQuote(value) { return sanitizeTerminalText(value).replace(/'/g, "'\\''"); }
-export function serializeAssignments(decisions, { reviewVisited = false, modelRevision = null, reviewedModelRevision = null, modelInspection = null, modelPlanSha256 = "" } = {}) {
+export function serializeAssignments(decisions) {
   const value = effective(decisions);
   const harnesses = value.selectedHarnesses.length ? value.selectedHarnesses.join(",") : "none";
-  const writableStrategy = ["smart-defaults", "custom-models"].includes(value.modelStrategy);
-  const inspectedCurrentRevision = modelInspection?.revision === modelRevision && modelInspection.totalPages > 0 && new Set(modelInspection.pagesViewed ?? []).size >= modelInspection.totalPages;
-  const currentReview = value.modelStrategy !== "custom-models" || (modelRevision !== null && reviewedModelRevision === modelRevision && inspectedCurrentRevision && validateCustomModelsDraft(value.customModels).status === "pass");
-  const modelApproved = reviewVisited && currentReview && value.apply && writableStrategy && value.modelWriteApproved;
   const lines = [
     `EDITION='${shellQuote(value.edition)}'`,
     `HARNESS='${shellQuote(harnesses)}'`,
@@ -1480,24 +1461,12 @@ export function serializeAssignments(decisions, { reviewVisited = false, modelRe
     `APPLY='${value.apply ? "true" : "false"}'`,
     `SKIP_PROFILE_MANAGER='${value.profileStrategy === "decide-later" ? "true" : "false"}'`,
     "TUI_USED='true'",
-    "TUI_MODE='app'",
-    `MODEL_STRATEGY='${shellQuote(value.modelStrategy)}'`,
-    `MODEL_WRITE_APPROVED='${modelApproved ? "true" : "false"}'`
+    "TUI_MODE='app'"
   ];
-  if (modelPlanSha256 && !/^[0-9a-f]{64}$/.test(modelPlanSha256)) throw new Error("invalid model plan digest");
-  if (modelApproved && value.modelStrategy === "custom-models" && modelPlanSha256) lines.push(`MODEL_PLAN_SHA256='${modelPlanSha256}'`);
   if (value.targetPath.trim()) lines.push(`TARGET_PATH='${shellQuote(value.targetPath.trim())}'`);
   return `${lines.join("\n")}\n`;
 }
 
 export function modelPlanForState(state) {
-  if (!state?.done || state.cancelled || state.decisions.modelStrategy !== "custom-models" || !state.decisions.apply || !state.decisions.modelWriteApproved || !state.reviewVisited || state.reviewedModelRevision !== state.modelRevision || !modelPlanInspectionStatus(state).complete) return null;
-  const validation = validateCustomModelsDraft(state.decisions.customModels);
-  if (validation.status !== "pass") return null;
-  return {
-    schema: "alfred.install.model-plan/v1",
-    strategy: "custom-models",
-    models: validation.config,
-    provider_calls: 0
-  };
+  return null;
 }

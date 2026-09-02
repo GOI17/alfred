@@ -2,22 +2,30 @@ openapi: 3.1.0
 info:
   title: Alfred Memory API
   description: "Exposes Alfred Memory as a ChatGPT Action. A Custom GPT can search, list, create, update and delete durable memories for a user through this schema. This is not a native ChatGPT Memory integration: Alfred Memory remains an external service invoked by the Custom GPT at runtime."
-  version: 0.0.0
+  version: 0.6.0
   contact:
     name: Alfred Labs
 servers:
-  - url: https://memory.example.com
-    description: "Production Alfred Memory server (must be public HTTPS on port 443)."
+  - url: https://alfred-labs-memory.fly.dev
+    description: "Production Alfred Memory server."
 
 security:
-  - bearerAuth: []
+  - oauth2:
+      - memory:read
+      - memory:write
 
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      description: "API key passed as an Authorization: Bearer \u003capiKey\u003e header. ChatGPT Actions does not support custom headers, so do not rely on x-api-key when configuring the action."
+    oauth2:
+      type: oauth2
+      description: "Per-user OAuth access. Alfred API keys are entered only on Alfred's consent page and are never shared with ChatGPT."
+      flows:
+        authorizationCode:
+          authorizationUrl: https://alfred-labs-memory.fly.dev/oauth/authorize
+          tokenUrl: https://alfred-labs-memory.fly.dev/oauth/token
+          scopes:
+            "memory:read": Read and search the user's Alfred memories.
+            "memory:write": Create, update, and delete the user's Alfred memories.
 
   schemas:
     Error:
@@ -292,6 +300,7 @@ components:
 paths:
   /health:
     get:
+      security: []
       operationId: healthCheck
       summary: Health check
       description: "Returns a simple status response used to validate connectivity."
@@ -303,75 +312,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
 
-  /memories/search:
-    get:
-      operationId: searchMemories
-      summary: Search memories
-      description: "Full-text search across the durable memories of the authenticated user."
-      parameters:
-        - name: q
-          in: query
-          required: true
-          schema:
-            type: string
-          description: "Search query."
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
-          description: "Maximum number of results to return."
-        - name: offset
-          in: query
-          schema:
-            type: integer
-            minimum: 0
-            default: 0
-          description: "Number of results to skip."
-        - name: type
-          in: query
-          schema:
-            $ref: '#/components/schemas/MemoryType'
-          description: "Filter by memory type."
-        - name: namespace
-          in: query
-          schema:
-            type: string
-          description: "Filter by namespace, for example project:alfred."
-        - name: projectId
-          in: query
-          schema:
-            type: string
-          description: "Filter by project id."
-        - name: tag
-          in: query
-          schema:
-            type: string
-          description: "Filter by a single tag."
-      responses:
-        '200':
-          description: "Paginated search results."
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MemoryPage'
-        '400':
-          description: "Invalid query parameters."
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: "Missing or invalid API key."
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
   /memories:
     get:
+      security:
+        - oauth2:
+            - memory:read
       operationId: listMemories
       summary: List memories
       description: "List durable memories of the authenticated user, optionally filtered."
@@ -419,13 +364,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/MemoryPage'
         '401':
-          description: "Missing or invalid API key."
+          description: "Missing, invalid, or expired OAuth access token."
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
     post:
+      security:
+        - oauth2:
+            - memory:write
       operationId: createMemory
       summary: Create memory
       description: "Store a durable memory for the authenticated user."
@@ -450,14 +398,51 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
-          description: "Missing or invalid API key."
+          description: "Missing, invalid, or expired OAuth access token."
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
   /memories/{id}:
+    get:
+      security:
+        - oauth2:
+            - memory:read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: "Memory identifier."
+      operationId: getMemory
+      summary: Get a memory
+      description: "Fetch one durable memory by id."
+      responses:
+        '200':
+          description: "Memory found."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryRecord'
+        '401':
+          description: "Missing or invalid OAuth access token."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: "Memory not found."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
     patch:
+      security:
+        - oauth2:
+            - memory:write
       parameters:
         - name: id
           in: path
@@ -489,7 +474,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
-          description: "Missing or invalid API key."
+          description: "Missing, invalid, or expired OAuth access token."
           content:
             application/json:
               schema:
@@ -502,6 +487,9 @@ paths:
                 $ref: '#/components/schemas/Error'
 
     delete:
+      security:
+        - oauth2:
+            - memory:write
       parameters:
         - name: id
           in: path
@@ -526,7 +514,7 @@ paths:
                   deleted:
                     type: boolean
         '401':
-          description: "Missing or invalid API key."
+          description: "Missing, invalid, or expired OAuth access token."
           content:
             application/json:
               schema:
@@ -541,6 +529,7 @@ paths:
   # -------- v0.4.1: Custom GPT surface --------
   /agents/manifest:
     get:
+      security: []
       operationId: listAgents
       summary: List available Alfred agents
       description: "Returns the agent manifest from .ai/agents/registry.json. Public; no API key required."
@@ -554,6 +543,7 @@ paths:
 
   /skills/manifest:
     get:
+      security: []
       operationId: listSkills
       summary: List available Alfred skills
       description: "Returns the skill manifest from .ai/skills/registry.json. Public; no API key required."
@@ -567,6 +557,7 @@ paths:
 
   /policies/check:
     post:
+      security: []
       operationId: checkPolicy
       summary: Check whether a proposed action is allowed
       description: "Returns whether a proposed action is allowed under the current policy. Public; no API key required."
@@ -586,7 +577,10 @@ paths:
 
   /search:
     post:
-      operationId: searchMemoriesV2
+      security:
+        - oauth2:
+            - memory:read
+      operationId: searchMemories
       summary: Search memories (semantic | keyword | hybrid)
       description: "v0.4.1 search endpoint. mode: 'semantic' uses the local embedding model; 'keyword' uses the in-memory filter; 'hybrid' (default) blends both via reciprocal rank fusion. Zero provider calls."
       requestBody:
@@ -609,13 +603,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
-          description: "Missing or invalid API key."
+          description: "Missing, invalid, or expired OAuth access token."
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '429':
-          description: "Action rate limit exceeded (100/min per API key)."
+          description: "Action rate limit exceeded (100/min per Bearer credential)."
           content:
             application/json:
               schema:

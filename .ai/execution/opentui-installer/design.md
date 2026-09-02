@@ -8,6 +8,12 @@ issue: 100
 
 # OpenTUI Installer Backend
 
+> **Issue #134 supersession:** `alfred setup` currently disables the model
+> assignment step. The model controls, exact-plan review, approval, IPC, and
+> write requirements below are retained as historical design context only;
+> neither OpenTUI nor the Node fallback exposes them during setup. User-owned
+> model-assignment APIs remain available outside setup.
+
 ## Goal
 
 Use OpenTUI, the terminal framework that powers OpenCode, for Alfred's guided

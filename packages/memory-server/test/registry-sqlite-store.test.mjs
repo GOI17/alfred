@@ -39,6 +39,7 @@ test("applySchema creates all expected tables and triggers", async () => {
     for (const expected of [
       "tenants", "workspaces", "tenant_access",
       "tenant_api_keys", "tenant_trace", "__tenants_update_buffer",
+      "oauth_authorization_codes", "oauth_tokens",
       "tenant_delete_block", "tenant_access_no_dual_pg_insert",
       "tenant_access_no_dual_pg_update"
     ]) {

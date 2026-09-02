@@ -8,6 +8,12 @@ issue: 95
 
 # Design: Complete Guided Pathfinder
 
+> **Issue #134 supersession:** model discovery remains schema-compatible, but
+> `alfred setup` no longer presents model decisions, exact previews, editing,
+> approval, model IPC, or `~/.alfred/models.json` writes. The model sections
+> below document the earlier setup contract; runtime/domain model assignment
+> remains user-owned and unchanged outside setup.
+
 ## Technical Approach
 
 Keep `install.sh` as discovery/apply authority and the TUI as a pure decision adapter. Before launch, the shell creates a mode-`0700` private directory containing a mode-`0600` versioned discovery JSON. `install-app.mjs` reads it and passes validated data to `install-pathfinder.mjs`; no discovery or preview file survives preview/cancel. Smart defaults come from `detectMachineModels()` and `buildSmartModelDefaults()`, without provider requests.

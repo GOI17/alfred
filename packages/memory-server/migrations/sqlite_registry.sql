@@ -283,3 +283,42 @@ CREATE INDEX IF NOT EXISTS action_attempts_key_time_idx
 
 CREATE INDEX IF NOT EXISTS action_attempts_time_idx
   ON action_attempts (attempted_at);
+
+-- =============================================================================
+-- issue #135: OAuth 2.0 credentials for direct ChatGPT Actions access
+-- Raw authorization codes and tokens are never stored; *_hash is SHA-256.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
+  id            TEXT PRIMARY KEY,
+  code_hash     TEXT NOT NULL UNIQUE,
+  tenant_id     TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  client_id     TEXT NOT NULL,
+  redirect_uri  TEXT NOT NULL,
+  scope         TEXT NOT NULL,
+  expires_at    TEXT NOT NULL,
+  used_at       TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS oauth_authorization_codes_lookup_idx
+  ON oauth_authorization_codes(code_hash, client_id, expires_at);
+
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+  id              TEXT PRIMARY KEY,
+  token_hash      TEXT NOT NULL UNIQUE,
+  token_type      TEXT NOT NULL CHECK (token_type IN ('access', 'refresh')),
+  tenant_id       TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  client_id       TEXT NOT NULL,
+  scope           TEXT NOT NULL,
+  family_id       TEXT NOT NULL,
+  expires_at      TEXT NOT NULL,
+  revoked_at      TEXT,
+  replaced_by_id  TEXT REFERENCES oauth_tokens(id) ON DELETE SET NULL,
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE INDEX IF NOT EXISTS oauth_tokens_access_lookup_idx
+  ON oauth_tokens(token_hash, token_type, expires_at, revoked_at);
+
+CREATE INDEX IF NOT EXISTS oauth_tokens_family_idx
+  ON oauth_tokens(family_id, revoked_at);

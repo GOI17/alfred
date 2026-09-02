@@ -46,8 +46,8 @@ from the final review itself.
    explicitly confirms apply in the final confirmation phase.
 3. Cancel from Review or final confirmation must end with status 130 and emit
    no result assignments.
-4. Custom model validation, exact-plan inspection, revision binding, and model
-   write approval remain prerequisites for applying a custom model plan.
+4. Model assignment remains outside setup, and injected legacy model state must
+   not expose or authorize a model write through this review flow.
 
 ### R3: Compatibility
 

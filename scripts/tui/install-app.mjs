@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 import { readFileSync, realpathSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { resolve } from "node:path";
 import process from "node:process";
 import { StringDecoder } from "node:string_decoder";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { writePrivateModelPlan } from "./install-model-plan.mjs";
+import { fileURLToPath } from "node:url";
 import {
   EDITIONS,
   HARNESSES,
@@ -13,7 +12,6 @@ import {
   createPathfinderState,
   normalizeTuiLayout,
   normalizeDiscovery,
-  modelPlanForState,
   modelPlanReviewLines,
   parseHarnessSelection,
   previewPageSize,
@@ -23,8 +21,7 @@ import {
   stripAnsi,
   terminalPhysicalRows,
   textEditingActive,
-  transition,
-  validateCustomModelsDraft
+  transition
 } from "./install-pathfinder.mjs";
 
 export function decodeTerminalEvent(buffer, { flushEscape = false } = {}) {
@@ -226,12 +223,11 @@ function setValue(pair) {
   if (index < 0) return;
   const key = pair.slice(0, index);
   const value = pair.slice(index + 1);
+  if (/^model(?:Approval|Strategy|Wildcard|Orchestrator|Developer|Fallback)$/.test(key) || key === "models") return;
   if (key === "harness" || key === "harnesses") {
     dispatch({ type: "PATCH", key: "harnesses", value: parseHarnessSelection(value, harnessStatus) });
   } else if (key === "profiles") {
     dispatch({ type: "PATCH", key, value: value === "false" || value === "decide-later" ? "decide-later" : "runtime-profiles" });
-  } else if (key === "modelApproval") {
-    dispatch({ type: "PATCH", key: "modelWriteApproved", value });
   } else {
     dispatch({ type: "PATCH", key, value });
   }
@@ -396,23 +392,8 @@ function parseBytes(data, { flushEscape = false, mouseEnabled = true } = {}) {
   }
 }
 
-export { writePrivateModelPlan };
-
 async function writeAssignments() {
-  if (state.decisions.modelStrategy === "custom-models" && validateCustomModelsDraft(state.decisions.customModels).status !== "pass") throw new Error("custom model plan is invalid; edit it or choose Configure models later");
-  const plan = modelPlanForState(state);
-  let modelPlanSha256 = "";
-  if (plan) {
-    const planPath = process.env.ALFRED_INSTALL_MODEL_PLAN_FILE;
-    if (!planPath) throw new Error("approved custom model plan path is unavailable");
-    const modulePath = join(dirname(fileURLToPath(import.meta.url)), "model-assignment.mjs");
-    const canonicalPath = (() => { try { return realpathSync(modulePath); } catch { return resolve(dirname(fileURLToPath(import.meta.url)), "../../packages/core/src/model-assignment.js"); } })();
-    const { validateModelsConfig } = await import(pathToFileURL(canonicalPath).href);
-    const validation = validateModelsConfig(plan.models);
-    if (validation.status !== "pass") throw new Error(`invalid custom model plan: ${validation.errors.join("; ")}`);
-    modelPlanSha256 = writePrivateModelPlan(planPath, plan).sha256;
-  }
-  const output = serializeAssignments(state.decisions, { reviewVisited: state.reviewVisited, modelRevision: state.modelRevision, reviewedModelRevision: state.reviewedModelRevision, modelInspection: state.modelInspection, modelPlanSha256 });
+  const output = serializeAssignments(state.decisions);
   const resultFile = process.env.ALFRED_INSTALL_APP_TUI_RESULT_FILE;
   if (resultFile) writeFileSync(resultFile, output);
   else process.stdout.write(output);

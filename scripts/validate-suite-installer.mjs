@@ -171,7 +171,7 @@ def run_case(layout, mode, expected):
             if mode == "normal":
                 os.write(fd, b"r\r\r")
             elif mode == "keyboard":
-                os.write(fd, b"\x1b[B\x1b[C\r\x1b[B\x1b[C\r" + b"\x1b[B" * 5 + b"\x1b[D\r\r" + b"\x1b[B" * 4 + b"\x1b[D\r\x1b[D\r\x1b[D\r")
+                os.write(fd, b"\x1b[B\x1b[C\r\x1b[B\x1b[C\r" + b"\x1b[B" * 5 + b"\r" + b"\x1b[B" * 2 + b"\x1b[D\x1b[B\r\r\r")
             elif mode == "custom":
                 os.write(fd, b"\x1b[B\r" + b"\x1b[B" * 6 + b"\r\x1b[C\r\rZ")
                 custom_stage = 1
@@ -250,7 +250,7 @@ def run_case(layout, mode, expected):
         assert b"TUI_MODE='app'" in output, mode + " PTY completion lost result assignments"
     if mode == "keyboard":
         assert b"HARNESS='opencode'" in output, layout + " arrow escape toggled the harness like Enter"
-        assert b"MODEL_STRATEGY='configure-later'" in output, layout + " Enter silently cycled the focused model enum"
+        assert b"MODEL_" not in output, layout + " setup serialized model-assignment IPC"
     if mode == "custom":
         assert b"[Enter] Edit model assignments" in output, layout + " custom PTY did not expose the focusable model edit action"
         assert "Select field → Enter → type → Enter to save".encode("utf8") in output, layout + " custom PTY did not explain field editing"
@@ -375,7 +375,6 @@ def run_inline_resize_case(mode, expected):
 for layout in ("fullscreen", "inline"):
     run_case(layout, "normal", 0)
     run_case(layout, "keyboard", 0)
-    run_case(layout, "custom", 0)
     run_case(layout, "cancel", 130)
     run_case(layout, "signal", 143)
 run_inline_resize_case("cancel", 130)
@@ -454,7 +453,7 @@ function runScriptPtyCase(layout, mode, utilLinux, discoveryFile) {
         if (mode === "normal" || mode === "keyboard") assert.match(stdout, /TUI_MODE='app'/);
         if (mode === "keyboard") {
           assert.match(stdout, /HARNESS='opencode'/, `${layout} arrow escape toggled the harness like Enter`);
-          assert.match(stdout, /MODEL_STRATEGY='configure-later'/, `${layout} Enter silently cycled the focused model enum`);
+          assert.doesNotMatch(stdout, /MODEL_/, `${layout} setup serialized model-assignment IPC`);
         }
         resolvePromise();
       } catch (error) {
@@ -584,7 +583,7 @@ try {
   assert.match(appTuiOutput, /Alfred installer/);
   assert.match(appTuiOutput, /OS: /);
   assert.match(appTuiOutput, /Node: /);
-  assert.match(appTuiOutput, /Provider\/model suggestions:/);
+  assert.doesNotMatch(appTuiOutput, /model|models\.json/i);
   assert.match(appTuiOutput, /Git: /);
   assert.match(appTuiOutput, /Use recommended setup/);
   assert.match(appTuiOutput, /Phase 1\/5: Discover/);
@@ -656,9 +655,8 @@ case "$1" in
     private_dir=$(dirname "$1")
     dir_mode=$(stat -c '%a' "$private_dir" 2>/dev/null || stat -f '%Lp' "$private_dir")
     discovery_mode=$(stat -c '%a' "$private_dir/discovery.json" 2>/dev/null || stat -f '%Lp' "$private_dir/discovery.json")
-    plan_mode=$(stat -c '%a' "$private_dir/model-plan.json" 2>/dev/null || stat -f '%Lp' "$private_dir/model-plan.json")
     canonical_mode=$(stat -c '%a' "$private_dir/model-assignment.mjs" 2>/dev/null || stat -f '%Lp' "$private_dir/model-assignment.mjs")
-    printf '%s %s %s %s\\n' "$dir_mode" "$discovery_mode" "$plan_mode" "$canonical_mode" > "$ALFRED_TEST_MODE_MARKER"
+    printf '%s %s %s\\n' "$dir_mode" "$discovery_mode" "$canonical_mode" > "$ALFRED_TEST_MODE_MARKER"
     ;;
 esac
 exec ${shellQuote(process.execPath)} "$@"
@@ -674,7 +672,7 @@ exec ${shellQuote(process.execPath)} "$@"
     }
   });
   assert.equal(modePreview.status, 0, modePreview.stderr);
-  assert.equal(readFileSync(modeMarker, "utf8").trim(), "700 600 600 600");
+  assert.equal(readFileSync(modeMarker, "utf8").trim(), "700 600 600");
   assert.deepEqual(readdirSync(modeTuiTemp), [], "private mode probe must still clean staged files");
 
   const fakeOpenTui = join(fixture, "alfred-installer-tui-fake");
@@ -683,7 +681,7 @@ exec ${shellQuote(process.execPath)} "$@"
 if [ -n "\${ALFRED_INSTALL_APP_TUI_RESULT_FILE:-}" ]; then
   exec > "$ALFRED_INSTALL_APP_TUI_RESULT_FILE"
 fi
-printf '%s\\n' "EDITION='coding'" "HARNESS='none'" "PROFILE_STRATEGY='runtime-profiles'" "MEMORY_SETUP='not-needed-for-coding-edition'" "NAME='opentui-test'" "APPLY='false'" "SKIP_PROFILE_MANAGER='false'" "TUI_USED='true'" "TUI_MODE='app'" "MODEL_STRATEGY='configure-later'" "MODEL_WRITE_APPROVED='false'"
+printf '%s\\n' "EDITION='coding'" "HARNESS='none'" "PROFILE_STRATEGY='runtime-profiles'" "MEMORY_SETUP='not-needed-for-coding-edition'" "NAME='opentui-test'" "APPLY='false'" "SKIP_PROFILE_MANAGER='false'" "TUI_USED='true'" "TUI_MODE='app'"
 `);
   chmodSync(fakeOpenTui, 0o755);
   writeFileSync(fakeOpenTuiChecksum, `${createHash("sha256").update(readFileSync(fakeOpenTui)).digest("hex")}  ${fakeOpenTui.split("/").at(-1)}\n`);
@@ -889,8 +887,7 @@ EOFRESULT
   });
   assert.equal(oldOutput.status, 0, oldOutput.stderr);
   assert.match(oldOutput.stdout, /Name:\s+old-output/);
-  assert.match(oldOutput.stdout, /Model strategy:\s+configure-later/);
-  assert.match(oldOutput.stdout, /Model approval:\s+false/);
+  assert.doesNotMatch(oldOutput.stdout, /model|models\.json/i);
   assert.match(oldOutput.stdout, /TUI mode:\s+app/);
   assert.deepEqual(readdirSync(oldOutputTemp), [], "old app output cleanup must remain intact");
 
@@ -921,73 +918,9 @@ EOFRESULT
       ALFRED_INSTALL_TUI_INPUT: "1\n5\n1\nfallback-after-invalid\nn"
     }
   });
-  assert.notEqual(invalidModelOutput.status, 0, "invalid optional IPC values must fail closed");
-  assert.match(invalidModelOutput.stderr, /Invalid MODEL_STRATEGY|Invalid MODEL_WRITE_APPROVED/);
-
-  function runDigestIpcCase(name, extraLines) {
-    const nodeBin = join(fixture, `digest-ipc-${name}-bin`);
-    mkdirSync(nodeBin, { recursive: true });
-    writeFileSync(join(nodeBin, "node"), `#!/bin/sh
-if [ "$1" = "-v" ]; then printf 'v26.0.0\\n'; exit 0; fi
-cat <<'EOFRESULT'
-EDITION='coding'
-HARNESS='none'
-PROFILE_STRATEGY='runtime-profiles'
-MEMORY_SETUP='not-needed-for-coding-edition'
-NAME='digest-${name}'
-APPLY='true'
-SKIP_PROFILE_MANAGER='false'
-TUI_USED='true'
-TUI_MODE='app'
-MODEL_STRATEGY='custom-models'
-MODEL_WRITE_APPROVED='true'
-${extraLines}
-EOFRESULT
-`);
-    chmodSync(join(nodeBin, "node"), 0o755);
-    return run([], {
-      env: {
-        PATH: `${nodeBin}:/usr/bin:/bin`,
-        ALFRED_INSTALL_FORCE_TUI: "1",
-        ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
-        ALFRED_INSTALL_TUI_INPUT: "1\n5\n1\ndigest-fallback\nn"
-      }
-    });
-  }
-  const absentDigest = runDigestIpcCase("absent", "");
-  assert.notEqual(absentDigest.status, 0, "approved custom apply requires a plan digest");
-  assert.match(absentDigest.stderr, /MODEL_PLAN_SHA256.*required/i);
-  const malformedDigest = runDigestIpcCase("malformed", "MODEL_PLAN_SHA256='ABC123'");
-  assert.notEqual(malformedDigest.status, 0, "malformed plan digest fails closed");
-  assert.match(malformedDigest.stderr, /Invalid MODEL_PLAN_SHA256/);
-  const duplicateDigest = runDigestIpcCase("duplicate", `MODEL_PLAN_SHA256='${"a".repeat(64)}'\nMODEL_PLAN_SHA256='${"b".repeat(64)}'`);
-  assert.match(duplicateDigest.stderr, /Rejected unsafe app TUI result/, "duplicate digest IPC is rejected before sourcing");
-
-  const unexpectedDigestNodeBin = join(fixture, "digest-ipc-unexpected-bin");
-  mkdirSync(unexpectedDigestNodeBin, { recursive: true });
-  writeFileSync(join(unexpectedDigestNodeBin, "node"), `#!/bin/sh
-if [ "$1" = "-v" ]; then printf 'v26.0.0\\n'; exit 0; fi
-cat <<'EOFRESULT'
-EDITION='coding'
-HARNESS='none'
-PROFILE_STRATEGY='runtime-profiles'
-MEMORY_SETUP='not-needed-for-coding-edition'
-NAME='digest-unexpected'
-APPLY='false'
-SKIP_PROFILE_MANAGER='false'
-TUI_USED='true'
-TUI_MODE='app'
-MODEL_STRATEGY='configure-later'
-MODEL_WRITE_APPROVED='false'
-MODEL_PLAN_SHA256='${"c".repeat(64)}'
-EOFRESULT
-`);
-  chmodSync(join(unexpectedDigestNodeBin, "node"), 0o755);
-  const unexpectedDigest = run([], {
-    env: { PATH: `${unexpectedDigestNodeBin}:/usr/bin:/bin`, ALFRED_INSTALL_FORCE_TUI: "1", ALFRED_INSTALL_APP_TUI_EVENTS: "submit" }
-  });
-  assert.notEqual(unexpectedDigest.status, 0, "non-custom output cannot carry a plan digest");
-  assert.match(unexpectedDigest.stderr, /Unexpected MODEL_PLAN_SHA256/);
+  assert.equal(invalidModelOutput.status, 0, invalidModelOutput.stderr);
+  assert.match(invalidModelOutput.stderr, /Rejected unsafe app TUI result/);
+  assert.match(invalidModelOutput.stdout, /TUI mode:\s+text/);
 
   const multiFlagPreview = run(["--edition=coding", "--name=multi", "--harness=opencode,codex-cli,codex-app"]);
   assert.equal(multiFlagPreview.status, 0, multiFlagPreview.stderr);
@@ -1090,7 +1023,7 @@ EOFRESULT
   assert.equal(trace.data.harnesses, "opencode,codex-cli");
   assert.match(trace.data.harness_status, /opencode=/);
   assert.equal(trace.data.provider_calls, 0);
-  assert.match(applied.stdout, /configure later; no model configuration will be written/);
+  assert.doesNotMatch(applied.stdout, /model|models\.json/i);
   assert.equal(existsSync(join(home, ".alfred", "models.json")), false, "configure-later apply must not write model config");
 
   const handoffTarget = join(fixture, "handoff-alfred-repo");
@@ -1190,18 +1123,13 @@ EOFRESULT
   const installSource = readFileSync(installSh, "utf8");
   for (const requiredRemote of [
     "scripts/tui/install-discovery.mjs",
-    "scripts/tui/install-model-plan.mjs",
     "packages/profile-manager/src/index.js",
     "packages/core/src/model-assignment.js"
   ]) assert.match(installSource, new RegExp(requiredRemote.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(installSource, /chmod 0700 "\$APP_TUI_PRIVATE_DIR"/);
   assert.match(installSource, /chmod 0600 "\$app_discovery_file"/);
   assert.match(installSource, /ALFRED_INSTALL_DISCOVERY_FILE=/);
-  assert.match(installSource, /MODEL_PLAN_SHA256/);
-  assert.match(installSource, /O_NOFOLLOW/);
-  assert.match(installSource, /fstatSync\(planDescriptor\)/);
-  assert.match(installSource, /timingSafeEqual\(actualDigest, expectedDigestBytes\)/);
-  assert.doesNotMatch(installSource, /readFileSync\(planPath/, "custom authority never reopens the validated plan pathname");
+  assert.doesNotMatch(installSource, /MODEL_(?:STRATEGY|WRITE_APPROVED|PLAN_SHA256)|write_approved_model_assignment|models\.json/);
   assert.match(installSource, /https:\/\/api\.github\.com\/repos\/GOI17\/alfred\/git\/ref\/heads\/\$DEFAULT_BRANCH/);
   assert.match(installSource, /https:\/\/codeload\.github\.com\/GOI17\/alfred\/tar\.gz\/\$app_tui_commit_sha/);
   assert.doesNotMatch(installSource, /codeload\.github\.com\/GOI17\/alfred\/tar\.gz\/refs\/heads/);
@@ -1337,286 +1265,86 @@ exec ${shellQuote(tarPath)} "$@"
   ]);
   assert.deepEqual(readdirSync(remoteTmp), [], "failed snapshot staging cleans private staging");
 
-  function writeDiscoveryFixture(filePath, { fixtureHome, fixtureTarget, existingModels = false, modelSignals = true }) {
-    const modelsPath = join(fixtureHome, ".alfred", "models.json");
+  function writeModelDisabledDiscovery(filePath, fixtureHome, fixtureTarget, existingModels = false) {
     writeFileSync(filePath, `${JSON.stringify({
       homeDir: fixtureHome,
       cwd,
       targetPath: fixtureTarget,
       env: {
         PATH: "/fixture/bin",
-        ...(modelSignals ? { OPENAI_API_KEY: "fixture-openai-secret", ANTHROPIC_API_KEY: "fixture-anthropic-secret" } : {})
+        OPENAI_API_KEY: "fixture-openai-secret",
+        ANTHROPIC_API_KEY: "fixture-anthropic-secret"
       },
       platform: "linux",
       release: "fixture-release",
       architecture: "arm64",
       nodeVersion: "v24.3.0",
       commands: { git: false, opencode: true, codex: false, pi: false },
-      existing_paths: [fixtureTarget, ...(existingModels ? [modelsPath] : [])]
+      existing_paths: [fixtureTarget, ...(existingModels ? [join(fixtureHome, ".alfred", "models.json")] : [])]
     }, null, 2)}\n`);
   }
 
-  const modelPreviewHome = join(fixture, "model-preview-home");
-  const modelPreviewTarget = join(fixture, "model-preview-target");
-  const modelPreviewFixture = join(fixture, "model-preview-fixture.json");
-  mkdirSync(modelPreviewHome, { recursive: true });
-  mkdirSync(modelPreviewTarget, { recursive: true });
-  writeDiscoveryFixture(modelPreviewFixture, { fixtureHome: modelPreviewHome, fixtureTarget: modelPreviewTarget });
-  const modelPreview = run([], {
+  const disabledHome = join(fixture, "model-disabled-home");
+  const disabledTarget = join(fixture, "model-disabled-target");
+  const disabledFixture = join(fixture, "model-disabled-fixture.json");
+  mkdirSync(disabledHome, { recursive: true });
+  mkdirSync(disabledTarget, { recursive: true });
+  writeModelDisabledDiscovery(disabledFixture, disabledHome, disabledTarget);
+  const disabledPreview = run([], {
     env: {
-      HOME: modelPreviewHome,
+      HOME: disabledHome,
       ALFRED_INSTALL_FORCE_TUI: "1",
       ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
-      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: modelPreviewFixture
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: disabledFixture
     }
   });
-  assert.equal(modelPreview.status, 0, modelPreview.stderr);
-  assert.match(modelPreview.stdout, /Model strategy:\s+smart-defaults/);
-  assert.match(modelPreview.stdout, /Proposed model configuration \(local discovery only\)/);
-  assert.match(modelPreview.stdout, /"primary": "openai\/gpt-4\.1-mini"/);
-  assert.doesNotMatch(`${modelPreview.stdout}\n${modelPreview.stderr}`, /fixture-openai-secret|fixture-anthropic-secret/);
-  assert.equal(existsSync(join(modelPreviewHome, ".alfred", "models.json")), false, "preview must not write model config");
+  assert.equal(disabledPreview.status, 0, disabledPreview.stderr);
+  assert.doesNotMatch(`${disabledPreview.stdout}\n${disabledPreview.stderr}`, /model strategy|model approval|proposed model|models\.json|openai\/gpt|anthropic\/claude/i);
+  assert.doesNotMatch(`${disabledPreview.stdout}\n${disabledPreview.stderr}`, /fixture-openai-secret|fixture-anthropic-secret/);
+  assert.equal(existsSync(join(disabledHome, ".alfred", "models.json")), false);
 
-  const cancelHome = join(fixture, "model-cancel-home");
-  const cancelFixture = join(fixture, "model-cancel-fixture.json");
-  const cancelWorkspace = join(fixture, "cancel-workspace");
-  const cancelTmp = join(fixture, "cancel-tmp");
-  mkdirSync(cancelHome, { recursive: true });
-  mkdirSync(cancelWorkspace, { recursive: true });
-  mkdirSync(cancelTmp, { recursive: true });
-  writeDiscoveryFixture(cancelFixture, { fixtureHome: cancelHome, fixtureTarget: modelPreviewTarget });
-  const cancelledModel = run([], {
-    cwd: cancelWorkspace,
+  const preservedHome = join(fixture, "model-preserved-home");
+  const preservedTarget = join(fixture, "model-preserved-target");
+  const preservedFixture = join(fixture, "model-preserved-fixture.json");
+  const preservedModels = join(preservedHome, ".alfred", "models.json");
+  mkdirSync(join(preservedHome, ".alfred"), { recursive: true });
+  mkdirSync(preservedTarget, { recursive: true });
+  writeFileSync(preservedModels, '{\n  "*": { "primary": "existing/model" },\n  "fallbacks": []\n}\n', { mode: 0o600 });
+  const preservedBefore = readFileSync(preservedModels);
+  writeModelDisabledDiscovery(preservedFixture, preservedHome, preservedTarget, true);
+  const preservedApply = run(["--path", preservedTarget, "--no-clone"], {
     env: {
-      HOME: cancelHome,
-      TMPDIR: cancelTmp,
-      ALFRED_INSTALL_FORCE_TUI: "1",
-      ALFRED_INSTALL_APP_TUI_LAYOUT: "inline",
-      ALFRED_INSTALL_APP_TUI_EVENTS: "q",
-      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: cancelFixture
-    }
-  });
-  assert.equal(cancelledModel.status, 130, "q must terminate the overall installer instead of entering text fallback");
-  assert.doesNotMatch(`${cancelledModel.stdout}\n${cancelledModel.stderr}`, /using text installer|ALFRED HUMAN-FIRST INSTALLER/i, "inline cancellation must not run text fallback");
-  assert.equal(existsSync(join(cancelHome, ".alfred", "models.json")), false, "cancel must not write model config");
-  assert.equal(existsSync(join(cancelHome, ".alfred", "runtime-profiles")), false, "cancel must not write profiles");
-  assert.deepEqual(readdirSync(cancelWorkspace), [], "cancel must not write project files");
-  assert.deepEqual(readdirSync(cancelTmp), [], "cancel must clean private staging");
-
-  const keepHome = join(fixture, "model-keep-home");
-  const keepTarget = join(fixture, "model-keep-target");
-  const keepFixture = join(fixture, "model-keep-fixture.json");
-  const keepModels = join(keepHome, ".alfred", "models.json");
-  mkdirSync(join(keepHome, ".alfred"), { recursive: true });
-  mkdirSync(keepTarget, { recursive: true });
-  writeFileSync(keepModels, "{\n  \"*\": { \"primary\": \"existing/model\" },\n  \"fallbacks\": []\n}\n", { mode: 0o600 });
-  const keepBefore = readFileSync(keepModels, "utf8");
-  writeDiscoveryFixture(keepFixture, { fixtureHome: keepHome, fixtureTarget: keepTarget, existingModels: true });
-  const keepApply = run(["--path", keepTarget, "--no-clone"], {
-    env: {
-      HOME: keepHome,
+      HOME: preservedHome,
       ALFRED_INSTALL_FORCE_TUI: "1",
       ALFRED_INSTALL_APP_TUI_EVENTS: "r,set:applyIntent=apply-safe-steps,enter,enter",
-      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: keepFixture
-    }
-  });
-  assert.equal(keepApply.status, 0, keepApply.stderr);
-  assert.match(keepApply.stdout, /Model strategy:\s+keep-existing/);
-  assert.match(keepApply.stdout, /remains untouched and was not read into the TUI/);
-  assert.doesNotMatch(keepApply.stdout, /Proposed model configuration|"primary"/);
-  assert.equal(readFileSync(keepModels, "utf8"), keepBefore, "keep-existing apply must preserve existing config byte-for-byte");
-
-  const approvedHome = join(fixture, "model-approved-home");
-  const approvedTarget = join(fixture, "model-approved-target");
-  const approvedFixture = join(fixture, "model-approved-fixture.json");
-  mkdirSync(approvedHome, { recursive: true });
-  mkdirSync(approvedTarget, { recursive: true });
-  writeDiscoveryFixture(approvedFixture, { fixtureHome: approvedHome, fixtureTarget: approvedTarget });
-  const approvedApply = run(["--path", approvedTarget, "--no-clone"], {
-    env: {
-      HOME: approvedHome,
-      ALFRED_INSTALL_FORCE_TUI: "1",
-      ALFRED_INSTALL_APP_TUI_EVENTS: "r,set:applyIntent=apply-safe-steps,space,down,enter,down,enter",
-      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: approvedFixture,
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: preservedFixture,
       ALFRED_INSTALL_HANDOFF_INPUT: "1"
     }
   });
-  assert.equal(approvedApply.status, 0, approvedApply.stderr);
-  assert.match(approvedApply.stdout, /Model strategy:\s+smart-defaults/);
-  assert.match(approvedApply.stdout, /Model approval:\s+true/);
-  assert.match(approvedApply.stdout, /Wrote approved model assignment config atomically/);
-  const approvedModelsPath = join(approvedHome, ".alfred", "models.json");
-  const approvedConfig = JSON.parse(readFileSync(approvedModelsPath, "utf8"));
-  assert.deepEqual(approvedConfig, {
-    "*": { primary: "openai/gpt-4.1-mini", fallbacks: ["anthropic/claude-sonnet-4"] },
-    orchestrator: { primary: "anthropic/claude-sonnet-4" },
-    developer: { primary: "anthropic/claude-sonnet-4" },
-    fallbacks: ["openai/gpt-4.1-mini", "anthropic/claude-sonnet-4"]
-  });
-  assert.equal(statSync(approvedModelsPath).mode & 0o777, 0o600, "models config must be mode 0600");
-  assert.equal(readdirSync(join(approvedHome, ".alfred")).some((name) => name.includes("models.json") && name.endsWith(".tmp")), false, "atomic model write must leave no temp file");
-  const modelTracePath = join(approvedHome, ".alfred", "observability", "model-assignment-trace.json");
-  const modelTrace = JSON.parse(readFileSync(modelTracePath, "utf8"));
-  assert.deepEqual(modelTrace.trace_events.map((event) => event.event), ["model_assignment_configured", "provider_request_avoided"]);
-  assert.equal(modelTrace.provider_calls, 0);
-  assert.equal(statSync(modelTracePath).mode & 0o777, 0o600);
-  const approvedInstallTrace = JSON.parse(readFileSync(join(approvedHome, ".alfred", "observability", "install-trace.json"), "utf8"));
-  assert.equal(approvedInstallTrace.data.model_strategy, "smart-defaults");
-  assert.equal(approvedInstallTrace.data.model_write_approved, true);
-  assert.equal(approvedInstallTrace.data.model_config_written, true);
-  assert.equal(approvedInstallTrace.data.provider_calls, 0);
+  assert.equal(preservedApply.status, 0, preservedApply.stderr);
+  assert.deepEqual(readFileSync(preservedModels), preservedBefore, "setup apply preserves an existing models.json byte-for-byte");
+  assert.doesNotMatch(`${preservedApply.stdout}\n${preservedApply.stderr}`, /model strategy|model approval|proposed model|models\.json/i);
 
-  const customEvents = [
-    "set:models=custom-models",
-    "set:modelWildcard= provider/main;$(touch_should_not_run) ",
-    "set:modelOrchestrator= provider/orchestrator'opaque ",
-    "set:modelDeveloper= provider/developer|opaque ",
-    "set:modelFallback= provider/fallback-one;$HOME ",
-    "set:modelFallback= provider/fallback-two&&false ",
-    "set:applyIntent=apply-safe-steps",
-    "down", "enter",
-    ...Array(6).fill("down"), "enter",
-    ...Array(5).fill("down"), "enter",
-    "enter", "right", "esc", "down", "enter", "down", "enter", "down", "enter"
-  ].join(",");
-  const customHome = join(fixture, "model-custom-home");
-  const customTarget = join(fixture, "model-custom-target");
-  const customFixture = join(fixture, "model-custom-fixture.json");
-  const customTmp = join(fixture, "model-custom-tmp");
-  mkdirSync(customHome, { recursive: true });
-  mkdirSync(customTarget, { recursive: true });
-  mkdirSync(customTmp, { recursive: true });
-  writeDiscoveryFixture(customFixture, { fixtureHome: customHome, fixtureTarget: customTarget, modelSignals: false });
-  const customPreviewHome = join(fixture, "model-custom-preview-home");
-  const customPreviewTarget = join(fixture, "model-custom-preview-target");
-  const customPreviewFixture = join(fixture, "model-custom-preview-fixture.json");
-  const customPreviewTmp = join(fixture, "model-custom-preview-tmp");
-  mkdirSync(customPreviewHome, { recursive: true });
-  mkdirSync(customPreviewTarget, { recursive: true });
-  mkdirSync(customPreviewTmp, { recursive: true });
-  writeDiscoveryFixture(customPreviewFixture, { fixtureHome: customPreviewHome, fixtureTarget: customPreviewTarget, modelSignals: false });
-  const customPreviewOnly = run([], {
+  const injectedHome = join(fixture, "model-injected-home");
+  const injectedTarget = join(fixture, "model-injected-target");
+  const injectedFixture = join(fixture, "model-injected-fixture.json");
+  mkdirSync(injectedHome, { recursive: true });
+  mkdirSync(injectedTarget, { recursive: true });
+  writeModelDisabledDiscovery(injectedFixture, injectedHome, injectedTarget);
+  const injectedApply = run(["--path", injectedTarget, "--no-clone"], {
     env: {
-      HOME: customPreviewHome,
-      TMPDIR: customPreviewTmp,
+      HOME: injectedHome,
       ALFRED_INSTALL_FORCE_TUI: "1",
-      ALFRED_INSTALL_APP_TUI_EVENTS: "set:models=custom-models,set:modelWildcard=provider/preview,submit",
-      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: customPreviewFixture
-    }
-  });
-  assert.equal(customPreviewOnly.status, 0, customPreviewOnly.stderr);
-  assert.match(customPreviewOnly.stdout, /Model strategy:\s+custom-models/);
-  assert.equal(existsSync(join(customPreviewHome, ".alfred", "models.json")), false, "valid custom preview never writes models");
-  assert.deepEqual(readdirSync(customPreviewTmp), [], "custom preview cleans the private plan and staging directory");
-  const customCancelled = run([], {
-    env: {
-      HOME: customPreviewHome,
-      TMPDIR: customPreviewTmp,
-      ALFRED_INSTALL_FORCE_TUI: "1",
-      ALFRED_INSTALL_APP_TUI_EVENTS: "set:models=custom-models,set:modelWildcard=provider/cancel,q",
-      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: customPreviewFixture
-    }
-  });
-  assert.equal(customCancelled.status, 130);
-  assert.equal(existsSync(join(customPreviewHome, ".alfred", "models.json")), false, "custom cancel never writes models");
-  assert.deepEqual(readdirSync(customPreviewTmp), [], "custom cancel cleans the private plan and staging directory");
-
-  const customApply = run(["--path", customTarget, "--no-clone"], {
-    env: {
-      HOME: customHome,
-      TMPDIR: customTmp,
-      ALFRED_INSTALL_FORCE_TUI: "1",
-      ALFRED_INSTALL_APP_TUI_EVENTS: customEvents,
-      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: customFixture,
+      ALFRED_INSTALL_APP_TUI_EVENTS: "set:models=custom-models,set:modelWildcard=provider/forbidden,set:modelApproval=true,r,set:applyIntent=apply-safe-steps,enter,enter",
+      ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: injectedFixture,
       ALFRED_INSTALL_HANDOFF_INPUT: "1"
     }
   });
-  assert.equal(customApply.status, 0, customApply.stderr);
-  assert.match(customApply.stdout, /Model strategy:\s+custom-models/);
-  assert.match(customApply.stdout, /Model approval:\s+true/);
-  assert.doesNotMatch(`${customApply.stdout}\n${customApply.stderr}`, /provider\/main|provider\/orchestrator|provider\/developer|provider\/fallback/, "raw IDs never enter shell output or assignments");
-  assert.equal(existsSync(join(fixture, "touch_should_not_run")), false, "shell metacharacters in opaque IDs are never executed");
-  const customModelsPath = join(customHome, ".alfred", "models.json");
-  assert.deepEqual(JSON.parse(readFileSync(customModelsPath, "utf8")), {
-    "*": { primary: " provider/main;$(touch_should_not_run) " },
-    orchestrator: { primary: " provider/orchestrator'opaque " },
-    developer: { primary: " provider/developer|opaque " },
-    fallbacks: [" provider/fallback-one;$HOME ", " provider/fallback-two&&false "]
-  });
-  assert.equal(statSync(customModelsPath).mode & 0o777, 0o600);
-  const customTrace = JSON.parse(readFileSync(join(customHome, ".alfred", "observability", "install-trace.json"), "utf8"));
-  assert.equal(customTrace.data.model_strategy, "custom-models");
-  assert.equal(customTrace.data.model_write_approved, true);
-  assert.equal(customTrace.data.model_config_written, true);
-  assert.equal(customTrace.data.provider_calls, 0);
-  assert.deepEqual(readdirSync(customTmp), [], "approved custom write cleans plan, temp files, and private staging");
+  assert.equal(injectedApply.status, 0, injectedApply.stderr);
+  assert.equal(existsSync(join(injectedHome, ".alfred", "models.json")), false, "model playback cannot create models.json during setup");
+  assert.doesNotMatch(`${injectedApply.stdout}\n${injectedApply.stderr}`, /provider\/forbidden|MODEL_/);
 
-  const invalidCustom = spawnSync("node", [appTui], {
-    cwd,
-    env: { ...process.env, ALFRED_INSTALL_APP_TUI_EVENTS: "set:models=custom-models,submit" },
-    encoding: "utf8"
-  });
-  assert.notEqual(invalidCustom.status, 0, "invalid custom plans cannot serialize or silently downgrade");
-  assert.match(invalidCustom.stderr, /custom model plan is invalid/);
-
-  const attackNodeBin = join(fixture, "model-plan-attack-bin");
-  mkdirSync(attackNodeBin, { recursive: true });
-  writeFileSync(join(attackNodeBin, "node"), `#!/bin/sh
-case "$1" in
-  *install-app.mjs)
-    ${shellQuote(process.execPath)} "$@" || exit $?
-    plan="$ALFRED_INSTALL_MODEL_PLAN_FILE"
-    case "$ALFRED_TEST_PLAN_ATTACK" in
-      missing) rm -f "$plan" ;;
-      symlink) cp "$plan" "$ALFRED_TEST_OUTSIDE_PLAN"; rm -f "$plan"; ln -s "$ALFRED_TEST_OUTSIDE_PLAN" "$plan" ;;
-      mode) chmod 0644 "$plan" ;;
-      unknown) printf '%s\n' '{"schema":"alfred.install.model-plan/v1","strategy":"custom-models","models":{"*":{"primary":"provider/main"},"fallbacks":[]},"provider_calls":0,"unknown":true}' > "$plan" ;;
-      invalid) printf '%s\n' '{"schema":"alfred.install.model-plan/v1","strategy":"custom-models","models":{"*":{"primary":""},"fallbacks":[]},"provider_calls":0}' > "$plan" ;;
-      tampered) printf '%s\n' '{"schema":"alfred.install.model-plan/v1","strategy":"smart-defaults","models":{"*":{"primary":"provider/main"},"fallbacks":[]},"provider_calls":0}' > "$plan" ;;
-      substitution) printf '%s\n' '{"schema":"alfred.install.model-plan/v1","strategy":"custom-models","models":{"*":{"primary":"provider/substituted"},"fallbacks":[]},"provider_calls":0}' > "$plan" ;;
-      directory-mode) chmod 0755 "$(dirname "$plan")" ;;
-    esac
-    exit 0
-    ;;
-esac
-exec ${shellQuote(process.execPath)} "$@"
-`);
-  chmodSync(join(attackNodeBin, "node"), 0o755);
-
-  for (const attack of ["missing", "symlink", "mode", "unknown", "invalid", "tampered", "substitution", "directory-mode"]) {
-    const attackHome = join(fixture, `model-plan-${attack}-home`);
-    const attackTarget = join(fixture, `model-plan-${attack}-target`);
-    const attackFixture = join(fixture, `model-plan-${attack}-fixture.json`);
-    const attackTmp = join(fixture, `model-plan-${attack}-tmp`);
-    const outsidePlan = join(fixture, `model-plan-${attack}-outside.json`);
-    const existingPath = join(attackHome, ".alfred", "models.json");
-    mkdirSync(join(attackHome, ".alfred"), { recursive: true });
-    mkdirSync(attackTarget, { recursive: true });
-    mkdirSync(attackTmp, { recursive: true });
-    writeFileSync(existingPath, '{"*":{"primary":"existing/model"},"fallbacks":[]}\n', { mode: 0o600 });
-    const before = readFileSync(existingPath, "utf8");
-    writeDiscoveryFixture(attackFixture, { fixtureHome: attackHome, fixtureTarget: attackTarget, modelSignals: false });
-    const attacked = run(["--path", attackTarget, "--no-clone"], {
-      env: {
-        HOME: attackHome,
-        PATH: `${attackNodeBin}:${process.env.PATH ?? ""}`,
-        TMPDIR: attackTmp,
-        ALFRED_INSTALL_FORCE_TUI: "1",
-        ALFRED_INSTALL_APP_TUI_EVENTS: customEvents,
-        ALFRED_INSTALL_DISCOVERY_FIXTURE_FILE: attackFixture,
-        ALFRED_INSTALL_HANDOFF_INPUT: "1",
-        ALFRED_TEST_PLAN_ATTACK: attack,
-        ALFRED_TEST_OUTSIDE_PLAN: outsidePlan
-      }
-    });
-    assert.notEqual(attacked.status, 0, `${attack} custom plan must fail closed`);
-    if (attack === "substitution") assert.match(attacked.stderr, /digest mismatch/, "valid model substitution with a stale digest is rejected by byte identity");
-    assert.equal(readFileSync(existingPath, "utf8"), before, `${attack} preserves the existing models target byte-for-byte`);
-    assert.equal(readdirSync(join(attackHome, ".alfred")).some((name) => name.includes("models.json") && name.endsWith(".tmp")), false, `${attack} leaves no target temp file`);
-    assert.deepEqual(readdirSync(attackTmp), [], `${attack} cleans private staging and plan temps`);
-  }
-
-  console.log("suite installer validation ok: preview is default, legacy flags fail closed, and apply does not install Pi by default");
+  console.log("suite installer validation ok: preview is default, model assignment is disabled, legacy flags fail closed, and apply does not install Pi by default");
 } finally {
   rmSync(fixture, { recursive: true, force: true });
 }

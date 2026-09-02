@@ -375,6 +375,7 @@ export async function createSqliteRegistryStore({ dbPath, applyMigrations = true
     emailVerifications: createEmailVerificationContract(handle),
     recoveries: createRecoveryContract(handle),
     actions: createActionAttemptContract(handle),
+    oauth: createOAuthContract(handle),
     rawHandle: handle
   };
 }
@@ -420,6 +421,129 @@ function createActionAttemptContract(db) {
 }
 
 export { applySchema as applySqliteRegistrySchema };
+
+// =============================================================================
+// OAuth contract (issue #135, direct ChatGPT Actions authorization)
+// =============================================================================
+function createOAuthContract(db) {
+  function insertToken(row, { tenantId = row.tenant_id, scope = row.scope } = {}) {
+    db.prepare(`
+      INSERT INTO oauth_tokens
+        (id, token_hash, token_type, tenant_id, client_id, scope, family_id, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      row.id, row.token_hash, row.token_type, tenantId, row.client_id,
+      scope, row.family_id, row.expires_at
+    );
+  }
+
+  return {
+    async createAuthorizationCode(input) {
+      db.prepare(`
+        INSERT INTO oauth_authorization_codes
+          (id, code_hash, tenant_id, client_id, redirect_uri, scope, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        input.id, input.code_hash, input.tenant_id, input.client_id,
+        input.redirect_uri, input.scope, input.expires_at
+      );
+      return { id: input.id };
+    },
+
+    async exchangeAuthorizationCode({ code_hash, client_id, redirect_uri, now, access, refresh }) {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const code = db.prepare(`
+          SELECT * FROM oauth_authorization_codes
+           WHERE code_hash = ? AND client_id = ? AND redirect_uri = ?
+             AND used_at IS NULL AND expires_at > ?
+        `).get(code_hash, client_id, redirect_uri, now);
+        if (!code) {
+          db.exec("ROLLBACK");
+          return null;
+        }
+        insertToken(access, { tenantId: code.tenant_id, scope: code.scope });
+        insertToken(refresh, { tenantId: code.tenant_id, scope: code.scope });
+        const changed = db.prepare(`
+          UPDATE oauth_authorization_codes SET used_at = ?
+           WHERE id = ? AND used_at IS NULL
+        `).run(now, code.id).changes;
+        if (changed !== 1) {
+          db.exec("ROLLBACK");
+          return null;
+        }
+        db.exec("COMMIT");
+        return { tenant_id: code.tenant_id, scope: code.scope };
+      } catch (err) {
+        try { db.exec("ROLLBACK"); } catch {}
+        throw err;
+      }
+    },
+
+    async resolveAccessToken(tokenHash, now) {
+      return db.prepare(`
+        SELECT id, tenant_id, client_id, scope, family_id, expires_at
+          FROM oauth_tokens
+         WHERE token_hash = ? AND token_type = 'access'
+           AND revoked_at IS NULL AND expires_at > ?
+      `).get(tokenHash, now) ?? null;
+    },
+
+    async findRefreshToken(tokenHash) {
+      return db.prepare(`
+        SELECT id, tenant_id, client_id, scope, family_id, expires_at, revoked_at, replaced_by_id
+          FROM oauth_tokens
+         WHERE token_hash = ? AND token_type = 'refresh'
+      `).get(tokenHash) ?? null;
+    },
+
+    async rotateRefreshToken({ token_hash, client_id, now, access, refresh }) {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const current = db.prepare(`
+          SELECT * FROM oauth_tokens
+           WHERE token_hash = ? AND token_type = 'refresh' AND client_id = ?
+             AND revoked_at IS NULL AND expires_at > ?
+        `).get(token_hash, client_id, now);
+        if (!current) {
+          db.exec("ROLLBACK");
+          return null;
+        }
+        insertToken(access, { tenantId: current.tenant_id, scope: current.scope });
+        insertToken(refresh, { tenantId: current.tenant_id, scope: current.scope });
+        const changed = db.prepare(`
+          UPDATE oauth_tokens SET revoked_at = ?, replaced_by_id = ?
+           WHERE id = ? AND revoked_at IS NULL
+        `).run(now, refresh.id, current.id).changes;
+        if (changed !== 1) {
+          db.exec("ROLLBACK");
+          return null;
+        }
+        db.exec("COMMIT");
+        return { tenant_id: current.tenant_id, scope: current.scope };
+      } catch (err) {
+        try { db.exec("ROLLBACK"); } catch {}
+        throw err;
+      }
+    },
+
+    async revokeTokenFamily(familyId, revokedAt) {
+      return db.prepare(`
+        UPDATE oauth_tokens SET revoked_at = COALESCE(revoked_at, ?)
+         WHERE family_id = ?
+      `).run(revokedAt, familyId).changes;
+    },
+
+    async recordTrace({ tenant_id, event, payload = {} }) {
+      const id = `trc_${randomUUID().replace(/-/g, "")}`;
+      db.prepare(`
+        INSERT INTO tenant_trace (id, tenant_id, event, payload)
+        VALUES (?, ?, ?, ?)
+      `).run(id, tenant_id, event, JSON.stringify(payload));
+      return { id };
+    }
+  };
+}
 
 // =============================================================================
 // bootstrap_attempts contract (v0.3.1 SaaS onboarding)

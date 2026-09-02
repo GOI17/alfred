@@ -1,0 +1,22 @@
+{
+  "trace_id": "issue-134-provider-request-avoided",
+  "timestamp": "2026-09-02T13:20:32Z",
+  "actor": "orchestrator",
+  "event": "provider_request_avoided",
+  "decision": "local-only",
+  "target": "issue-134-disable-setup-model-assignment",
+  "reason": "Repository inspection, implementation, and validation were deterministic local work.",
+  "data": {
+    "issue": 134,
+    "branch": "issue-134-disable-setup-model-assignment",
+    "provider_calls": 0,
+    "validation": {
+      "pathfinder_tests": "pass",
+      "setup_tests": "pass",
+      "suite_installer_validator": "pass",
+      "installer_tui_check": "pass",
+      "homebrew_tests": "pass",
+      "server_check": "pass"
+    }
+  }
+}

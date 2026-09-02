@@ -43,9 +43,9 @@ import {
   inlineRedrawSequence,
   printableInputAction,
   terminalTokenAction,
-  sgrMouseAction,
-  writePrivateModelPlan
+  sgrMouseAction
 } from "./install-app.mjs";
+import { writePrivateModelPlan } from "./install-model-plan.mjs";
 
 const defaults = recommend({
   current: {},
@@ -111,255 +111,41 @@ const discovery = normalizeDiscovery({
   provider_calls: 0
 });
 const discoveredRecommendation = recommend({ discovery });
-assert.equal(discoveredRecommendation.decisions.modelStrategy, "smart-defaults");
+assert.equal(discoveredRecommendation.decisions.modelStrategy, "configure-later");
+assert.doesNotMatch(JSON.stringify(discoveredRecommendation.decisions.customModels), /ollama|anthropic/i);
 assert.equal(discoveredRecommendation.discovery.models.suggestions[1].source, "env:ANTHROPIC_API_KEY");
 assert.equal(discoveredRecommendation.provider_calls, 0);
 
 const existingDiscovery = { ...discovery, models: { ...discovery.models, existing_config: true }, install: { ...discovery.install, models_config_exists: true } };
-assert.equal(recommend({ discovery: existingDiscovery }).decisions.modelStrategy, "keep-existing");
-
-let noSignalModels = { ...createPathfinderState(), phase: "Configure" };
-assert.ok(MODEL_STRATEGIES.includes("custom-models"), "custom-models is a stable strategy");
-assert.deepEqual(availableModelStrategies(noSignalModels), ["custom-models", "configure-later"], "manual model assignment remains available with zero detections");
-noSignalModels = focusControl(noSignalModels, "models");
-noSignalModels = transition(noSignalModels, { type: "CHANGE", delta: 1 });
-assert.equal(noSignalModels.decisions.modelStrategy, "custom-models", "Right selects custom models with no local model signal");
-assert.equal(controlsFor(noSignalModels)[noSignalModels.focus], "models-edit", "selecting custom models with an arrow focuses the adjacent edit action");
-const modelEditAction = noSignalModels;
-for (const delta of [-1, 1]) {
-  const unchanged = transition(modelEditAction, { type: "CHANGE", delta });
-  assert.equal(unchanged.phase, "Configure", "horizontal arrows on models-edit cannot navigate phases");
-  assert.equal(unchanged.decisions.modelStrategy, "custom-models", "horizontal arrows on models-edit cannot change model strategy");
-  assert.equal(unchanged.overlay, null, "horizontal arrows on models-edit never activate the editor");
-}
-assert.equal(transition(modelEditAction, { type: "ACTIVATE" }).overlay?.type, "model-editor", "Enter on models-edit opens the manual model editor");
-assert.equal(transition(modelEditAction, { type: "SPACE" }).overlay?.type, "model-editor", "Space on models-edit opens the manual model editor");
-noSignalModels = transition(noSignalModels, { type: "PATCH", key: "modelStrategy", value: "custom-models" });
-noSignalModels = focusControl(noSignalModels, "models");
-noSignalModels = transition(noSignalModels, { type: "ACTIVATE" });
-assert.equal(noSignalModels.overlay?.type, "model-editor", "Enter opens the manual model editor");
-noSignalModels = focusControl(noSignalModels, "model:wildcard");
-noSignalModels = transition(noSignalModels, { type: "ACTIVATE" });
-noSignalModels = transition(noSignalModels, { type: "INPUT", text: "ollama/qwen2.5-coder:7b" });
-const editingRender = stripAnsi(render(noSignalModels, { columns: 80, rows: 24, color: false }).text);
-assert.match(editingRender, /Select field → Enter → type → Enter to save/, "the editor explains the complete field-edit sequence");
-assert.match(editingRender, /\[EDITING\].*▏|▏.*\[EDITING\]/, "the active field visibly marks edit mode and the cursor");
-noSignalModels = transition(noSignalModels, { type: "ACTIVATE" });
-assert.equal(noSignalModels.decisions.customModels.wildcard, "ollama/qwen2.5-coder:7b", "explicit edit mode commits the wildcard model ID");
-
-const strategyMatrix = [
-  [createPathfinderState(), ["custom-models", "configure-later"]],
-  [createPathfinderState({ discovery }), ["smart-defaults", "custom-models", "configure-later"]],
-  [createPathfinderState({ discovery: existingDiscovery }), ["keep-existing", "smart-defaults", "custom-models", "configure-later"]],
-  [createPathfinderState({ current: { edition: "memory" }, discovery: existingDiscovery }), ["configure-later"]]
-];
-for (const [matrixState, expected] of strategyMatrix) assert.deepEqual(availableModelStrategies(matrixState), expected);
-
-let editor = { ...createPathfinderState(), phase: "Configure" };
-editor = transition(editor, { type: "PATCH", key: "modelStrategy", value: "custom-models" });
-editor = transition(editor, { type: "PATCH", key: "modelWildcard", value: "a👩‍💻b" });
-editor = focusControl(editor, "models");
-editor = transition(editor, { type: "ACTIVATE" });
-editor = focusControl(editor, "model:wildcard");
-editor = transition(editor, { type: "ACTIVATE" });
-editor = transition(editor, { type: "CHANGE", delta: -1 });
-editor = transition(editor, { type: "BACKSPACE" });
-assert.equal(editor.editing.draft, "ab", "Backspace removes one complete emoji grapheme");
-editor = transition(editor, { type: "ESCAPE" });
-assert.equal(editor.decisions.customModels.wildcard, "a👩‍💻b", "Escape cancels the active field draft");
-editor = transition(editor, { type: "ACTIVATE" });
-editor = transition(editor, { type: "CHANGE", delta: -1 });
-editor = transition(editor, { type: "DELETE" });
-editor = transition(editor, { type: "ACTIVATE" });
-assert.equal(editor.decisions.customModels.wildcard, "a👩‍💻", "Delete removes the grapheme after the cursor and Enter commits");
-
-editor = focusControl(editor, "fallback-add");
-editor = transition(editor, { type: "ACTIVATE" });
-editor = transition(editor, { type: "INPUT", text: "provider/first;$HOME" });
-editor = transition(editor, { type: "ACTIVATE" });
-editor = focusControl(editor, "fallback-add");
-editor = transition(editor, { type: "ACTIVATE" });
-editor = transition(editor, { type: "INPUT", text: "provider/second,opaque" });
-editor = transition(editor, { type: "ACTIVATE" });
-assert.deepEqual(editor.decisions.customModels.fallbacks, ["provider/first;$HOME", "provider/second,opaque"], "fallback IDs are independent opaque rows");
-editor = focusControl(editor, "fallback-up");
-editor = transition(editor, { type: "ACTIVATE" });
-assert.deepEqual(editor.decisions.customModels.fallbacks, ["provider/second,opaque", "provider/first;$HOME"], "Move preserves explicit fallback order");
-editor = focusControl(editor, "fallback-remove");
-editor = transition(editor, { type: "ACTIVATE" });
-assert.deepEqual(editor.decisions.customModels.fallbacks, ["provider/first;$HOME"], "Remove deletes only the selected fallback row");
-
-const hostileRevision = editor.modelRevision;
-const hostileModel = transition(editor, { type: "PATCH", key: "modelWildcard", value: "safe\x1b]52;c;evil\x07" });
-assert.equal(hostileModel.modelRevision, hostileRevision, "hostile terminal controls are rejected before persistence");
-assert.equal(hostileModel.decisions.customModels.wildcard, editor.decisions.customModels.wildcard);
-assert.equal(sanitizeModelInput("model\nnext"), null);
-assert.equal(sanitizeModelInput("provider/model;$HOME"), "provider/model;$HOME", "shell metacharacters remain opaque data");
-
-assert.deepEqual(buildCustomModelsConfig({ wildcard: " provider/main ", orchestrator: "   ", developer: " provider/dev ", fallbacks: [" fallback/one "] }), {
-  "*": { primary: " provider/main " }, developer: { primary: " provider/dev " }, fallbacks: [" fallback/one "]
-});
-assert.equal(validateCustomModelsDraft({ wildcard: "   ", orchestrator: "", developer: "", fallbacks: [] }).status, "fail", "required whitespace-only wildcard remains invalid");
-assert.equal(validateCustomModelsDraft({ wildcard: " provider/main ", orchestrator: "   ", developer: "", fallbacks: [] }).status, "pass", "optional whitespace-only overrides are omitted without rewriting valid IDs");
-assert.equal(validateCustomModelsDraft({ wildcard: "", orchestrator: "", developer: "", fallbacks: [] }).status, "fail");
-assert.equal(validateCustomModelsDraft({ wildcard: "provider/main", orchestrator: "", developer: "", fallbacks: [""] }).status, "fail");
-let invalidReview = { ...createPathfinderState(), phase: "Configure" };
-invalidReview = transition(invalidReview, { type: "PATCH", key: "modelStrategy", value: "custom-models" });
-invalidReview = transition(invalidReview, { type: "NEXT" });
-invalidReview = focusControl(invalidReview, "model-approval");
-assert.equal(transition(invalidReview, { type: "ACTIVATE" }).decisions.modelWriteApproved, false, "approval is unavailable for an invalid custom plan");
-invalidReview = focusControl(invalidReview, "review-apply");
-assert.equal(transition(invalidReview, { type: "ACTIVATE" }).phase, "Review", "invalid custom Review cannot apply");
-const invalidApply = { ...invalidReview, phase: "Apply", reviewVisited: true };
-assert.equal(transition(focusControl(invalidApply, "confirm"), { type: "ACTIVATE" }).done, false, "invalid custom Apply cannot confirm");
-
-let revisionState = { ...createPathfinderState(), phase: "Configure" };
-revisionState = transition(revisionState, { type: "PATCH", key: "modelStrategy", value: "custom-models" });
-revisionState = transition(revisionState, { type: "PATCH", key: "modelWildcard", value: "provider/main;$(opaque)" });
-revisionState = transition(revisionState, { type: "PATCH", key: "modelOrchestrator", value: "provider/orchestrator" });
-revisionState = transition(revisionState, { type: "PATCH", key: "modelDeveloper", value: "provider/developer" });
-revisionState = transition(revisionState, { type: "PATCH", key: "modelFallback", value: "provider/fallback-one" });
-revisionState = transition(revisionState, { type: "NEXT" });
-assert.equal(revisionState.reviewedModelRevision, revisionState.modelRevision, "Review binds to the current model revision");
-revisionState = inspectExactPlan(revisionState);
-revisionState = focusControl(revisionState, "model-approval");
-revisionState = transition(revisionState, { type: "ACTIVATE" });
-assert.equal(revisionState.decisions.modelWriteApproved, true);
-revisionState = transition(revisionState, { type: "PATCH", key: "modelWildcard", value: "provider/changed" });
-assert.equal(revisionState.decisions.modelWriteApproved, false, "any model edit clears approval");
-assert.equal(revisionState.reviewedModelRevision, null, "any model edit invalidates Review binding");
-assert.equal(transition(focusControl(revisionState, "review-apply"), { type: "ACTIVATE" }).phase, "Review", "stale Review cannot apply");
-
-let approvedCustom = { ...revisionState, phase: "Configure" };
-approvedCustom = transition(approvedCustom, { type: "NEXT" });
-approvedCustom = inspectExactPlan(approvedCustom);
-approvedCustom = focusControl(approvedCustom, "model-approval");
-approvedCustom = transition(approvedCustom, { type: "ACTIVATE" });
-approvedCustom = transition(approvedCustom, { type: "PATCH", key: "applyIntent", value: "apply-safe-steps" });
-approvedCustom = focusControl(approvedCustom, "review-apply");
-approvedCustom = transition(approvedCustom, { type: "ACTIVATE" });
-approvedCustom = focusControl(approvedCustom, "confirm");
-approvedCustom = transition(approvedCustom, { type: "ACTIVATE" });
-const exactCustomPlan = modelPlanForState(approvedCustom);
-assert.deepEqual(exactCustomPlan.models, {
-  "*": { primary: "provider/changed" },
-  orchestrator: { primary: "provider/orchestrator" },
-  developer: { primary: "provider/developer" },
-  fallbacks: ["provider/fallback-one"]
-});
-const customPreview = previewModel(approvedCustom.decisions, approvedCustom.discovery).lines.join("\n");
-assert.match(customPreview, /Canonical models\.json: .*provider\/changed/);
-const customAssignments = serializeAssignments(approvedCustom.decisions, approvedCustom);
-assert.match(customAssignments, /^MODEL_STRATEGY='custom-models'$/m);
-assert.match(customAssignments, /^MODEL_WRITE_APPROVED='true'$/m);
-assert.doesNotMatch(customAssignments, /provider\/|model-plan|MODEL_PLAN|\$HOME/, "raw model IDs and plan paths never enter result IPC");
-const expectedPlanDigest = "a".repeat(64);
-const customDigestAssignments = serializeAssignments(approvedCustom.decisions, { ...approvedCustom, modelPlanSha256: expectedPlanDigest });
-assert.match(customDigestAssignments, new RegExp(`^MODEL_PLAN_SHA256='${expectedPlanDigest}'$`, "m"), "approved custom output carries only the plan digest");
-assert.match(serializeAssignments(approvedCustom.decisions, { ...approvedCustom, modelInspection: null, modelPlanSha256: expectedPlanDigest }), /^MODEL_WRITE_APPROVED='false'$/m, "serialization independently rejects approval when exact pages were omitted");
-assert.equal(modelPlanForState({ ...approvedCustom, modelInspection: null }), null, "plan creation independently rejects omitted exact-page inspection");
-assert.throws(() => serializeAssignments(approvedCustom.decisions, { ...approvedCustom, modelPlanSha256: "ABC" }), /model plan digest/, "TUI refuses malformed digest IPC");
-assert.doesNotMatch(serializeAssignments({ ...discoveredRecommendation.decisions, apply: true, modelWriteApproved: true }, { reviewVisited: true, modelPlanSha256: expectedPlanDigest }), /MODEL_PLAN_SHA256/, "non-custom output cannot carry a plan digest");
-
-let inspectedPlan = { ...createPathfinderState(), phase: "Configure" };
-inspectedPlan = transition(inspectedPlan, { type: "PATCH", key: "modelStrategy", value: "custom-models" });
-inspectedPlan = transition(inspectedPlan, { type: "PATCH", key: "modelWildcard", value: " provider/main " });
-for (let index = 1; index <= 12; index += 1) inspectedPlan = transition(inspectedPlan, { type: "PATCH", key: "modelFallback", value: ` provider/fallback-${index} ` });
-inspectedPlan = transition(inspectedPlan, { type: "NEXT" });
-assert.match(render(inspectedPlan, { columns: 80, rows: 24, color: false }).text, /Inspect exact models\.json.*not inspected/, "custom Review visibly requires exact inspection");
-assert.equal(modelPlanInspectionStatus(inspectedPlan).label, "not inspected");
-inspectedPlan = focusControl(inspectedPlan, "model-plan-review");
-inspectedPlan = transition(inspectedPlan, { type: "ACTIVATE" });
-assert.equal(inspectedPlan.overlay?.type, "model-plan-review");
-inspectedPlan = transition(inspectedPlan, { type: "PAGE", delta: 0, pageSize: 5 });
-const canonicalInspection = canonicalModelsJson(inspectedPlan.decisions.customModels);
-assert.equal(canonicalInspection, `${JSON.stringify(buildCustomModelsConfig(inspectedPlan.decisions.customModels), null, 2)}\n`, "inspection uses exact canonical target bytes");
-assert.equal(modelPlanReviewLines(inspectedPlan, 10).join(""), canonicalInspection.replaceAll("\n", ""), "wrapping exact JSON never drops ordinary spaces or punctuation");
-assert.match(previewModel(inspectedPlan.decisions, inspectedPlan.discovery).lines.join("\n"), /"primary":" provider\/main "/, "preview JSON preserves ordinary leading and trailing model-ID spaces");
-assert.ok(modelPlanInspectionStatus(inspectedPlan).totalPages >= 3, "10+ fallbacks paginate at 80x24-sized content");
-inspectedPlan = transition(inspectedPlan, { type: "CLOSE_OVERLAY" });
-assert.match(modelPlanInspectionStatus(inspectedPlan).label, /^pages 1\//);
-inspectedPlan = focusControl(inspectedPlan, "model-approval");
-assert.equal(transition(inspectedPlan, { type: "ACTIVATE" }).decisions.modelWriteApproved, false, "approval is unavailable after viewing only one page");
-inspectedPlan = focusControl(inspectedPlan, "review-apply");
-assert.equal(transition(inspectedPlan, { type: "ACTIVATE" }).phase, "Review", "Apply is blocked before every exact page and approval");
-inspectedPlan = focusControl(inspectedPlan, "model-plan-review");
-inspectedPlan = transition(inspectedPlan, { type: "ACTIVATE" });
-for (let page = 1; page < modelPlanInspectionStatus(inspectedPlan).totalPages; page += 1) inspectedPlan = transition(inspectedPlan, { type: "PAGE", delta: 1, pageSize: 5 });
-assert.equal(modelPlanInspectionStatus(inspectedPlan).label, "inspected", "all exact pages viewed marks the current revision inspected");
-inspectedPlan = transition(inspectedPlan, { type: "CLOSE_OVERLAY" });
-inspectedPlan = focusControl(inspectedPlan, "review-apply");
-assert.equal(transition(inspectedPlan, { type: "ACTIVATE" }).phase, "Review", "fully inspected custom Review still requires explicit approval");
-inspectedPlan = focusControl(inspectedPlan, "model-approval");
-inspectedPlan = transition(inspectedPlan, { type: "ACTIVATE" });
-assert.equal(inspectedPlan.decisions.modelWriteApproved, true);
-inspectedPlan = focusControl(inspectedPlan, "review-apply");
-assert.equal(transition(inspectedPlan, { type: "ACTIVATE" }).phase, "Apply");
-const inspectedRevision = inspectedPlan.modelRevision;
-inspectedPlan = transition(inspectedPlan, { type: "PATCH", key: "modelDeveloper", value: " provider/changed " });
-assert.equal(inspectedPlan.modelRevision, inspectedRevision + 1);
-assert.equal(inspectedPlan.decisions.modelWriteApproved, false, "model edits clear explicit approval");
-assert.equal(modelPlanInspectionStatus(inspectedPlan).label, "not inspected", "model edits clear exact-page inspection");
-
-let renderedInspection = { ...inspectedPlan, phase: "Review" };
-renderedInspection = transition(renderedInspection, { type: "PATCH", key: "modelDeveloper", value: "" });
-renderedInspection = focusControl(renderedInspection, "model-plan-review");
-renderedInspection = transition(renderedInspection, { type: "ACTIVATE" });
-const inspectionPageSize = previewPageSize({ columns: 80, rows: 24 });
-const inspectionLines = modelPlanReviewLines(renderedInspection, 78);
-renderedInspection = transition(renderedInspection, { type: "PAGE", delta: 0, pageSize: inspectionPageSize, totalItems: inspectionLines.length });
-let renderedExactPages = "";
-for (let page = 0; page < modelPlanInspectionStatus(renderedInspection).totalPages; page += 1) {
-  renderedExactPages += `${render(renderedInspection, { columns: 80, rows: 24, color: false }).text}\n`;
-  if (page + 1 < modelPlanInspectionStatus(renderedInspection).totalPages) renderedInspection = transition(renderedInspection, { type: "PAGE", delta: 1, pageSize: inspectionPageSize, totalItems: inspectionLines.length });
-}
-for (let index = 1; index <= 12; index += 1) assert.match(renderedExactPages, new RegExp(`provider/fallback-${index}`), `80x24 exact review renders fallback ${index} on some inspected page`);
-
-for (const layout of ["fullscreen", "inline"]) {
-  let reachable = { ...editor, editing: null };
-  for (let index = 0; index < controlsFor(reachable).length; index += 1) {
-    reachable = { ...reachable, focus: index };
-    const rendered = render(reachable, { columns: 80, rows: 24, color: false, layout });
-    assert.ok(rendered.text.split("\n").length <= (layout === "fullscreen" ? 23 : 24), `${layout} model editor fits 80x24`);
-    assert.ok(rendered.hitRegions.some(({ action }) => action.control === controlsFor(reachable)[index]), `${layout} model editor keeps focused control reachable`);
+assert.equal(recommend({ discovery: existingDiscovery }).decisions.modelStrategy, "configure-later");
+for (const state of [createPathfinderState(), createPathfinderState({ discovery }), createPathfinderState({ discovery: existingDiscovery })]) {
+  assert.deepEqual(availableModelStrategies(state), ["configure-later"]);
+  assert.equal(modelPlanForState({ ...state, done: true }), null);
+  for (const key of ["modelStrategy", "modelWriteApproved", "modelWildcard", "modelOrchestrator", "modelDeveloper", "modelFallback"]) {
+    assert.deepEqual(transition(state, { type: "PATCH", key, value: key === "modelStrategy" ? "custom-models" : "provider/model" }), state, `${key} is ignored during setup`);
   }
 }
-
-const planWriterFixture = mkdtempSync(join(tmpdir(), "alfred-model-plan-writer-"));
-try {
-  const planPath = join(planWriterFixture, "model-plan.json");
-  writeFileSync(planPath, "", { mode: 0o600 });
-  const written = writePrivateModelPlan(planPath, exactCustomPlan);
-  assert.deepEqual(JSON.parse(readFileSync(planPath, "utf8")), exactCustomPlan);
-  assert.equal(written.sha256, createHash("sha256").update(readFileSync(planPath)).digest("hex"), "writer hashes the exact bytes renamed into place");
-  assert.deepEqual(written.bytes, readFileSync(planPath), "writer returns the exact atomically written bytes");
-  assert.equal(statSync(planPath).mode & 0o777, 0o600);
-  assert.deepEqual(readFileSync(planPath, "utf8").includes("provider/changed"), true);
-  assert.deepEqual(readdirSync(planWriterFixture), ["model-plan.json"], "atomic plan write leaves no sibling temp file");
-} finally {
-  rmSync(planWriterFixture, { recursive: true, force: true });
+const disabledConfigure = { ...createPathfinderState({ discovery }), phase: "Configure" };
+assert.deepEqual(controlsFor(disabledConfigure), ["name", "path", "intent", "next"]);
+for (const output of [render(disabledConfigure, { columns: 80, rows: 24, color: false }).text, previewModel(disabledConfigure.decisions, discovery).lines.join("\n"), rationaleLines(disabledConfigure).join("\n")]) {
+  assert.doesNotMatch(output, /model|models\.json|ollama|anthropic/i);
 }
-
-const unsafePlanWriterFixture = mkdtempSync(join(tmpdir(), "alfred-model-plan-writer-unsafe-"));
-try {
-  const wrongName = join(unsafePlanWriterFixture, "other.json");
-  writeFileSync(wrongName, "", { mode: 0o600 });
-  assert.throws(() => writePrivateModelPlan(wrongName, exactCustomPlan), /fixed model-plan\.json filename/);
-  const outside = join(unsafePlanWriterFixture, "outside.json");
-  const symlinkPlan = join(unsafePlanWriterFixture, "model-plan.json");
-  writeFileSync(outside, "outside", { mode: 0o600 });
-  symlinkSync(outside, symlinkPlan);
-  assert.throws(() => writePrivateModelPlan(symlinkPlan, exactCustomPlan), /regular non-symlink/);
-  rmSync(symlinkPlan);
-  writeFileSync(symlinkPlan, "", { mode: 0o644 });
-  assert.throws(() => writePrivateModelPlan(symlinkPlan, exactCustomPlan), /mode 0600/);
-  chmodSync(symlinkPlan, 0o600);
-  chmodSync(unsafePlanWriterFixture, 0o755);
-  assert.throws(() => writePrivateModelPlan(symlinkPlan, exactCustomPlan), /private mode 0700/);
-} finally {
-  chmodSync(unsafePlanWriterFixture, 0o700);
-  rmSync(unsafePlanWriterFixture, { recursive: true, force: true });
+for (const overlay of ["model-editor", "model-plan-review"]) {
+  const injected = {
+    ...disabledConfigure,
+    overlay: { type: overlay, page: 0 },
+    editing: { kind: "model", control: "model:wildcard", draft: "provider/model", cursor: 0 },
+    decisions: { ...disabledConfigure.decisions, modelStrategy: "custom-models", modelWriteApproved: true }
+  };
+  assert.deepEqual(controlsFor(injected), ["name", "path", "intent", "next"]);
+  assert.doesNotMatch(render(injected, { columns: 80, rows: 24, color: false }).text, /model|models\.json|provider\/model/i);
+  const ignored = transition(injected, { type: overlay === "model-editor" ? "OPEN_MODEL_EDITOR" : "OPEN_MODEL_PLAN_REVIEW" });
+  assert.equal(ignored.overlay, null);
+  assert.equal(ignored.editing, null);
+  assert.equal(ignored.decisions.modelStrategy, "configure-later");
+  assert.equal(ignored.decisions.modelWriteApproved, false);
 }
+assert.doesNotMatch(serializeAssignments({ ...disabledConfigure.decisions, apply: true, modelWriteApproved: true, modelStrategy: "custom-models" }), /^MODEL_/m);
 
 let quick = createPathfinderState({ current: {}, harnessStatus: { opencode: "installed" } });
 quick = transition(quick, { type: "USE_RECOMMENDED" });
@@ -427,14 +213,6 @@ function focusControl(state, control) {
   return transition(state, { type: "FOCUS_CONTROL", control });
 }
 
-function inspectExactPlan(state, pageSize = 5) {
-  let inspected = focusControl(state, "model-plan-review");
-  inspected = transition(inspected, { type: "ACTIVATE" });
-  inspected = transition(inspected, { type: "PAGE", delta: 0, pageSize });
-  for (let page = 1; page < modelPlanInspectionStatus(inspected).totalPages; page += 1) inspected = transition(inspected, { type: "PAGE", delta: 1, pageSize });
-  return transition(inspected, { type: "CLOSE_OVERLAY" });
-}
-
 for (const [control, activatedPhase] of [["recommended", "Review"], ["customize", "Choose"]]) {
   const discoverAction = focusControl(createPathfinderState(), control);
   const decisionsBefore = structuredClone(discoverAction.decisions);
@@ -462,7 +240,6 @@ const enumCases = [
   { control: "edition", key: "edition", state: chooseEnums },
   { control: "profile", key: "profileStrategy", state: chooseEnums },
   { control: "memory", key: "memorySetup", state: { ...createPathfinderState({ current: { edition: "full" }, discovery }), phase: "Configure" } },
-  { control: "models", key: "modelStrategy", state: { ...createPathfinderState({ discovery }), phase: "Configure" } },
   { control: "intent", key: "applyIntent", state: { ...createPathfinderState({ discovery }), phase: "Configure" } }
 ];
 for (const { control, key, state: enumState } of enumCases) {
@@ -500,13 +277,6 @@ assert.equal(transition(reviewCancel, { type: "ACTIVATE" }).cancelled, true, "Re
 const applyCancel = focusControl(selectedApply, "cancel");
 assert.equal(transition(applyCancel, { type: "ACTIVATE" }).cancelled, true, "Apply confirmation exposes cancel");
 
-const modelApproval = focusControl(transition(createPathfinderState({ discovery }), { type: "USE_RECOMMENDED" }), "model-approval");
-for (const delta of [-1, 1]) {
-  assert.equal(transition(modelApproval, { type: "CHANGE", delta }).decisions.modelWriteApproved, false, "horizontal arrows do not toggle model approval");
-}
-assert.equal(transition(modelApproval, { type: "SPACE" }).decisions.modelWriteApproved, true, "Space toggles model approval");
-assert.equal(transition(modelApproval, { type: "ACTIVATE" }).decisions.modelWriteApproved, true, "Enter toggles model approval");
-
 let overlayState = createPathfinderState();
 for (const phase of PHASES) {
   overlayState = { ...overlayState, phase, done: false };
@@ -527,7 +297,7 @@ assert.match(narrow.text, /layout: fullscreen/);
 assert.equal(narrow.text.match(/^Keys:/gm)?.length, 1, "the footer has one compact help line");
 assert.equal(narrow.text.split("\n").length, 23, "fullscreen reserves the physical last row");
 assert.match(narrow.text.split("\n").at(-1), /^Keys:/, "fullscreen help ends at physical row rows-1");
-assert.match(narrow.text, /Provider\/model suggestions: no safe local signals detected/);
+assert.doesNotMatch(narrow.text, /model|models\.json/i);
 assert.equal(narrow.provider_calls, 0);
 assert.match(stripAnsi(narrow.text), /┌ Discover/);
 
@@ -846,62 +616,24 @@ for (const [name, sequence] of Object.entries(unsafeSgrLookalikes)) {
   assert.equal(redraw, "beforeafter", `inline redraw removes ${name}`);
 }
 
-const model = previewModel(discoveredRecommendation.decisions, discovery);
-assert.equal(model.providerCalls, 0);
-assert.match(model.lines.join("\n"), /Wildcard primary: ollama\/qwen2\.5-coder:7b/);
-assert.match(model.lines.join("\n"), /Orchestrator override: anthropic\/claude-sonnet-4/);
-assert.match(model.lines.join("\n"), /Developer override: anthropic\/claude-sonnet-4/);
-assert.match(model.lines.join("\n"), /Global fallback chain: ollama\/qwen2\.5-coder:7b → anthropic\/claude-sonnet-4/);
+const modelFreePreview = previewModel(discoveredRecommendation.decisions, discovery);
+assert.equal(modelFreePreview.providerCalls, 0);
+assert.doesNotMatch(modelFreePreview.lines.join("\n"), /model|models\.json|ollama|anthropic/i);
 const exactPathPreview = previewModel({ ...discoveredRecommendation.decisions, targetPath: "/home/test/.alfred/installs/exact-preview-path" }, discovery);
 assert.match(exactPathPreview.lines.join("\n"), /Target path: \/home\/test\/\.alfred\/installs\/exact-preview-path/, "full Preview preserves the exact target path");
-const keepModel = previewModel(recommend({ discovery: existingDiscovery }).decisions, existingDiscovery);
-assert.match(keepModel.lines.join("\n"), /remains untouched and was not read into the TUI/);
-assert.doesNotMatch(keepModel.lines.join("\n"), /Wildcard primary|Global fallback chain|Model write approved/);
-const laterDecisions = { ...discoveredRecommendation.decisions, modelStrategy: "configure-later" };
-const laterModel = previewModel(laterDecisions, discovery);
-assert.match(laterModel.lines.join("\n"), /No model configuration will be written/);
-assert.doesNotMatch(laterModel.lines.join("\n"), /Wildcard primary|Global fallback chain|Model write approved/);
 
 const codingConfigure = { ...createPathfinderState({ discovery }), phase: "Configure" };
-assert.deepEqual(controlsFor(codingConfigure), ["models", "name", "path", "intent", "next"]);
+assert.deepEqual(controlsFor(codingConfigure), ["name", "path", "intent", "next"]);
 assert.doesNotMatch(stripAnsi(render(codingConfigure, { columns: 100, rows: 30, color: false }).text), /Memory:/);
-const customConfigure = transition(focusControl({ ...createPathfinderState(), phase: "Configure" }, "models"), { type: "CHANGE", delta: 1 });
-assert.deepEqual(controlsFor(customConfigure), ["models", "models-edit", "name", "path", "intent", "next"], "models-edit immediately follows the custom strategy selector");
-const customConfigureRender = render(customConfigure, { columns: 80, rows: 24, color: false, layout: "fullscreen" });
-assert.match(customConfigureRender.text, /Models \(←\/→ choose\): Custom model assignments/, "the Models row is visibly a selector");
-assert.match(customConfigureRender.text, /> \[Enter\] Edit model assignments…/, "the focused models-edit control is visibly actionable");
-assert.match(customConfigureRender.text.split("\n").at(-1), /Enter edit models/, "the models-edit footer names its focused action");
-assert.ok(customConfigureRender.hitRegions.some(({ action }) => action.type === "OPEN_MODEL_EDITOR" && action.control === "models-edit"), "fullscreen exposes a mouse hit region for models-edit");
-for (const layout of ["fullscreen", "inline"]) {
-  let reachable = { ...customConfigure, focus: 0 };
-  for (const expectedControl of controlsFor(customConfigure)) {
-    assert.equal(controlsFor(reachable)[reachable.focus], expectedControl, `${layout} Down reaches ${expectedControl} in order`);
-    const rendered = render(reachable, { columns: 80, rows: 24, color: false, layout });
-    assert.equal(rendered.hitRegions.length, controlsFor(reachable).length, `${layout} custom Configure keeps every control reachable at 80x24`);
-    reachable = transition(reachable, { type: "MOVE", delta: 1 });
-  }
-}
 const memoryConfigure = { ...createPathfinderState({ current: { edition: "memory" }, discovery }), phase: "Configure" };
 assert.deepEqual(controlsFor(memoryConfigure), ["memory", "name", "path", "intent", "next"]);
 assert.doesNotMatch(stripAnsi(render(memoryConfigure, { columns: 100, rows: 30, color: false }).text), /Profiles:|Models:/);
 const fullConfigure = { ...createPathfinderState({ current: { edition: "full" }, discovery }), phase: "Configure" };
-assert.deepEqual(controlsFor(fullConfigure), ["memory", "models", "name", "path", "intent", "next"]);
+assert.deepEqual(controlsFor(fullConfigure), ["memory", "name", "path", "intent", "next"]);
 for (const rendered of [render(codingConfigure, { color: false }), render(memoryConfigure, { color: false }), render(fullConfigure, { color: false })]) {
   assert.doesNotMatch(rendered.text, /not-needed-for-/);
+  assert.doesNotMatch(rendered.text, /model|models\.json/i);
 }
-
-const longApprovalDiscovery = normalizeDiscovery({
-  ...discovery,
-  install: {
-    ...discovery.install,
-    models_config_path: "/home/test/.alfred/configuration/with/a/long/path/that/wraps/models.json"
-  }
-});
-const longApprovalState = transition(createPathfinderState({ discovery: longApprovalDiscovery }), { type: "USE_RECOMMENDED" });
-const longApprovalRender = render(longApprovalState, { columns: 80, rows: 24, color: false });
-const approvalRegion = longApprovalRender.hitRegions.find(({ action }) => action.type === "PATCH" && action.key === "modelWriteApproved");
-assert.ok(approvalRegion && approvalRegion.y2 > approvalRegion.y1, "a wrapped actionable row retains one multi-row mouse hit region");
-assert.equal(longApprovalRender.hitRegions.length, controlsFor(longApprovalState).length, "wrapped actions preserve every Review control hit region");
 
 let changed = createPathfinderState({ discovery });
 changed = transition(changed, { type: "CUSTOMIZE" });
@@ -918,22 +650,22 @@ let approved = createPathfinderState({ discovery });
 approved = transition(approved, { type: "USE_RECOMMENDED" });
 approved = transition(approved, { type: "PATCH", key: "applyIntent", value: "apply-safe-steps" });
 approved = transition(approved, { type: "PATCH", key: "modelWriteApproved", value: true });
-assert.equal(approved.decisions.modelWriteApproved, true);
+assert.equal(approved.decisions.modelWriteApproved, false);
 approved = transition(approved, { type: "CONTINUE" });
 approved = transition(approved, { type: "CONFIRM" });
 assert.equal(approved.decisions.apply, true);
-assert.match(serializeAssignments(approved.decisions, { reviewVisited: approved.reviewVisited }), /^MODEL_STRATEGY='smart-defaults'$/m);
-assert.match(serializeAssignments(approved.decisions, { reviewVisited: approved.reviewVisited }), /^MODEL_WRITE_APPROVED='true'$/m);
+assert.doesNotMatch(serializeAssignments(approved.decisions), /^MODEL_/m);
 
 let unreviewed = createPathfinderState({ discovery });
 unreviewed = transition(unreviewed, { type: "PATCH", key: "modelWriteApproved", value: true });
 assert.equal(unreviewed.decisions.modelWriteApproved, false, "approval is unavailable before Review");
-assert.match(serializeAssignments({ ...discoveredRecommendation.decisions, apply: true, modelWriteApproved: true }), /^MODEL_WRITE_APPROVED='false'$/m);
+assert.doesNotMatch(serializeAssignments({ ...discoveredRecommendation.decisions, apply: true, modelWriteApproved: true }), /^MODEL_/m);
 
 const assignments = serializeAssignments({ ...explicit.decisions, apply: false });
-for (const name of ["EDITION", "HARNESS", "PROFILE_STRATEGY", "MEMORY_SETUP", "NAME", "APPLY", "SKIP_PROFILE_MANAGER", "TUI_USED", "TUI_MODE", "MODEL_STRATEGY", "MODEL_WRITE_APPROVED", "TARGET_PATH"]) {
+for (const name of ["EDITION", "HARNESS", "PROFILE_STRATEGY", "MEMORY_SETUP", "NAME", "APPLY", "SKIP_PROFILE_MANAGER", "TUI_USED", "TUI_MODE", "TARGET_PATH"]) {
   assert.match(assignments, new RegExp(`^${name}=`, "m"));
 }
+assert.doesNotMatch(assignments, /^MODEL_/m);
 assert.match(assignments, /^TUI_MODE='app'$/m);
 
 const primaryPress = decodeTerminalEvent("\x1b[<0;12;8M");
