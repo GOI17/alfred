@@ -1,0 +1,29 @@
+{
+  "id": "release-0.6.0",
+  "version": "0.6.0",
+  "candidate": "alfred-setup-command-0.6.0",
+  "owner": "orchestrator",
+  "status": "candidate",
+  "scope": "alfred-setup-command",
+  "previous_release": "release-0.5.0",
+  "issue": 124,
+  "branch": "issue-124-alfred-setup",
+  "public_commands": ["alfred"],
+  "removed_commands": ["alfred-install"],
+  "required_validators": [
+    "homebrew:test",
+    "validate:homebrew",
+    "pages:build",
+    "pages:check",
+    "brew audit --strict --formula GOI17/tap/alfred",
+    "brew upgrade GOI17/tap/alfred",
+    "brew test GOI17/tap/alfred"
+  ],
+  "source_policy": {
+    "release_tag": "v0.6.0",
+    "validated_commit_source": "pending",
+    "tap_commit": "pending"
+  },
+  "provider_calls_allowed": 0,
+  "harness_config_writes_require_human_approval": true
+}

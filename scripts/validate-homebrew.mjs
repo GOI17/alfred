@@ -13,9 +13,10 @@ const installer = readFileSync(join(root, "install.sh"), "utf8");
 const installDocs = readFileSync(join(root, "site/docs/install.html"), "utf8");
 const installPolicy = readFileSync(join(root, ".ai/instructions/install-management.md"), "utf8");
 const specification = readFileSync(join(root, ".ai/execution/homebrew-installation.md"), "utf8");
+const setupCommand = readFileSync(join(root, "packages/memory-server/scripts/setup.mjs"), "utf8");
 
-assert.equal(manifest.version, "0.5.0");
-assert.match(installer, /^VERSION="0\.5\.0"$/m);
+assert.equal(manifest.version, "0.6.0");
+assert.match(installer, /^VERSION="0\.6\.0"$/m);
 for (const text of [installDocs, installPolicy, specification]) {
   const searchableText = text.replace(/<[^>]+>/g, "");
   assert.match(searchableText, /brew install GOI17\/tap\/alfred/);
@@ -28,16 +29,17 @@ const cli = spawnSync(
   { encoding: "utf8", cwd: root }
 );
 assert.equal(cli.status, 0, cli.stderr);
-assert.equal(cli.stdout.trim(), "alfred 0.5.0");
+assert.equal(cli.stdout.trim(), "alfred 0.6.0");
 
 const preview = spawnSync(
-  "sh",
-  [join(root, "install.sh"), "--edition=coding", "--name=brew-validation", "--harness=none"],
-  { encoding: "utf8", cwd: root }
+  process.execPath,
+  [join(root, "packages/memory-server/scripts/alfred.mjs"), "setup", "--edition=coding", "--name=brew-validation", "--harness=none"],
+  { encoding: "utf8", cwd: root, env: { ...process.env, ALFRED_DISTRIBUTION: "homebrew" } }
 );
 assert.equal(preview.status, 0, preview.stderr);
 assert.match(preview.stdout, /ALFRED SUITE INSTALL PREVIEW/);
-assert.match(preview.stdout, /Version:\s+0\.5\.0/);
+assert.match(preview.stdout, /Version:\s+0\.6\.0/);
+assert.match(preview.stdout, new RegExp(`Target path:\\s+${root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 assert.match(preview.stdout, /Provider calls: 0/);
 
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "alfred-homebrew-validation-"));
@@ -45,24 +47,27 @@ try {
   const formulaPath = join(temporaryDirectory, "Formula", "alfred.rb");
   const formula = renderFormula({
     source: "git",
-    version: "0.5.0",
+    version: "0.6.0",
     revision: "a".repeat(40)
   });
   writeFormulaAtomic(formulaPath, formula);
   const ruby = spawnSync("ruby", ["-c", formulaPath], { encoding: "utf8" });
   assert.equal(ruby.status, 0, `${ruby.stdout}${ruby.stderr}`);
   assert.match(ruby.stdout, /Syntax OK/);
-  assert.match(formula, /--no-clone/);
+  assert.match(formula, /ALFRED_DISTRIBUTION=homebrew/);
+  assert.match(formula, /alfred setup/);
+  assert.doesNotMatch(formula, /alfred-install/);
   assert.match(formula, /depends_on "node"/);
   assert.doesNotMatch(formula, /^\s*version\s/m);
 } finally {
   rmSync(temporaryDirectory, { recursive: true, force: true });
 }
+assert.match(setupCommand, /--no-clone/);
 
 process.stdout.write(`${JSON.stringify({
   status: "pass",
   version: manifest.version,
   formula_modes: ["git-revision", "archive-sha256"],
-  commands: ["alfred", "alfred-install"],
+  commands: ["alfred"],
   provider_calls: 0
 })}\n`);

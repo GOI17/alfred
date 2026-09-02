@@ -14,12 +14,12 @@ gh auth login
 gh auth setup-git
 brew install GOI17/tap/alfred
 alfred version
-alfred-install
+alfred setup
 ```
 
 Use the fully qualified formula name: plain `brew install alfred` resolves to
 the unrelated Alfred macOS application cask. The formula itself writes no live
-harness configuration; `alfred-install` remains guided and preview-first.
+harness configuration; `alfred setup` remains guided and preview-first.
 
 The existing `curl | sh` bootstrap remains available in the
 [install guide](https://alfred.alfredlabs.org/docs/install.html).

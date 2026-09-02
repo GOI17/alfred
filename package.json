@@ -1,7 +1,7 @@
 {
   "name": "alfred",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Alfred handles the operational burden so humans focus on decisions.",
   "packageManager": "pnpm@10.0.0",
   "scripts": {
@@ -51,7 +51,7 @@
     "validate:homebrew": "node scripts/validate-homebrew.mjs",
     "pages:build": "node scripts/build-pages-site.mjs",
     "pages:check": "node scripts/check-pages-site.mjs",
-    "homebrew:test": "node --test scripts/generate-homebrew-formula.test.mjs",
+    "homebrew:test": "node --test scripts/generate-homebrew-formula.test.mjs scripts/alfred-setup.test.mjs",
     "homebrew:formula": "node scripts/generate-homebrew-formula.mjs"
   }
 }

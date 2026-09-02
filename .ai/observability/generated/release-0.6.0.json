@@ -1,0 +1,21 @@
+{
+  "event": "release_candidate_started",
+  "release": "0.6.0",
+  "validated_commit_source": "pending",
+  "timestamp_utc": "2026-09-02",
+  "phase": "issue-124-alfred-setup",
+  "issue": 124,
+  "branch": "issue-124-alfred-setup",
+  "change": "Replace the public alfred-install executable with alfred setup",
+  "local_validation": {
+    "cli_setup_preview": "pass",
+    "alfred_setup_tests": "3/3 pass",
+    "formula_generator_tests": "4/4 pass",
+    "homebrew_contract": "pass",
+    "homebrew_formula_style": "pass",
+    "pages_build": "pass",
+    "pages_check": "pass"
+  },
+  "provider_calls": 0,
+  "result": "candidate-pass-pending-publication"
+}

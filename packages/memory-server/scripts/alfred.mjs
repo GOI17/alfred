@@ -22,6 +22,7 @@ const usage = () => {
     "  alfred init --profile=both --name shared  # both kinds",
     "",
     "Subcommands:",
+    "  setup            Configure Alfred with a guided, preview-first flow",
     "  init             Initialize a tenant + workspace + API key (3 profiles)",
     "  provision        Provision a tenant only (no workspace, no key)",
     "  list             List tenants in the registry",
@@ -59,6 +60,8 @@ async function main(argv, env = process.env) {
   }
   try {
     switch (subcmd) {
+      case "setup":
+        return await (await import("./setup.mjs")).run(rest, env);
       case "init":
         return await (await import("./init.mjs")).run(rest, env);
       case "provision":

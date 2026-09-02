@@ -33,13 +33,13 @@ authenticate Git for the private tap and run:
 gh auth login
 gh auth setup-git
 brew install GOI17/tap/alfred
-alfred-install
+alfred setup
 ```
 
 Always use the fully qualified formula name because unqualified
 `brew install alfred` resolves to the unrelated Alfred macOS application cask.
 The formula installs packaged commands only; it does not write live harness
-configuration. `alfred-install` opens the same preview-first guided flow from
+configuration. `alfred setup` opens the same preview-first guided flow from
 the packaged, pinned source without cloning `main`.
 
 The bootstrap alternative remains
@@ -114,10 +114,8 @@ Process:
 8. If different and not `--dry-run`, write the updated content atomically.
 9. Emit an update trace event with `diff_detected` flag.
 
-CLI:
-```
-alfred-install update --source <path> --target <path> [--type agent|skill|adapter] [--dry-run] [--force]
-```
+There is no separate public installer executable. Invoke this operation through
+the install-management API after validating the source and target paths.
 
 ### Uninstall
 
@@ -133,10 +131,8 @@ Process:
 5. If not `--dry-run`, remove the target file.
 6. Emit an uninstall trace event.
 
-CLI:
-```
-alfred-install uninstall --target <path> [--type agent|skill|adapter] [--dry-run] [--force]
-```
+There is no separate public installer executable. Invoke this operation through
+the install-management API after validating the target path.
 
 ## Trace Event Format
 
@@ -147,7 +143,7 @@ Every operation must emit a trace object matching `createInstallTrace`:
   "trace_id": "phase-13-install-management",
   "timestamp": "ISO-8601",
   "event": "install_management_operation",
-  "actor": "alfred-install",
+  "actor": "alfred-setup",
   "data": {
     "operation": "install | update | uninstall",
     "artifact_type": "agent | skill | adapter",
