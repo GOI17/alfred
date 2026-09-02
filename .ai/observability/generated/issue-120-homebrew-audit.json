@@ -2,7 +2,7 @@
   "event": "homebrew_audit_remediation_started",
   "issue": 120,
   "release": "0.5.0",
-  "timestamp_utc": "2026-09-01",
+  "timestamp_utc": "2026-09-02",
   "finding": "Stable version stanza is redundant with the version inferred from the immutable source tag",
   "remediation": "Omit the explicit version stanza and retain tag/revision pinning",
   "local_validation": {
@@ -12,5 +12,13 @@
     "homebrew_strict_audit": "pass"
   },
   "provider_calls": 0,
-  "result": "local-pass-pending-publication"
+  "published_tap_commit": "18c7254c2548393dc631ef62e8a5169f93f694cc",
+  "end_to_end_validation": {
+    "homebrew_strict_audit": "pass",
+    "homebrew_source_install": "pass",
+    "homebrew_test": "pass",
+    "alfred_version": "alfred 0.5.0",
+    "installer_preview": "pass"
+  },
+  "result": "pass"
 }

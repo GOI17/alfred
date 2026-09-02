@@ -26,9 +26,11 @@ Use the fully qualified formula name because unqualified
 - Documentation site build and checks: pass.
 - Provider calls: 0.
 
-Publication, `brew audit`, `brew install`, and `brew test` are completed after
-the release commit is merged and tagged so the formula can pin its immutable
-source revision.
+The private formula was published at
+`GOI17/homebrew-tap@18c7254c2548393dc631ef62e8a5169f93f694cc`, pinned to
+`GOI17/alfred@ee73a36af68c28ebb305d8290c8254f86cf091fa`. Strict audit,
+source installation, `brew test`, `alfred version`, and the packaged installer
+preview all pass.
 
 ## Traceability
 

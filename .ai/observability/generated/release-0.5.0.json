@@ -1,15 +1,18 @@
 {
   "event": "release_candidate_validated",
   "release": "0.5.0",
-  "validated_commit_source": "pending",
-  "timestamp_utc": "2026-09-01",
+  "validated_commit_source": "ee73a36af68c28ebb305d8290c8254f86cf091fa",
+  "tap_commit": "18c7254c2548393dc631ef62e8a5169f93f694cc",
+  "timestamp_utc": "2026-09-02",
   "phase": "issue-118-homebrew-installation",
   "issue": 118,
   "branch": "issue-118-homebrew-installation",
   "provider_calls": 0,
   "network_operations": [
     "github issue creation",
-    "official Homebrew documentation lookup"
+    "official Homebrew documentation lookup",
+    "GitHub release and private tap publication",
+    "Homebrew source installation and testing"
   ],
   "local_validation": {
     "formula_generator_tests": "4/4 pass",
@@ -20,13 +23,14 @@
     "pages_check": "pass",
     "git_diff_check": "pass"
   },
-  "pending_external_validation": [
-    "merge release commit",
-    "create v0.5.0 tag and release",
-    "publish GOI17/homebrew-tap formula pinned to the tag commit",
-    "brew audit",
-    "brew install",
-    "brew test"
-  ],
-  "result": "candidate-pass"
+  "external_validation": {
+    "github_release": "https://github.com/GOI17/alfred/releases/tag/v0.5.0",
+    "private_tap": "https://github.com/GOI17/homebrew-tap",
+    "homebrew_strict_audit": "pass",
+    "homebrew_source_install": "pass",
+    "homebrew_test": "pass",
+    "alfred_version": "alfred 0.5.0",
+    "installer_preview": "pass; no files written; provider calls 0"
+  },
+  "result": "pass"
 }

@@ -25,6 +25,6 @@ regression in both the generator and Homebrew contract validator.
 - [x] Generator tests pass.
 - [x] Homebrew contract validator passes.
 - [x] Generated formula passes `brew style`.
-- [ ] Published formula passes `brew audit --strict`.
-- [ ] Published formula installs and passes `brew test`.
-- [ ] Provider calls remain 0.
+- [x] Published formula passes `brew audit --strict`.
+- [x] Published formula installs and passes `brew test`.
+- [x] Provider calls remain 0.
