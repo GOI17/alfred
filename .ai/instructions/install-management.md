@@ -26,7 +26,27 @@ Provide deterministic, reproducible instructions for Alfred installation, update
 
 ### Mode 0: Human-First Suite Install
 
-Use for humans installing Alfred itself. Run `curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh` without advanced flags so the TUI can explain edition, harness, runtime profiles, Memory setup, name, and preview/apply. Use `--edition`, `--name`, `--harness`, and `--apply` only for automation after decisions are known.
+Use for humans installing Alfred itself. For versioned Homebrew installation,
+authenticate Git for the private tap and run:
+
+```sh
+gh auth login
+gh auth setup-git
+brew install GOI17/tap/alfred
+alfred-install
+```
+
+Always use the fully qualified formula name because unqualified
+`brew install alfred` resolves to the unrelated Alfred macOS application cask.
+The formula installs packaged commands only; it does not write live harness
+configuration. `alfred-install` opens the same preview-first guided flow from
+the packaged, pinned source without cloning `main`.
+
+The bootstrap alternative remains
+`curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh`.
+Run it without advanced flags so the TUI can explain edition, harness, runtime
+profiles, Memory setup, name, and preview/apply. Use `--edition`, `--name`,
+`--harness`, and `--apply` only for automation after decisions are known.
 
 ### Mode 1: Agent-Driven Harness Artifact Install
 

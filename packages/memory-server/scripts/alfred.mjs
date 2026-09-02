@@ -8,6 +8,10 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
+const { version: ALFRED_VERSION } = JSON.parse(
+  readFileSync(new URL("../../../package.json", import.meta.url), "utf8")
+);
+
 const usage = () => {
   process.stderr.write([
     "alfred <subcommand> [options]",
@@ -76,7 +80,7 @@ async function main(argv, env = process.env) {
       case "serve":
         return await (await import("./serve.mjs")).run(rest, env);
       case "version":
-        process.stdout.write("alfred 0.3.0\n");
+        process.stdout.write(`alfred ${ALFRED_VERSION}\n`);
         return 0;
       default:
         process.stderr.write(`Unknown subcommand: ${subcmd}\n`);

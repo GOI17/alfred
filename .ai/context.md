@@ -107,6 +107,17 @@ curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/uninstall.sh | sh
 
 Install scripts validate paths (reject root `/` and protected paths like `.ai/`, `.opencode/`, `harnesses/`).
 
+### 8. Homebrew Distribution
+
+Alfred `0.5.0` adds a versioned Homebrew packaging boundary. Collaborators use
+the private `GOI17/homebrew-tap` and install the fully qualified formula with
+`brew install GOI17/tap/alfred`; the qualification avoids collision with the
+unrelated Alfred macOS application cask. The formula installs `alfred` and
+`alfred-install`, declares Node explicitly, and pins private Git source by both
+tag and commit revision. Formula installation never writes live harness config;
+the packaged `alfred-install` command preserves the existing preview/apply
+approval flow and does not clone `main`.
+
 
 ## Memory Hosting
 

@@ -14,7 +14,7 @@
 
 set -e
 
-VERSION="0.4.1.1"
+VERSION="0.5.0"
 OPENTUI_INSTALLER_VERSION="0.1.0"
 REPO_URL="https://github.com/GOI17/alfred.git"
 DEFAULT_BRANCH="main"
