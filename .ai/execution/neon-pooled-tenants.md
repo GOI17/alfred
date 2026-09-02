@@ -35,7 +35,7 @@ persist across pooled transactions.
 - [x] Unit tests cover pooled URL cleanup, schema qualification, transaction
       commit, and transaction rollback.
 - [x] Existing Memory and console tests pass.
-- [ ] Real PostgreSQL cross-tenant isolation passes in CI.
+- [x] Real PostgreSQL cross-tenant isolation passes in CI.
 - [ ] Production deploy succeeds.
 - [ ] Tenant bootstrap no longer reports an unsupported startup parameter.
 - [x] Trace reports provider calls 0.
