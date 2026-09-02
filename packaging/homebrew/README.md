@@ -10,7 +10,7 @@ gh auth login
 gh auth setup-git
 brew install GOI17/tap/alfred
 alfred version
-alfred-install
+alfred setup
 ```
 
 Use the fully qualified formula name. Homebrew already distributes an unrelated
@@ -23,7 +23,7 @@ the collaborator's credential helper without publishing a source archive:
 
 ```sh
 node scripts/generate-homebrew-formula.mjs \
-  --version 0.5.0 \
+  --version 0.6.0 \
   --source git \
   --revision <tag-commit-sha> \
   --output /path/to/homebrew-tap/Formula/alfred.rb
@@ -34,7 +34,7 @@ SHA-256 instead:
 
 ```sh
 node scripts/generate-homebrew-formula.mjs \
-  --version 0.5.0 \
+  --version 0.6.0 \
   --source archive \
   --sha256 <archive-sha256> \
   --output /path/to/homebrew-tap/Formula/alfred.rb
@@ -49,6 +49,6 @@ brew test GOI17/tap/alfred
 ```
 
 Formula installation places source under Homebrew `libexec`, installs
-`alfred` and `alfred-install`, and writes no live harness configuration.
-`alfred-install` always reuses the packaged source with `--no-clone` and retains
-the existing preview/apply approval gates.
+the `alfred` command and writes no live harness configuration. `alfred setup`
+always reuses the packaged source with `--no-clone` and retains the existing
+preview/apply approval gates.

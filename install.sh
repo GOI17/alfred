@@ -14,7 +14,7 @@
 
 set -e
 
-VERSION="0.5.0"
+VERSION="0.6.0"
 OPENTUI_INSTALLER_VERSION="0.1.0"
 REPO_URL="https://github.com/GOI17/alfred.git"
 DEFAULT_BRANCH="main"
@@ -44,8 +44,8 @@ MODEL_WRITE_APPROVED=false
 MODEL_PLAN_SHA256=""
 MODEL_CONFIG_WRITTEN=false
 
-log() { printf '[alfred-install] %s\n' "$*"; }
-err() { printf '[alfred-install][error] %s\n' "$*" 1>&2; exit 1; }
+log() { printf '[alfred setup] %s\n' "$*"; }
+err() { printf '[alfred setup][error] %s\n' "$*" 1>&2; exit 1; }
 
 usage() {
   sed -n '2,36p' "$0"
