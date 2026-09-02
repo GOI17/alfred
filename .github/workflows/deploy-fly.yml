@@ -3,6 +3,9 @@ name: deploy-fly
 # Deploys Alfred Memory to Fly.io on every push to main.
 # Required secrets (set at https://github.com/GOI17/alfred/settings/secrets/actions):
 #   FLY_API_TOKEN        — from `flyctl auth token` (one-time)
+#   ALFRED_OAUTH_CLIENT_ID
+#   ALFRED_OAUTH_CLIENT_SECRET
+#   ALFRED_OAUTH_REDIRECT_URIS
 #
 # This workflow is opt-in. To enable it, push a commit that touches
 # packages/memory-server/** or this file. To pause deploys, add `[skip deploy]`
@@ -71,6 +74,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Stage OAuth secrets
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          ALFRED_OAUTH_CLIENT_ID: ${{ secrets.ALFRED_OAUTH_CLIENT_ID }}
+          ALFRED_OAUTH_CLIENT_SECRET: ${{ secrets.ALFRED_OAUTH_CLIENT_SECRET }}
+          ALFRED_OAUTH_REDIRECT_URIS: ${{ secrets.ALFRED_OAUTH_REDIRECT_URIS }}
+        run: |
+          set -euo pipefail
+          APP="${{ github.event.inputs.app }}"
+          if [ -z "$APP" ]; then
+            APP=$(grep -E '^app\s*=' fly.toml | head -1 | sed -E 's/^app\s*=\s*"([^"]+)".*/\1/')
+          fi
+          for name in ALFRED_OAUTH_CLIENT_ID ALFRED_OAUTH_CLIENT_SECRET ALFRED_OAUTH_REDIRECT_URIS; do
+            if [ -z "${!name:-}" ]; then
+              echo "Required OAuth configuration is missing: $name" >&2
+              exit 1
+            fi
+          done
+          {
+            printf 'ALFRED_OAUTH_CLIENT_ID=%s\n' "$ALFRED_OAUTH_CLIENT_ID"
+            printf 'ALFRED_OAUTH_CLIENT_SECRET=%s\n' "$ALFRED_OAUTH_CLIENT_SECRET"
+            printf 'ALFRED_OAUTH_REDIRECT_URIS=%s\n' "$ALFRED_OAUTH_REDIRECT_URIS"
+          } | flyctl secrets import --stage --app "$APP"
       - name: Deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

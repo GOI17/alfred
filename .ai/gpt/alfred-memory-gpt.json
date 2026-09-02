@@ -18,20 +18,22 @@
     {
       "name": "alfred_memory",
       "description": "Read, search, write, update, and delete durable memories in the user's Alfred Memory instance. Also returns the agent and skill catalog and a policy-check endpoint.",
-      "openapi_url": "https://YOUR_ALFRED_HOST/openapi.yaml",
+      "openapi_url": "https://alfred-labs-memory.fly.dev/openapi.yaml",
       "auth": {
-        "type": "api_key",
-        "header": "Authorization",
-        "prefix": "Bearer ",
-        "instructions": "The user pastes their Alfred API key (starts with alk_). It is sent as 'Authorization: Bearer <key>' on every request. The key is stored only in this GPT's configuration."
+        "type": "oauth",
+        "client_id": "alfred-chatgpt",
+        "authorization_url": "https://alfred-labs-memory.fly.dev/oauth/authorize",
+        "token_url": "https://alfred-labs-memory.fly.dev/oauth/token",
+        "scopes": ["memory:read", "memory:write"],
+        "instructions": "Set the shared client secret only in the ChatGPT editor. Users enter their alk_ API key on Alfred's consent page; ChatGPT never receives it."
       }
     }
   ],
   "metadata": {
     "category": "productivity",
     "tags": ["memory", "second-brain", "knowledge-base", "self-hosted", "alfred"],
-    "model_hint": "gpt-4o",
-    "version": "0.4.1",
+    "gpt_id": "g-6a320e87e6908191a3f834b273221f99",
+    "version": "0.6.0",
     "openapi_spec": "packages/memory-openapi/openapi.yaml",
     "provider_calls_per_request": 0
   }
