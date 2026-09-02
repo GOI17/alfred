@@ -29,10 +29,12 @@ client secret.
 
 ## Production values
 
+- Public GPT ID: `g-6a320e87e6908191a3f834b273221f99`
+- OAuth callback ID reported by ChatGPT: `g-31ee07319349c89eb0a46bd25648afbf99fd6b84`
 - Client ID: `alfred-chatgpt`
 - Redirects:
-  - `https://chatgpt.com/aip/g-6a320e87e6908191a3f834b273221f99/oauth/callback`
-  - `https://chat.openai.com/aip/g-6a320e87e6908191a3f834b273221f99/oauth/callback`
+  - `https://chatgpt.com/aip/g-31ee07319349c89eb0a46bd25648afbf99fd6b84/oauth/callback`
+  - `https://chat.openai.com/aip/g-31ee07319349c89eb0a46bd25648afbf99fd6b84/oauth/callback`
 - Authorization URL: `https://alfred-labs-memory.fly.dev/oauth/authorize`
 - Token URL: `https://alfred-labs-memory.fly.dev/oauth/token`
 - Scopes: `memory:read memory:write`
@@ -43,7 +45,7 @@ client secret.
 - [ ] All three OAuth values are present before Fly synchronization begins.
 - [ ] Fly receives the three values in one staged secret import.
 - [ ] The subsequent deployment activates the staged values together.
-- [ ] The authorization endpoint accepts the exact GPT callback.
+- [ ] The authorization endpoint accepts the exact callback reported by the
+      ChatGPT Action, which is distinct from the public GPT ID.
 - [ ] The GPT Action is configured for direct OAuth.
 - [ ] Existing API-key authentication remains unchanged.
-
