@@ -86,10 +86,11 @@
       "id": "memory-server-console-handlers",
       "description": "Console surface: bootstrap, verify, recover, semantic search, CAPTCHA, email",
       "files": [
-        "packages/memory-server/test/console.test.mjs"
+        "packages/memory-server/test/console.test.mjs",
+        "packages/memory-server/test/neon-pooled-tenants.test.mjs"
       ],
-      "command": "node --test packages/memory-server/test/console.test.mjs",
-      "expected_test_count": 99,
+      "command": "node --test packages/memory-server/test/console.test.mjs packages/memory-server/test/neon-pooled-tenants.test.mjs",
+      "expected_test_count": 103,
       "blocked_on_failure": true
     },
     {

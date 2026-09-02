@@ -57,7 +57,7 @@ jobs:
           done
       - name: Validate policies
         run: node scripts/validate-policies.mjs
-      - name: Validate release 0.4.1
+      - name: Validate release regression gates
         run: node scripts/validate-release-0.4.1.mjs
       - name: Check Dockerfile syntax
         run: docker buildx build --check -f Dockerfile .
