@@ -60,12 +60,10 @@
 Edition        <span class="k">coding</span> / memory / full
 Harnesses      <span class="k">opencode</span> [installed] · codex-cli [installed] · pi [installed]
 Profiles       <span class="k">runtime profiles</span> / decide later
-Models         smart defaults for <span class="k">*</span>, <span class="k">orchestrator</span>, <span class="k">developer</span>, <span class="k">temporary</span>
 Target path    <span class="k">~/.alfred/installs/default</span>
 
 Preview:
   + core, agents, skills, profile-manager, adapters, evals
-  + ~/.alfred/models.json <span class="c">(model defaults preview)</span>
   + .ai/generated/opencode-install <span class="c">(harness preview)</span>
 
 No files have been written yet.
@@ -266,7 +264,7 @@ Apply safe suite install steps now? <span class="p">[y/N]</span>
         <article class="problem">
           <span class="tag">Models</span>
           <h3>User-owned models per agent</h3>
-          <p>The installer detects local providers, previews <code>~/.alfred/models.json</code>, and lets you assign per-agent primary models with a global fallback chain without hardcoding specs.</p>
+          <p>Runtime model assignment stays user-owned and separate from setup. The setup flow never creates or modifies <code>~/.alfred/models.json</code>.</p>
         </article>
       </div>
     </div>

@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-134-delegation-decision",
+  "timestamp": "2026-09-02T13:20:32Z",
+  "actor": "orchestrator",
+  "event": "delegation_decision",
+  "decision": "execute-directly",
+  "target": "issue-134-disable-setup-model-assignment",
+  "reason": "The setup-only change is bounded, and the user explicitly required no further delegation.",
+  "data": {
+    "issue": 134,
+    "branch": "issue-134-disable-setup-model-assignment",
+    "provider_calls": 0
+  }
+}

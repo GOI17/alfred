@@ -175,26 +175,20 @@ Validation     local capability checks · preview files · approval gates
         client profiles across machines without hand-editing harness config.
       </p>
 
-      <h2 id="models">Model assignment during install</h2>
+      <h2 id="models">Model assignment after setup</h2>
       <p>
-        The installer detects available providers and local models without
-        calling a provider, then previews smart defaults for
-        <code>*</code>, <code>orchestrator</code>, <code>developer</code>, and
-        <code>temporary</code>. It writes <code>~/.alfred/models.json</code> only
-        when you explicitly accept the model defaults or apply the plan.
+        Alfred setup does not prompt for model assignments or create, replace,
+        or modify <code>~/.alfred/models.json</code>. Model selection remains a
+        user-owned runtime or standalone reconfiguration decision after setup.
       </p>
       <div class="terminal">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">model preview</span>
+          <span class="title">setup boundary</span>
         </div>
-<pre><span class="c"># Smart model defaults are previewed first</span>
-Target path : <span class="k">~/.alfred/models.json</span>
-Wildcard   : <span class="k">ollama/qwen2.5-coder:7b</span>
-Developer  : <span class="k">anthropic/claude-sonnet-4</span>
-Fallbacks  : global chain, ordered local → cheap cloud → premium cloud
-
-Write model defaults? <span class="p">[y/N]</span>
+<pre><span class="c"># Setup leaves any existing assignment byte-for-byte unchanged</span>
+Model assignment : <span class="k">not part of alfred setup</span>
+Provider calls   : <span class="k">0</span>
 </pre>
       </div>
 
@@ -255,7 +249,6 @@ Apply changes? <span class="p">[y/N]</span>
           <span class="title">verify</span>
         </div>
 <pre><span class="f">node</span> -v                     <span class="c"># Node 22+</span>
-<span class="f">test</span> -f ~/.alfred/models.json <span class="c"># if model defaults were applied</span>
 <span class="f">test</span> -d ~/.alfred/installs/default <span class="c"># default suite install target</span>
 </pre>
       </div>

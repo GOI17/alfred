@@ -10,7 +10,6 @@ import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { validateModelsConfig } from "../../core/src/model-assignment.js";
 import {
   HARNESSES,
   LABELS,
@@ -19,7 +18,6 @@ import {
   controlsFor,
   createPathfinderState,
   displayWidth,
-  modelPlanForState,
   modelPlanInspectionStatus,
   modelPlanReviewLines,
   normalizeDiscovery,
@@ -31,7 +29,6 @@ import {
   transition,
   validateCustomModelsDraft
 } from "../../../scripts/tui/install-pathfinder.mjs";
-import { writePrivateModelPlan } from "../../../scripts/tui/install-model-plan.mjs";
 
 const THEME = Object.freeze({
   background: "#1f1f28",
@@ -209,9 +206,7 @@ function actionRow(state, control, text, action, tone = "foreground") {
   });
 }
 
-function modelsApplicable(state) {
-  return state.decisions.edition !== "memory";
-}
+function modelsApplicable() { return false; }
 
 function memoryApplicable(state) {
   return state.decisions.edition !== "coding";
@@ -243,10 +238,6 @@ function discoverRows(state) {
     .map(({ label }) => label);
   const projectPath = abbreviateHomePath(discovery.git.project_root, discovery);
   const targetPath = abbreviateHomePath(discovery.install.selected_target, discovery);
-  const modelSignal = discovery.models.suggestions.length
-    ? discovery.models.suggestions.map(({ model }) => model).join(", ")
-    : "No safe local signal";
-
   return [
     row("Alfred inspected this machine locally. Nothing has been changed.", { tone: "muted", kind: "description" }),
     section("Environment"),
@@ -258,9 +249,6 @@ function discoverRows(state) {
     }),
     row(`${installedHarnesses.length ? "✓" : "○"}  Harnesses     ${installedHarnesses.length ? installedHarnesses.join(", ") : "None detected"}  [detected]`, {
       tone: installedHarnesses.length ? "green" : "foreground"
-    }),
-    row(`${discovery.models.suggestions.length ? "✓" : "○"}  Models        ${modelSignal}  [detected]`, {
-      tone: discovery.models.suggestions.length ? "green" : "foreground"
     }),
     row(`${discovery.install.target_exists ? "✓" : "○"}  Installation  ${discovery.install.target_exists ? `Found at ${targetPath}` : "New installation"}  [detected]`, {
       tone: discovery.install.target_exists ? "green" : "foreground"
@@ -332,7 +320,7 @@ function modelSummaryRows(state) {
       row(`    Fallbacks     ${config.fallbacks?.join(" → ") || "None"}`, { tone: "muted", kind: "detail" })
     ];
   }
-  if (decisions.modelStrategy === "custom-models") {
+  if (modelsApplicable(state) && decisions.modelStrategy === "custom-models") {
     return [
       row(`    Global        ${decisions.customModels.wildcard || "Required"}`, { tone: decisions.customModels.wildcard ? "green" : "red", kind: "detail" }),
       row(`    Orchestrator  ${decisions.customModels.orchestrator || "Uses global"}`, { tone: "muted", kind: "detail" }),
@@ -415,7 +403,7 @@ function reviewRows(state) {
     row("✓  Provider calls: 0", { tone: "green" })
   ];
 
-  if (decisions.modelStrategy === "custom-models") {
+  if (modelsApplicable(state) && decisions.modelStrategy === "custom-models") {
     const inspection = modelPlanInspectionStatus(state);
     rows.push(actionRow(
       state,
@@ -462,9 +450,6 @@ function applyRows(state) {
     row(`${apply ? "!" : "✓"}  Execution       ${LABELS.intents[state.decisions.applyIntent]}`, {
       tone: apply ? "yellow" : "green"
     }),
-    row(`${state.decisions.modelWriteApproved ? "!" : "✓"}  Models write     ${state.decisions.modelWriteApproved ? "Approved" : "Not approved"}`, {
-      tone: state.decisions.modelWriteApproved ? "yellow" : "green"
-    })
   ];
   if (modelsApplicable(state) && ["smart-defaults", "custom-models"].includes(state.decisions.modelStrategy)) {
     rows.push(actionRow(
@@ -667,7 +652,18 @@ function normalizePagedState(state, layout) {
 
 export function openTuiViewForState(state, viewport = { columns: 80, rows: 24 }) {
   const layout = responsiveLayout(viewport);
-  const normalized = normalizePagedState(state, layout);
+  const legacyOverlay = ["model-editor", "model-plan-review"].includes(state.overlay?.type);
+  const legacyEditing = state.editing?.kind === "model";
+  const legacyDecision = state.decisions.modelStrategy !== "configure-later" || state.decisions.modelWriteApproved;
+  const setupState = legacyOverlay || legacyEditing || legacyDecision
+    ? {
+        ...state,
+        overlay: legacyOverlay ? null : state.overlay,
+        editing: legacyEditing ? null : state.editing,
+        decisions: { ...state.decisions, modelStrategy: "configure-later", modelWriteApproved: false }
+      }
+    : state;
+  const normalized = normalizePagedState(setupState, layout);
   return {
     state: normalized,
     layout,
@@ -790,22 +786,7 @@ export function frameForState(state, viewport = { columns: 80, rows: 24 }) {
 }
 
 export function assignmentsForState(state, environment = process.env) {
-  const plan = modelPlanForState(state);
-  let modelPlanSha256 = "";
-  if (plan) {
-    const validation = validateModelsConfig(plan.models);
-    if (validation.status !== "pass") throw new Error(`invalid custom model plan: ${validation.errors.join("; ")}`);
-    const planPath = environment.ALFRED_INSTALL_MODEL_PLAN_FILE;
-    if (!planPath) throw new Error("approved custom model plan path is unavailable");
-    modelPlanSha256 = writePrivateModelPlan(planPath, plan).sha256;
-  }
-  return serializeAssignments(state.decisions, {
-    reviewVisited: state.reviewVisited,
-    modelRevision: state.modelRevision,
-    reviewedModelRevision: state.reviewedModelRevision,
-    modelInspection: state.modelInspection,
-    modelPlanSha256
-  });
+  return serializeAssignments(state.decisions);
 }
 
 function clearChildren(container) {
