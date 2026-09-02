@@ -3,7 +3,7 @@
 Static landing, documentation, and Memory Console for Alfred.
 
 - Current rollback host: **https://goi17.github.io/alfred/**
-- Target host: Cloudflare Pages at the domain root
+- Production host: **https://alfred.alfredlabs.org/** on Cloudflare Pages
 
 The checked-in HTML remains compatible with the GitHub Pages `/alfred/`
 subpath. `npm run pages:build` creates the root-hosted Cloudflare artifact in
@@ -12,7 +12,7 @@ subpath. `npm run pages:build` creates the root-hosted Cloudflare artifact in
 ## Deployed layout
 
 ```
-https://goi17.github.io/alfred/
+https://alfred.alfredlabs.org/
 ├── /                → site/index.html          (landing)
 ├── /assets/*        → site/assets/*            (CSS, favicon)
 ├── /docs/*          → site/docs/*              (documentation)
@@ -88,8 +88,8 @@ relevant pull request and deploys it when Cloudflare credentials are present.
 4. Add the production Pages origin to the Memory server and redeploy it:
 
    ```sh
-   ALFRED_MEMORY_ALLOWED_ORIGINS=https://alfred.pages.dev
-   ALFRED_CONSOLE_URL=https://alfred.pages.dev/memory/app/
+   ALFRED_MEMORY_ALLOWED_ORIGINS=https://alfred.alfredlabs.org
+   ALFRED_CONSOLE_URL=https://alfred.alfredlabs.org/memory/app/
    ```
 
    Include the custom-domain origin too when one is attached. The server uses
@@ -99,9 +99,10 @@ relevant pull request and deploys it when Cloudflare credentials are present.
 ### Verification and cutover
 
 1. Run the workflow manually and verify `/`, `/docs/`, `/memory/`, and
-   `/memory/app/` at the returned `pages.dev` URL.
+   `/memory/app/` at the returned `pages.dev` preview URL.
 2. Unlock the Console with an owner key and verify tenant/history requests.
-3. Attach the custom domain in Cloudflare and repeat the checks.
+3. Attach `alfred.alfredlabs.org` in Cloudflare and repeat the checks at the
+   production domain.
 4. Only then disable `.github/workflows/pages-deploy.yml` or GitHub Pages.
 
 ### Rollback
