@@ -1,0 +1,15 @@
+{
+  "trace_id": "issue-130-neon-deploy-gate",
+  "timestamp": "2026-09-02T05:07:00Z",
+  "event": "regression_gate_updated",
+  "actor": "orchestrator",
+  "data": {
+    "issue": 130,
+    "branch": "issue-130-neon-deploy-gate",
+    "reason": "Include three Neon pooling tests and one new console rollback test in the exact-count release gate.",
+    "previous_expected_test_count": 99,
+    "expected_test_count": 103,
+    "baseline_update_authorization": "explicit-user-authorization-and-continue",
+    "provider_calls": 0
+  }
+}
