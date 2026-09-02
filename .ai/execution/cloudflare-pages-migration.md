@@ -57,8 +57,8 @@ to the Alfred Memory API, not to the static host.
 - [x] Cutover and rollback are documented.
 - [x] Repository production configuration targets
       `https://alfred.alfredlabs.org`.
-- [ ] Cloudflare credentials are configured by the repository owner.
-- [ ] The `alfred.alfredlabs.org` custom domain and first production deployment
+- [x] Cloudflare credentials are configured by the repository owner.
+- [x] The `alfred.alfredlabs.org` custom domain and first production deployment
       are verified by the repository owner.
 
 ## References
