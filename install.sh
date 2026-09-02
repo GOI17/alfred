@@ -39,10 +39,6 @@ SKIP_PROFILE_MANAGER=false
 HAD_ARGS=false
 TUI_USED=false
 TUI_MODE="none"
-MODEL_STRATEGY="configure-later"
-MODEL_WRITE_APPROVED=false
-MODEL_PLAN_SHA256=""
-MODEL_CONFIG_WRITTEN=false
 
 log() { printf '[alfred setup] %s\n' "$*"; }
 err() { printf '[alfred setup][error] %s\n' "$*" 1>&2; exit 1; }
@@ -321,7 +317,6 @@ EOFTUI
 }
 
 APP_TUI_PRIVATE_DIR=""
-APP_MODEL_PLAN_FILE=""
 APP_TUI_BACKEND="node"
 APP_TUI_EXECUTABLE=""
 APP_TUI_OPENTUI_SOURCE=""
@@ -331,7 +326,6 @@ cleanup_app_tui_private_dir() {
     rm -rf "$APP_TUI_PRIVATE_DIR"
   fi
   APP_TUI_PRIVATE_DIR=""
-  APP_MODEL_PLAN_FILE=""
   APP_TUI_BACKEND="node"
   APP_TUI_EXECUTABLE=""
   APP_TUI_OPENTUI_SOURCE=""
@@ -472,7 +466,6 @@ launch_selected_app_tui() (
   export ALFRED_INSTALL_CURRENT_APPLY="$APPLY"
   export ALFRED_INSTALL_HARNESS_STATUS="$HARNESS_STATUS"
   export ALFRED_INSTALL_DISCOVERY_FILE="$app_discovery_file"
-  export ALFRED_INSTALL_MODEL_PLAN_FILE="$APP_MODEL_PLAN_FILE"
   if [ -n "${ALFRED_INSTALL_APP_TUI_EVENTS:-}${ALFRED_INSTALL_APP_TUI_SCRIPT:-}" ]; then
     execute_selected_app_tui > "$app_tui_out"
   elif has_dev_tty; then
@@ -543,7 +536,7 @@ validate_app_tui_result() {
     result_key=${result_line%%=*}
     result_value=${result_line#*=}
     case "$result_key" in
-      EDITION|HARNESS|PROFILE_STRATEGY|MEMORY_SETUP|NAME|APPLY|SKIP_PROFILE_MANAGER|TUI_USED|TUI_MODE|TARGET_PATH|MODEL_STRATEGY|MODEL_WRITE_APPROVED|MODEL_PLAN_SHA256) ;;
+      EDITION|HARNESS|PROFILE_STRATEGY|MEMORY_SETUP|NAME|APPLY|SKIP_PROFILE_MANAGER|TUI_USED|TUI_MODE|TARGET_PATH) ;;
       *) return 1 ;;
     esac
     case ",$seen_keys," in
@@ -582,11 +575,6 @@ run_app_tui_if_available() {
 
   APP_TUI_PRIVATE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/alfred-install-app-tui.XXXXXX")" || return 1
   chmod 0700 "$APP_TUI_PRIVATE_DIR" || { cleanup_app_tui_private_dir; return 1; }
-  APP_MODEL_PLAN_FILE="$APP_TUI_PRIVATE_DIR/model-plan.json"
-  if ! (umask 077; : > "$APP_MODEL_PLAN_FILE") || ! chmod 0600 "$APP_MODEL_PLAN_FILE"; then
-    cleanup_app_tui_private_dir
-    return 1
-  fi
   trap 'cleanup_app_tui_private_dir' EXIT
   trap 'cleanup_app_tui_private_dir; exit 129' HUP
   trap 'cleanup_app_tui_private_dir; exit 130' INT
@@ -609,7 +597,6 @@ run_app_tui_if_available() {
       ! tar -xzf "$app_tui_snapshot" -C "$app_tui_snapshot_dir" --strip-components=1 2>/dev/null || \
       ! cp "$app_tui_snapshot_dir/scripts/tui/install-app.mjs" "$app_tui_script" || \
       ! cp "$app_tui_snapshot_dir/scripts/tui/install-pathfinder.mjs" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" || \
-      ! cp "$app_tui_snapshot_dir/scripts/tui/install-model-plan.mjs" "$APP_TUI_PRIVATE_DIR/install-model-plan.mjs" || \
       ! cp "$app_tui_snapshot_dir/scripts/tui/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" || \
       ! cp "$app_tui_snapshot_dir/packages/profile-manager/src/index.js" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" || \
       ! cp "$app_tui_snapshot_dir/packages/core/src/model-assignment.js" "$APP_TUI_PRIVATE_DIR/model-assignment.mjs"
@@ -622,7 +609,6 @@ run_app_tui_if_available() {
   else
     if ! cp "$app_tui_source_dir/scripts/tui/install-app.mjs" "$app_tui_script" || \
       ! cp "$app_tui_source_dir/scripts/tui/install-pathfinder.mjs" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" || \
-      ! cp "$app_tui_source_dir/scripts/tui/install-model-plan.mjs" "$APP_TUI_PRIVATE_DIR/install-model-plan.mjs" || \
       ! cp "$app_tui_source_dir/scripts/tui/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" || \
       ! cp "$app_tui_source_dir/packages/profile-manager/src/index.js" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" || \
       ! cp "$app_tui_source_dir/packages/core/src/model-assignment.js" "$APP_TUI_PRIVATE_DIR/model-assignment.mjs"
@@ -633,7 +619,7 @@ run_app_tui_if_available() {
     fi
   fi
 
-  chmod 0600 "$app_tui_script" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" "$APP_TUI_PRIVATE_DIR/install-model-plan.mjs" \
+  chmod 0600 "$app_tui_script" "$APP_TUI_PRIVATE_DIR/install-pathfinder.mjs" \
     "$APP_TUI_PRIVATE_DIR/install-discovery.mjs" "$APP_TUI_PRIVATE_DIR/profile-manager.mjs" \
     "$APP_TUI_PRIVATE_DIR/model-assignment.mjs" || {
       cleanup_app_tui_private_dir
@@ -680,11 +666,6 @@ run_app_tui_if_available() {
     log "OpenTUI could not complete; continuing with the compatible Node TUI." 1>&2
     APP_TUI_BACKEND="node"
     rm -f "$app_tui_out"
-    if ! (umask 077; : > "$APP_MODEL_PLAN_FILE") || ! chmod 0600 "$APP_MODEL_PLAN_FILE"; then
-      cleanup_app_tui_private_dir
-      reset_app_tui_cleanup_traps
-      return 1
-    fi
     if launch_selected_app_tui; then
       app_tui_status=0
     else
@@ -922,29 +903,9 @@ else
   run_tui_if_available
 fi
 
-case "$MODEL_STRATEGY" in
-  smart-defaults|custom-models|keep-existing|configure-later) ;;
-  *) err "Invalid MODEL_STRATEGY from app TUI: $MODEL_STRATEGY" ;;
-esac
-case "$MODEL_WRITE_APPROVED" in
-  true|false) ;;
-  *) err "Invalid MODEL_WRITE_APPROVED from app TUI: $MODEL_WRITE_APPROVED" ;;
-esac
 for boolean_value in "$APPLY" "$SKIP_PROFILE_MANAGER" "$TUI_USED"; do
   case "$boolean_value" in true|false) ;; *) err "Invalid boolean assignment from app TUI" ;; esac
 done
-if [ "$MODEL_WRITE_APPROVED" = true ] && { [ "$TUI_MODE" != "app" ] || { [ "$MODEL_STRATEGY" != "smart-defaults" ] && [ "$MODEL_STRATEGY" != "custom-models" ]; } || [ "$APPLY" != true ]; }; then
-  err "Model write approval requires app Review, a writable model strategy, and explicit Apply confirmation"
-fi
-if [ -n "$MODEL_PLAN_SHA256" ]; then
-  if [ "${#MODEL_PLAN_SHA256}" -ne 64 ]; then err "Invalid MODEL_PLAN_SHA256 from app TUI: expected 64 lowercase hex characters"; fi
-  case "$MODEL_PLAN_SHA256" in *[!0123456789abcdef]*) err "Invalid MODEL_PLAN_SHA256 from app TUI: expected 64 lowercase hex characters" ;; esac
-  if [ "$TUI_MODE" != "app" ] || [ "$MODEL_STRATEGY" != "custom-models" ] || [ "$MODEL_WRITE_APPROVED" != true ] || [ "$APPLY" != true ]; then
-    err "Unexpected MODEL_PLAN_SHA256 without an approved custom model apply"
-  fi
-elif [ "$TUI_MODE" = "app" ] && [ "$MODEL_STRATEGY" = "custom-models" ] && [ "$MODEL_WRITE_APPROVED" = true ] && [ "$APPLY" = true ]; then
-  err "MODEL_PLAN_SHA256 is required for an approved custom model apply"
-fi
 
 case "$EDITION" in
   coding|memory|full) ;;
@@ -979,151 +940,6 @@ if command -v node >/dev/null 2>&1; then
     node_status="too_old:$node_version"
   fi
 fi
-
-print_model_assignment_preview() {
-  case "$MODEL_STRATEGY" in
-    smart-defaults)
-      printf '\nProposed model configuration (local discovery only):\n'
-      if [ -n "$APP_TUI_PRIVATE_DIR" ] && [ -f "$APP_TUI_PRIVATE_DIR/discovery.json" ]; then
-        node --input-type=module - "$APP_TUI_PRIVATE_DIR/discovery.json" <<'NODEPREVIEW'
-import fs from "node:fs";
-const discovery = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-process.stdout.write(`${JSON.stringify(discovery.models?.proposed_config ?? {}, null, 2)}\n`);
-NODEPREVIEW
-      else
-        printf '  unavailable; configure models later\n'
-      fi
-      printf 'Proposed target: %s/.alfred/models.json\n' "$HOME"
-      printf 'Write approved: %s\n' "$MODEL_WRITE_APPROVED"
-      ;;
-    custom-models)
-      printf '\nCustom model configuration: exact values were reviewed in the app TUI.\n'
-      printf 'Proposed target: %s/.alfred/models.json\n' "$HOME"
-      printf 'Write approved: %s\n' "$MODEL_WRITE_APPROVED"
-      ;;
-    keep-existing)
-      printf '\nModel configuration: existing ~/.alfred/models.json remains untouched and was not read into the TUI.\n'
-      ;;
-    configure-later)
-      printf '\nModel configuration: configure later; no model configuration will be written.\n'
-      ;;
-  esac
-  printf 'Model provider calls: 0\n'
-}
-
-write_approved_model_assignment() {
-  [ "$TUI_USED" = true ] || return 0
-  [ "$TUI_MODE" = "app" ] || return 0
-  [ "$APPLY" = true ] || return 0
-  { [ "$MODEL_STRATEGY" = "smart-defaults" ] || [ "$MODEL_STRATEGY" = "custom-models" ]; } || return 0
-  [ "$MODEL_WRITE_APPROVED" = true ] || return 0
-  [ -n "$APP_TUI_PRIVATE_DIR" ] && [ -f "$APP_TUI_PRIVATE_DIR/discovery.json" ] && [ -f "$APP_TUI_PRIVATE_DIR/model-assignment.mjs" ] || \
-    err "Approved model configuration is unavailable"
-
-  model_target="$HOME/.alfred/models.json"
-  model_trace="$HOME/.alfred/observability/model-assignment-trace.json"
-  mkdir -p "$(dirname "$model_target")" "$(dirname "$model_trace")"
-  node --input-type=module - "$MODEL_STRATEGY" "$APP_TUI_PRIVATE_DIR" "$APP_MODEL_PLAN_FILE" "$APP_TUI_PRIVATE_DIR/discovery.json" "$APP_TUI_PRIVATE_DIR/model-assignment.mjs" "$model_target" "$model_trace" "$MODEL_PLAN_SHA256" <<'NODEWRITE'
-import fs from "node:fs";
-import path from "node:path";
-import { createHash, timingSafeEqual } from "node:crypto";
-import { pathToFileURL } from "node:url";
-
-const [strategy, privateDir, planPath, discoveryPath, modulePath, targetPath, tracePath, expectedDigest] = process.argv.slice(2);
-const { traceModelAssignmentConfigured, validateModelsConfig } = await import(pathToFileURL(modulePath).href);
-const effectiveUid = typeof process.geteuid === "function" ? process.geteuid() : null;
-let config;
-let detectedModels = [];
-if (strategy === "custom-models") {
-  if (!/^[0-9a-f]{64}$/.test(expectedDigest)) throw new Error("invalid expected custom model plan digest");
-  const expectedPrivateDir = path.resolve(privateDir);
-  const expectedPlanPath = path.join(expectedPrivateDir, "model-plan.json");
-  if (path.resolve(planPath) !== expectedPlanPath || path.dirname(expectedPlanPath) !== expectedPrivateDir || path.basename(expectedPlanPath) !== "model-plan.json") throw new Error("custom model plan must use the fixed private parent and name");
-  const privateStats = fs.lstatSync(expectedPrivateDir);
-  if (!privateStats.isDirectory() || privateStats.isSymbolicLink() || (privateStats.mode & 0o777) !== 0o700) throw new Error("invalid app TUI private directory mode or type");
-  if (effectiveUid !== null && privateStats.uid !== effectiveUid) throw new Error("app TUI private directory is not owned by the effective uid");
-  const pathStats = fs.lstatSync(expectedPlanPath);
-  if (!pathStats.isFile() || pathStats.isSymbolicLink() || (pathStats.mode & 0o777) !== 0o600) throw new Error("custom model plan must be a mode-0600 regular non-symlink file");
-  if (effectiveUid !== null && pathStats.uid !== effectiveUid) throw new Error("custom model plan is not owned by the effective uid");
-  const noFollow = typeof fs.constants.O_NOFOLLOW === "number" ? fs.constants.O_NOFOLLOW : 0;
-  let planDescriptor;
-  let planBytes;
-  try {
-    planDescriptor = fs.openSync(expectedPlanPath, fs.constants.O_RDONLY | noFollow);
-    const openedStats = fs.fstatSync(planDescriptor);
-    if (!openedStats.isFile() || (openedStats.mode & 0o777) !== 0o600) throw new Error("opened custom model plan is not a mode-0600 regular file");
-    if (effectiveUid !== null && openedStats.uid !== effectiveUid) throw new Error("opened custom model plan is not owned by the effective uid");
-    if (openedStats.dev !== pathStats.dev || openedStats.ino !== pathStats.ino) throw new Error("custom model plan changed before open");
-    planBytes = fs.readFileSync(planDescriptor);
-  } finally {
-    if (planDescriptor !== undefined) fs.closeSync(planDescriptor);
-  }
-  const actualDigest = createHash("sha256").update(planBytes).digest();
-  const expectedDigestBytes = Buffer.from(expectedDigest, "hex");
-  if (actualDigest.length !== expectedDigestBytes.length || !timingSafeEqual(actualDigest, expectedDigestBytes)) throw new Error("custom model plan digest mismatch");
-  const plan = JSON.parse(planBytes.toString("utf8"));
-  const exactKeys = (value, allowed) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).every((key) => allowed.includes(key));
-  if (!exactKeys(plan, ["schema", "strategy", "models", "provider_calls"]) || Object.keys(plan).length !== 4 || plan.schema !== "alfred.install.model-plan/v1" || plan.strategy !== "custom-models" || plan.provider_calls !== 0) throw new Error("invalid custom model plan contract");
-  if (!exactKeys(plan.models, ["*", "orchestrator", "developer", "fallbacks"]) || !Object.hasOwn(plan.models, "*") || !Object.hasOwn(plan.models, "fallbacks")) throw new Error("invalid custom models keys");
-  for (const key of ["*", "orchestrator", "developer"]) {
-    if (!Object.hasOwn(plan.models, key)) continue;
-    const entry = plan.models[key];
-    if (!exactKeys(entry, ["primary"]) || Object.keys(entry).length !== 1 || typeof entry.primary !== "string" || !entry.primary.trim() || /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u.test(entry.primary)) throw new Error(`invalid ${key} model entry`);
-  }
-  if (!Array.isArray(plan.models.fallbacks) || plan.models.fallbacks.some((value) => typeof value !== "string" || !value.trim() || /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u.test(value))) throw new Error("invalid custom fallback chain");
-  config = plan.models;
-} else if (strategy === "smart-defaults") {
-  if (expectedDigest) throw new Error("smart defaults cannot carry a custom plan digest");
-  const discovery = JSON.parse(fs.readFileSync(discoveryPath, "utf8"));
-  if (discovery.schema !== "alfred.install.discovery/v1" || discovery.provider_calls !== 0) throw new Error("invalid discovery contract");
-  config = discovery.models?.proposed_config;
-  detectedModels = discovery.models?.suggestions ?? [];
-} else {
-  throw new Error("invalid writable model strategy");
-}
-const validation = validateModelsConfig(config);
-if (validation.status !== "pass" || !config?.["*"]?.primary) throw new Error(`invalid proposed model config: ${validation.errors.join("; ")}`);
-
-function writeAtomic(filePath, text) {
-  const temporaryPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`);
-  let descriptor;
-  try {
-    descriptor = fs.openSync(temporaryPath, fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY, 0o600);
-    fs.fchmodSync(descriptor, 0o600);
-    fs.writeFileSync(descriptor, text, "utf8");
-    fs.fsyncSync(descriptor);
-    fs.closeSync(descriptor);
-    descriptor = undefined;
-    fs.renameSync(temporaryPath, filePath);
-    const directoryDescriptor = fs.openSync(path.dirname(filePath), fs.constants.O_RDONLY);
-    try { fs.fsyncSync(directoryDescriptor); } finally { fs.closeSync(directoryDescriptor); }
-  } catch (error) {
-    if (descriptor !== undefined) try { fs.closeSync(descriptor); } catch {}
-    try { fs.unlinkSync(temporaryPath); } catch {}
-    throw error;
-  }
-}
-
-writeAtomic(targetPath, `${JSON.stringify(config, null, 2)}\n`);
-const configured = traceModelAssignmentConfigured({
-  targetPath,
-  detectedModels,
-  modelCount: config.fallbacks?.length ?? 0,
-  action: "write"
-});
-const avoided = {
-  trace_id: "install-model-provider-request-avoided",
-  timestamp: new Date().toISOString(),
-  event: "provider_request_avoided",
-  actor: "alfred-suite-install",
-  data: { operation: "model_assignment_configuration", reason: "local_discovery_sufficient", provider_calls: 0 }
-};
-writeAtomic(tracePath, `${JSON.stringify({ trace_events: [configured, avoided], provider_calls: 0 }, null, 2)}\n`);
-NODEWRITE
-  MODEL_CONFIG_WRITTEN=true
-  log "Wrote approved model assignment config atomically: $model_target"
-  log "Trace events: model_assignment_configured, provider_request_avoided (provider_calls=0)"
-}
 
 edition_components() {
   if [ -n "$COMPONENTS" ]; then
@@ -1354,8 +1170,6 @@ Harnesses:      $SELECTED_HARNESSES
 Detected:       $(display_harness_status)
 Profile:        $DISPLAY_PROFILE_STRATEGY
 Memory setup:   $DISPLAY_MEMORY_SETUP
-Model strategy: $MODEL_STRATEGY
-Model approval: $MODEL_WRITE_APPROVED
 Components:     $COMPONENT_PLAN
 Node:           $node_status
 Provider calls: 0
@@ -1372,8 +1186,6 @@ Safety:
   - Harness-specific files must be generated as previews and applied only
     after explicit human approval.
 EOFPLAN
-
-print_model_assignment_preview
 
 if [ "$APPLY" != true ] || [ "$TUI_USED" != true ]; then
   print_handoff_explanation
@@ -1480,16 +1292,10 @@ if [ "$SELECTED_HARNESSES" = "none" ]; then
   log "No harness selected/detected. Suite repo installed; harness previews skipped."
 fi
 
-write_approved_model_assignment
-
 TRACE_DIR="$HOME/.alfred/observability"
 mkdir -p "$TRACE_DIR"
 TRACE_FILE="$TRACE_DIR/install-trace.json"
-if [ "$MODEL_CONFIG_WRITTEN" = true ]; then
-  INSTALL_TRACE_EVENTS='["install_management_operation", "model_assignment_configured", "provider_request_avoided"]'
-else
-  INSTALL_TRACE_EVENTS='["install_management_operation", "provider_request_avoided"]'
-fi
+INSTALL_TRACE_EVENTS='["install_management_operation", "provider_request_avoided"]'
 TRACE_TMP="$TRACE_FILE.$$ .tmp"
 TRACE_TMP="$(printf '%s' "$TRACE_TMP" | tr -d ' ')"
 cat > "$TRACE_TMP" <<EOFTRACE
@@ -1509,9 +1315,6 @@ cat > "$TRACE_TMP" <<EOFTRACE
     "tui_mode": "$TUI_MODE",
     "profile_strategy": "$PROFILE_STRATEGY",
     "memory_setup": "$MEMORY_SETUP",
-    "model_strategy": "$MODEL_STRATEGY",
-    "model_write_approved": $MODEL_WRITE_APPROVED,
-    "model_config_written": $MODEL_CONFIG_WRITTEN,
     "trace_events": $INSTALL_TRACE_EVENTS,
     "components": "$COMPONENT_PLAN",
     "status": "pass",

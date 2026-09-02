@@ -14,6 +14,10 @@ Make `alfred setup` the only public entry point for guided Alfred
 configuration. Homebrew remains responsible for package installation; Alfred
 itself is responsible for environment setup.
 
+Issue #134 removes model assignment from this command: `alfred setup` does not
+prompt for, preview, approve, create, or modify `~/.alfred/models.json`. Runtime
+model resolution and standalone reconfiguration remain separate capabilities.
+
 ## Requirements
 
 ### R1: CLI contract

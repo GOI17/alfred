@@ -108,5 +108,44 @@ test("serializes the established app TUI contract", () => {
   assert.match(output, /^EDITION='coding'$/m);
   assert.match(output, /^TUI_USED='true'$/m);
   assert.match(output, /^TUI_MODE='app'$/m);
-  assert.match(output, /^MODEL_WRITE_APPROVED='false'$/m);
+  assert.doesNotMatch(output, /^MODEL_/m);
+});
+
+test("omits model assignment from every OpenTUI setup phase", () => {
+  const base = createInstallerState({});
+  for (const phase of ["Discover", "Choose", "Configure", "Review", "Apply"]) {
+    const state = { ...base, phase };
+    const view = openTuiViewForState(state, { columns: 140, rows: 34 });
+    const text = [
+      ...view.main.rows.map(({ text: value }) => value),
+      ...view.preview.rows.map(({ text: value }) => value),
+      ...view.footer
+    ].join("\n");
+    assert.doesNotMatch(text, /model|models\.json/i, `${phase} must omit model assignment`);
+  }
+});
+
+test("ignores injected legacy model overlays", () => {
+  const base = createInstallerState({});
+  for (const overlay of ["model-editor", "model-plan-review"]) {
+    const state = {
+      ...base,
+      phase: "Configure",
+      overlay: { type: overlay, page: 0 },
+      editing: { kind: "model", control: "model:wildcard", draft: "provider/model", cursor: 0 },
+      decisions: { ...base.decisions, modelStrategy: "custom-models", modelWriteApproved: true }
+    };
+    const view = openTuiViewForState(state, { columns: 140, rows: 34 });
+    const text = [
+      view.main.title,
+      ...view.main.rows.map(({ text: value }) => value),
+      ...view.preview.rows.map(({ text: value }) => value),
+      ...view.footer
+    ].join("\n");
+    assert.equal(view.state.overlay, null);
+    assert.equal(view.state.editing, null);
+    assert.equal(view.state.decisions.modelStrategy, "configure-later");
+    assert.equal(view.state.decisions.modelWriteApproved, false);
+    assert.doesNotMatch(text, /model|models\.json|provider\/model/i);
+  }
 });
