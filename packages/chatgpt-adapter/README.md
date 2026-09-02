@@ -1,69 +1,52 @@
-# Alfred Memory ChatGPT Adapter v0.3.0
+# Alfred Memory for ChatGPT Actions
 
-Custom GPT Actions integration for Alfred Memory. Provides:
+ChatGPT connects directly to the public Alfred Memory API with OAuth 2.0. No
+local bridge is required and the tenant API key is never stored in the GPT.
 
-1. An **OpenAPI 3.1 spec** (`openapi.json`) that ChatGPT consumes to define Actions.
-2. A **bridge server** (`src/bridge.mjs`) that forwards HTTP requests from ChatGPT to your self-hosted Alfred Memory Server with proper auth and CORS.
+## Custom GPT configuration
 
-## Setup (Custom GPT)
+Import the hosted schema:
 
-1. Open ChatGPT → My GPTs → Create.
-2. Configure → Actions → **Import OpenAPI schema** → upload `openapi.json`.
-3. Authentication → **API Key** → type **Bearer** → paste `alk_...` key.
-4. Privacy → set to **Public** or **Private** depending on your use.
-5. Save and test: ask the GPT `List my last 5 memories`.
-
-## Setup (bridge server)
-
-```bash
-ALFRED_MEMORY_BASE_URL=https://alfred-memory.example.com \
-ALFRED_MEMORY_API_KEY=alk_... \
-ALFRED_MEMORY_BRIDGE_PORT=8787 \
-ALFRED_MEMORY_BRIDGE_ALLOWED_ORIGINS=https://chat.openai.com \
-  node packages/chatgpt-adapter/src/bridge.mjs
+```text
+https://alfred-labs-memory.fly.dev/openapi.yaml
 ```
 
-Env vars:
+Choose **OAuth** and configure:
 
-| Var | Required | Default |
-|---|---|---|
-| `ALFRED_MEMORY_BASE_URL` | yes | none |
-| `ALFRED_MEMORY_API_KEY` | yes | none |
-| `ALFRED_MEMORY_BRIDGE_PORT` | no | `8787` |
-| `ALFRED_MEMORY_BRIDGE_ALLOWED_ORIGINS` | no | `https://chat.openai.com` |
-
-In the GPT's Actions schema, point the **server URL** to `https://<your-bridge-host>:8787/memories`.
-
-## What the bridge does
-
-1. Accepts HTTPS requests from ChatGPT.
-2. Validates origin against the CORS allowlist (defense in depth).
-3. Forwards to your self-hosted Alfred Memory Server with `Authorization: Bearer alk_...`.
-4. Streams the response back unchanged.
-
-The bridge does NOT have a database. It is pure forwarder.
-
-## What the OpenAPI spec exposes
-
-| Operation | HTTP |
+| Field | Value |
 |---|---|
-| `listMemories` | `GET /memories?namespace=&type=&limit=&offset=` |
-| `createMemory` | `POST /memories` |
-| `searchMemories` | `GET /memories/search?q=&namespace=&type=&limit=&offset=` |
-| `getMemory` | `GET /memories/{id}` |
-| `deleteMemory` | `DELETE /memories/{id}` |
-| `validatePolicy` | `GET /policy` |
-| `health` | `GET /health` |
+| Authorization URL | `https://alfred-labs-memory.fly.dev/oauth/authorize` |
+| Token URL | `https://alfred-labs-memory.fly.dev/oauth/token` |
+| Scope | `memory:read memory:write` |
+| Client ID | The value of `ALFRED_OAUTH_CLIENT_ID` on the server |
+| Client secret | The value of `ALFRED_OAUTH_CLIENT_SECRET` on the server |
 
-The schema is hand-curated for ChatGPT's tooling. If you change the underlying memory schema, regenerate this file with the script in `tools/generate-openapi.mjs` (planned).
+After the Action is saved, copy both callback URLs displayed by ChatGPT into
+the server's comma-separated `ALFRED_OAUTH_REDIRECT_URIS` allowlist. Redirect
+URIs are matched exactly.
+
+When a user chooses **Sign in**, Alfred asks for their existing `alk_...` API
+key on Alfred's own consent page. Alfred validates it and issues scoped OAuth
+tokens to ChatGPT. The API key itself never leaves Alfred.
+
+The canonical schema lives at
+`packages/memory-openapi/openapi.yaml`; `/openapi.yaml` serves it directly.
+
+## Security properties
+
+- Authorization Code flow with mandatory `state`.
+- Five-minute, single-use authorization codes.
+- One-hour access tokens.
+- Rotating refresh tokens with family revocation on reuse.
+- Exact redirect URI allowlist.
+- Only SHA-256 credential hashes are stored.
+- `memory:read` and `memory:write` are enforced per operation.
+- Existing API-key authentication remains available to CLI and technical
+  integrations.
 
 ## Tests
 
 ```bash
-npm run check
-npm test
+npm run chatgpt:check
+npm run chatgpt:test
 ```
-
-Test counts:
-
-- `contract.test.mjs` — 11 tests covering OpenAPI shape and bridge forwarding.

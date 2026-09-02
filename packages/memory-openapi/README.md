@@ -16,7 +16,7 @@ This package only contains:
 
 It intentionally does **not** contain:
 
-- OAuth or user-management flows.
+- OAuth runtime code (implemented by `@alfred-labs/memory-server`).
 - ChatGPT native memory sync.
 - MCP tooling for ChatGPT.
 - UI, billing, embeddings, RAG or other external integrations.
@@ -26,8 +26,9 @@ It intentionally does **not** contain:
 | Method | Path | OperationId | Consequential | Purpose |
 |--------|------|-------------|---------------|---------|
 | GET | `/health` | `healthCheck` | no | Connectivity check |
-| GET | `/memories/search` | `searchMemories` | no | Full-text search |
+| POST | `/search` | `searchMemories` | no | Keyword/semantic/hybrid search |
 | GET | `/memories` | `listMemories` | no | List/filter memories |
+| GET | `/memories/{id}` | `getMemory` | no | Read one memory |
 | POST | `/memories` | `createMemory` | **yes** | Create a memory |
 | PATCH | `/memories/{id}` | `updateMemory` | **yes** | Update a memory |
 | DELETE | `/memories/{id}` | `deleteMemory` | **yes** | Delete a memory |
@@ -36,21 +37,20 @@ It intentionally does **not** contain:
 
 ChatGPT Actions supports `None`, `API Key` and `OAuth`; see the official
 [GPT Action authentication guide](https://developers.openai.com/api/docs/actions/authentication).
-For this MVP we use an **API key sent as a Bearer token**:
+Alfred uses **OAuth 2.0 Authorization Code** so each ChatGPT user receives a
+separate, scoped token:
 
-1. In the Custom GPT Action, set **Authentication** to **API Key**.
-2. Configure the schema location (`openapi.yaml`) and set the API key.
-3. The schema declares `security: [bearerAuth: []]` and the
-   `bearerAuth` HTTP bearer scheme, so ChatGPT sends:
+1. In the Custom GPT Action, set **Authentication** to **OAuth**.
+2. Configure Alfred's `/oauth/authorize` and `/oauth/token` URLs plus the
+   `memory:read memory:write` scopes.
+3. ChatGPT exchanges a one-time code and sends the resulting access token as:
 
    ```
-   Authorization: Bearer <api-key>
+   Authorization: Bearer <oauth-access-token>
    ```
 
-Do not rely on the `x-api-key` header. The schema models authentication as the
-standard `Authorization` header, and OpenAI's
-[production notes](https://developers.openai.com/api/docs/actions/production)
-list custom headers as an Actions limitation.
+The existing `alk_...` key is entered only on Alfred's consent page. It is not
+stored in ChatGPT's GPT configuration.
 
 ## Hosting requirement
 
@@ -83,10 +83,10 @@ Rules:
 ## Manual E2E checklist
 
 1. Start the Alfred Memory API on a public HTTPS endpoint.
-2. Confirm `Authorization: Bearer <api-key>` is accepted.
+2. Configure the OAuth client, client secret, and exact ChatGPT callback URLs.
 3. Create a private Custom GPT.
 4. Add a ChatGPT Action and point it to `openapi.yaml`.
-5. Set **API Key** authentication with the production API key.
+5. Set **OAuth** authentication and choose **Sign in**.
 6. Test `healthCheck` if exposed.
 7. Ask the GPT to remember a durable preference → `createMemory`.
 8. Ask about that preference → `searchMemories`.
@@ -94,17 +94,18 @@ Rules:
 10. Update the memory → confirm → `updateMemory`.
 11. Delete the memory → confirm → `deleteMemory`.
 12. Confirm secrets and raw chat history are not persisted.
-13. Confirm errors do not expose the API key.
+13. Confirm errors and traces expose neither the API key nor OAuth credentials.
 
 ## Risks and limitations
 
-- **Shared API key**: fine for personal use; unsuitable for multi-user deployments.
+- **OAuth client secret**: keep it in server/ChatGPT configuration and rotate it
+  if it is exposed.
 - **Mutations are consequential**: `createMemory`, `updateMemory` and `deleteMemory`
   are marked with `x-openai-isConsequential: true`.
 - **Exfiltration risk**: keep the Custom GPT private until you trust the memory
   contents. `searchMemories` and `listMemories` can expose stored context.
-- **No custom headers**: ChatGPT Actions does not support custom headers, so
-  authentication must use the `Authorization` header.
+- **Exact callbacks**: ChatGPT callback URLs must be explicitly allowlisted;
+  wildcard redirect URLs are rejected.
 - **Payload/timeout limits**: keep responses under 100,000 characters and under
   45 seconds.
 - **Namespace discipline**: the default namespace is `project:alfred`. Ask the

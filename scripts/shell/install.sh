@@ -281,8 +281,8 @@ case "$PROFILE" in
   web)
     cat <<EOF2
   - For ChatGPT: my GPTs > Create > Actions > Import
-    $TARGET_PATH/packages/chatgpt-adapter/openapi.json
-    Auth: API Key, Bearer, value=\$API_KEY
+    https://alfred-labs-memory.fly.dev/openapi.yaml
+    Auth: OAuth; then Sign in and enter \$API_KEY only on Alfred's page
   - For Claude Desktop: edit claude_desktop_config.json and add:
     {"mcpServers": {"alfred-memory": {"command": "node", "args": ["$TARGET_PATH/packages/anthropic-adapter/bin/alfred-mcp.mjs"], "env": {"ALFRED_MEMORY_API_KEY": "\$API_KEY"}}}}
   - For Gemini / AI Studio: Tools > Extensions > Import

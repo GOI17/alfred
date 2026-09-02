@@ -117,6 +117,17 @@ Notes:
   https://dash.cloudflare.com → Turnstile when you go to production.
 - **`ALFRED_PUBLIC_URL`** must match your actual domain.
 
+To enable direct ChatGPT OAuth, first create the Custom GPT Action and copy
+the exact callback URLs it displays. Then set all OAuth values together;
+setting only some of them intentionally prevents startup:
+
+```sh
+flyctl secrets set \
+  ALFRED_OAUTH_CLIENT_ID="alfred-chatgpt" \
+  ALFRED_OAUTH_CLIENT_SECRET="<random value of at least 32 characters>" \
+  ALFRED_OAUTH_REDIRECT_URIS="https://chatgpt.com/aip/g-YOUR-GPT-ID/oauth/callback,https://chat.openai.com/aip/g-YOUR-GPT-ID/oauth/callback"
+```
+
 ## 5. Deploy
 
 ```sh

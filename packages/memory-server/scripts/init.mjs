@@ -47,14 +47,20 @@ function parseArgs(argv) {
       // Support both --key value and --key=value forms.
       let k, v;
       const eq = a.indexOf("=");
-      if (eq !== -1) {
+      const inline = eq !== -1;
+      if (inline) {
         k = a.slice(2, eq);
         v = a.slice(eq + 1);
       } else {
         k = a.slice(2);
         v = argv[i + 1];
       }
-      if (v === undefined || v.startsWith("--")) { out[k] = true; } else { out[k] = v; i += 1; }
+      if (v === undefined || v.startsWith("--")) {
+        out[k] = true;
+      } else {
+        out[k] = v;
+        if (!inline) i += 1;
+      }
     } else { out._.push(a); }
   }
   return out;

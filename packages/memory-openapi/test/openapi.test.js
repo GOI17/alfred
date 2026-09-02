@@ -18,9 +18,9 @@ const expectedRoutes = new Set([
   "GET /skills/manifest",
   "POST /policies/check",
   "POST /search",
-  "GET /memories/search",
   "POST /memories",
   "GET /memories",
+  "GET /memories/{id}",
   "PATCH /memories/{id}",
   "DELETE /memories/{id}"
 ]);
@@ -39,15 +39,17 @@ describe("memory-openapi schema", () => {
     assert.equal(spec.openapi, "3.1.0");
   });
 
-  it("uses HTTP bearer auth", () => {
-    const security = spec.components?.securitySchemes?.bearerAuth;
-    assert.ok(security, "bearerAuth security scheme must exist");
-    assert.equal(security.type, "http");
-    assert.equal(security.scheme, "bearer");
+  it("uses OAuth 2.0 Authorization Code with Alfred endpoints", () => {
+    const security = spec.components?.securitySchemes?.oauth2;
+    assert.ok(security, "oauth2 security scheme must exist");
+    assert.equal(security.type, "oauth2");
+    assert.equal(security.flows.authorizationCode.authorizationUrl, "https://alfred-labs-memory.fly.dev/oauth/authorize");
+    assert.equal(security.flows.authorizationCode.tokenUrl, "https://alfred-labs-memory.fly.dev/oauth/token");
+    assert.deepEqual(Object.keys(security.flows.authorizationCode.scopes), ["memory:read", "memory:write"]);
   });
 
-  it("declares global bearer security", () => {
-    assert.deepEqual(spec.security, [{ bearerAuth: [] }]);
+  it("declares global OAuth security", () => {
+    assert.deepEqual(spec.security, [{ oauth2: ["memory:read", "memory:write"] }]);
   });
 
   it("exposes only the required operationIds", () => {
@@ -57,9 +59,9 @@ describe("memory-openapi schema", () => {
       "listAgents",
       "listSkills",
       "checkPolicy",
-      "searchMemoriesV2",
       "searchMemories",
       "listMemories",
+      "getMemory",
       "createMemory",
       "updateMemory",
       "deleteMemory"
@@ -118,7 +120,6 @@ describe("memory-openapi schema", () => {
       "/skills/manifest",
       "/policies/check",
       "/search",
-      "/memories/search",
       "/memories",
       "/memories/{id}"
     ]);
@@ -147,6 +148,18 @@ describe("memory-openapi schema", () => {
       "SearchResult"
     ]) {
       assert.ok(schemas.includes(name), `schema ${name} must be defined`);
+    }
+  });
+
+  it("uses read/write scopes per protected operation", () => {
+    for (const opId of ["searchMemories", "listMemories", "getMemory"]) {
+      assert.deepEqual(findOperation(spec, opId).security, [{ oauth2: ["memory:read"] }]);
+    }
+    for (const opId of ["createMemory", "updateMemory", "deleteMemory"]) {
+      assert.deepEqual(findOperation(spec, opId).security, [{ oauth2: ["memory:write"] }]);
+    }
+    for (const opId of ["healthCheck", "listAgents", "listSkills", "checkPolicy"]) {
+      assert.deepEqual(findOperation(spec, opId).security, []);
     }
   });
 
@@ -276,7 +289,10 @@ function parseSequence(lines, startIndex, indent) {
     } else if (isMappingPair(itemText)) {
       const [key, rawValue] = splitPair(itemText, line.index);
       item = {};
-      index = assignValue(item, key, rawValue, lines, index, indent + 2);
+      const valueIndent = rawValue === "" && lines[index]?.indent > indent + 2
+        ? lines[index].indent
+        : indent + 2;
+      index = assignValue(item, key, rawValue, lines, index, valueIndent);
 
       if (index < lines.length && lines[index].indent === indent + 2) {
         const parsed = parseMapping(lines, index, indent + 2);
@@ -331,12 +347,11 @@ function assignValue(object, key, rawValue, lines, index, nestedIndent) {
 }
 
 function isMappingPair(text) {
-  const colonIndex = text.indexOf(":");
-  return colonIndex > 0;
+  return mappingColonIndex(text) > 0;
 }
 
 function splitPair(text, lineNumber) {
-  const colonIndex = text.indexOf(":");
+  const colonIndex = mappingColonIndex(text);
   if (colonIndex <= 0) {
     throw new Error(`Expected mapping pair on line ${lineNumber}: ${text}`);
   }
@@ -344,6 +359,21 @@ function splitPair(text, lineNumber) {
   const key = stripQuotes(text.slice(0, colonIndex).trim());
   const value = text.slice(colonIndex + 1).trim();
   return [key, value];
+}
+
+function mappingColonIndex(text) {
+  let quote = null;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if ((char === '"' || char === "'") && (!quote || quote === char)) {
+      quote = quote ? null : char;
+      continue;
+    }
+    if (!quote && char === ":" && (index === text.length - 1 || /\s/.test(text[index + 1]))) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 function parseScalar(value) {

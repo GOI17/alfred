@@ -10,7 +10,13 @@ import {
   createServer,
   startServer
 } from "../src/server.js";
-import { createConsoleRouter, createOpenapiRouter } from "../src/index.js";
+import {
+  createConsoleRouter,
+  createOpenapiRouter,
+  createOAuthRouter,
+  createOAuthService,
+  loadOAuthConfig
+} from "../src/index.js";
 import {
   createTenantService,
   createUserService,
@@ -185,8 +191,10 @@ export async function run(argv = [], env = process.env) {
   const args = parseArgs(argv);
   const merged = { ...env, ...args };
   let config;
+  let oauthConfig;
   try {
     config = loadServerConfig(merged);
+    oauthConfig = loadOAuthConfig(merged);
   } catch (err) {
     process.stderr.write(`Server config error: ${err.message}\n`);
     return 2;
@@ -195,6 +203,10 @@ export async function run(argv = [], env = process.env) {
   const registry = await openRegistry();
   const tenantService = createTenantService({ store: registry.tenants });
   const userService = createUserService({ store: registry.users });
+  const oauthService = oauthConfig.enabled
+    ? createOAuthService({ config: oauthConfig, registry, userService })
+    : null;
+  const oauthRouter = createOAuthRouter({ oauthService });
   const memoryFactory = createTenantMemoryStoreFactory(registry);
   // The web console may be deployed elsewhere (Vercel, Netlify, GH Pages) or
   // alongside the server. Three resolution modes:
@@ -208,7 +220,7 @@ export async function run(argv = [], env = process.env) {
     userService, tenantService, config,
     ...consoleOpts,
     registry,
-    sharedUrl: process.env.ALFRED_SAAS_DATABASE_URL ?? null
+    sharedUrl: merged.ALFRED_SAAS_DATABASE_URL ?? null
   });
   const openapiRouter = createOpenapiRouter({
     userService,
@@ -216,6 +228,7 @@ export async function run(argv = [], env = process.env) {
     searchServiceFactory: null,  // v0.4.1: keyword fallback only; semantic+hybrid in v0.4.0 wired separately
     projectRoot: process.cwd(),
     registry,
+    oauthService,
     requireAuth: true,
     allowedOrigins: config.allowedOrigins
   });
@@ -226,6 +239,7 @@ export async function run(argv = [], env = process.env) {
     config,
     consoleRouter,
     openapiRouter,
+    oauthRouter,
     registry
   });
 

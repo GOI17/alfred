@@ -49,14 +49,16 @@ const adapters = [
   },
   {
     name: "chatgpt-custom-gpt",
-    description: "ChatGPT Plus/Pro Custom GPT Actions bridge",
+    description: "Direct OAuth connection from ChatGPT Actions to Alfred Memory",
     relDir: "packages/chatgpt-adapter",
     commands: [
-      "Run bridge: alfred-memory-base-url=$ALFRED url alfred-bridge (uses packages/chatgpt-adapter)",
       "In ChatGPT: My GPTs → Create → Configure → Actions → Import OpenAPI schema.",
-      "Upload packages/chatgpt-adapter/openapi.json.",
-      "Authentication: API Key, Bearer.",
-      "Paste alk_... from .alfred/config.json."
+      "Import https://alfred-labs-memory.fly.dev/openapi.yaml.",
+      "Authentication: OAuth.",
+      "Authorization URL: https://alfred-labs-memory.fly.dev/oauth/authorize",
+      "Token URL: https://alfred-labs-memory.fly.dev/oauth/token",
+      "Scopes: memory:read memory:write.",
+      "After saving, choose Sign in and enter alk_... only on Alfred's consent page."
     ]
   },
   {

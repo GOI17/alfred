@@ -35,11 +35,11 @@ function json(res, status, body) {
 
 function authenticate(req) {
   const auth = req.headers.authorization;
-  const apiKey = typeof auth === "string" && auth.startsWith("Bearer ")
+  const credential = typeof auth === "string" && auth.startsWith("Bearer ")
     ? auth.slice("Bearer ".length).trim()
     : (typeof req.headers["x-api-key"] === "string" ? req.headers["x-api-key"] : null);
-  if (!apiKey) return { error: { code: "unauthorized", message: "API key required." } };
-  return { apiKey };
+  if (!credential) return { error: { code: "unauthorized", message: "Bearer credential required." } };
+  return { credential };
 }
 
 function hashKey(apiKey) {
@@ -153,6 +153,7 @@ export function createOpenapiRouter({
   searchServiceFactory,  // () => SearchService (lazy, so we don't load transformers at startup)
   projectRoot,           // repo root for manifest loaders
   registry = null,       // optional; if provided, rate limiter is enabled
+  oauthService = null,   // optional; resolves scoped alo_ access tokens
   requireAuth = true,
   allowedOrigins = []
 } = {}) {
@@ -163,6 +164,8 @@ export function createOpenapiRouter({
   const rateLimiter = registry ? createActionRateLimiter({ registry }) : null;
   const agentsManifest = loadAgentsManifest(projectRoot);
   const skillsManifest = loadSkillsManifest(projectRoot);
+  const openapiPath = join(projectRoot, "packages", "memory-openapi", "openapi.yaml");
+  const openapiDocument = existsSync(openapiPath) ? readFileSync(openapiPath, "utf8") : null;
 
   // Cached at router creation; if .ai/ changes at runtime, restart the
   // process. This is fine for v0.4.1 (manifests change per release).
@@ -224,6 +227,16 @@ export function createOpenapiRouter({
       return json(res, 200, skillsManifest);
     }
 
+    if (url.pathname === "/openapi.yaml" && req.method === "GET") {
+      if (!openapiDocument) return json(res, 404, { error: { code: "not_found", message: "OpenAPI schema is unavailable." } });
+      res.writeHead(200, {
+        "content-type": "application/yaml; charset=utf-8",
+        "cache-control": "public, max-age=300",
+        "x-content-type-options": "nosniff"
+      });
+      return res.end(openapiDocument);
+    }
+
     if (url.pathname === "/policies/check" && req.method === "POST") {
       const body = await readJsonBody(req);
       if (body.__invalid) return json(res, 400, { error: { code: "validation_error", message: "Invalid JSON body." } });
@@ -242,12 +255,27 @@ export function createOpenapiRouter({
       if (auth.error) return json(res, 401, { error: auth.error });
 
       // Resolve tenant
-      const resolved = await userService.resolveApiKey(auth.apiKey);
-      if (!resolved) return json(res, 401, { error: { code: "unauthorized", message: "Invalid API key." } });
+      let resolved;
+      let scopes = null;
+      if (auth.credential.startsWith("alo_")) {
+        resolved = oauthService ? await oauthService.resolveAccessToken(auth.credential) : null;
+        scopes = resolved?.scopes ?? [];
+      } else {
+        resolved = await userService.resolveApiKey(auth.credential);
+      }
+      if (!resolved) return json(res, 401, { error: { code: "unauthorized", message: "Invalid or expired Bearer credential." } });
       const tenantId = resolved.tenant_id;
 
+      const requiredScope = req.method === "GET" || url.pathname === "/search"
+        ? "memory:read"
+        : "memory:write";
+      if (scopes && !scopes.includes(requiredScope)) {
+        res.setHeader("www-authenticate", `Bearer error="insufficient_scope", scope="${requiredScope}"`);
+        return json(res, 403, { error: { code: "insufficient_scope", message: `${requiredScope} scope is required.` } });
+      }
+
       // Rate limit
-      const rl = await enforceRateLimit(auth.apiKey, url.pathname, req.method);
+      const rl = await enforceRateLimit(auth.credential, url.pathname, req.method);
       if (!rl.allowed) {
         if (rl.body?.error?.retry_after_seconds) {
           res.setHeader("retry-after", String(rl.body.error.retry_after_seconds));

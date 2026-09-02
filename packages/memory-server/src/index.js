@@ -40,5 +40,15 @@ export { createConsoleRouter } from "./console-router.js";
 // v0.4.1: Custom GPT / OpenAPI surface
 export { createOpenapiRouter } from "./openapi-router.js";
 
+export {
+  createOAuthService,
+  loadOAuthConfig,
+  hashOAuthSecret,
+  OAuthConfigError,
+  OAuthError,
+  OAUTH_SCOPES
+} from "./oauth/oauth-service.js";
+export { createOAuthRouter } from "./oauth/oauth-router.js";
+
 // v0.4.1: Action rate limiter (100 req/min per API key)
 export { createActionRateLimiter } from "./bootstrap/action-rate-limiter.js";

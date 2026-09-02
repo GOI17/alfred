@@ -159,22 +159,22 @@
 
     <div class="panel">
       <h2>Connected services</h2>
-      <p class="hint">Set up ChatGPT, Claude Desktop, or Gemini to use the same memory. Each adapter needs a tenant API key.</p>
+      <p class="hint">Set up ChatGPT, Claude Desktop, or Gemini to use the same memory. ChatGPT connects through OAuth; technical adapters can continue using tenant API keys.</p>
 
       <div class="step">
         <span class="step-num">1</span><strong>ChatGPT (Plus/Pro)</strong>
-        <div class="small" style="margin-top: 4px;">Import <code>openapi.json</code> as Custom GPT Actions.</div>
+        <div class="small" style="margin-top: 4px;">Connect Custom GPT Actions directly to Alfred through OAuth.</div>
         <details>
           <summary>Show steps</summary>
           <pre>
-1. Run the bridge:
-   ALFRED_MEMORY_BASE_URL=&lt;your-server&gt; ALFRED_MEMORY_API_KEY=&lt;key&gt; \
-     node packages/chatgpt-adapter/src/bridge.mjs &amp;
-
-2. In ChatGPT: My GPTs → Create → Configure → Actions → Import OpenAPI.
-3. Upload: packages/chatgpt-adapter/openapi.json
-4. Auth: API Key · Bearer · paste the alk_... key
-5. Save and test: ask the GPT "list my last 5 memories"</pre>
+1. In ChatGPT: My GPTs → Create → Configure → Actions → Import OpenAPI.
+2. Import: https://alfred-labs-memory.fly.dev/openapi.yaml
+3. Auth: OAuth
+   Authorization URL: https://alfred-labs-memory.fly.dev/oauth/authorize
+   Token URL: https://alfred-labs-memory.fly.dev/oauth/token
+   Scope: memory:read memory:write
+4. Save, choose "Sign in", and enter your alk_... key only on Alfred's page.
+5. Test: ask the GPT "list my last 5 memories"</pre>
         </details>
       </div>
 
