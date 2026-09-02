@@ -1,0 +1,21 @@
+{
+  "trace_id": "issue-132-console-api-status",
+  "timestamp": "2026-09-02T05:15:00Z",
+  "event": "console_dom_contract_fixed",
+  "actor": "orchestrator",
+  "data": {
+    "issue": 132,
+    "branch": "issue-132-console-api-status",
+    "root_cause": "Unlock flows referenced an apiStatus element absent from the HTML.",
+    "tenant_bootstrap_timing": "The server request completed before the client-side null dereference.",
+    "execution_strategy": "local-only",
+    "local_validation": {
+      "console_check": "pass",
+      "console_build": "pass",
+      "pages_build": "pass",
+      "pages_check": "pass",
+      "declared_status_element": "pass"
+    },
+    "provider_calls": 0
+  }
+}
