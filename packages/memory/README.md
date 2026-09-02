@@ -83,7 +83,7 @@ const memory = await memoryService.createMemory(tenant.id, {
 |---|---|
 | `domain.js` | `ALLOWED_MEMORY_TYPES`, `createMemoryService`, normalize helpers, `MemoryValidationError`, `MemoryNotFoundError` |
 | `in-memory-store.js` | `createInMemoryStore` |
-| `postgres-store.js` | `createPostgresMemoryStore(client)` |
+| `postgres-store.js` | `createPostgresMemoryStore(client, { schema? })` |
 | `sqlite-memory-store.js` | `createSqliteMemoryStore(db)`, `openSqliteMemoryStore(path)` |
 | `http.js` | `createMemoryHttpHandler`, `createMemoryHttpServer` |
 | `sdk.js` | `createMemoryClient` |

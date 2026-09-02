@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Neon pooled connections no longer receive `search_path` through PostgreSQL
+  startup `options`. Tenant provisioning now scopes `search_path` to one
+  transaction, while runtime memory queries explicitly qualify the tenant
+  schema. Legacy stored URLs are sanitized when their pool is opened.
+
 ## 0.3.0
 
 Multi-tenant extension of the v0.2.0 memory MVP. Backwards-compatible. Adds:

@@ -456,7 +456,7 @@ async function makeServicesWithRegistry() {
 
 const MOCK_PROVISIONER = {
   async provision({ tenantId, sharedUrl }) {
-    return { schema: "tenant_" + tenantId.replace(/^usr_t_/, ""), connectionString: sharedUrl + "?options=-c search_path=tenant_" + tenantId };
+    return { schema: "tenant_" + tenantId.replace(/^usr_t_/, ""), connectionString: sharedUrl };
   }
 };
 
@@ -477,6 +477,7 @@ test("createBootstrap with valid input returns tenant + alk_ key", async () => {
   // metadata may be a JSON string (SQLite) or object (in-memory); handle both.
   const meta = typeof result.tenant.metadata === "string" ? JSON.parse(result.tenant.metadata) : result.tenant.metadata;
   assert.equal(meta && meta.source, "web_bootstrap");
+  assert.equal(new URL(result.tenant.db_connection).searchParams.has("options"), false);
 });
 
 test("createBootstrap rejects empty display_name with validation_error", async () => {
@@ -599,20 +600,62 @@ test("createBootstrap issues a key with alk_ prefix and 12-char public prefix", 
   assert.match(result.key_prefix, /^alk_[A-Za-z0-9_-]{8}$/);
 });
 
-test("schema provisioner builds tenant_<id> schema and search_path connection", async () => {
+test("schema provisioner keeps pooled URLs startup-option free and scopes search_path to its transaction", async () => {
   const queries = [];
-  const provisioner = createSchemaProvisioner({ pgClient: async () => ({
-    query: async (sql, values) => { queries.push({ sql, values }); },
-    end: async () => {}
-  }) });
+  let clientOptions;
+  let ended = false;
+  const provisioner = createSchemaProvisioner({ pgClient: async (options) => {
+    clientOptions = options;
+    return {
+      query: async (sql, values) => { queries.push({ sql, values }); },
+      end: async () => { ended = true; }
+    };
+  } });
   const tenantId = "usr_t_abc123abc123abc123abc123abc12345";
   const schema = provisioner.schemaNameFor(tenantId);
   assert.equal(schema, "tenant_abc123abc123abc123abc123abc12345");
-  const conn = provisioner.buildTenantConnectionString("postgres://u:p@h/d", schema);
-  assert.ok(/search_path[=%]3[Dd]tenant_/.test(conn) || /search_path=tenant_/.test(decodeURIComponent(conn)), "expected search_path=tenant_ in " + conn);
-  await provisioner.provision({ tenantId, sharedUrl: "postgres://u:p@h/d" });
+  const sharedUrl = "postgresql://u:p@ep-example-pooler.us-east-2.aws.neon.tech/d?sslmode=require&options=-c%20search_path%3Dlegacy,public";
+  const conn = provisioner.buildTenantConnectionString(sharedUrl, schema);
+  const parsed = new URL(conn);
+  assert.equal(parsed.hostname, "ep-example-pooler.us-east-2.aws.neon.tech");
+  assert.equal(parsed.searchParams.get("sslmode"), "require");
+  assert.equal(parsed.searchParams.has("options"), false);
+
+  const result = await provisioner.provision({ tenantId, sharedUrl });
+  assert.equal(result.connectionString, conn);
+  assert.equal(clientOptions.connectionString, conn);
+  assert.equal(queries[0].sql, "BEGIN");
+  assert.equal(queries.at(-1).sql, "COMMIT");
+  const searchPath = queries.find((entry) => entry.sql.includes("set_config('search_path'"));
+  assert.deepEqual(searchPath?.values, [`${schema}, public`]);
   const seed = queries.find((entry) => entry.sql.includes("INSERT INTO alfred_memory_users"));
   assert.deepEqual(seed?.values, [tenantId]);
+  assert.equal(ended, true);
+});
+
+test("schema provisioner rolls back and closes the client when a migration fails", async () => {
+  const queries = [];
+  let ended = false;
+  const provisioner = createSchemaProvisioner({
+    tenantMigrations: { broken: "SELECT broken" },
+    pgClient: async () => ({
+      async query(sql) {
+        queries.push(sql);
+        if (sql === "SELECT broken") throw new Error("migration failed");
+      },
+      async end() { ended = true; }
+    })
+  });
+
+  await assert.rejects(
+    provisioner.provision({
+      tenantId: "usr_t_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      sharedUrl: "postgres://u:p@h/d"
+    }),
+    /migration failed/
+  );
+  assert.deepEqual(queries.slice(-2), ["SELECT broken", "ROLLBACK"]);
+  assert.equal(ended, true);
 });
 
 test("schema provisioner rejects invalid tenant ids", async () => {

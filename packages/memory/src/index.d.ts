@@ -116,7 +116,7 @@ export class MemoryApiError extends Error {
 }
 
 export function createInMemoryStore(initialMemories?: MemoryRecord[]): MemoryStore;
-export function createPostgresMemoryStore(client: PgStyleClient): MemoryStore;
+export function createPostgresMemoryStore(client: PgStyleClient, options?: { schema?: string }): MemoryStore;
 export function createMemoryService(options: { store: MemoryStore; now?: () => Date; idGenerator?: () => string }): MemoryService;
 export function createMemoryHttpHandler(options?: { service?: MemoryService; apiKeys?: Record<string, string> | Map<string, string> | ((apiKey: string) => string | undefined | Promise<string | undefined>) }): (req: any, res: any) => Promise<void>;
 export function createMemoryHttpServer(options?: Parameters<typeof createMemoryHttpHandler>[0]): any;
