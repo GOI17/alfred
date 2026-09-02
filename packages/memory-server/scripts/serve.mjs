@@ -21,6 +21,66 @@ import { openRegistry, defaultRegistryPath } from "../src/registry/store-factory
 import { openSqliteMemoryStore } from "../../memory/src/sqlite-memory-store.js";
 import { readFileSync } from "node:fs";
 
+const POSTGRES_SCHEMA_RE = /^[a-z_][a-z0-9_]{0,62}$/;
+
+function parsePostgresUrl(connectionString) {
+  if (typeof connectionString !== "string") {
+    throw new TypeError("PostgreSQL connection string must be a string.");
+  }
+  let url;
+  try {
+    url = new URL(connectionString);
+  } catch {
+    throw new TypeError("PostgreSQL connection string must be a valid URL.");
+  }
+  if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
+    throw new TypeError("PostgreSQL connection string must use postgres:// or postgresql://.");
+  }
+  return url;
+}
+
+function assertPostgresSchema(schema) {
+  if (typeof schema !== "string" || !POSTGRES_SCHEMA_RE.test(schema)) {
+    throw new TypeError("PostgreSQL tenant schema must be a safe lowercase identifier.");
+  }
+  return schema;
+}
+
+function legacySearchPathSchema(connectionString) {
+  const options = parsePostgresUrl(connectionString).searchParams.get("options");
+  if (!options) return null;
+  const match = options.match(/(?:^|\s)-c\s*search_path=([a-z_][a-z0-9_]{0,62})(?:,public)?(?:\s|$)/);
+  return match?.[1] ?? null;
+}
+
+export function withoutStartupOptions(connectionString) {
+  const url = parsePostgresUrl(connectionString);
+  url.searchParams.delete("options");
+  return url.toString();
+}
+
+export function tenantPostgresSchema(tenant) {
+  if (!tenant || typeof tenant !== "object") {
+    throw new TypeError("PostgreSQL tenant must be an object.");
+  }
+  const metadataSchema = tenant.metadata?.schema;
+  if (metadataSchema !== undefined && metadataSchema !== null) {
+    return assertPostgresSchema(metadataSchema);
+  }
+
+  if (tenant.db_connection) {
+    const legacySchema = legacySearchPathSchema(tenant.db_connection);
+    if (legacySchema) return assertPostgresSchema(legacySchema);
+  }
+
+  if (typeof tenant.id === "string" && /^usr_t_[a-f0-9]{32}$/.test(tenant.id)) {
+    return `tenant_${tenant.id.slice("usr_t_".length)}`;
+  }
+
+  // Manually configured, non-SaaS Postgres tenants historically used public.
+  return "public";
+}
+
 function parseArgs(argv) {
   const out = { _: [] };
   for (let i = 0; i < argv.length; i += 1) {
@@ -59,8 +119,8 @@ export function createTenantMemoryStoreFactory(registry, {
   }
 
   // Cache the initialization promise so concurrent first requests for one
-  // tenant cannot open duplicate pools. PostgreSQL pools are tenant-scoped:
-  // each connection URL pins search_path to exactly one tenant schema.
+  // tenant cannot open duplicate pools. Queries explicitly qualify the tenant
+  // schema and never depend on pooled connection session state.
   const cache = new Map();
   const closeables = new Set();
 
@@ -75,8 +135,9 @@ export function createTenantMemoryStoreFactory(registry, {
 
     if (tenant.storage_backend === "postgres") {
       if (!tenant.db_connection) throw new Error("PostgreSQL tenant has no db_connection.");
+      const schema = tenantPostgresSchema(tenant);
       const pool = await postgresPoolFactory({
-        connectionString: tenant.db_connection,
+        connectionString: withoutStartupOptions(tenant.db_connection),
         tenantId: tenant.id
       });
       if (!pool || typeof pool.query !== "function") {
@@ -86,7 +147,7 @@ export function createTenantMemoryStoreFactory(registry, {
         // This is idempotent and also repairs tenants created before the
         // provisioner started seeding alfred_memory_users.
         await pool.query(
-          "INSERT INTO alfred_memory_users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING",
+          `INSERT INTO "${schema}"."alfred_memory_users" (id) VALUES ($1) ON CONFLICT (id) DO NOTHING`,
           [tenant.id]
         );
       } catch (err) {
@@ -94,7 +155,7 @@ export function createTenantMemoryStoreFactory(registry, {
         throw err;
       }
       if (typeof pool.end === "function") closeables.add(pool);
-      return createMemoryService({ store: createPostgresMemoryStore(pool) });
+      return createMemoryService({ store: createPostgresMemoryStore(pool, { schema }) });
     }
 
     throw new Error("Unsupported tenant storage_backend=" + tenant.storage_backend);

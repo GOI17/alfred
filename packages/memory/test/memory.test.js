@@ -436,6 +436,60 @@ describe("In-memory store adapter", () => {
 
 
 describe("PostgreSQL store adapter", () => {
+  test("schema-qualifies every memory table reference and rejects unsafe schemas", async () => {
+    const calls = [];
+    const row = {
+      id: "memory-1",
+      user_id: "alice",
+      namespace: "personal",
+      project_id: null,
+      type: "fact",
+      content: "Schema-qualified query",
+      tags: [],
+      source: "test",
+      metadata: {},
+      confidence: null,
+      expires_at: null,
+      created_at: "2026-06-15T00:00:00.000Z",
+      updated_at: "2026-06-15T00:00:00.000Z",
+      total_count: "1"
+    };
+    const client = {
+      async query(text, values) {
+        calls.push({ text, values });
+        if (text.startsWith("DELETE")) return { rows: [], rowCount: 1 };
+        return { rows: [row], rowCount: 1 };
+      }
+    };
+    const schema = "tenant_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const store = createPostgresMemoryStore(client, { schema });
+
+    await store.create({
+      id: row.id,
+      userId: row.user_id,
+      namespace: row.namespace,
+      type: row.type,
+      content: row.content,
+      tags: row.tags,
+      source: row.source,
+      metadata: row.metadata,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    });
+    await store.list("alice", { limit: 10, offset: 0 });
+    await store.search("alice", { q: "qualified", limit: 10, offset: 0 });
+    await store.get("alice", row.id);
+    await store.update("alice", row.id, { content: "updated" });
+    await store.delete("alice", row.id);
+
+    assert.equal(calls.length, 6);
+    assert.ok(calls.every(({ text }) => text.includes(`"${schema}"."alfred_memories"`)));
+    assert.throws(
+      () => createPostgresMemoryStore(client, { schema: "public; DROP SCHEMA public" }),
+      /safe lowercase identifier/
+    );
+  });
+
   test("uses a pg-style client and scopes all operations by userId", async () => {
     const calls = [];
     const row = {

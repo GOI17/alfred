@@ -16,16 +16,15 @@
 //
 // What it does:
 //   1. CREATE SCHEMA IF NOT EXISTS tenant_<id>
-//   2. SET search_path TO tenant_<id>, public
+//   2. Set a transaction-local search_path to tenant_<id>, public
 //   3. Apply the per-tenant migrations:
 //        - alfred_memory_users
 //        - alfred_memories (with namespace, type, etc.)
 //        - alfred_sessions
 //        - alfred_topics
 //        - alfred_acceptance_criteria
-//   4. Returns the connection string for the tenant (with search_path set
-//      via the `options` URL parameter, so each Pool that opens it is
-//      automatically scoped to the schema).
+//   4. Returns the shared connection string without startup options. Runtime
+//      queries explicitly qualify the tenant schema.
 
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -137,20 +136,17 @@ function schemaNameFor(tenantId) {
   return `tenant_${tenantId.replace(/^usr_t_/, "")}`;
 }
 
-// Build a tenant-scoped connection URL from the shared cluster URL by
-// adding the search_path via the `options` query parameter. node-postgres
-// passes `options` to the backend as `-c <key>=<value>` for every new
-// connection, so each Pool opened with this URL is automatically scoped
-// to the tenant's schema.
+// Build a pooler-safe tenant URL. Legacy Alfred URLs can contain startup
+// options, so remove them instead of forwarding unsupported session state.
 function buildTenantConnectionString(sharedUrl, schemaName) {
   if (typeof sharedUrl !== "string" || !sharedUrl.startsWith("postgres")) {
     throw new Error("sharedUrl must be a postgres:// or postgresql:// connection string");
   }
+  if (typeof schemaName !== "string" || !/^tenant_[a-f0-9]{32}$/.test(schemaName)) {
+    throw new Error(`Invalid tenant schema: ${schemaName}`);
+  }
   const url = new URL(sharedUrl);
-  const options = url.searchParams.get("options") || "";
-  const tenantOption = `-c search_path=${schemaName},public`;
-  const merged = options ? `${options},${tenantOption}` : tenantOption;
-  url.searchParams.set("options", merged);
+  url.searchParams.delete("options");
   return url.toString();
 }
 
@@ -167,11 +163,15 @@ export function createSchemaProvisioner({ pgClient, tenantMigrations = DEFAULT_T
       const schema = schemaNameFor(tenantId);
       const tenantConn = buildTenantConnectionString(sharedUrl, schema);
       const client = await pgClient({ connectionString: tenantConn });
+      let transactionOpen = false;
       try {
-        // 1. Create the schema.
+        await client.query("BEGIN");
+        transactionOpen = true;
+        // 1. Create the schema inside the provisioning transaction.
         await client.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
-        // 2. Set search_path so subsequent DDL lands in the tenant schema.
-        await client.query(`SET search_path TO "${schema}", public`);
+        // 2. Scope only this transaction. PgBouncer pins one server connection
+        // for the transaction, and the setting disappears at COMMIT/ROLLBACK.
+        await client.query("SELECT set_config('search_path', $1, true)", [`${schema}, public`]);
         // 3. Apply per-tenant migrations in order.
         for (const [name, sql] of Object.entries(tenantMigrations)) {
           await client.query(sql);
@@ -183,7 +183,14 @@ export function createSchemaProvisioner({ pgClient, tenantMigrations = DEFAULT_T
           "INSERT INTO alfred_memory_users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING",
           [tenantId]
         );
+        await client.query("COMMIT");
+        transactionOpen = false;
         return { schema, connectionString: tenantConn };
+      } catch (error) {
+        if (transactionOpen) {
+          try { await client.query("ROLLBACK"); } catch { /* preserve original error */ }
+        }
+        throw error;
       } finally {
         // pgClient returns a client we must close.
         if (typeof client.end === "function") {

@@ -48,20 +48,29 @@ function paginationFrom(row, options) {
   };
 }
 
-async function countMemories(client, where, values) {
-  const result = await client.query(`SELECT COUNT(*) AS total_count FROM alfred_memories WHERE ${where.join(" AND ")}`, values);
+function memoryTableFor(schema) {
+  if (schema === undefined || schema === null) return "alfred_memories";
+  if (typeof schema !== "string" || !/^[a-z_][a-z0-9_]{0,62}$/.test(schema)) {
+    throw new TypeError("PostgreSQL memory schema must be a safe lowercase identifier.");
+  }
+  return `"${schema}"."alfred_memories"`;
+}
+
+async function countMemories(client, table, where, values) {
+  const result = await client.query(`SELECT COUNT(*) AS total_count FROM ${table} WHERE ${where.join(" AND ")}`, values);
   return Number(result.rows[0]?.total_count ?? 0);
 }
 
-export function createPostgresMemoryStore(client) {
+export function createPostgresMemoryStore(client, { schema } = {}) {
   if (!client || typeof client.query !== "function") {
     throw new TypeError("createPostgresMemoryStore requires a pg-style client or pool with query(text, values).");
   }
+  const table = memoryTableFor(schema);
 
   return {
     async create(memory) {
       const result = await client.query(
-        `INSERT INTO alfred_memories (
+        `INSERT INTO ${table} (
           id, user_id, namespace, project_id, type, content, tags, source, metadata, confidence, expires_at, created_at, updated_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13)
         RETURNING *`,
@@ -91,7 +100,7 @@ export function createPostgresMemoryStore(client) {
       values.push(options.limit, options.offset);
       const result = await client.query(
         `SELECT *, COUNT(*) OVER() AS total_count
-         FROM alfred_memories
+         FROM ${table}
          WHERE ${where.join(" AND ")}
          ORDER BY created_at DESC, id DESC
          LIMIT $${values.length - 1} OFFSET $${values.length}`,
@@ -100,7 +109,7 @@ export function createPostgresMemoryStore(client) {
       const pagination =
         result.rows.length > 0
           ? paginationFrom(result.rows[0], options)
-          : { limit: options.limit, offset: options.offset, total: await countMemories(client, where, values.slice(0, -2)) };
+          : { limit: options.limit, offset: options.offset, total: await countMemories(client, table, where, values.slice(0, -2)) };
       return {
         items: result.rows.map(toMemory),
         pagination
@@ -125,7 +134,7 @@ export function createPostgresMemoryStore(client) {
       values.push(options.limit, options.offset);
       const result = await client.query(
         `SELECT *, COUNT(*) OVER() AS total_count
-         FROM alfred_memories
+         FROM ${table}
          WHERE ${where.join(" AND ")}
          ORDER BY created_at DESC, id DESC
          LIMIT $${values.length - 1} OFFSET $${values.length}`,
@@ -134,7 +143,7 @@ export function createPostgresMemoryStore(client) {
       const pagination =
         result.rows.length > 0
           ? paginationFrom(result.rows[0], options)
-          : { limit: options.limit, offset: options.offset, total: await countMemories(client, where, values.slice(0, -2)) };
+          : { limit: options.limit, offset: options.offset, total: await countMemories(client, table, where, values.slice(0, -2)) };
       return {
         items: result.rows.map(toMemory),
         pagination
@@ -142,7 +151,7 @@ export function createPostgresMemoryStore(client) {
     },
 
     async get(userId, id) {
-      const result = await client.query("SELECT * FROM alfred_memories WHERE user_id = $1 AND id = $2", [userId, id]);
+      const result = await client.query(`SELECT * FROM ${table} WHERE user_id = $1 AND id = $2`, [userId, id]);
       return toMemory(result.rows[0]);
     },
 
@@ -169,7 +178,7 @@ export function createPostgresMemoryStore(client) {
       }
 
       const result = await client.query(
-        `UPDATE alfred_memories
+        `UPDATE ${table}
          SET ${columns.join(", ")}
          WHERE user_id = $1 AND id = $2
          RETURNING *`,
@@ -179,7 +188,7 @@ export function createPostgresMemoryStore(client) {
     },
 
     async delete(userId, id) {
-      const result = await client.query("DELETE FROM alfred_memories WHERE user_id = $1 AND id = $2", [userId, id]);
+      const result = await client.query(`DELETE FROM ${table} WHERE user_id = $1 AND id = $2`, [userId, id]);
       return result.rowCount > 0;
     }
   };
