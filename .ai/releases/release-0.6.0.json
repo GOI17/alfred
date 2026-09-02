@@ -3,7 +3,7 @@
   "version": "0.6.0",
   "candidate": "alfred-setup-command-0.6.0",
   "owner": "orchestrator",
-  "status": "candidate",
+  "status": "complete",
   "scope": "alfred-setup-command",
   "previous_release": "release-0.5.0",
   "issue": 124,
@@ -21,8 +21,17 @@
   ],
   "source_policy": {
     "release_tag": "v0.6.0",
-    "validated_commit_source": "pending",
-    "tap_commit": "pending"
+    "validated_commit_source": "6f6a4da5964f1b0cc77c6b27813258269d7abfa9",
+    "tap_commit": "16de4548f4b3c884f293d1c16015f132a9b6a900"
+  },
+  "validation": {
+    "setup_tests": "3/3 pass",
+    "formula_generator_tests": "4/4 pass",
+    "homebrew_strict_audit": "pass",
+    "homebrew_upgrade": "0.5.0 to 0.6.0 pass",
+    "homebrew_test": "pass",
+    "removed_command_absent": true,
+    "provider_calls": 0
   },
   "provider_calls_allowed": 0,
   "harness_config_writes_require_human_approval": true

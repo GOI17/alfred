@@ -51,8 +51,8 @@ itself is responsible for environment setup.
 - [x] CLI setup preview passes.
 - [x] Formula generator tests pass.
 - [x] Homebrew validator and formula style pass.
-- [ ] Release `v0.6.0` is published from a validated commit.
-- [ ] Tap formula passes strict audit, upgrade, and `brew test`.
-- [ ] `alfred version` reports `0.6.0`.
-- [ ] `command -v alfred-install` fails after cleanup.
+- [x] Release `v0.6.0` is published from a validated commit.
+- [x] Tap formula passes strict audit, upgrade, and `brew test`.
+- [x] `alfred version` reports `0.6.0`.
+- [x] `command -v alfred-install` fails after cleanup.
 - [x] Provider calls remain 0.
