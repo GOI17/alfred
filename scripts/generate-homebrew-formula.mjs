@@ -93,7 +93,6 @@ class Alfred < Formula
   desc "Agent operations runtime for coding harnesses"
   homepage "https://alfred.alfredlabs.org"
 ${sourceStanza(options)}
-  version "${options.version}"
 
   depends_on "node"
 
