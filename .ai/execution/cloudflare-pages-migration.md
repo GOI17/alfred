@@ -45,6 +45,8 @@ to the Alfred Memory API, not to the static host.
 1. Keep GitHub Pages active during verification.
 2. Document Cloudflare project creation, GitHub secrets, API CORS, DNS cutover, and rollback.
 3. Do not embed API keys or Cloudflare credentials in the artifact.
+4. Use `https://alfred.alfredlabs.org` as the production site origin and
+   `https://alfred.alfredlabs.org/memory/app/` as the external Console URL.
 
 ## Completion conditions
 
@@ -53,8 +55,11 @@ to the Alfred Memory API, not to the static host.
 - [x] Cloudflare headers and canonical slash redirects are included.
 - [x] GitHub Actions supports production and preview deployments.
 - [x] Cutover and rollback are documented.
+- [x] Repository production configuration targets
+      `https://alfred.alfredlabs.org`.
 - [ ] Cloudflare credentials are configured by the repository owner.
-- [ ] The first production deployment is verified before DNS changes.
+- [ ] The `alfred.alfredlabs.org` custom domain and first production deployment
+      are verified by the repository owner.
 
 ## References
 
