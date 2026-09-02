@@ -20,6 +20,7 @@ test("renders a private formula pinned by tag and revision", () => {
   assert.match(formula, /# typed: strict/);
   assert.match(formula, /tag:\s+"v0\.5\.0"/);
   assert.match(formula, new RegExp(`revision: "${revision}"`));
+  assert.doesNotMatch(formula, /^\s*version\s/m);
   assert.match(formula, /depends_on "node"/);
   assert.match(formula, /formula_opt_bin\("node"\)/);
   assert.match(formula, /packages\/memory-server\/scripts\/alfred\.mjs/);
@@ -71,7 +72,7 @@ test("writes the generated formula atomically", () => {
       "--output", output
     ]);
     assert.equal(exitCode, 0);
-    assert.match(readFileSync(output, "utf8"), /version "0\.5\.0"/);
+    assert.match(readFileSync(output, "utf8"), /tag:\s+"v0\.5\.0"/);
     assert.equal(statSync(output).mode & 0o777, 0o644);
   } finally {
     rmSync(directory, { recursive: true, force: true });

@@ -1,0 +1,16 @@
+{
+  "event": "homebrew_audit_remediation_started",
+  "issue": 120,
+  "release": "0.5.0",
+  "timestamp_utc": "2026-09-01",
+  "finding": "Stable version stanza is redundant with the version inferred from the immutable source tag",
+  "remediation": "Omit the explicit version stanza and retain tag/revision pinning",
+  "local_validation": {
+    "formula_generator_tests": "4/4 pass",
+    "homebrew_contract": "pass",
+    "homebrew_formula_style": "pass",
+    "homebrew_strict_audit": "pass"
+  },
+  "provider_calls": 0,
+  "result": "local-pass-pending-publication"
+}

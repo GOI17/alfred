@@ -54,6 +54,7 @@ try {
   assert.match(ruby.stdout, /Syntax OK/);
   assert.match(formula, /--no-clone/);
   assert.match(formula, /depends_on "node"/);
+  assert.doesNotMatch(formula, /^\s*version\s/m);
 } finally {
   rmSync(temporaryDirectory, { recursive: true, force: true });
 }
