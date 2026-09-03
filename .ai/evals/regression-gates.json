@@ -79,7 +79,7 @@
         "packages/memory-server/test/migrate-sqlite.test.mjs"
       ],
       "command": "node --test packages/memory-server/test/{server,init,cli,registry-sqlite-store,migrate-sqlite}.test.mjs",
-      "expected_test_count": 50,
+      "expected_test_count": 51,
       "blocked_on_failure": true
     },
     {
@@ -90,7 +90,7 @@
         "packages/memory-server/test/neon-pooled-tenants.test.mjs"
       ],
       "command": "node --test packages/memory-server/test/console.test.mjs packages/memory-server/test/neon-pooled-tenants.test.mjs",
-      "expected_test_count": 108,
+      "expected_test_count": 109,
       "blocked_on_failure": true
     },
     {
