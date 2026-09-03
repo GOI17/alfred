@@ -90,6 +90,10 @@ The console asks the user to paste an API key (`alk_...`). The key is
 stored in `localStorage` only — never sent to anyone except the Alfred
 server the SPA is pointed at. The "Unlock" button validates the key by
 calling `/console/api/tenants` and falling back to a known-endpoint check.
+While unlocked, the **Current session** panel keeps the key masked by default
+and provides explicit show, hide, and copy actions. **Log out** removes the
+key from this browser and clears secret-bearing UI state; it does not revoke
+the key for other browsers or connected agents.
 
 ## Deploy on GitHub Pages (most common)
 

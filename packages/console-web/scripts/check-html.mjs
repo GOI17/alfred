@@ -14,6 +14,8 @@ if (!existsSync(path)) {
 const text = readFileSync(path, "utf8");
 const required = [
   "<title>", "setKey", "loadTenants", "issueKey", "loadKeys", "ALFRED_API_BASE",
+  "sessionApiKey", "toggleApiKeyVisibility", "copyApiKey", "logout",
+  'localStorage.removeItem("alfred_api_key")',
   "g-6a320e87e6908191a3f834b273221f99-alfred",
   "Do not open the GPT editor or fill in Client ID or Client Secret",
   "already configured inside the published Alfred GPT"
