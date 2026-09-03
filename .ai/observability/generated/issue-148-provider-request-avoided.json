@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-148-provider-request-avoided",
+  "timestamp": "2026-09-03T00:30:00Z",
+  "actor": "orchestrator",
+  "event": "provider_request_avoided",
+  "decision": "local-only",
+  "target": "issue-148-recovery-redirect",
+  "reason": "Redirect policy, persistence, rendering, tests, and validation are deterministic local operations.",
+  "data": {
+    "issue": 148,
+    "branch": "issue-148-recovery-redirect",
+    "provider_calls": 0
+  }
+}

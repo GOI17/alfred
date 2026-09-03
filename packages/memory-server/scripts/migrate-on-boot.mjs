@@ -9,8 +9,8 @@
 // (POST /console/api/bootstrap → createSchemaProvisioner).
 //
 // For deployments that want to pre-provision a Postgres registry DB
-// (e.g. ALFRED_SAAS_DATABASE_URL), this script also runs the
-// 005/006/007/008/009 migrations against it so the SaaS flow can run.
+// (e.g. ALFRED_SAAS_DATABASE_URL), this script also runs the numbered SaaS
+// migrations against it so the SaaS flow can run.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -50,7 +50,7 @@ async function main() {
   registry.close();
 
   // 3. If ALFRED_SAAS_DATABASE_URL is set, attempt to apply the Postgres-side
-  //    migrations (005-009). This is opt-in: a deployment that only uses
+  //    numbered SaaS migrations. This is opt-in: a deployment that only uses
   //    SQLite mode can skip this entirely.
   const saasUrl = process.env.ALFRED_SAAS_DATABASE_URL;
   if (!saasUrl) {

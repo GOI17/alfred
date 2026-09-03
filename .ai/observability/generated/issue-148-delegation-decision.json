@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-148-delegation-decision",
+  "timestamp": "2026-09-03T00:30:00Z",
+  "actor": "orchestrator",
+  "event": "delegation_decision",
+  "decision": "execute-directly",
+  "target": "issue-148-recovery-redirect",
+  "reason": "The bounded recovery and OAuth continuation change is handled directly under the independent full-ownership handoff.",
+  "data": {
+    "issue": 148,
+    "branch": "issue-148-recovery-redirect",
+    "provider_calls": 0
+  }
+}

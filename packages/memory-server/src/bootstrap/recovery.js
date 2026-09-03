@@ -55,10 +55,36 @@ export class RecoveryUnavailableError extends Error {
   }
 }
 
-export function createRecovery({ registry, userService, emailSender, baseUrl = "", now = () => Date.now(), clock = () => Date.now() } = {}) {
+export function createRecovery({
+  registry,
+  userService,
+  emailSender,
+  continuationPolicy = null,
+  trace = null,
+  baseUrl = "",
+  now = () => Date.now(),
+  clock = () => Date.now()
+} = {}) {
   if (!registry) throw new TypeError("createRecovery requires registry");
   if (!userService) throw new TypeError("createRecovery requires userService");
   if (!emailSender) throw new TypeError("createRecovery requires emailSender");
+
+  const continuation = continuationPolicy ?? {
+    normalize(value) {
+      if (value !== undefined && value !== null && value !== "") {
+        throw new Error("Recovery continuation is not allowed.");
+      }
+      return { kind: "console", url: "/console/", stored: null };
+    },
+    resolveStored() {
+      return { kind: "console", url: "/console/", stored: null };
+    }
+  };
+  const emit = typeof trace === "function" ? trace : async () => {};
+
+  async function emitSafe(event) {
+    try { await emit(event); } catch { /* Recovery must not fail on trace I/O. */ }
+  }
 
   // Per-IP rate limit (in-memory; multi-process would need a shared store).
   const ipAttempts = new Map();
@@ -83,9 +109,18 @@ export function createRecovery({ registry, userService, emailSender, baseUrl = "
   return {
     isValidEmail: (email) => emailSender.isValidEmail(email),
 
-    async requestRecovery({ ip, email }) {
+    async requestRecovery({ ip, email, continueTo = null }) {
       if (!emailSender.isValidEmail(email)) {
         throw new RecoveryValidationError([{ field: "email", message: "email must be a valid address." }]);
+      }
+      let selectedContinuation;
+      try {
+        selectedContinuation = continuation.normalize(continueTo);
+      } catch {
+        throw new RecoveryValidationError([{
+          field: "continue_to",
+          message: "continue_to must be an allowed Alfred continuation."
+        }]);
       }
       const readiness = await emailSender.checkReadiness();
       if (!readiness?.ready) throw new RecoveryUnavailableError();
@@ -108,7 +143,8 @@ export function createRecovery({ registry, userService, emailSender, baseUrl = "
         tenant_id: verification.tenant_id,
         email,
         token,
-        expires_at
+        expires_at,
+        continuation_path: selectedContinuation.stored
       });
       const link = `${baseUrl || ""}/console/api/recover?token=${encodeURIComponent(token)}`;
       const subject = "Recover your Alfred Memory API key";
@@ -121,6 +157,15 @@ export function createRecovery({ registry, userService, emailSender, baseUrl = "
         "This link expires in 1 hour. If you didn't request this, ignore the email."
       ].join("\n");
       const result = await emailSender.send({ to: email, subject, text });
+      await emitSafe({
+        tenant_id: verification.tenant_id,
+        event: "recovery.requested",
+        payload: {
+          continuation_kind: selectedContinuation.kind,
+          outcome: result.sent ? "sent" : "delivery_skipped",
+          provider_calls: 0
+        }
+      });
       return { sent: result.sent, skipped: result.skipped === true, link };
     },
 
@@ -145,6 +190,17 @@ export function createRecovery({ registry, userService, emailSender, baseUrl = "
       // Mark the recovery as used.
       await registry.recoveries.markRecoveryUsed(recovery.id, { newKeyId: newKeyResult.key.id, oldKeyId: oldKey?.id ?? null });
 
+      const selectedContinuation = continuation.resolveStored(recovery.continuation_path);
+      await emitSafe({
+        tenant_id: recovery.tenant_id,
+        event: "recovery.consumed",
+        payload: {
+          continuation_kind: selectedContinuation.kind,
+          outcome: "key_rotated",
+          provider_calls: 0
+        }
+      });
+
       return {
         state: "success",
         tenant_id: recovery.tenant_id,
@@ -153,7 +209,10 @@ export function createRecovery({ registry, userService, emailSender, baseUrl = "
         key_prefix: newKeyResult.key.key_prefix,
         key_id: newKeyResult.key.id,
         old_key_id: oldKey?.id ?? null,
-        consumed_at: new Date(now()).toISOString()
+        consumed_at: new Date(now()).toISOString(),
+        continuation_kind: selectedContinuation.kind,
+        continue_url: selectedContinuation.url,
+        continue_label: "Continue with Alfred"
       };
     }
   };

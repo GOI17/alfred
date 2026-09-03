@@ -36,6 +36,13 @@ export {
 } from "./recovery.js";
 
 export {
+  buildOAuthRecoveryHref,
+  createRecoveryContinuationPolicy,
+  RecoveryContinuationError,
+  RECOVERY_FALLBACK_URL
+} from "./recovery-continuation.js";
+
+export {
   createEmbedder,
   embeddingToBuffer,
   bufferToEmbedding

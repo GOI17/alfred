@@ -27,6 +27,10 @@ function applySchema(db) {
   db.exec("PRAGMA busy_timeout = 5000;");
   const sql = readFileSync(resolve(MIG_DIR, "sqlite_registry.sql"), "utf8");
   db.exec(sql);
+  const recoveryColumns = db.prepare("PRAGMA table_info(tenant_recoveries)").all();
+  if (!recoveryColumns.some((column) => column.name === "continuation_path")) {
+    db.exec("ALTER TABLE tenant_recoveries ADD COLUMN continuation_path TEXT");
+  }
 }
 
 // =============================================================================
@@ -641,9 +645,17 @@ function createRecoveryContract(db) {
     async createRecovery(input) {
       const id = input.id ?? `rec_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
       db.prepare(`
-        INSERT INTO tenant_recoveries (id, tenant_id, email, token, expires_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(id, input.tenant_id, input.email, input.token, input.expires_at, input.created_at ?? nowIso());
+        INSERT INTO tenant_recoveries (id, tenant_id, email, token, expires_at, continuation_path, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        input.tenant_id,
+        input.email,
+        input.token,
+        input.expires_at,
+        input.continuation_path ?? null,
+        input.created_at ?? nowIso()
+      );
       return { id };
     },
     async findRecoveryByToken(token) {
@@ -658,6 +670,7 @@ function createRecoveryContract(db) {
         used_at: row.used_at ?? null,
         new_key_id: row.new_key_id ?? null,
         old_key_id: row.old_key_id ?? null,
+        continuation_path: row.continuation_path ?? null,
         created_at: row.created_at
       };
     },
