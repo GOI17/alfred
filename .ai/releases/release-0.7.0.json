@@ -1,0 +1,42 @@
+{
+  "id": "release-0.7.0",
+  "version": "0.7.0",
+  "candidate": "oauth-recovery-homebrew-0.7.0",
+  "owner": "orchestrator",
+  "status": "candidate",
+  "scope": "oauth-recovery-neon-setup-homebrew",
+  "previous_release": "release-0.6.0",
+  "issue": 153,
+  "branch": "issue-153-release-0.7.0",
+  "includes": [
+    "chatgpt-oauth",
+    "neon-pooled-tenants",
+    "smtp-recovery-readiness",
+    "recovery-result-page",
+    "recovery-oauth-continuation",
+    "setup-review-correctness",
+    "automatic-homebrew-tap-releases"
+  ],
+  "excluded": [
+    "alfredlabs-resend-migration-pending-external-approval"
+  ],
+  "required_validators": [
+    "check",
+    "test",
+    "validate:release-0.7.0",
+    "validate:homebrew",
+    "pages:build",
+    "pages:check",
+    "brew style",
+    "brew audit --strict --formula GOI17/tap/alfred",
+    "brew upgrade GOI17/tap/alfred",
+    "brew test GOI17/tap/alfred"
+  ],
+  "source_policy": {
+    "release_tag": "v0.7.0",
+    "validated_commit_source": "pending",
+    "tap_commit": "pending"
+  },
+  "provider_calls_allowed": 0,
+  "harness_config_writes_require_human_approval": true
+}

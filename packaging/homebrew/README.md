@@ -23,7 +23,7 @@ the collaborator's credential helper without publishing a source archive:
 
 ```sh
 node scripts/generate-homebrew-formula.mjs \
-  --version 0.6.0 \
+  --version 0.7.0 \
   --source git \
   --revision <tag-commit-sha> \
   --output /path/to/homebrew-tap/Formula/alfred.rb
@@ -34,7 +34,7 @@ SHA-256 instead:
 
 ```sh
 node scripts/generate-homebrew-formula.mjs \
-  --version 0.6.0 \
+  --version 0.7.0 \
   --source archive \
   --sha256 <archive-sha256> \
   --output /path/to/homebrew-tap/Formula/alfred.rb

@@ -1,0 +1,19 @@
+{
+  "event": "release_candidate_started",
+  "release": "0.7.0",
+  "validated_commit_source": "pending",
+  "timestamp_utc": "2026-09-03",
+  "phase": "issue-153-release-0.7.0",
+  "issue": 153,
+  "branch": "issue-153-release-0.7.0",
+  "change": "Publish OAuth, recovery, Neon, setup, and automatic Homebrew updates",
+  "local_validation": {
+    "repository_checks": "pass",
+    "repository_tests": "pass; 19 release gates",
+    "release_contract": "pass",
+    "homebrew_contract": "pass; 11 tests",
+    "homebrew_formula_style": "pass"
+  },
+  "provider_calls": 0,
+  "result": "candidate-pass-pending-publication"
+}

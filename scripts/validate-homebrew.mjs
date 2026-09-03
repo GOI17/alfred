@@ -15,8 +15,8 @@ const installPolicy = readFileSync(join(root, ".ai/instructions/install-manageme
 const specification = readFileSync(join(root, ".ai/execution/homebrew-installation.md"), "utf8");
 const setupCommand = readFileSync(join(root, "packages/memory-server/scripts/setup.mjs"), "utf8");
 
-assert.equal(manifest.version, "0.6.0");
-assert.match(installer, /^VERSION="0\.6\.0"$/m);
+assert.equal(manifest.version, "0.7.0");
+assert.match(installer, /^VERSION="0\.7\.0"$/m);
 for (const text of [installDocs, installPolicy, specification]) {
   const searchableText = text.replace(/<[^>]+>/g, "");
   assert.match(searchableText, /brew install GOI17\/tap\/alfred/);
@@ -29,7 +29,7 @@ const cli = spawnSync(
   { encoding: "utf8", cwd: root }
 );
 assert.equal(cli.status, 0, cli.stderr);
-assert.equal(cli.stdout.trim(), "alfred 0.6.0");
+assert.equal(cli.stdout.trim(), "alfred 0.7.0");
 
 const preview = spawnSync(
   process.execPath,
@@ -38,7 +38,7 @@ const preview = spawnSync(
 );
 assert.equal(preview.status, 0, preview.stderr);
 assert.match(preview.stdout, /ALFRED SUITE INSTALL PREVIEW/);
-assert.match(preview.stdout, /Version:\s+0\.6\.0/);
+assert.match(preview.stdout, /Version:\s+0\.7\.0/);
 assert.match(preview.stdout, new RegExp(`Target path:\\s+${root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 assert.match(preview.stdout, /Provider calls: 0/);
 
@@ -47,7 +47,7 @@ try {
   const formulaPath = join(temporaryDirectory, "Formula", "alfred.rb");
   const formula = renderFormula({
     source: "git",
-    version: "0.6.0",
+    version: "0.7.0",
     revision: "a".repeat(40)
   });
   writeFormulaAtomic(formulaPath, formula);

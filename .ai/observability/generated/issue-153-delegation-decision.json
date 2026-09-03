@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-153-delegation-decision",
+  "timestamp": "2026-09-03T02:25:00Z",
+  "actor": "orchestrator",
+  "event": "delegation_decision",
+  "decision": "execute-directly",
+  "target": "issue-153-release-0.7.0",
+  "reason": "Release preparation is a bounded integration task; the separately owned recovery redirect remains in its existing worktree until merged.",
+  "data": {
+    "issue": 153,
+    "branch": "issue-153-release-0.7.0",
+    "provider_calls": 0
+  }
+}

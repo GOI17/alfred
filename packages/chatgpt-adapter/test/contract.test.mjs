@@ -32,7 +32,7 @@ test("ChatGPT setup documentation requires OAuth and no bridge", () => {
 });
 
 test("schema has no placeholder server and identifies the current contract", () => {
-  assert.match(schema, /version: 0\.6\.0/);
+  assert.match(schema, /version: 0\.7\.0/);
   assert.doesNotMatch(schema, /memory\.example\.com|alfred-memory\.example\.com/);
 });
 
