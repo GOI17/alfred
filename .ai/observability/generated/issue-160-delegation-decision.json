@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-160-delegation-decision",
+  "timestamp": "2026-09-03T05:32:34Z",
+  "actor": "orchestrator",
+  "event": "delegation_decision",
+  "decision": "execute-directly",
+  "target": "issue-160-complete-release-automation",
+  "reason": "The release workflow, version contract, tap handoff, and validators are a tightly coupled deterministic configuration change.",
+  "data": {
+    "issue": 160,
+    "branch": "issue-160-complete-release-automation",
+    "provider_calls": 0
+  }
+}

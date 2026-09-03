@@ -109,7 +109,8 @@ Install scripts validate paths (reject root `/` and protected paths like `.ai/`,
 
 ### 8. Homebrew Distribution
 
-Alfred `0.7.0` uses a versioned Homebrew packaging boundary. Collaborators use
+Starting with Alfred `0.7.0`, releases use a versioned Homebrew packaging
+boundary. Collaborators use
 the private `GOI17/homebrew-tap` and install the fully qualified formula with
 `brew install GOI17/tap/alfred`; the qualification avoids collision with the
 unrelated Alfred macOS application cask. The formula installs `alfred` and
@@ -118,6 +119,10 @@ both tag and commit revision. Formula installation never writes live harness
 config; `alfred setup` preserves the existing preview/apply approval flow and
 does not clone `main`. The former `alfred-install` executable was removed in
 0.6.0 so package installation and product configuration have distinct names.
+Eligible Conventional Commits on `main` are accumulated in a reviewable
+Release Please PR. Merging that PR publishes the stable GitHub Release and
+invokes the private tap publisher directly; manually published stable releases
+and manual tag dispatch remain supported recovery paths.
 
 
 ## Memory Hosting

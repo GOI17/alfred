@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-160-provider-request-avoided",
+  "timestamp": "2026-09-03T05:32:34Z",
+  "actor": "orchestrator",
+  "event": "provider_request_avoided",
+  "decision": "local-only",
+  "target": "issue-160-complete-release-automation",
+  "reason": "Release configuration, version coherence, and regression validation are deterministic; primary GitHub and Release Please documentation was consulted without a model-provider request.",
+  "data": {
+    "issue": 160,
+    "branch": "issue-160-complete-release-automation",
+    "provider_calls": 0
+  }
+}

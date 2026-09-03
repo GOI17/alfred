@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "node",
+  "include-v-in-tag": true,
+  "include-component-in-tag": false,
+  "bump-patch-for-minor-pre-major": true,
+  "pull-request-title-pattern": "chore(main): release ${version}",
+  "packages": {
+    ".": {
+      "package-name": "alfred",
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "install.sh"
+        },
+        {
+          "type": "json",
+          "path": ".ai/gpt/alfred-memory-gpt.json",
+          "jsonpath": "$.metadata.version"
+        },
+        {
+          "type": "yaml",
+          "path": "packages/memory-openapi/openapi.yaml",
+          "jsonpath": "$.info.version"
+        }
+      ]
+    }
+  }
+}
