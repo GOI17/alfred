@@ -1,0 +1,112 @@
+name: release-homebrew-tap
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing stable Alfred tag to publish (vX.Y.Z)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-homebrew-tap
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the immutable Alfred release
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Validate release identity
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Release tag must match vX.Y.Z" >&2
+            exit 1
+          fi
+          VERSION="${RELEASE_TAG#v}"
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Release tag and package.json version do not match" >&2
+            exit 1
+          fi
+          REVISION=$(git rev-parse "${RELEASE_TAG}^{commit}")
+          if [[ ! "$REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Release revision is not a full commit SHA" >&2
+            exit 1
+          fi
+          if [ "$REVISION" != "$(git rev-parse HEAD)" ]; then
+            echo "Checked-out source does not match the release tag" >&2
+            exit 1
+          fi
+          printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
+          printf 'revision=%s\n' "$REVISION" >> "$GITHUB_OUTPUT"
+
+      - name: Validate Alfred Homebrew packaging
+        run: |
+          npm run homebrew:test
+          npm run validate:homebrew
+
+      - name: Checkout the private tap with its repository-scoped deploy key
+        uses: actions/checkout@v6
+        with:
+          repository: GOI17/homebrew-tap
+          ref: main
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          persist-credentials: true
+          path: homebrew-tap
+
+      - name: Generate and validate the release formula
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          REVISION: ${{ steps.release.outputs.revision }}
+        run: |
+          set -euo pipefail
+          node scripts/generate-homebrew-formula.mjs \
+            --version "$VERSION" \
+            --source git \
+            --revision "$REVISION" \
+            --output homebrew-tap/Formula/alfred.rb
+          ruby -c homebrew-tap/Formula/alfred.rb
+          brew style homebrew-tap/Formula/alfred.rb
+
+      - name: Publish the formula to the tap
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        working-directory: homebrew-tap
+        run: |
+          set -euo pipefail
+          UNEXPECTED=$(git status --porcelain | awk '{print $2}' | grep -v '^Formula/alfred.rb$' || true)
+          if [ -n "$UNEXPECTED" ]; then
+            echo "Refusing to publish unexpected tap changes" >&2
+            exit 1
+          fi
+          if git diff --quiet -- Formula/alfred.rb; then
+            echo "Tap already publishes Alfred $VERSION"
+            exit 0
+          fi
+          git config user.name "alfred-release[bot]"
+          git config user.email "alfred-release[bot]@users.noreply.github.com"
+          git add -- Formula/alfred.rb
+          git commit -m "alfred $VERSION"
+          git push origin HEAD:main

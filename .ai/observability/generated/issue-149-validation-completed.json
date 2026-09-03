@@ -1,0 +1,17 @@
+{
+  "trace_id": "issue-149-validation-completed",
+  "timestamp": "2026-09-03T01:06:35Z",
+  "actor": "orchestrator",
+  "event": "validation_completed",
+  "decision": "pass",
+  "target": "issue-149-auto-tap-releases",
+  "reason": "The repository suite, static checks, Homebrew contract validation, Ruby syntax, and brew style all passed.",
+  "data": {
+    "issue": 149,
+    "branch": "issue-149-auto-tap-releases",
+    "repository_gates": 19,
+    "homebrew_tests": 11,
+    "brew_style_offenses": 0,
+    "provider_calls": 0
+  }
+}

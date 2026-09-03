@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-149-delegation-decision",
+  "timestamp": "2026-09-03T01:01:19Z",
+  "actor": "orchestrator",
+  "event": "delegation_decision",
+  "decision": "execute-directly",
+  "target": "issue-149-auto-tap-releases",
+  "reason": "The release workflow and repository-scoped credential setup form one bounded implementation and do not require specialist delegation.",
+  "data": {
+    "issue": 149,
+    "branch": "issue-149-auto-tap-releases",
+    "provider_calls": 0
+  }
+}
