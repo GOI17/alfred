@@ -52,9 +52,9 @@ const adapters = [
     description: "Direct OAuth connection from ChatGPT Actions to Alfred Memory",
     relDir: "packages/chatgpt-adapter",
     commands: [
-      "Tenant user: open https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred.",
+      "Tenant user: open https://chatgpt.com/gpts/mine and select Alfred Memory.",
       "Ask for your memories, choose Sign in, and enter alk_... only on Alfred's consent page.",
-      "Do not open the GPT editor or fill in Client ID or Client Secret; the published GPT is already configured.",
+      "If Alfred Memory is absent, create it from packages/chatgpt-adapter/README.md; never enter credentials in a chat.",
       "Operator-only deployment details: packages/chatgpt-adapter/README.md."
     ]
   },

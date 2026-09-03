@@ -99,9 +99,9 @@ test("nextStepsFor: web returns ChatGPT/Claude/Gemini steps", () => {
   assert.match(text, /Claude/);
   assert.match(text, /Gemini/);
   assert.match(text, /alk_xyz/);
-  assert.match(text, /g-6a320e87e6908191a3f834b273221f99-alfred/);
-  assert.match(text, /Do not open the GPT editor or fill in Client ID or Client Secret/);
-  assert.match(text, /already configured inside the published Alfred GPT/);
+  assert.match(text, /https:\/\/chatgpt\.com\/gpts\/mine/);
+  assert.match(text, /select Alfred Memory/);
+  assert.match(text, /Never enter your API key, Client ID, or Client Secret in a chat/);
   assert.doesNotMatch(text, /chatgpt-adapter\/src\/bridge/);
 });
 

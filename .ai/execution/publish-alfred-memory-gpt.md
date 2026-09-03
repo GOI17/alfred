@@ -74,14 +74,24 @@ exactly.
 
 ## Completion Conditions
 
-- [ ] `GET /privacy` returns HTTP 200 over production HTTPS.
-- [ ] Privacy content and security-header tests pass.
-- [ ] The Action exposes all 10 canonical operationIds.
-- [ ] OAuth sign-in reaches Alfred's consent page using an exact callback.
+- [x] `GET /privacy` returns HTTP 200 over production HTTPS.
+- [x] Privacy content and security-header tests pass.
+- [x] The Action exposes all 10 canonical operationIds.
+- [x] OAuth sign-in reaches Alfred's consent page using an exact callback.
 - [ ] The replacement GPT is accessible to anyone with the link.
-- [ ] All stale repository references are replaced.
-- [ ] No secret appears in source control, screenshots, logs, or trace output.
+- [x] All stale repository references are replaced.
+- [x] No secret appears in source control, screenshots, logs, or trace output.
 - [ ] Relevant checks, tests, validators, and the linked PR pass.
+
+## External publication constraint
+
+The replacement GPT was created and saved successfully at its owner URL on
+September 2, 2026. The ChatGPT share dialog exposed only **Only me** and stated
+that sharing GPTs with the public is no longer available for this account. The
+repository therefore routes tenant users to **My GPTs** instead of publishing
+another URL that returns 404 to everyone except the owner. Public publication
+remains the only incomplete condition and must be retried if ChatGPT restores
+the account's sharing capability.
 
 ## References
 
@@ -90,4 +100,3 @@ exactly.
 - Deployment guide: `.ai/docs/custom-gpt-deploy.md`
 - OpenAPI schema: `packages/memory-openapi/openapi.yaml`
 - Memory server router: `packages/memory-server/src/openapi-router.js`
-

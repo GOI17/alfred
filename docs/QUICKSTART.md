@@ -105,18 +105,17 @@ the same port (no CORS needed).
 
 ### ChatGPT (Plus / Pro / Enterprise)
 
-1. Open the preconfigured
-   [Alfred GPT](https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred).
+1. Open [My GPTs](https://chatgpt.com/gpts/mine) and select **Alfred Memory**.
 2. Ask: "list my last 5 memories".
 3. Choose **Sign in** when ChatGPT offers it.
 4. Enter your `alk_...` key only on Alfred's consent page, approve access,
    and retry the request.
 
-Do not open the GPT editor or fill in Client ID or Client Secret. Those fields
-are already configured inside the published Alfred GPT; your only credential
-is the `alk_...` key entered on Alfred's consent page. The separate
-[deployment guide](../.ai/docs/custom-gpt-deploy.md) is only for operators who
-deliberately create and host a different GPT Action.
+The configured GPT is currently owner-only because its ChatGPT account does
+not offer public GPT sharing. If it is not present under **My GPTs**, follow the
+[deployment guide](../.ai/docs/custom-gpt-deploy.md) to create it in your own
+account. Your `alk_...` key is entered only on Alfred's consent page; never put
+it in the GPT editor.
 
 ### Claude Desktop
 
