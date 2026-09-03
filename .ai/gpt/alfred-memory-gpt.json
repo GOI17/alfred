@@ -25,21 +25,30 @@
         "client_secret_source": "private ALFRED_OAUTH_CLIENT_SECRET; never publish",
         "authorization_url": "https://alfred-labs-memory.fly.dev/oauth/authorize",
         "token_url": "https://alfred-labs-memory.fly.dev/oauth/token",
-        "scopes": ["memory:read", "memory:write"],
+        "scopes": [
+          "memory:read",
+          "memory:write"
+        ],
         "instructions": "Set the shared client secret only in the ChatGPT editor. Users enter their alk_ API key on Alfred's consent page; ChatGPT never receives it."
       }
     }
   ],
   "metadata": {
     "category": "productivity",
-    "tags": ["memory", "second-brain", "knowledge-base", "self-hosted", "alfred"],
+    "tags": [
+      "memory",
+      "second-brain",
+      "knowledge-base",
+      "self-hosted",
+      "alfred"
+    ],
     "gpt_id": "g-6a99052078c08191a73ea9133e6f2df9",
     "owner_url": "https://chatgpt.com/g/g-6a99052078c08191a73ea9133e6f2df9-alfred-memory",
     "public_url": null,
     "visibility": "only_me",
     "sharing_constraint": "The ChatGPT builder reported that sharing GPTs with the public is no longer available for this account on September 2, 2026.",
     "oauth_callback_id": "g-31ee07319349c89eb0a46bd25648afbf99fd6b84",
-    "version": "0.7.0",
+    "version": "0.7.1",
     "openapi_spec": "packages/memory-openapi/openapi.yaml",
     "provider_calls_per_request": 0
   }
