@@ -32,6 +32,11 @@ import {
 } from "./bootstrap/index.js";
 import { dirname, resolve, join, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  explicitlyAcceptsJson,
+  sendRecoveryJson,
+  sendRecoveryPage
+} from "./recovery-result-page.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -253,7 +258,10 @@ export function createConsoleRouter({
     if (url.pathname.startsWith("/console/api/")) {
       const origin = req.headers.origin;
       const allowedOrigins = Array.isArray(config?.allowedOrigins) ? config.allowedOrigins : [];
-      if (origin && (allowedOrigins.length === 0 || allowedOrigins.includes(origin))) {
+      // A recovery GET can carry a one-time API key. Keep it limited to top-level
+      // navigation and direct machine clients rather than exposing it to browser CORS.
+      const isRecoveryResult = url.pathname === "/console/api/recover" && req.method === "GET";
+      if (origin && !isRecoveryResult && (allowedOrigins.length === 0 || allowedOrigins.includes(origin))) {
         res.setHeader("access-control-allow-origin", origin);
         res.setHeader("vary", "Origin");
         res.setHeader("access-control-allow-headers", "content-type, authorization, x-api-key");
@@ -327,12 +335,51 @@ export function createConsoleRouter({
     }
 
     if (url.pathname === "/console/api/recover" && req.method === "GET") {
-      if (!recovery) return json(res, 503, { error: { code: "recovery_not_configured", message: "Recovery is not configured on this server." } });
+      const wantsJson = explicitlyAcceptsJson(req.headers.accept);
+      if (!recovery) {
+        const body = { error: { code: "recovery_not_configured", message: "Recovery is not configured on this server." } };
+        return wantsJson
+          ? sendRecoveryJson(res, 503, body)
+          : sendRecoveryPage(res, 503, { state: "unavailable" });
+      }
       const token = url.searchParams.get("token");
-      const result = await recovery.consumeRecovery({ token });
-      if (!result) return json(res, 400, { error: { code: "invalid_token", message: "Recovery token is invalid." } });
-      if (result.expired) return json(res, 410, { error: { code: "token_expired", message: "Recovery token has expired." } });
-      return json(res, 200, {
+      let result;
+      try {
+        result = await recovery.consumeRecovery({ token });
+      } catch {
+        const body = { error: { code: "internal_error", message: "Alfred could not complete recovery." } };
+        return wantsJson
+          ? sendRecoveryJson(res, 500, body)
+          : sendRecoveryPage(res, 500, { state: "unavailable" });
+      }
+      if (result.state === "invalid") {
+        const body = { error: { code: "invalid_token", message: "Recovery token is invalid." } };
+        return wantsJson
+          ? sendRecoveryJson(res, 400, body)
+          : sendRecoveryPage(res, 400, { state: "invalid" });
+      }
+      if (result.state === "expired") {
+        const body = { error: { code: "token_expired", message: "Recovery token has expired." } };
+        return wantsJson
+          ? sendRecoveryJson(res, 410, body)
+          : sendRecoveryPage(res, 410, { state: "expired" });
+      }
+      if (result.state === "used") {
+        const body = { error: { code: "token_used", message: "Recovery token has already been used." } };
+        return wantsJson
+          ? sendRecoveryJson(res, 410, body)
+          : sendRecoveryPage(res, 410, { state: "used" });
+      }
+      if (result.state !== "success" || typeof result.api_key !== "string") {
+        const body = { error: { code: "internal_error", message: "Alfred could not complete recovery." } };
+        return wantsJson
+          ? sendRecoveryJson(res, 500, body)
+          : sendRecoveryPage(res, 500, { state: "unavailable" });
+      }
+      if (!wantsJson) {
+        return sendRecoveryPage(res, 200, { state: "success", apiKey: result.api_key });
+      }
+      return sendRecoveryJson(res, 200, {
         ok: true,
         tenant_id: result.tenant_id,
         email: result.email,

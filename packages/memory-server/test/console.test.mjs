@@ -1160,6 +1160,50 @@ function makeRecoveryFixture() {
   return { store, emails, tenantCounter, keys: store.keys, verifications: store.verifications, recoveries: store.recoveries };
 }
 
+function makeRecoveryRouterFixture({ apiKey = "alk_new_key", expiresAt, usedAt = null } = {}) {
+  const fx = makeRecoveryFixture();
+  fx.store.recordBootstrapAttempt = async () => ({ id: "attempt" });
+  fx.store.countBootstrapAttempts = async () => 0;
+  fx.store.oldestBootstrapAttemptInWindow = async () => null;
+  fx.store._recoveryArr.push({
+    id: "rec1",
+    tenant_id: "usr_t_abc",
+    email: "u@x.com",
+    token: "tok1",
+    expires_at: expiresAt ?? new Date(Date.now() + 1e6).toISOString(),
+    used_at: usedAt
+  });
+  const userService = {
+    async provisionApiKey() {
+      return { apiKey, key: { id: "key_new", key_prefix: "alk_newxxxx", label: "recovery" } };
+    }
+  };
+  const router = createConsoleRouter({
+    userService,
+    tenantService: {},
+    config: {},
+    consoleDirOverride: "",
+    registry: fx.store,
+    emailSender: makeReadyRecoverySender()
+  });
+  return { fx, router };
+}
+
+function assertRecoverySecurityHeaders(res) {
+  assert.equal(res.headers["cache-control"], "no-store");
+  assert.equal(res.headers.vary, "Accept");
+  assert.equal(res.headers.pragma, "no-cache");
+  assert.equal(res.headers.expires, "0");
+  assert.equal(res.headers["referrer-policy"], "no-referrer");
+  assert.equal(res.headers["x-frame-options"], "DENY");
+  assert.equal(res.headers["x-content-type-options"], "nosniff");
+  assert.equal(res.headers["cross-origin-resource-policy"], "same-origin");
+  assert.match(res.headers["content-security-policy"], /default-src 'none'/);
+  assert.match(res.headers["content-security-policy"], /base-uri 'none'/);
+  assert.match(res.headers["content-security-policy"], /form-action 'none'/);
+  assert.match(res.headers["content-security-policy"], /frame-ancestors 'none'/);
+}
+
 test("createRecovery requires registry + userService + emailSender", () => {
   assert.throws(() => createRecovery({}));
   // Providing a non-emailSender that is null should still throw.
@@ -1259,14 +1303,40 @@ test("POST /console/api/recover maps global SMTP unavailability to 503", async (
   assert.equal(JSON.parse(res.body).error.code, "recovery_unavailable");
 });
 
-test("createRecovery.consumeRecovery returns null for unknown token", async () => {
+test("createRecovery.consumeRecovery distinguishes invalid tokens and renders them safely", async () => {
   const fx = makeRecoveryFixture();
   const sender = createEmailSender({ host: null });
   const r = createRecovery({ registry: fx.store, userService: {}, emailSender: sender });
-  assert.equal(await r.consumeRecovery({ token: "nope" }), null);
+  assert.deepEqual(await r.consumeRecovery({ token: "nope" }), { state: "invalid" });
+
+  const { router } = makeRecoveryRouterFixture();
+  const htmlRes = await invoke(router, makeReq({ url: "/console/api/recover?token=nope" }));
+  assert.equal(htmlRes.statusCode, 400);
+  assert.match(htmlRes.headers["content-type"], /text\/html/);
+  assert.match(htmlRes.body, /This recovery link is invalid/);
+  assert.match(htmlRes.body, /No new API key was shown/);
+  assert.match(htmlRes.body, /href="\/console"/);
+  assert.doesNotMatch(htmlRes.body, /"error"\s*:/);
+  assertRecoverySecurityHeaders(htmlRes);
+
+  const jsonRes = await invoke(makeRecoveryRouterFixture().router, makeReq({
+    url: "/console/api/recover?token=nope",
+    headers: { accept: "application/json" }
+  }));
+  assert.equal(jsonRes.statusCode, 400);
+  assert.match(jsonRes.headers["content-type"], /application\/json/);
+  assert.equal(JSON.parse(jsonRes.body).error.code, "invalid_token");
+  assertRecoverySecurityHeaders(jsonRes);
+
+  const unconfigured = createConsoleRouter({ userService: {}, tenantService: {}, config: {}, consoleDirOverride: "" });
+  const unavailableRes = await invoke(unconfigured, makeReq({ url: "/console/api/recover?token=stale" }));
+  assert.equal(unavailableRes.statusCode, 503);
+  assert.match(unavailableRes.headers["content-type"], /text\/html/);
+  assert.match(unavailableRes.body, /Recovery unavailable/);
+  assertRecoverySecurityHeaders(unavailableRes);
 });
 
-test("createRecovery.consumeRecovery revokes old key, issues new, marks used", async () => {
+test("recovery success rotates the key and negotiates a secure one-time result", async () => {
   const fx = makeRecoveryFixture();
   // Tenant with an active key.
   fx.store.keys.set("key_old", { id: "key_old", tenant_id: "usr_t_abc", revoked_at: null, key_prefix: "alk_oldxxx" });
@@ -1280,20 +1350,103 @@ test("createRecovery.consumeRecovery revokes old key, issues new, marks used", a
   };
   const r = createRecovery({ registry: fx.store, userService, emailSender: sender });
   const result = await r.consumeRecovery({ token: "tok1" });
+  assert.equal(result.state, "success");
   assert.equal(result.tenant_id, "usr_t_abc");
   assert.equal(result.api_key, "alk_new_key");
   assert.equal(result.old_key_id, "key_old");
   assert.equal(result.key_id, "key_new");
   assert.ok(fx.store.keys.get("key_old").revoked_at, "old key should be revoked");
   assert.ok(fx.store._recoveryArr[0].used_at, "recovery should be marked used");
+
+  const browserFixture = makeRecoveryRouterFixture();
+  const browserRes = await invoke(browserFixture.router, makeReq({
+    url: "/console/api/recover?token=tok1",
+    headers: { accept: "text/html,application/xhtml+xml,*/*;q=0.8" }
+  }));
+  assert.equal(browserRes.statusCode, 200);
+  assert.match(browserRes.headers["content-type"], /text\/html/);
+  assert.match(browserRes.body, /Your new API key is ready/);
+  assert.match(browserRes.body, /previous API key has been revoked/);
+  assert.match(browserRes.body, /id="recovery-key"[^>]+value="alk_new_key"[^>]+readonly/);
+  assert.match(browserRes.body, /autocomplete="off"/);
+  assert.match(browserRes.body, /id="copy-key"/);
+  assert.match(browserRes.body, /navigator\.clipboard\.writeText\(keyField\.value\)/);
+  assert.match(browserRes.body, /copyStatus\.textContent/);
+  assert.doesNotMatch(browserRes.body, /u@x\.com|usr_t_abc|"api_key"\s*:/);
+  assertRecoverySecurityHeaders(browserRes);
+  const nonce = browserRes.body.match(/<style nonce="([^"]+)"/)?.[1];
+  assert.ok(nonce);
+  assert.match(browserRes.headers["content-security-policy"], new RegExp(`style-src 'nonce-${nonce}'`));
+  assert.match(browserRes.headers["content-security-policy"], new RegExp(`script-src 'nonce-${nonce}'`));
+  assert.match(browserRes.body, new RegExp(`<script nonce="${nonce}">`));
+
+  const reloadRes = await invoke(browserFixture.router, makeReq({ url: "/console/api/recover?token=tok1" }));
+  assert.equal(reloadRes.statusCode, 410);
+  assert.match(reloadRes.body, /already been used/);
+  assert.doesNotMatch(reloadRes.body, /alk_new_key|id="recovery-key"/);
+  assertRecoverySecurityHeaders(reloadRes);
+
+  const wildcardRes = await invoke(makeRecoveryRouterFixture().router, makeReq({
+    url: "/console/api/recover?token=tok1",
+    headers: { accept: "*/*", origin: "https://untrusted.example" }
+  }));
+  assert.match(wildcardRes.headers["content-type"], /text\/html/);
+  assert.equal(wildcardRes.headers["access-control-allow-origin"], undefined);
+
+  const jsonRes = await invoke(makeRecoveryRouterFixture().router, makeReq({
+    url: "/console/api/recover?token=tok1",
+    headers: { accept: "application/json" }
+  }));
+  assert.equal(jsonRes.statusCode, 200);
+  assert.match(jsonRes.headers["content-type"], /application\/json/);
+  assert.deepEqual(JSON.parse(jsonRes.body), {
+    ok: true,
+    tenant_id: "usr_t_abc",
+    email: "u@x.com",
+    api_key: "alk_new_key",
+    key_prefix: "alk_newxxxx",
+    key_id: "key_new",
+    old_key_id: null,
+    consumed_at: JSON.parse(jsonRes.body).consumed_at
+  });
+  assertRecoverySecurityHeaders(jsonRes);
+
+  const rejectedJsonRes = await invoke(makeRecoveryRouterFixture().router, makeReq({
+    url: "/console/api/recover?token=tok1",
+    headers: { accept: "application/json;q=0,*/*;q=0.8" }
+  }));
+  assert.match(rejectedJsonRes.headers["content-type"], /text\/html/);
+
+  const unsafeKey = `alk_"><script>window.compromised=true</script>&'`;
+  const escapedRes = await invoke(makeRecoveryRouterFixture({ apiKey: unsafeKey }).router, makeReq({
+    url: "/console/api/recover?token=tok1"
+  }));
+  assert.doesNotMatch(escapedRes.body, /value="alk_"><script>/);
+  assert.match(escapedRes.body, /value="alk_&quot;&gt;&lt;script&gt;window\.compromised=true&lt;\/script&gt;&amp;&#39;"/);
 });
 
-test("createRecovery.consumeRecovery returns null for already-used token", async () => {
+test("createRecovery.consumeRecovery distinguishes already-used tokens", async () => {
   const fx = makeRecoveryFixture();
   fx.store._recoveryArr.push({ id: "rec1", tenant_id: "usr_t_abc", email: "u@x.com", token: "tok1", expires_at: new Date(Date.now() + 1e6).toISOString(), used_at: new Date().toISOString() });
   const sender = createEmailSender({ host: null });
   const r = createRecovery({ registry: fx.store, userService: {}, emailSender: sender });
-  assert.equal(await r.consumeRecovery({ token: "tok1" }), null);
+  assert.deepEqual(await r.consumeRecovery({ token: "tok1" }), { state: "used" });
+
+  const usedAt = new Date().toISOString();
+  const htmlRes = await invoke(makeRecoveryRouterFixture({ usedAt }).router, makeReq({ url: "/console/api/recover?token=tok1" }));
+  assert.equal(htmlRes.statusCode, 410);
+  assert.match(htmlRes.body, /already been used/);
+  assert.match(htmlRes.body, /only once/);
+  assert.doesNotMatch(htmlRes.body, /id="recovery-key"/);
+  assertRecoverySecurityHeaders(htmlRes);
+
+  const jsonRes = await invoke(makeRecoveryRouterFixture({ usedAt }).router, makeReq({
+    url: "/console/api/recover?token=tok1",
+    headers: { accept: "application/json" }
+  }));
+  assert.equal(jsonRes.statusCode, 410);
+  assert.equal(JSON.parse(jsonRes.body).error.code, "token_used");
+  assertRecoverySecurityHeaders(jsonRes);
 });
 
 test("createRecovery.consumeRecovery marks expired tokens", async () => {
@@ -1302,7 +1455,23 @@ test("createRecovery.consumeRecovery marks expired tokens", async () => {
   const sender = createEmailSender({ host: null });
   const r = createRecovery({ registry: fx.store, userService: {}, emailSender: sender });
   const result = await r.consumeRecovery({ token: "tok1" });
-  assert.equal(result.expired, true);
+  assert.deepEqual(result, { state: "expired" });
+
+  const expiresAt = new Date(Date.now() - 1000).toISOString();
+  const htmlRes = await invoke(makeRecoveryRouterFixture({ expiresAt }).router, makeReq({ url: "/console/api/recover?token=tok1" }));
+  assert.equal(htmlRes.statusCode, 410);
+  assert.match(htmlRes.body, /recovery link has expired/);
+  assert.match(htmlRes.body, /request another recovery email/);
+  assert.doesNotMatch(htmlRes.body, /id="recovery-key"/);
+  assertRecoverySecurityHeaders(htmlRes);
+
+  const jsonRes = await invoke(makeRecoveryRouterFixture({ expiresAt }).router, makeReq({
+    url: "/console/api/recover?token=tok1",
+    headers: { accept: "application/json" }
+  }));
+  assert.equal(jsonRes.statusCode, 410);
+  assert.equal(JSON.parse(jsonRes.body).error.code, "token_expired");
+  assertRecoverySecurityHeaders(jsonRes);
 });
 
 test("console-web index.html includes the forgot-my-key panel", () => {

@@ -1,0 +1,27 @@
+{
+  "trace_id": "issue-146-recovery-result-page",
+  "timestamp": "2026-09-03T02:14:26Z",
+  "actor": "orchestrator",
+  "event": "recovery_result_page_validated",
+  "decision": "ready-for-review",
+  "target": "issue-146-recovery-result-page",
+  "reason": "Browser rendering, explicit JSON negotiation, one-time states, secret-safe copy behavior, and security headers passed deterministic validation.",
+  "data": {
+    "issue": 146,
+    "branch": "issue-146-recovery-result-page",
+    "memory_server_check": "pass",
+    "memory_server_tests": {
+      "passed": 222,
+      "skipped": 2,
+      "failed": 0
+    },
+    "console_regression_gate": {
+      "passed": 108,
+      "expected": 108,
+      "failed": 0
+    },
+    "recovery_dataset_validation": "pass",
+    "trace_json_validation": "pass",
+    "provider_calls": 0
+  }
+}

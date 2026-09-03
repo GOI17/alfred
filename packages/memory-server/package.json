@@ -16,7 +16,7 @@
     "pg": "^8.13.0"
   },
   "scripts": {
-    "check": "node --check src/server.js && node --check src/init.js && node --check src/index.js && node --check src/openapi-router.js && node --check src/oauth/oauth-service.js && node --check src/oauth/oauth-router.js && node --check src/registry/sqlite-registry-store.js && node --check src/registry/store-factory.js && for f in scripts/*.mjs; do node --check \"$f\" || exit 1; done",
+    "check": "node --check src/server.js && node --check src/init.js && node --check src/index.js && node --check src/openapi-router.js && node --check src/recovery-result-page.js && node --check src/oauth/oauth-service.js && node --check src/oauth/oauth-router.js && node --check src/registry/sqlite-registry-store.js && node --check src/registry/store-factory.js && for f in scripts/*.mjs; do node --check \"$f\" || exit 1; done",
     "test": "node --test test/*.mjs"
   }
 }
