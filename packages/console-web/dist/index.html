@@ -77,8 +77,8 @@
   </style>
 <!-- /* __ALFRED_BUILD_INJECT__ */ -->
 <script>
-  window.ALFRED_API_BASE = "https://alfred-labs-memory.fly.dev";
-  window.ALFRED_BUILD_VERSION = "0.7.0";
+  window.ALFRED_API_BASE = "http://localhost:3000";
+  window.ALFRED_BUILD_VERSION = "2026-09-03";
 </script>
 </head>
 <body>
@@ -165,19 +165,19 @@
 
       <div class="step">
         <span class="step-num">1</span><strong>ChatGPT (Plus/Pro)</strong>
-        <div class="small" style="margin-top: 4px;">Use the preconfigured Alfred GPT. Do not create or configure another GPT Action.</div>
+        <div class="small" style="margin-top: 4px;">Open My GPTs and select Alfred Memory. If it is absent, use the operator guide to create it.</div>
         <details>
           <summary>Show steps</summary>
           <pre>
-1. Open: https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred
+1. Open: https://chatgpt.com/gpts/mine and select Alfred Memory.
 2. Ask Alfred to list your last 5 memories.
 3. Choose "Sign in" when ChatGPT offers it.
 4. Enter your alk_... key only on Alfred's consent page.
 5. Approve access and retry your request.
 
-Do not open the GPT editor or fill in Client ID or Client Secret. Those fields
-are already configured inside the published Alfred GPT. Your only credential
-is the alk_ key, and it is entered only on Alfred's consent page.</pre>
+If Alfred Memory is absent, create it from packages/chatgpt-adapter/README.md.
+Your alk_ key is entered only on Alfred's consent page. Never enter the API key,
+Client ID, or Client Secret in a chat.</pre>
         </details>
       </div>
 

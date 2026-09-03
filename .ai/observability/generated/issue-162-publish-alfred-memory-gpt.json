@@ -1,0 +1,101 @@
+{
+  "id": "issue-162-publish-alfred-memory-gpt",
+  "issue": 162,
+  "status": "implemented_with_external_constraint",
+  "strategy": "hybrid",
+  "events": [
+    {
+      "event": "task_received",
+      "scope": "restore the broken Alfred Custom GPT link by creating, configuring, deploying, and publishing Alfred Memory"
+    },
+    {
+      "event": "task_classified",
+      "result": "direct execution; repository changes are deterministic while ChatGPT and production deployment require authorized external operations"
+    },
+    {
+      "event": "delegation_decision",
+      "result": "not delegated because the task is cohesive and no specialist materially improves the outcome"
+    },
+    {
+      "event": "provider_request_avoided",
+      "reason": "Repository discovery, implementation, tests, and secret generation use local deterministic tools; no LLM provider request is required."
+    },
+    {
+      "event": "permission_allowed",
+      "action": "read_and_write_protected_project_paths",
+      "reason": "The repository owner explicitly authorized access to protected .ai project material for this task."
+    },
+    {
+      "event": "permission_allowed",
+      "action": "network_and_external_configuration",
+      "reason": "The repository owner explicitly authorized OAuth secret rotation, callback registration, privacy policy deployment, and GPT publication."
+    },
+    {
+      "event": "tool_requested",
+      "action": "github_issue_creation",
+      "result": "Created issue 162 with goal, acceptance criteria, deployment, publication, and verification requirements."
+    },
+    {
+      "event": "tool_requested",
+      "action": "isolated_worktree_creation",
+      "result": "Created issue-162-publish-alfred-memory-gpt from origin/main so unrelated user changes remain untouched."
+    },
+    {
+      "event": "tool_requested",
+      "action": "chatgpt_gpt_configuration",
+      "result": "Created an Alfred Memory draft, loaded the canonical prompt and starters, disabled optional capabilities, imported the Action schema, and configured OAuth without exposing its secret."
+    },
+    {
+      "event": "tool_requested",
+      "action": "github_actions_secret_rotation",
+      "result": "Rotated the three ALFRED_OAUTH_* repository secrets together for the new GPT callback identifier; secret values were not logged or committed."
+    },
+    {
+      "event": "validation",
+      "result": "Memory server syntax checks passed and the complete server suite passed with 231 passing and 2 opt-in tests skipped."
+    },
+    {
+      "event": "tool_requested",
+      "action": "fly_deploy",
+      "result": "GitHub Actions run 33720199333 deployed the privacy endpoint and rotated OAuth configuration after all 19 release regression gates passed."
+    },
+    {
+      "event": "tool_requested",
+      "action": "oauth_callback_verification",
+      "result": "A real ChatGPT sign-in identified callback g-31ee07319349c89eb0a46bd25648afbf99fd6b84. GitHub Actions run 33720592029 deployed both exact host variants; both returned the consent page and an unregistered callback returned HTTP 400."
+    },
+    {
+      "event": "tool_requested",
+      "action": "chatgpt_action_verification",
+      "result": "The imported schema exposed all 10 approved operation identifiers and the builder healthCheck test returned status ok."
+    },
+    {
+      "event": "tool_requested",
+      "action": "chatgpt_gpt_creation",
+      "result": "Created Alfred Memory as g-6a99052078c08191a73ea9133e6f2df9 and verified that its owner URL loads."
+    },
+    {
+      "event": "external_constraint",
+      "action": "public_gpt_sharing",
+      "result": "The ChatGPT share dialog exposed only Only me and reported that sharing GPTs with the public is no longer available for this account."
+    },
+    {
+      "event": "tool_requested",
+      "action": "stale_link_removal",
+      "result": "Removed every repository reference to the unavailable GPT and routed tenant guidance to My GPTs while recording the owner-only replacement in canonical metadata."
+    },
+    {
+      "event": "validation",
+      "result": "Server, ChatGPT adapter, OpenAPI, Console, static pages, release 0.7.0, and 19 release regression gates passed; provider calls remained zero."
+    },
+    {
+      "event": "validation_limited",
+      "result": "The repository-wide syntax check passed. The repository-wide test command reached installer-tui and stopped because @opentui/core is not installed in the clean worktree; package-specific and deployment CI tests passed without installing additional dependencies."
+    },
+    {
+      "event": "pull_request_validation",
+      "result": "Pull request 165 passed the linked-issue, Pages build-and-deploy, and real-Postgres cross-tenant isolation checks."
+    }
+  ],
+  "provider_calls": 0
+}

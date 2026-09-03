@@ -14,9 +14,9 @@ if (!existsSync(path)) {
 const text = readFileSync(path, "utf8");
 const required = [
   "<title>", "setKey", "loadTenants", "issueKey", "loadKeys", "ALFRED_API_BASE",
-  "g-6a320e87e6908191a3f834b273221f99-alfred",
-  "Do not open the GPT editor or fill in Client ID or Client Secret",
-  "already configured inside the published Alfred GPT"
+  "https://chatgpt.com/gpts/mine",
+  "select Alfred Memory",
+  "Never enter the API key"
 ];
 for (const r of required) {
   if (!text.includes(r)) {
