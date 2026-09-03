@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-158-provider-request-avoided",
+  "timestamp": "2026-09-03T03:52:51Z",
+  "actor": "orchestrator",
+  "event": "provider_request_avoided",
+  "decision": "local-only",
+  "target": "issue-158-setup-onboarding",
+  "reason": "Discovery, recommendation, rendering, documentation generation, and validation are deterministic local operations; official product documentation was consulted without making a model-provider request.",
+  "data": {
+    "issue": 158,
+    "branch": "issue-158-setup-onboarding",
+    "provider_calls": 0
+  }
+}

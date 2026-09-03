@@ -22,6 +22,7 @@
       "auth": {
         "type": "oauth",
         "client_id": "alfred-chatgpt",
+        "client_secret_source": "private ALFRED_OAUTH_CLIENT_SECRET; never publish",
         "authorization_url": "https://alfred-labs-memory.fly.dev/oauth/authorize",
         "token_url": "https://alfred-labs-memory.fly.dev/oauth/token",
         "scopes": ["memory:read", "memory:write"],
@@ -33,6 +34,7 @@
     "category": "productivity",
     "tags": ["memory", "second-brain", "knowledge-base", "self-hosted", "alfred"],
     "gpt_id": "g-6a320e87e6908191a3f834b273221f99",
+    "public_url": "https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred",
     "oauth_callback_id": "g-31ee07319349c89eb0a46bd25648afbf99fd6b84",
     "version": "0.7.0",
     "openapi_spec": "packages/memory-openapi/openapi.yaml",

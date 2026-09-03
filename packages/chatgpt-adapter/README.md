@@ -3,7 +3,15 @@
 ChatGPT connects directly to the public Alfred Memory API with OAuth 2.0. No
 local bridge is required and the tenant API key is never stored in the GPT.
 
-## Custom GPT configuration
+## Tenant users
+
+Open the preconfigured
+[Alfred GPT](https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred),
+ask for your memories, choose **Sign in**, and enter your `alk_...` key only on
+Alfred's consent page. You do not need to configure a Client ID or Client
+Secret; AlfredLabs manages those values in the GPT.
+
+## Operator-only Custom GPT configuration
 
 Import the hosted schema:
 
@@ -18,8 +26,12 @@ Choose **OAuth** and configure:
 | Authorization URL | `https://alfred-labs-memory.fly.dev/oauth/authorize` |
 | Token URL | `https://alfred-labs-memory.fly.dev/oauth/token` |
 | Scope | `memory:read memory:write` |
-| Client ID | The value of `ALFRED_OAUTH_CLIENT_ID` on the server |
-| Client secret | The value of `ALFRED_OAUTH_CLIENT_SECRET` on the server |
+| Client ID | `alfred-chatgpt` for AlfredLabs production, or the exact value of `ALFRED_OAUTH_CLIENT_ID` on your server |
+| Client secret | The exact private `ALFRED_OAUTH_CLIENT_SECRET` value on your server |
+
+There is no public/default Client Secret. If the current value was not retained,
+generate a new value of at least 32 characters and rotate the server and GPT
+editor together. Never publish or commit it.
 
 After the Action is saved, copy both callback URLs displayed by ChatGPT into
 the server's comma-separated `ALFRED_OAUTH_REDIRECT_URIS` allowlist. Redirect

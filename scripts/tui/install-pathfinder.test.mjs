@@ -13,6 +13,7 @@ import {
   abbreviateHomePath,
   clipAnsi,
   controlsFor,
+  configurationExplanationLines,
   createPathfinderState,
   displayWidth,
   normalizeTuiLayout,
@@ -24,7 +25,6 @@ import {
   previewPageSize,
   recommend,
   render,
-  rationaleLines,
   sanitizeTerminalOutput,
   sanitizeTerminalText,
   sanitizeModelInput,
@@ -100,6 +100,12 @@ const discovery = normalizeDiscovery({
     validation: { status: "pass", errors: [] },
     existing_config: false
   },
+  memory: {
+    workspace_config_exists: false,
+    environment_configured: false,
+    existing_connection: false,
+    source: "none"
+  },
   install: {
     alfred_home: "/home/test/.alfred", selected_target: "/home/test/.alfred/installs/acme",
     target_exists: true, models_config_path: "/home/test/.alfred/models.json", models_config_exists: false
@@ -127,7 +133,7 @@ for (const state of [createPathfinderState(), createPathfinderState({ discovery 
 }
 const disabledConfigure = { ...createPathfinderState({ discovery }), phase: "Configure" };
 assert.deepEqual(controlsFor(disabledConfigure), ["name", "path", "intent", "next"]);
-for (const output of [render(disabledConfigure, { columns: 80, rows: 24, color: false }).text, previewModel(disabledConfigure.decisions, discovery).lines.join("\n"), rationaleLines(disabledConfigure).join("\n")]) {
+for (const output of [render(disabledConfigure, { columns: 80, rows: 24, color: false }).text, previewModel(disabledConfigure.decisions, discovery).lines.join("\n"), configurationExplanationLines(disabledConfigure).join("\n")]) {
   assert.doesNotMatch(output, /model|models\.json|ollama|anthropic/i);
 }
 for (const overlay of ["model-editor", "model-plan-review"]) {
@@ -478,10 +484,10 @@ assert.equal(resizedPreview.overlay.page, 0, "wide viewport page bounds use the 
 
 const wide = render(createPathfinderState(), { columns: 120, rows: 30 });
 assert.match(wide.text, /\[Discover\] > Choose > Configure > Review > Apply/);
-assert.match(wide.text, /Why this recommendation/);
+assert.match(wide.text, /What this configuration changes/);
 assert.ok(wide.text.split("\n").every((line) => displayWidth(line) <= 120));
 assert.match(stripAnsi(wide.text), /┌ Discover/);
-assert.match(stripAnsi(wide.text), /┌ Rationale/);
+assert.match(stripAnsi(wide.text), /┌ What this configuration changes/);
 
 const tallWide = render(createPathfinderState(), { columns: 120, rows: 50, color: false });
 const tallWideLines = tallWide.text.split("\n");
@@ -495,16 +501,17 @@ const tallConfigure = render({ ...createPathfinderState({ discovery }), phase: "
 assert.equal(tallConfigure.text.split("\n").length, 49);
 assert.ok(tallConfigure.text.split("\n").findLastIndex((line) => /└─+┘/.test(line)) < 45, "wide Configure does not add an empty boxed area");
 
-let longRationaleState = createPathfinderState();
-longRationaleState = transition(longRationaleState, { type: "PATCH", key: "name", value: "a-very-long-install-name-that-makes-the-recommendation-rationale-readable-across-lines" });
-const longWideRationale = stripAnsi(render(longRationaleState, { columns: 120, rows: 50, color: true }).text);
-assert.match(longWideRationale, /from recommendation; your selection is/);
-assert.match(longWideRationale, /selection is respected\./);
-assert.doesNotMatch(longWideRationale, /…/, "wide two-column rationale wraps without clipping");
-const longOverlayRationale = stripAnsi(render(transition(longRationaleState, { type: "OPEN_WHY" }), { columns: 80, rows: 24, color: true }).text);
-assert.match(longOverlayRationale, /Changed from recommendation; your selection is/);
-assert.match(longOverlayRationale, /selection is respected\./);
-assert.doesNotMatch(longOverlayRationale, /…/, "rationale overlay wraps without clipping");
+let longExplanationState = createPathfinderState();
+longExplanationState = transition(longExplanationState, { type: "PATCH", key: "name", value: "a-very-long-install-name-that-keeps-the-configuration-explanation-readable-across-lines" });
+const longWideExplanation = stripAnsi(render(longExplanationState, { columns: 120, rows: 50, color: true }).text);
+const longExplanationText = configurationExplanationLines(longExplanationState).join("\n");
+assert.match(longExplanationText, /labels this local suite installation and its traces/);
+assert.match(longExplanationText, /it is not a tenant name/);
+assert.doesNotMatch(longWideExplanation, /…/, "wide two-column explanations wrap without clipping");
+const longOverlayExplanation = stripAnsi(render(transition(longExplanationState, { type: "OPEN_WHY" }), { columns: 80, rows: 24, color: true }).text);
+assert.match(longOverlayExplanation, /What this configuration changes/);
+assert.doesNotMatch(longOverlayExplanation, /Changed from recommendation|selection is respected/);
+assert.doesNotMatch(longOverlayExplanation, /…/, "configuration explanation overlay wraps without clipping");
 
 for (const layout of ["fullscreen", "inline"]) {
   for (const phase of PHASES) {
@@ -640,11 +647,29 @@ changed = transition(changed, { type: "CUSTOMIZE" });
 changed = transition(changed, { type: "PATCH", key: "edition", value: "full" });
 changed = transition(changed, { type: "PATCH", key: "memorySetup", value: "postgres" });
 changed = transition(changed, { type: "PATCH", key: "name", value: "changed-name" });
-assert.match(rationaleLines(changed).join("\n"), /Edition: Full\. Changed from recommendation; your selection is respected\./);
-assert.match(rationaleLines(changed).join("\n"), /Memory: Postgres\. Changed from recommendation; your selection is respected\./);
-assert.match(rationaleLines(changed).join("\n"), /Install name: changed-name\. Changed from recommendation; your selection is respected\./);
-assert.match(rationaleLines(changed).join("\n"), /Target path: ~\/\.alfred\/installs\/changed-name\./);
-assert.doesNotMatch(rationaleLines(createPathfinderState()).join("\n"), /Target path: default\./, "empty path uses Preview's effective derived target");
+const changedExplanation = configurationExplanationLines(changed).join("\n");
+assert.match(changedExplanation, /Edition — Full: installs both coding operations and Memory components\./);
+assert.match(changedExplanation, /Memory — Postgres: installs Memory components for web, human, or multi-machine use\./);
+assert.match(changedExplanation, /Install name — changed-name: labels this local suite installation/);
+assert.match(changedExplanation, /Target path — ~\/\.alfred\/installs\/changed-name:/);
+assert.doesNotMatch(changedExplanation, /Changed from recommendation|selection is respected/);
+
+const skippedProfiles = createPathfinderState({ current: { profile: "decide-later" }, discovery });
+assert.match(configurationExplanationLines(skippedProfiles).join("\n"), /Runtime Profiles — skipped: does not include or initialize/);
+assert.match(configurationExplanationLines(createPathfinderState({ discovery })).join("\n"), /Runtime Profiles — enabled: initializes shared profiles\/ and private profiles\.local\//);
+
+const detectedMemoryDiscovery = normalizeDiscovery({
+  ...discovery,
+  memory: { workspace_config_exists: true, environment_configured: false, existing_connection: true, source: "workspace-config" }
+});
+const detectedMemory = createPathfinderState({ current: { edition: "memory" }, discovery: detectedMemoryDiscovery });
+assert.equal(detectedMemory.decisions.memorySetup, "existing-tenant");
+assert.match(configurationExplanationLines(detectedMemory).join("\n"), /reuses the connection signaled by the workspace \.alfred\/config\.json/);
+assert.match(configurationExplanationLines(detectedMemory).join("\n"), /does not create another tenant/);
+
+const manualExistingMemory = createPathfinderState({ current: { edition: "full", memory: "existing-tenant" }, discovery });
+assert.equal(manualExistingMemory.decisions.memorySetup, "existing-tenant");
+assert.match(configurationExplanationLines(manualExistingMemory).join("\n"), /provide ALFRED_MEMORY_BASE_URL and ALFRED_MEMORY_API_KEY after setup/);
 
 let approved = createPathfinderState({ discovery });
 approved = transition(approved, { type: "USE_RECOMMENDED" });

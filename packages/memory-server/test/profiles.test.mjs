@@ -99,8 +99,8 @@ test("nextStepsFor: web returns ChatGPT/Claude/Gemini steps", () => {
   assert.match(text, /Claude/);
   assert.match(text, /Gemini/);
   assert.match(text, /alk_xyz/);
-  assert.match(text, /openapi\.yaml/);
-  assert.match(text, /Auth: OAuth/);
+  assert.match(text, /g-6a320e87e6908191a3f834b273221f99-alfred/);
+  assert.match(text, /No OAuth Client ID or Client Secret is needed/);
   assert.doesNotMatch(text, /chatgpt-adapter\/src\/bridge/);
 });
 

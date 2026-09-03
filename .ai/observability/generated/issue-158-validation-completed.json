@@ -1,0 +1,17 @@
+{
+  "trace_id": "issue-158-validation-completed",
+  "timestamp": "2026-09-03T03:52:51Z",
+  "actor": "orchestrator",
+  "event": "validation_completed",
+  "decision": "pass",
+  "target": "issue-158-setup-onboarding",
+  "reason": "Setup discovery, Pathfinder and OpenTUI behavior, suite installer, Homebrew dispatch, Memory server, console, Pages, policy, and release validators all passed.",
+  "data": {
+    "issue": 158,
+    "branch": "issue-158-setup-onboarding",
+    "memory_server_tests": 231,
+    "installer_tui_tests": 12,
+    "homebrew_tests": 11,
+    "provider_calls": 0
+  }
+}

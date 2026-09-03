@@ -54,6 +54,8 @@ Flags:
   --path=<dir>                    Install repo path when --apply is used. Default: ~/.alfred/installs/<name>.
   --harness=<auto|opencode|codex-cli|codex-app|codex|pi|none>
                                   Harness previews. Comma-repeatable. auto selects installed supported harnesses.
+  --memory=<existing-tenant|decide-later|local-sqlite|postgres>
+                                  Memory plan for Memory/Full editions.
   --apply                         Apply safe suite install steps. Without this, preview only.
   --dry-run                       Alias for preview-only mode.
   --no-clone                      With --apply, reuse an existing repo at --path.
@@ -229,6 +231,8 @@ while [ "$#" -gt 0 ]; do
     --path) [ "$#" -ge 2 ] || err "Missing value after --path"; TARGET_PATH="$2"; shift 2 ;;
     --harness=*) HARNESS="${1#*=}"; shift ;;
     --harness) [ "$#" -ge 2 ] || err "Missing value after --harness"; HARNESS="$2"; shift 2 ;;
+    --memory=*) MEMORY_SETUP="${1#*=}"; shift ;;
+    --memory) [ "$#" -ge 2 ] || err "Missing value after --memory"; MEMORY_SETUP="$2"; shift 2 ;;
     --apply) APPLY=true; shift ;;
     --dry-run) APPLY=false; shift ;;
     --no-clone) NO_CLONE=true; shift ;;
@@ -819,22 +823,38 @@ tui_choose_memory_setup() {
     memory|full) ;;
     *) MEMORY_SETUP="not-needed-for-coding-edition"; return 0 ;;
   esac
-  cat <<'EOFMEMORY'
+  detected_memory="no"
+  detected_memory_reason="No workspace config or complete Memory environment was detected."
+  if [ -f "$SOURCE_PROJECT_PATH/.alfred/config.json" ]; then
+    detected_memory="yes"
+    detected_memory_reason="Detected $SOURCE_PROJECT_PATH/.alfred/config.json (credential values were not read)."
+  elif [ -n "${ALFRED_MEMORY_BASE_URL:-}" ] && [ -n "${ALFRED_MEMORY_API_KEY:-}" ]; then
+    detected_memory="yes"
+    detected_memory_reason="Detected ALFRED_MEMORY_BASE_URL + ALFRED_MEMORY_API_KEY (values are never displayed)."
+  fi
+  cat <<EOFMEMORY
 
 Choose a Memory setup strategy:
   1) decide later (recommended for first install)
-     Plan/install without choosing storage yet.
+     Install components without creating or connecting a tenant.
   2) local SQLite
-     Good for coding-agent-only local development on one machine.
+     Prepare for a coding-only tenant on one machine; create it later with alfred init.
   3) Postgres
-     Required for human/web agents, external AI shared memory, or multiple machines.
+     Prepare for human/web or multi-machine Memory; connect or create it later.
+  4) use existing tenant
+     Reuse a tenant created in the Memory app; setup will not create another one.
+
+Existing connection: $detected_memory. $detected_memory_reason
 EOFMEMORY
-  tui_ask 'Memory setup [1=decide later, 2=local SQLite, 3=Postgres, default 1]: ' '1'
+  memory_default="1"
+  if [ "$detected_memory" = "yes" ]; then memory_default="4"; fi
+  tui_ask "Memory setup [1=decide later, 2=local SQLite, 3=Postgres, 4=existing tenant, default $memory_default]: " "$memory_default"
   choice="$TUI_ANSWER"
   case "$choice" in
     1|later|decide-later) MEMORY_SETUP="decide-later" ;;
     2|sqlite|local|local-sqlite) MEMORY_SETUP="local-sqlite" ;;
     3|postgres|pg) MEMORY_SETUP="postgres" ;;
+    4|existing|existing-tenant) MEMORY_SETUP="existing-tenant" ;;
     *) err "Unknown TUI Memory setup choice: $choice" ;;
   esac
 }
@@ -912,6 +932,22 @@ case "$EDITION" in
   *) err "Unknown edition: $EDITION (use coding, memory, or full)" ;;
 esac
 
+case "$EDITION" in
+  coding) MEMORY_SETUP="not-needed-for-coding-edition" ;;
+  memory|full)
+    if [ "$MEMORY_SETUP" = "not-selected" ]; then MEMORY_SETUP="decide-later"; fi
+    case "$MEMORY_SETUP" in
+      existing-tenant|decide-later|local-sqlite|postgres) ;;
+      *) err "Unknown Memory setup: $MEMORY_SETUP (use existing-tenant, decide-later, local-sqlite, or postgres)" ;;
+    esac
+    ;;
+esac
+
+MEMORY_CLI_ARG=""
+case "$EDITION" in
+  memory|full) MEMORY_CLI_ARG=" --memory=$MEMORY_SETUP" ;;
+esac
+
 SELECTED_HARNESSES="$(normalize_harness_selection "$HARNESS")"
 
 case "$NAME" in
@@ -961,6 +997,29 @@ DISPLAY_PROFILE_STRATEGY="$PROFILE_STRATEGY"
 DISPLAY_MEMORY_SETUP="$MEMORY_SETUP"
 if [ "$PROFILE_STRATEGY" = "not-needed-for-memory-edition" ]; then DISPLAY_PROFILE_STRATEGY="Not included in Memory edition"; fi
 if [ "$MEMORY_SETUP" = "not-needed-for-coding-edition" ]; then DISPLAY_MEMORY_SETUP="Not included in Coding edition"; fi
+
+print_memory_consequence() {
+  case "$MEMORY_SETUP" in
+    existing-tenant)
+      printf '  Reuses your Memory app tenant; this setup creates no tenant.\n'
+      printf '  Clients connect with ALFRED_MEMORY_BASE_URL and ALFRED_MEMORY_API_KEY.\n'
+      ;;
+    local-sqlite)
+      printf '  Installs Memory components for local-only SQLite use.\n'
+      printf '  This suite setup creates no tenant; run alfred init --profile=coding afterward.\n'
+      ;;
+    postgres)
+      printf '  Installs Memory components for human/web or multi-machine use.\n'
+      printf '  This suite setup creates no tenant; connect the existing one or run alfred init with its Postgres URL afterward.\n'
+      ;;
+    decide-later)
+      printf '  Installs the selected suite components without creating or connecting a tenant.\n'
+      ;;
+    *)
+      printf '  Memory is not part of this edition.\n'
+      ;;
+  esac
+}
 
 print_expected_preview_locations() {
   if [ "$SELECTED_HARNESSES" = "none" ]; then
@@ -1179,6 +1238,13 @@ TUI mode:       $TUI_MODE
 What --name means:
   A local human-readable install/context identifier. It is used to derive
   the default install path (~/.alfred/installs/$NAME) and label traces.
+  It is not a Memory tenant name.
+
+What the Memory choice changes:
+$(print_memory_consequence)
+
+What Runtime Profiles changes:
+  $(if [ "$PROFILE_STRATEGY" = "runtime-profiles" ]; then printf 'Initializes shared profiles/ and private profiles.local/ under ~/.alfred/runtime-profiles; activation remains a separate preview/approval step.'; elif [ "$PROFILE_STRATEGY" = "decide-later" ]; then printf 'Does not include or initialize the profile switching layer; harness configuration remains manual.'; else printf 'Runtime Profiles are not included in this edition.'; fi)
 
 Safety:
   - This installer does not install Pi by default.
@@ -1201,7 +1267,7 @@ To apply safe suite install steps, rerun the guided installer and choose apply:
   curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh
 
 Automation fallback when the decisions are already known:
-  curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=$EDITION --name=$NAME --harness=$HARNESS --apply
+  curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=$EDITION$MEMORY_CLI_ARG --name=$NAME --harness=$HARNESS --apply
 EOFNEXT
   else
   cat <<EOFNEXT
@@ -1212,8 +1278,8 @@ To apply safe suite install steps, rerun with:
   --apply
 
 Examples:
-  curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=$EDITION --name=$NAME --apply
-  curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=$EDITION --name=$NAME --harness=opencode --apply
+  curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=$EDITION$MEMORY_CLI_ARG --name=$NAME --apply
+  curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh -s -- --edition=$EDITION$MEMORY_CLI_ARG --name=$NAME --harness=opencode --apply
 EOFNEXT
   fi
   exit 0

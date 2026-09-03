@@ -45,6 +45,14 @@ ALFRED_OAUTH_CLIENT_SECRET=<random value of at least 32 characters>
 ALFRED_OAUTH_REDIRECT_URIS=https://chatgpt.com/aip/g-YOUR-GPT-ID/oauth/callback,https://chat.openai.com/aip/g-YOUR-GPT-ID/oauth/callback
 ```
 
+`ALFRED_OAUTH_CLIENT_ID` is the non-secret identifier. AlfredLabs production
+uses the exact value `alfred-chatgpt`. `ALFRED_OAUTH_CLIENT_SECRET` is a private,
+deployment-specific value; there is no public or repository default. The exact
+same secret must be entered in the GPT editor and configured on the Alfred
+server. If the current value is no longer available, generate a new value of at
+least 32 characters and rotate the GPT editor and server deployment together.
+Never put that value in documentation, source control, screenshots, or logs.
+
 `ALFRED_MEMORY_ALLOWED_ORIGINS` must include the ChatGPT origins for the
 browser-based GPT UI to be allowed to call your server.
 
@@ -88,8 +96,11 @@ In ChatGPT:
      contents of `packages/memory-openapi/openapi.yaml`.
    - Authentication:
      - Type: **OAuth**
-     - Client ID: the same value as `ALFRED_OAUTH_CLIENT_ID`
-     - Client secret: the same value as `ALFRED_OAUTH_CLIENT_SECRET`
+     - Client ID: `alfred-chatgpt` for AlfredLabs production, or the exact
+       non-secret value configured as `ALFRED_OAUTH_CLIENT_ID` on your server.
+     - Client secret: the exact private value configured as
+       `ALFRED_OAUTH_CLIENT_SECRET` on your server. There is no public/default
+       value; if it was lost, rotate both sides together.
      - Authorization URL: `https://YOUR_DOMAIN/oauth/authorize`
      - Token URL: `https://YOUR_DOMAIN/oauth/token`
      - Scope: `memory:read memory:write`

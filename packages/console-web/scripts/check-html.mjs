@@ -12,7 +12,13 @@ if (!existsSync(path)) {
   process.exit(1);
 }
 const text = readFileSync(path, "utf8");
-const required = ["<title>", "setKey", "loadTenants", "issueKey", "loadKeys", "ALFRED_API_BASE"];
+const required = [
+  "<title>", "setKey", "loadTenants", "issueKey", "loadKeys", "ALFRED_API_BASE",
+  "g-6a320e87e6908191a3f834b273221f99-alfred",
+  "Client ID: alfred-chatgpt",
+  "ALFRED_OAUTH_CLIENT_SECRET",
+  "There is no public/default Client Secret"
+];
 for (const r of required) {
   if (!text.includes(r)) {
     console.error("Missing in src/index.html: " + r);

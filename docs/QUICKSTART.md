@@ -105,14 +105,17 @@ the same port (no CORS needed).
 
 ### ChatGPT (Plus / Pro / Enterprise)
 
-1. Open <https://chat.openai.com/gpts/editor> → Create a GPT.
-2. Configure → Actions → **Import OpenAPI** → import
-   `https://alfred-labs-memory.fly.dev/openapi.yaml`.
-3. Authentication: **OAuth** using `/oauth/authorize`, `/oauth/token`, and
-   scopes `memory:read memory:write` from the same server.
-4. Save, choose **Sign in**, and enter your `alk_...` key only on Alfred's
-   consent page.
-5. In the GPT Builder test: "list my last 5 memories".
+1. Open the preconfigured
+   [Alfred GPT](https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred).
+2. Ask: "list my last 5 memories".
+3. Choose **Sign in** when ChatGPT offers it.
+4. Enter your `alk_...` key only on Alfred's consent page, approve access,
+   and retry the request.
+
+You do not need a Client ID or Client Secret for this path. AlfredLabs manages
+those credentials in the preconfigured GPT. Operators creating a separate GPT
+must follow [the deployment guide](../.ai/docs/custom-gpt-deploy.md); there is
+no public/default client secret.
 
 ### Claude Desktop
 

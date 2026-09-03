@@ -195,10 +195,16 @@ Provider calls   : <span class="k">0</span>
       <h2 id="web">Option B &mdash; Memory edition</h2>
       <p>Use Alfred Memory from ChatGPT, Claude, Gemini, or coding agents.</p>
       <ol>
-        <li>Create a free Postgres database (Neon / Supabase / Render).</li>
-        <li>Copy the connection string &mdash; it looks like
+        <li>If you already created a tenant in the Memory app, choose
+          <strong>Use existing tenant</strong>. Alfred will not create another
+          tenant; clients reuse <code>ALFRED_MEMORY_BASE_URL</code> and
+          <code>ALFRED_MEMORY_API_KEY</code>.</li>
+        <li>For a new self-hosted tenant, create a Postgres database and copy
+          its connection string, such as
           <code>postgres://user:pass@host/db?sslmode=require</code>.</li>
-        <li>Run the guided installer and choose the Memory edition. Pick Postgres for shared/human/web memory, or decide later for a first preview.</li>
+        <li>Run the guided installer and choose the Memory edition. Pick
+          Postgres for shared/human/web memory, Local SQLite for one-machine
+          coding use, or Decide later for a no-tenant preview.</li>
       </ol>
       <div class="terminal">
         <div class="terminal-bar">

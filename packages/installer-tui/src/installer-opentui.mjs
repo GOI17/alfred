@@ -22,7 +22,7 @@ import {
   modelPlanReviewLines,
   normalizeDiscovery,
   previewModel,
-  rationaleLines,
+  configurationExplanationLines,
   serializeAssignments,
   stripAnsi,
   textEditingActive,
@@ -537,8 +537,8 @@ function overlayRows(state, layout) {
   let source;
   let title;
   if (state.overlay.type === "why") {
-    source = rationaleLines(state).slice(1);
-    title = "Why these defaults";
+    source = configurationExplanationLines(state).slice(1);
+    title = "What this configuration changes";
   } else if (state.overlay.type === "model-plan-review") {
     source = modelPlanReviewLines(state, contentWidth);
     title = "Exact models.json";
@@ -550,7 +550,7 @@ function overlayRows(state, layout) {
   const page = Math.max(0, Math.min(pageCount - 1, state.overlay.page || 0));
   return {
     title,
-    subtitle: `${state.overlay.type === "why" ? "Local reasoning only" : "Read-only"} · page ${page + 1}/${pageCount}`,
+    subtitle: `${state.overlay.type === "why" ? "Practical effects" : "Read-only"} · page ${page + 1}/${pageCount}`,
     rows: source.slice(page * pageSize, (page + 1) * pageSize).map((text) => row(text, {
       tone: /provider calls:\s*0|safety:/i.test(text) ? "green" : /blocker|blocked|not inspected/i.test(text) ? "red" : "foreground"
     }))
@@ -629,10 +629,10 @@ function footerLines(state, layout) {
   const keys = state.editing
     ? "←→ cursor  Enter save  Esc cancel  Backspace/Delete edit"
     : state.overlay
-      ? "Esc close  ←→/↑↓ pages  p preview  w why  q cancel"
+      ? "Esc close  ←→/↑↓ pages  p preview  w explain  q cancel"
       : layout.mode === "compact"
         ? "↑↓ Move · ←→ Change · Space Toggle · Enter Select · b Back · p Preview · q Quit"
-        : "↑↓ move  ←→ change  Space toggle  Enter select  b back  p preview  w why  q quit";
+        : "↑↓ move  ←→ change  Space toggle  Enter select  b back  p preview  w explain  q quit";
   return [
     layout.mode === "wide"
       ? "Safety · Preview-first · human approval required · provider calls 0"

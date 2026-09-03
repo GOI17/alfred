@@ -927,6 +927,22 @@ EOFRESULT
   assert.match(multiFlagPreview.stdout, /Harnesses:\s+opencode,codex-cli,codex-app/);
   assert.match(multiFlagPreview.stdout, /Detected:\s+opencode \[/);
 
+  const existingMemoryPreview = run([
+    "--edition=full", "--name=existing-memory", "--harness=none", "--memory=existing-tenant"
+  ]);
+  assert.equal(existingMemoryPreview.status, 0, existingMemoryPreview.stderr);
+  assert.match(existingMemoryPreview.stdout, /Memory setup:\s+existing-tenant/);
+  assert.match(existingMemoryPreview.stdout, /Reuses your Memory app tenant; this setup creates no tenant/);
+  assert.match(existingMemoryPreview.stdout, /ALFRED_MEMORY_BASE_URL and ALFRED_MEMORY_API_KEY/);
+  assert.match(existingMemoryPreview.stdout, /What Runtime Profiles changes:/);
+  assert.match(existingMemoryPreview.stdout, /activation remains a separate preview\/approval step/);
+  assert.match(existingMemoryPreview.stdout, /--edition=full --memory=existing-tenant --name=existing-memory --apply/);
+  assert.equal(existsSync(join(home, ".alfred")), false, "existing-tenant preview writes no local state");
+
+  const invalidMemoryPreview = run(["--edition=memory", "--memory=duplicate-tenant"]);
+  assert.notEqual(invalidMemoryPreview.status, 0);
+  assert.match(invalidMemoryPreview.stderr, /Unknown Memory setup/);
+
   const fakeBin = join(fixture, "fake-bin");
   const fakeCodexApp = join(fixture, "Codex.app");
   mkdirSync(fakeBin, { recursive: true });
@@ -962,12 +978,14 @@ EOFRESULT
   assert.match(tuiFullOutput, /Choose a harness target/);
   assert.match(tuiFullOutput, /Choose a runtime profile strategy/);
   assert.match(tuiFullOutput, /Choose a Memory setup strategy/);
+  assert.match(tuiFullOutput, /use existing tenant/);
   assert.match(tuiFullOutput, /--name is a local human-readable install\/context identifier/);
   assert.match(tuiFullOutput, /ALFRED SUITE INSTALL PREVIEW/);
   assert.match(tuiFullOutput, /Edition:\s+full/);
   assert.match(tuiFullOutput, /Harnesses:\s+none/);
   assert.match(tuiFullOutput, /Profile:\s+runtime-profiles/);
   assert.match(tuiFullOutput, /Memory setup:\s+postgres/);
+  assert.match(tuiFullOutput, /This suite setup creates no tenant/);
   assert.match(tuiFullOutput, /Name:\s+acme/);
   assert.match(tuiFullOutput, /TUI used:\s+true/);
   assert.match(tuiFullOutput, /No files were written/);
