@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-146-delegation-decision",
+  "timestamp": "2026-09-03T01:00:47Z",
+  "actor": "orchestrator",
+  "event": "delegation_decision",
+  "decision": "execute-directly",
+  "target": "issue-146-recovery-result-page",
+  "reason": "The bounded recovery presentation and negotiation change is directly testable and does not require specialist delegation.",
+  "data": {
+    "issue": 146,
+    "branch": "issue-146-recovery-result-page",
+    "provider_calls": 0
+  }
+}

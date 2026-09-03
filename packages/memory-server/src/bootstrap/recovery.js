@@ -125,12 +125,12 @@ export function createRecovery({ registry, userService, emailSender, baseUrl = "
     },
 
     async consumeRecovery({ token }) {
-      if (typeof token !== "string" || token.length === 0) return null;
+      if (typeof token !== "string" || token.length === 0) return { state: "invalid" };
       const recovery = await registry.recoveries.findRecoveryByToken(token);
-      if (!recovery) return null;
-      if (recovery.used_at) return null;
+      if (!recovery) return { state: "invalid" };
+      if (recovery.used_at) return { state: "used" };
       if (new Date(recovery.expires_at).getTime() < now()) {
-        return { expired: true, tenant_id: recovery.tenant_id };
+        return { state: "expired" };
       }
 
       // Find and revoke the active key for this tenant.
@@ -146,6 +146,7 @@ export function createRecovery({ registry, userService, emailSender, baseUrl = "
       await registry.recoveries.markRecoveryUsed(recovery.id, { newKeyId: newKeyResult.key.id, oldKeyId: oldKey?.id ?? null });
 
       return {
+        state: "success",
         tenant_id: recovery.tenant_id,
         email: recovery.email,
         api_key: newKeyResult.apiKey,

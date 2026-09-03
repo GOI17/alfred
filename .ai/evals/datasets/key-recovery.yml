@@ -27,9 +27,10 @@ vectors:
       - audit row created with ip + timestamp
 
   - id: recovery-consume-rotates-key
-    description: GET with valid token revokes old key, issues new alk_ key
+    description: Explicit JSON GET with valid token revokes old key and issues new alk_ key
     inputs:
       token: valid
+      accept: application/json
     expected_status: 200
     expected_response:
       ok: true
@@ -40,23 +41,38 @@ vectors:
       - new api_key row inserted
       - token row marked consumed
 
+  - id: recovery-browser-result-page
+    description: Browser GET with a valid token renders the secure one-time result page
+    inputs:
+      token: valid
+      accept: text/html
+    expected_status: 200
+    expected_content_type: text/html
+    expected_page_state: success
+    invariants:
+      - The page has a read-only API key field and an accessible Copy button.
+      - The previous key revocation and one-time display warnings are visible.
+      - The key is HTML-escaped and is not written to a URL, log, trace, or storage API.
+      - Cache-Control is no-store.
+      - CSP, Referrer-Policy, and framing protection are present.
+
   - id: recovery-token-replay-rejected
     description: Reusing a consumed token returns 410
     inputs:
       token: already_consumed
+      accept: application/json
     expected_status: 410
     expected_response:
-      ok: false
-      error: recovery_token_used
+      error: token_used
 
   - id: recovery-token-expired
-    description: Tokens older than 24h return 410
+    description: Tokens past their one-hour expiry return 410
     inputs:
       token: expired
+      accept: application/json
     expected_status: 410
     expected_response:
-      ok: false
-      error: recovery_token_expired
+      error: token_expired
 
   - id: recovery-rate-limit
     description: 4th request from same IP within 1h returns 429

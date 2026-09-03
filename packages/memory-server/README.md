@@ -123,6 +123,38 @@ transport is not configured or cannot authenticate, the endpoint returns
 and unregistered addresses share the same generic response to prevent account
 enumeration.
 
+### Recovery result negotiation
+
+Opening `GET /console/api/recover?token=...` in a browser returns an accessible
+HTML result page by default. The page sends `Cache-Control: no-store`, does not
+load external assets, and shows a newly issued key only on the first successful
+use of the link. Its Continue action is the fixed, same-origin `/console` path;
+continuation and redirect policy are intentionally outside this endpoint.
+
+Machine clients must explicitly send `Accept: application/json`. A successful
+JSON response retains the existing fields:
+
+```json
+{
+  "ok": true,
+  "tenant_id": "usr_...",
+  "email": "user@example.com",
+  "api_key": "alk_...",
+  "key_prefix": "alk_...",
+  "key_id": "key_...",
+  "old_key_id": "key_...",
+  "consumed_at": "2026-09-03T00:00:00.000Z"
+}
+```
+
+Invalid tokens return `400 invalid_token`; expired and already-used tokens
+return `410 token_expired` and `410 token_used`, respectively. Missing,
+wildcard, browser-style, and `application/json;q=0` Accept headers select HTML,
+not JSON. Recovery GET responses carry the same no-store and restrictive
+security headers in both representations. The secret-bearing recovery GET is
+not exposed through browser CORS; machine clients should call it directly.
+Clients must never persist or log the returned `api_key`.
+
 ## Web console
 
 The `/console` route serves the optional web console. The server does not

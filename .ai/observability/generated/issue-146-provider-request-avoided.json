@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-146-provider-request-avoided",
+  "timestamp": "2026-09-03T01:00:47Z",
+  "actor": "orchestrator",
+  "event": "provider_request_avoided",
+  "decision": "local-only",
+  "target": "issue-146-recovery-result-page",
+  "reason": "Recovery rendering, content negotiation, security-header checks, and regression validation are deterministic local operations.",
+  "data": {
+    "issue": 146,
+    "branch": "issue-146-recovery-result-page",
+    "provider_calls": 0
+  }
+}
