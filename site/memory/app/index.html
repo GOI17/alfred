@@ -64,6 +64,13 @@
       font: 12px/1.5 ui-monospace, monospace; color: var(--good);
       word-break: break-all;
     }
+    .session-key {
+      flex: 1; min-width: 240px;
+      background: #0b0d11; color: var(--good); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 10px;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .session-status { min-height: 18px; margin: 8px 0 0; }
     .small { font-size: 12px; color: var(--muted); }
     .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
     .spacer { flex: 1; }
@@ -134,6 +141,20 @@
   </div>
 
   <div id="unlocked" style="display: none;">
+
+    <div class="panel">
+      <h2>Current session</h2>
+      <p class="hint">This API key is saved in this browser and used to unlock the Console.</p>
+      <label class="small" for="sessionApiKey">Current API key</label>
+      <div class="row" style="margin-top: 6px;">
+        <input id="sessionApiKey" class="session-key" type="password" readonly autocomplete="off" spellcheck="false" aria-describedby="sessionHint sessionStatus" />
+        <button id="toggleSessionApiKey" class="btn secondary" type="button" onclick="toggleApiKeyVisibility()" aria-controls="sessionApiKey" aria-pressed="false">Show</button>
+        <button class="btn secondary" type="button" onclick="copyApiKey()">Copy</button>
+        <button class="btn danger" type="button" onclick="logout()">Log out</button>
+      </div>
+      <p id="sessionHint" class="small" style="margin: 8px 0 0;">Logging out removes this key from this browser. It does not revoke the key for other agents or browsers.</p>
+      <p id="sessionStatus" class="small session-status" role="status" aria-live="polite"></p>
+    </div>
 
     <div class="panel">
       <h2>Tenants</h2>
@@ -245,6 +266,7 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
 <script>
 let API_KEY = "";
 let CURRENT_TENANT = "";
+let SESSION_VERSION = 0;
 const TENANT_NAME_RE = /^[A-Za-z0-9 _-]{1,64}$/;
 
 function validateTenantName(name) {
@@ -308,10 +330,8 @@ async function signup() {
       });
     }
     API_KEY = res.api_key;
-    document.getElementById("apiStatus").textContent = "✓ unlocked";
-    document.getElementById("locked").style.display = "none";
-    document.getElementById("unlocked").style.display = "block";
     localStorage.setItem("alfred_api_key", API_KEY);
+    showUnlockedState();
     // Show the freshly-issued key in a banner so the user can copy it.
     document.getElementById("newKeyBody").innerHTML =
       '<div class="panel" style="background: #1a2a1a; border-color: var(--good);">' +
@@ -354,14 +374,82 @@ function showErrorInline(elementId, message) {
   el.style.color = "var(--bad)";
 }
 
+function showUnlockedState() {
+  SESSION_VERSION += 1;
+  const sessionApiKey = document.getElementById("sessionApiKey");
+  const toggleButton = document.getElementById("toggleSessionApiKey");
+  sessionApiKey.value = API_KEY;
+  sessionApiKey.type = "password";
+  toggleButton.textContent = "Show";
+  toggleButton.setAttribute("aria-pressed", "false");
+  document.getElementById("sessionStatus").textContent = "";
+  document.getElementById("sessionStatus").style.color = "";
+  document.getElementById("apiStatus").textContent = "✓ unlocked";
+  document.getElementById("locked").style.display = "none";
+  document.getElementById("unlocked").style.display = "block";
+}
+
+function toggleApiKeyVisibility() {
+  const sessionApiKey = document.getElementById("sessionApiKey");
+  const toggleButton = document.getElementById("toggleSessionApiKey");
+  const reveal = sessionApiKey.type === "password";
+  sessionApiKey.type = reveal ? "text" : "password";
+  toggleButton.textContent = reveal ? "Hide" : "Show";
+  toggleButton.setAttribute("aria-pressed", reveal ? "true" : "false");
+  const status = document.getElementById("sessionStatus");
+  status.textContent = reveal
+    ? "API key visible. Hide it when you are done."
+    : "API key hidden.";
+  status.style.color = "";
+}
+
+async function copyApiKey() {
+  const status = document.getElementById("sessionStatus");
+  try {
+    if (!API_KEY || !navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+      throw new Error("Clipboard unavailable");
+    }
+    await navigator.clipboard.writeText(API_KEY);
+    status.textContent = "API key copied.";
+    status.style.color = "var(--good)";
+  } catch {
+    status.textContent = "Could not copy automatically. Show the key and copy it manually.";
+    status.style.color = "var(--bad)";
+  }
+}
+
+function logout() {
+  SESSION_VERSION += 1;
+  API_KEY = "";
+  CURRENT_TENANT = "";
+  localStorage.removeItem("alfred_api_key");
+
+  const sessionApiKey = document.getElementById("sessionApiKey");
+  const toggleButton = document.getElementById("toggleSessionApiKey");
+  sessionApiKey.value = "";
+  sessionApiKey.type = "password";
+  toggleButton.textContent = "Show";
+  toggleButton.setAttribute("aria-pressed", "false");
+  document.getElementById("apiKey").value = "";
+  document.getElementById("newKeyBody").innerHTML = "";
+  document.getElementById("tenantsBody").innerHTML = '<div class="empty">Loading...</div>';
+  document.getElementById("keysBody").innerHTML = '<div class="empty">Select a tenant to view keys.</div>';
+  document.getElementById("keyTenant").innerHTML = "";
+  document.getElementById("keyLabel").value = "";
+  document.getElementById("showRevoked").checked = false;
+  document.getElementById("sessionStatus").textContent = "";
+  document.getElementById("sessionStatus").style.color = "";
+  document.getElementById("unlocked").style.display = "none";
+  document.getElementById("locked").style.display = "block";
+  document.getElementById("apiStatus").textContent = "locked — session ended";
+}
+
 function setKey() {
   const input = document.getElementById("apiKey");
   API_KEY = input.value.trim();
   if (!API_KEY) return;
-  document.getElementById("apiStatus").textContent = "✓ unlocked";
-  document.getElementById("locked").style.display = "none";
-  document.getElementById("unlocked").style.display = "block";
   localStorage.setItem("alfred_api_key", API_KEY);
+  showUnlockedState();
   loadAll();
 }
 
@@ -438,7 +526,9 @@ async function loadAll() {
 }
 
 async function loadTenants() {
+  const sessionVersion = SESSION_VERSION;
   const res = await api("/console/api/tenants");
+  if (sessionVersion !== SESSION_VERSION || !API_KEY) return;
   const tenants = res.items || [];
   const sel = document.getElementById("keyTenant");
   sel.innerHTML = "";
@@ -469,8 +559,10 @@ async function loadTenants() {
 
 async function loadKeys() {
   if (!CURRENT_TENANT) return;
+  const sessionVersion = SESSION_VERSION;
   const showRevoked = document.getElementById("showRevoked").checked;
   const res = await api("/console/api/tenants/" + CURRENT_TENANT + "/keys?include_revoked=" + showRevoked);
+  if (sessionVersion !== SESSION_VERSION || !API_KEY) return;
   const keys = res.keys || [];
   if (keys.length === 0) {
     document.getElementById("keysBody").innerHTML = '<div class="empty">No keys for this tenant.</div>';
@@ -494,12 +586,14 @@ async function loadKeys() {
 async function issueKey() {
   const tenantId = document.getElementById("keyTenant").value;
   if (!tenantId) return;
+  const sessionVersion = SESSION_VERSION;
   const label = document.getElementById("keyLabel").value.trim() || null;
   try {
     const res = await api("/console/api/tenants/" + tenantId + "/keys", {
       method: "POST",
       body: JSON.stringify({ label })
     });
+    if (sessionVersion !== SESSION_VERSION || !API_KEY) return;
     document.getElementById("newKeyBody").innerHTML =
       '<div class="panel" style="background: #1a2a1a; border-color: var(--good);">' +
       '<strong class="ok">New API key for tenant ' + tenantId + '</strong><br>' +
@@ -512,8 +606,10 @@ async function issueKey() {
 
 async function revokeKey(keyId) {
   if (!confirm("Revoke this key? Any agent using it will get 401.")) return;
+  const sessionVersion = SESSION_VERSION;
   try {
     await api("/console/api/keys/" + keyId, { method: "DELETE" });
+    if (sessionVersion !== SESSION_VERSION || !API_KEY) return;
     loadKeys();
   } catch (err) { showError(err); }
 }

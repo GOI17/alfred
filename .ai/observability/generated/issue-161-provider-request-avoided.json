@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-161-provider-request-avoided",
+  "timestamp": "2026-09-03T05:31:45Z",
+  "actor": "orchestrator",
+  "event": "provider_request_avoided",
+  "decision": "local-only",
+  "target": "issue-161-memory-console-session-controls",
+  "reason": "HTML, browser state transitions, clipboard behavior, static builds, and regression checks are deterministic local operations.",
+  "data": {
+    "issue": 161,
+    "branch": "issue-161-memory-console-session-controls",
+    "provider_calls": 0
+  }
+}

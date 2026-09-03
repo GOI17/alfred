@@ -17,7 +17,7 @@ test("src/index.html exists and is non-empty", () => {
   assert.ok(text.length > 5000, "index.html should be substantial");
 });
 
-test("src/index.html has the key UI elements", () => {
+test("src/index.html has the key UI elements and current-session behavior", async () => {
   const text = readFileSync(srcIndex, "utf8");
   for (const r of [
     "<title>",
@@ -28,10 +28,85 @@ test("src/index.html has the key UI elements", () => {
     "apiBase",
     "requestRecovery",
     "continue_to",
-    "new URL(window.location.href)"
+    "new URL(window.location.href)",
+    "sessionApiKey",
+    "toggleApiKeyVisibility",
+    "copyApiKey",
+    "logout"
   ]) {
     assert.ok(text.includes(r), "missing: " + r);
   }
+
+  const sourceStart = text.indexOf("function showUnlockedState() {");
+  const sourceEnd = text.indexOf("function setKey() {");
+  assert.ok(sourceStart >= 0 && sourceEnd > sourceStart, "session functions should be extractable");
+
+  const elementIds = [
+    "sessionApiKey", "toggleSessionApiKey", "sessionStatus", "apiStatus",
+    "locked", "unlocked", "apiKey", "newKeyBody", "tenantsBody",
+    "keysBody", "keyTenant", "keyLabel", "showRevoked"
+  ];
+  const elements = Object.fromEntries(elementIds.map((id) => [id, {
+    id,
+    value: "",
+    type: "",
+    textContent: "",
+    innerHTML: "",
+    checked: false,
+    style: {},
+    attributes: {},
+    setAttribute(name, value) { this.attributes[name] = value; }
+  }]));
+  const removedKeys = [];
+  const copiedKeys = [];
+  const document = { getElementById(id) { return elements[id]; } };
+  const localStorage = { removeItem(key) { removedKeys.push(key); } };
+  const navigator = { clipboard: { async writeText(value) { copiedKeys.push(value); } } };
+  const createHarness = new Function("document", "localStorage", "navigator", `
+    let API_KEY = "alk_active_secret";
+    let CURRENT_TENANT = "usr_t_active";
+    let SESSION_VERSION = 0;
+    ${text.slice(sourceStart, sourceEnd)}
+    return {
+      showUnlockedState,
+      toggleApiKeyVisibility,
+      copyApiKey,
+      logout,
+      state: () => ({ API_KEY, CURRENT_TENANT, SESSION_VERSION })
+    };
+  `);
+  const harness = createHarness(document, localStorage, navigator);
+
+  harness.showUnlockedState();
+  assert.equal(elements.sessionApiKey.value, "alk_active_secret");
+  assert.equal(elements.sessionApiKey.type, "password", "the key should start masked");
+  assert.equal(elements.unlocked.style.display, "block");
+
+  harness.toggleApiKeyVisibility();
+  assert.equal(elements.sessionApiKey.type, "text");
+  assert.equal(elements.toggleSessionApiKey.attributes["aria-pressed"], "true");
+  harness.toggleApiKeyVisibility();
+  assert.equal(elements.sessionApiKey.type, "password");
+
+  await harness.copyApiKey();
+  assert.deepEqual(copiedKeys, ["alk_active_secret"]);
+  assert.equal(elements.sessionStatus.textContent, "API key copied.");
+
+  elements.apiKey.value = "alk_active_secret";
+  elements.newKeyBody.innerHTML = "alk_other_secret";
+  elements.tenantsBody.innerHTML = "tenant data";
+  elements.keysBody.innerHTML = "key data";
+  harness.logout();
+
+  assert.deepEqual(removedKeys, ["alfred_api_key"]);
+  assert.deepEqual(harness.state(), { API_KEY: "", CURRENT_TENANT: "", SESSION_VERSION: 2 });
+  assert.equal(elements.sessionApiKey.value, "");
+  assert.equal(elements.apiKey.value, "");
+  assert.equal(elements.newKeyBody.innerHTML, "");
+  assert.doesNotMatch(elements.tenantsBody.innerHTML, /tenant data/);
+  assert.doesNotMatch(elements.keysBody.innerHTML, /key data/);
+  assert.equal(elements.unlocked.style.display, "none");
+  assert.equal(elements.locked.style.display, "block");
 });
 
 test("npm run build creates dist/index.html", () => {

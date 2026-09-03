@@ -14,6 +14,8 @@ if (!existsSync(path)) {
 const text = readFileSync(path, "utf8");
 const required = [
   "<title>", "setKey", "loadTenants", "issueKey", "loadKeys", "ALFRED_API_BASE",
+  "sessionApiKey", "toggleApiKeyVisibility", "copyApiKey", "logout",
+  'localStorage.removeItem("alfred_api_key")',
   "https://chatgpt.com/gpts/mine",
   "select Alfred Memory",
   "Never enter the API key"
