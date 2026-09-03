@@ -1,0 +1,70 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-please-main
+  cancel-in-progress: false
+
+jobs:
+  prepare-or-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      prs_created: ${{ steps.release.outputs.prs_created }}
+      pr: ${{ steps.release.outputs.pr }}
+    steps:
+      - name: Prepare release PR or publish merged release
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  validate-release-pr:
+    needs: prepare-or-release
+    if: ${{ needs.prepare-or-release.outputs.prs_created == 'true' }}
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Resolve generated release branch
+        id: release-pr
+        env:
+          RELEASE_PR: ${{ needs.prepare-or-release.outputs.pr }}
+        run: |
+          node -e '
+            const pr = JSON.parse(process.env.RELEASE_PR);
+            if (!pr.headBranchName?.startsWith("release-please--branches--main")) {
+              throw new Error("Unexpected Release Please branch");
+            }
+            process.stdout.write(`branch=${pr.headBranchName}\n`);
+          ' >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.release-pr.outputs.branch }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Validate generated release candidate
+        run: |
+          npm run validate:release-automation
+          npm run homebrew:test
+          npm run validate:homebrew
+
+  publish-homebrew-tap:
+    needs: prepare-or-release
+    if: ${{ needs.prepare-or-release.outputs.release_created == 'true' }}
+    uses: ./.github/workflows/release-homebrew-tap.yml
+    with:
+      tag: ${{ needs.prepare-or-release.outputs.tag_name }}
+    secrets: inherit

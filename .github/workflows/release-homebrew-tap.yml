@@ -9,6 +9,12 @@ on:
         description: "Existing stable Alfred tag to publish (vX.Y.Z)"
         required: true
         type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: "Stable Alfred tag created by the release workflow (vX.Y.Z)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -19,7 +25,7 @@ concurrency:
 
 jobs:
   publish:
-    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event.release.prerelease == false
     runs-on: macos-latest
     timeout-minutes: 15
     steps:

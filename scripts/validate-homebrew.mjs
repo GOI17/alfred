@@ -14,9 +14,11 @@ const installDocs = readFileSync(join(root, "site/docs/install.html"), "utf8");
 const installPolicy = readFileSync(join(root, ".ai/instructions/install-management.md"), "utf8");
 const specification = readFileSync(join(root, ".ai/execution/homebrew-installation.md"), "utf8");
 const setupCommand = readFileSync(join(root, "packages/memory-server/scripts/setup.mjs"), "utf8");
+const version = manifest.version;
+const escapedVersion = version.replaceAll(".", "\\.");
 
-assert.equal(manifest.version, "0.7.0");
-assert.match(installer, /^VERSION="0\.7\.0"$/m);
+assert.match(version, /^\d+\.\d+\.\d+$/);
+assert.match(installer, new RegExp(`^VERSION="${escapedVersion}" # x-release-please-version$`, "m"));
 for (const text of [installDocs, installPolicy, specification]) {
   const searchableText = text.replace(/<[^>]+>/g, "");
   assert.match(searchableText, /brew install GOI17\/tap\/alfred/);
@@ -29,7 +31,7 @@ const cli = spawnSync(
   { encoding: "utf8", cwd: root }
 );
 assert.equal(cli.status, 0, cli.stderr);
-assert.equal(cli.stdout.trim(), "alfred 0.7.0");
+assert.equal(cli.stdout.trim(), `alfred ${version}`);
 
 const preview = spawnSync(
   process.execPath,
@@ -38,7 +40,7 @@ const preview = spawnSync(
 );
 assert.equal(preview.status, 0, preview.stderr);
 assert.match(preview.stdout, /ALFRED SUITE INSTALL PREVIEW/);
-assert.match(preview.stdout, /Version:\s+0\.7\.0/);
+assert.match(preview.stdout, new RegExp(`Version:\\s+${escapedVersion}`));
 assert.match(preview.stdout, new RegExp(`Target path:\\s+${root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 assert.match(preview.stdout, /Provider calls: 0/);
 
@@ -47,7 +49,7 @@ try {
   const formulaPath = join(temporaryDirectory, "Formula", "alfred.rb");
   const formula = renderFormula({
     source: "git",
-    version: "0.7.0",
+    version,
     revision: "a".repeat(40)
   });
   writeFormulaAtomic(formulaPath, formula);
@@ -66,7 +68,7 @@ assert.match(setupCommand, /--no-clone/);
 
 process.stdout.write(`${JSON.stringify({
   status: "pass",
-  version: manifest.version,
+  version,
   formula_modes: ["git-revision", "archive-sha256"],
   commands: ["alfred"],
   provider_calls: 0

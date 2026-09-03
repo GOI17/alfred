@@ -1,0 +1,18 @@
+{
+  "trace_id": "issue-160-permission-check",
+  "timestamp": "2026-09-03T05:32:34Z",
+  "actor": "orchestrator",
+  "event": "permission_check",
+  "decision": "human-approval-required",
+  "target": "github-actions-create-pull-requests",
+  "reason": "The repository currently prevents GITHUB_TOKEN from creating pull requests. Enabling that repository-level capability broadens automation permissions and requires explicit human approval.",
+  "data": {
+    "issue": 160,
+    "current_default_workflow_permissions": "read",
+    "current_can_approve_pull_request_reviews": false,
+    "requested_default_workflow_permissions": "read",
+    "requested_can_approve_pull_request_reviews": true,
+    "workflow_self_approval": false,
+    "provider_calls": 0
+  }
+}

@@ -22,6 +22,20 @@ jobs:
             const body = pr.body || "";
             const branch = pr.head.ref;
 
+            const releasePleasePr =
+              pr.user.login === "github-actions[bot]" &&
+              branch.startsWith("release-please--branches--main");
+            if (releasePleasePr) {
+              core.notice("Trusted Release Please PR: linked-issue convention does not apply.");
+              return;
+            }
+
+            const conventionalTitle = /^(feat|fix|perf|refactor|build|ci|docs|test|chore|revert)(\([^)]+\))?!?: .+/;
+            if (!conventionalTitle.test(pr.title || "")) {
+              core.setFailed("PR title must use Conventional Commits, for example: feat(setup): explain existing tenants.");
+              return;
+            }
+
             const closingKeyword = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/i;
             const match = body.match(closingKeyword);
 

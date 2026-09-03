@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..", "..", "..");
 const schemaPath = resolve(root, "packages", "memory-openapi", "openapi.yaml");
 const schema = readFileSync(schemaPath, "utf8");
+const { version } = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
 
 test("ChatGPT uses the canonical hosted OpenAPI schema", () => {
   assert.match(schema, /url: https:\/\/alfred-labs-memory\.fly\.dev/);
@@ -32,7 +33,7 @@ test("ChatGPT setup documentation requires OAuth and no bridge", () => {
 });
 
 test("schema has no placeholder server and identifies the current contract", () => {
-  assert.match(schema, /version: 0\.7\.0/);
+  assert.match(schema, new RegExp(`version: ${version.replaceAll(".", "\\.")}`));
   assert.doesNotMatch(schema, /memory\.example\.com|alfred-memory\.example\.com/);
 });
 

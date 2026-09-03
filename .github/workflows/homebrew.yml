@@ -10,8 +10,14 @@ on:
       - "packages/memory-server/scripts/alfred.mjs"
       - "scripts/generate-homebrew-formula.mjs"
       - "scripts/generate-homebrew-formula.test.mjs"
+      - "scripts/homebrew-release-workflow.test.mjs"
       - "scripts/validate-homebrew.mjs"
+      - "scripts/validate-release-automation.mjs"
       - ".github/workflows/homebrew.yml"
+      - ".github/workflows/release-homebrew-tap.yml"
+      - ".github/workflows/release-please.yml"
+      - ".release-please-manifest.json"
+      - "release-please-config.json"
   pull_request:
     paths:
       - "install.sh"
@@ -20,8 +26,14 @@ on:
       - "packages/memory-server/scripts/alfred.mjs"
       - "scripts/generate-homebrew-formula.mjs"
       - "scripts/generate-homebrew-formula.test.mjs"
+      - "scripts/homebrew-release-workflow.test.mjs"
       - "scripts/validate-homebrew.mjs"
+      - "scripts/validate-release-automation.mjs"
       - ".github/workflows/homebrew.yml"
+      - ".github/workflows/release-homebrew-tap.yml"
+      - ".github/workflows/release-please.yml"
+      - ".release-please-manifest.json"
+      - "release-please-config.json"
 
 permissions:
   contents: read
@@ -37,12 +49,15 @@ jobs:
       - name: Test formula generator
         run: npm run homebrew:test
       - name: Validate Homebrew contract
-        run: npm run validate:homebrew
+        run: |
+          npm run validate:homebrew
+          npm run validate:release-automation
       - name: Style generated formula
         run: |
+          VERSION=$(node -p "require('./package.json').version")
           brew tap-new alfred/preflight
           node scripts/generate-homebrew-formula.mjs \
-            --version 0.7.0 \
+            --version "$VERSION" \
             --source git \
             --revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
             --output "$(brew --repository alfred/preflight)/Formula/alfred.rb"
