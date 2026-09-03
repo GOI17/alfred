@@ -101,6 +101,10 @@ export function discoverInstallEnvironment(options = {}) {
   const nodeMajor = majorMatch ? Number(majorMatch[1]) : null;
   const targetPath = path.resolve(options.targetPath || env.ALFRED_INSTALL_TARGET_PATH || path.join(homeDir, ".alfred", "installs", env.ALFRED_INSTALL_NAME || "default"));
   const modelsPath = path.join(homeDir, ".alfred", "models.json");
+  const workspaceConfigPath = path.join(cwd, ".alfred", "config.json");
+  const workspaceConfigExists = exists(workspaceConfigPath);
+  const environmentConfigured = typeof env.ALFRED_MEMORY_BASE_URL === "string" && env.ALFRED_MEMORY_BASE_URL.trim() !== "" &&
+    typeof env.ALFRED_MEMORY_API_KEY === "string" && env.ALFRED_MEMORY_API_KEY.trim() !== "";
   const models = detectMachineModels({
     env,
     homeDir,
@@ -131,6 +135,14 @@ export function discoverInstallEnvironment(options = {}) {
       proposed_config: proposed.config,
       validation: { status: validation.status, errors: validation.errors },
       existing_config: exists(modelsPath)
+    },
+    memory: {
+      workspace_config_exists: workspaceConfigExists,
+      environment_configured: environmentConfigured,
+      existing_connection: workspaceConfigExists || environmentConfigured,
+      source: workspaceConfigExists && environmentConfigured
+        ? "workspace-config+environment"
+        : workspaceConfigExists ? "workspace-config" : environmentConfigured ? "environment" : "none"
     },
     install: {
       alfred_home: path.join(homeDir, ".alfred"),

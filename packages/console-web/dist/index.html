@@ -77,8 +77,8 @@
   </style>
 <!-- /* __ALFRED_BUILD_INJECT__ */ -->
 <script>
-  window.ALFRED_API_BASE = "http://localhost:3000";
-  window.ALFRED_BUILD_VERSION = "2026-09-03";
+  window.ALFRED_API_BASE = "https://alfred-labs-memory.fly.dev";
+  window.ALFRED_BUILD_VERSION = "0.7.0";
 </script>
 </head>
 <body>
@@ -165,18 +165,19 @@
 
       <div class="step">
         <span class="step-num">1</span><strong>ChatGPT (Plus/Pro)</strong>
-        <div class="small" style="margin-top: 4px;">Connect Custom GPT Actions directly to Alfred through OAuth.</div>
+        <div class="small" style="margin-top: 4px;">Use the preconfigured Alfred GPT. Do not create or configure another GPT Action.</div>
         <details>
           <summary>Show steps</summary>
           <pre>
-1. In ChatGPT: My GPTs → Create → Configure → Actions → Import OpenAPI.
-2. Import: https://alfred-labs-memory.fly.dev/openapi.yaml
-3. Auth: OAuth
-   Authorization URL: https://alfred-labs-memory.fly.dev/oauth/authorize
-   Token URL: https://alfred-labs-memory.fly.dev/oauth/token
-   Scope: memory:read memory:write
-4. Save, choose "Sign in", and enter your alk_... key only on Alfred's page.
-5. Test: ask the GPT "list my last 5 memories"</pre>
+1. Open: https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred
+2. Ask Alfred to list your last 5 memories.
+3. Choose "Sign in" when ChatGPT offers it.
+4. Enter your alk_... key only on Alfred's consent page.
+5. Approve access and retry your request.
+
+Do not open the GPT editor or fill in Client ID or Client Secret. Those fields
+are already configured inside the published Alfred GPT. Your only credential
+is the alk_ key, and it is entered only on Alfred's consent page.</pre>
         </details>
       </div>
 

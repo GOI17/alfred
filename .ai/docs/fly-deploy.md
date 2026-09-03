@@ -125,6 +125,10 @@ To enable direct ChatGPT OAuth, first create the Custom GPT Action and copy
 the exact callback URLs it displays. Then set all OAuth values together;
 setting only some of them intentionally prevents startup:
 
+The Client ID is `alfred-chatgpt`. The Client Secret has no public/default
+value: use the same private value in the GPT editor and
+`ALFRED_OAUTH_CLIENT_SECRET`. If it was lost, rotate both sides together.
+
 ```sh
 flyctl secrets set \
   ALFRED_OAUTH_CLIENT_ID="alfred-chatgpt" \

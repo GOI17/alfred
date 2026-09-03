@@ -12,10 +12,22 @@ if (!existsSync(path)) {
   process.exit(1);
 }
 const text = readFileSync(path, "utf8");
-const required = ["<title>", "setKey", "loadTenants", "issueKey", "loadKeys", "ALFRED_API_BASE"];
+const required = [
+  "<title>", "setKey", "loadTenants", "issueKey", "loadKeys", "ALFRED_API_BASE",
+  "g-6a320e87e6908191a3f834b273221f99-alfred",
+  "Do not open the GPT editor or fill in Client ID or Client Secret",
+  "already configured inside the published Alfred GPT"
+];
 for (const r of required) {
   if (!text.includes(r)) {
     console.error("Missing in src/index.html: " + r);
+    process.exit(1);
+  }
+}
+
+for (const forbidden of ["Operator: configure a separate Custom GPT", "ALFRED_OAUTH_CLIENT_SECRET"]) {
+  if (text.includes(forbidden)) {
+    console.error("Operator-only OAuth configuration leaked into the tenant UI: " + forbidden);
     process.exit(1);
   }
 }

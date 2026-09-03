@@ -11,6 +11,7 @@ export const HARNESSES = [
   { value: "pi", label: "Pi" }
 ];
 export const MEMORY_SETUPS = [
+  { value: "existing-tenant", label: "Use existing tenant" },
   { value: "decide-later", label: "Decide later" },
   { value: "local-sqlite", label: "Local SQLite" },
   { value: "postgres", label: "Postgres" }
@@ -255,6 +256,14 @@ export function normalizeDiscovery(input, legacyHarnessStatus = {}) {
       },
       existing_config: value.models?.existing_config === true
     },
+    memory: {
+      workspace_config_exists: value.memory?.workspace_config_exists === true,
+      environment_configured: value.memory?.environment_configured === true,
+      existing_connection: value.memory?.existing_connection === true,
+      source: ["workspace-config", "environment", "workspace-config+environment", "none"].includes(value.memory?.source)
+        ? value.memory.source
+        : "none"
+    },
     install: {
       alfred_home: known(value.install?.alfred_home),
       selected_target: known(value.install?.selected_target),
@@ -322,7 +331,11 @@ export function recommend({ current = {}, harnessStatus = {}, discovery: discove
   const profileSeed = current.profileStrategy ?? current.profile;
   const memorySeed = current.memorySetup ?? current.memory;
   const profileStrategy = edition === "memory" ? "not-needed-for-memory-edition" : PROFILE_STRATEGIES.includes(profileSeed) ? profileSeed : "runtime-profiles";
-  const memorySetup = edition === "coding" ? "not-needed-for-coding-edition" : MEMORY_SETUPS.some((item) => item.value === memorySeed) ? memorySeed : "decide-later";
+  const memorySetup = edition === "coding"
+    ? "not-needed-for-coding-edition"
+    : MEMORY_SETUPS.some((item) => item.value === memorySeed)
+      ? memorySeed
+      : discovery.memory.existing_connection ? "existing-tenant" : "decide-later";
   const decisions = {
     edition,
     selectedHarnesses,
@@ -340,7 +353,11 @@ export function recommend({ current = {}, harnessStatus = {}, discovery: discove
     EDITIONS.some((item) => item.value === current.edition) ? "edition-current-value" : "edition-coding-default",
     explicitHarness ? "harness-explicit-selection" : selectedHarnesses.length ? "harness-installed-auto" : "harness-none-installed",
     edition === "memory" ? "profiles-not-needed" : profileSeed === "decide-later" ? "profiles-current-value" : "profiles-runtime-default",
-    edition === "coding" ? "memory-not-needed" : MEMORY_SETUPS.some((item) => item.value === memorySeed) ? "memory-current-value" : "memory-decide-later-default",
+    edition === "coding"
+      ? "memory-not-needed"
+      : MEMORY_SETUPS.some((item) => item.value === memorySeed)
+        ? "memory-current-value"
+        : discovery.memory.existing_connection ? "memory-existing-detected" : "memory-decide-later-default",
     "execution-preview-default"
   ];
   return freezeRecommendation({
@@ -931,6 +948,7 @@ function bodyEntries(state) {
       { text: `OS: ${discovery.os.platform} ${discovery.os.release} · ${discovery.os.architecture}`, tone: "safe" },
       { text: `Node: ${discovery.node.version} · ${discovery.node.status} (requires ${discovery.node.required_major}+)`, tone: discovery.node.status === "ok" ? "safe" : "blocker" },
       { text: `Harnesses: ${harnesses.length ? harnesses.join(", ") : "none detected"}`, tone: harnesses.length ? "safe" : "normal" },
+      { text: `Memory connection: ${discovery.memory.existing_connection ? `detected via ${discovery.memory.source}` : "not detected"}`, tone: discovery.memory.existing_connection ? "safe" : "normal" },
       { text: `Existing install: ${discovery.install.target_exists ? "found" : "not found"} at ${displayPath(discovery.install.selected_target)}`, tone: discovery.install.target_exists ? "safe" : "normal" },
       { text: `Git: ${discovery.git.repository_state} · ${discovery.git.linked_worktree_state} · ${displayPath(discovery.git.workspace_root)}`, tone: discovery.git.repository_state === "repository" ? "safe" : "normal" },
       { text: `Project root: ${displayPath(discovery.git.project_root)}`, tone: discovery.git.repository_state === "repository" ? "safe" : "normal" },
@@ -1022,54 +1040,61 @@ function bodyEntries(state) {
   return entries;
 }
 
-const REASON_TEXT = {
-  "edition-current-value": "Kept the valid current edition.",
-  "edition-coding-default": "Coding is the safe suite default.",
-  "harness-explicit-selection": "Kept explicit harness choices.",
-  "harness-installed-auto": "Selected locally detected harnesses.",
-  "harness-none-installed": "No installed harness was selected.",
-  "profiles-not-needed": "Memory edition needs no runtime profiles.",
-  "profiles-current-value": "Kept the current profile choice.",
-  "profiles-runtime-default": "Coding/full recommend runtime profiles.",
-  "memory-not-needed": "Coding edition needs no Memory setup.",
-  "memory-current-value": "Kept the current Memory setup.",
-  "memory-decide-later-default": "Memory/full can decide storage later.",
-  "models-keep-existing": "Existing model configuration is kept by default.",
-  "models-smart-defaults": "Smart defaults use only locally detected suggestions.",
-  "models-configure-later": "No validated model suggestion was detected.",
-  "execution-preview-default": "Preview only prevents implicit writes."
-};
+function memoryConnectionSource(source) {
+  if (source === "workspace-config") return "the workspace .alfred/config.json";
+  if (source === "environment") return "ALFRED_MEMORY_BASE_URL and ALFRED_MEMORY_API_KEY";
+  if (source === "workspace-config+environment") return "the workspace config and Memory environment variables";
+  return "no local signal";
+}
 
-export function rationaleLines(state) {
-  const recommendation = state.recommendation.decisions;
+export function configurationExplanationLines(state) {
   const current = effective(state.decisions);
-  const lines = ["Why this recommendation"];
-  const fields = [
-    ["edition", "Edition", LABELS.editions],
-    ["selectedHarnesses", "Harnesses", null],
-    ...(profilesApplicable(current) ? [["profileStrategy", "Profiles", LABELS.profiles]] : []),
-    ...(memoryApplicable(current) ? [["memorySetup", "Memory", LABELS.memory]] : []),
-    ...(modelsApplicable(current) ? [["modelStrategy", "Models", LABELS.models]] : []),
-    ["name", "Install name", null],
-    ["targetPath", "Target path", null],
-    ...(["Review", "Apply"].includes(state.phase) && modelsApplicable(current) && ["smart-defaults", "custom-models"].includes(current.modelStrategy) ? [["modelWriteApproved", "Model write approval", { true: "Approved", false: "Not approved" }]] : []),
-    ["applyIntent", "Execution", LABELS.intents]
+  const editionEffects = {
+    coding: "installs agent operations, skills, adapters, and evals; Memory is not included.",
+    memory: "installs Memory API, server, console, and external-agent adapters; coding operations and Runtime Profiles are not included.",
+    full: "installs both coding operations and Memory components."
+  };
+  const harnesses = current.selectedHarnesses.map((id) => HARNESSES.find((item) => item.value === id)?.label || id);
+  const lines = [
+    "What this configuration changes",
+    `Edition — ${LABELS.editions[current.edition]}: ${editionEffects[current.edition]}`,
+    harnesses.length
+      ? `Harnesses — ${harnesses.join(", ")}: generates reviewable adapter previews; live harness configuration is not written.`
+      : "Harnesses — None: no harness-specific previews are generated; existing harness configuration stays untouched."
   ];
-  const reasonIndexes = { edition: 0, selectedHarnesses: 1, profileStrategy: 2, memorySetup: 3, applyIntent: 4 };
-  for (const [key, label, labels] of fields) {
-    const normalize = key === "selectedHarnesses" ? (value) => [...value].sort() : (value) => value;
-    const currentValue = key === "targetPath" ? effectiveTargetPath(current) : current[key];
-    const recommendedValue = key === "targetPath" ? effectiveTargetPath(recommendation) : recommendation[key];
-    const changed = JSON.stringify(normalize(currentValue)) !== JSON.stringify(normalize(recommendedValue));
-    const display = key === "selectedHarnesses"
-      ? (currentValue.length ? currentValue.map((id) => HARNESSES.find((item) => item.value === id)?.label || id).join(", ") : "none")
-      : (labels?.[currentValue] ?? currentValue);
-    lines.push(changed
-      ? `${label}: ${display}. Changed from recommendation; your selection is respected.`
-      : `${label}: ${display}. ${REASON_TEXT[state.recommendation.reasons[reasonIndexes[key]]] || "Matches recommendation."}`);
+  if (profilesApplicable(current)) {
+    lines.push(current.profileStrategy === "runtime-profiles"
+      ? "Runtime Profiles — enabled: initializes shared profiles/ and private profiles.local/ under ~/.alfred/runtime-profiles. Activation or symlink changes happen later through a separate preview and approval."
+      : "Runtime Profiles — skipped: does not include or initialize the profile switching layer. Each harness keeps its current configuration and future changes are manual.");
   }
+  if (memoryApplicable(current)) {
+    if (current.memorySetup === "existing-tenant") {
+      lines.push(state.discovery.memory.existing_connection
+        ? `Memory — existing tenant: reuses the connection signaled by ${memoryConnectionSource(state.discovery.memory.source)} and does not create another tenant.`
+        : "Memory — existing tenant: does not create another tenant. No local connection was detected, so provide ALFRED_MEMORY_BASE_URL and ALFRED_MEMORY_API_KEY after setup.");
+    } else if (current.memorySetup === "local-sqlite") {
+      lines.push("Memory — Local SQLite: installs Memory components for a single-machine coding tenant. Suite setup does not create it; run alfred init --profile=coding afterward.");
+    } else if (current.memorySetup === "postgres") {
+      lines.push("Memory — Postgres: installs Memory components for web, human, or multi-machine use. Suite setup does not create a tenant; connect the existing one or run alfred init with its Postgres URL afterward.");
+    } else {
+      lines.push("Memory — Decide later: installs the selected suite components without creating or connecting a tenant.");
+    }
+  }
+  lines.push(
+    `Install name — ${current.name}: labels this local suite installation and its traces; it is not a tenant name.`,
+    `Target path — ${effectiveTargetPath(current)}: stores the versioned suite and generated previews there; the current project remains unchanged until separately approved.`,
+    current.applyIntent === "apply-safe-steps"
+      ? "Execution — Apply safe steps: after final confirmation, installs the suite and generates previews; live harness files still require a separate approval."
+      : "Execution — Preview only: shows the complete plan and writes no files."
+  );
   lines.push("Provider calls: 0");
   return lines.map(sanitizeTerminalText);
+}
+
+// Backward-compatible export for adapter integrations. User-facing surfaces
+// render configuration consequences, not recommendation rationale.
+export function rationaleLines(state) {
+  return configurationExplanationLines(state);
 }
 
 export function stripAnsi(text) { return sanitizeControls(text, { preserveNewlines: true }); }
@@ -1390,7 +1415,7 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
   const title = sanitizeTerminalText(wide ? `Alfred installer | ${PHASES.map((phase) => phase === state.phase ? `[${phase}]` : phase).join(" > ")}` : `Alfred installer | ${phaseIndex + 1}/${PHASES.length} ${state.phase}`);
   let entries;
   let pageLabel = "";
-  if (state.overlay?.type === "why") entries = rationaleLines(state).map((text) => ({ text }));
+  if (state.overlay?.type === "why") entries = configurationExplanationLines(state).map((text) => ({ text }));
   else if (state.overlay?.type === "preview") {
     const all = previewModel(state.decisions, state.discovery).lines;
     const pageSize = previewPageSize({ columns: width, rows: height });
@@ -1412,7 +1437,7 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
     `Preview: ${previewModel(state.decisions, state.discovery).concise}`,
     state.overlay?.type === "model-editor"
       ? (state.editing ? "Keys: ←→ cursor;Enter commit;Esc cancel;Backspace/Delete edit" : "Keys: ↑↓ move;Enter edit/action;Esc close;p Preview;q quit")
-      : state.overlay ? "Keys: Esc close;arrows page;p Preview;w Why;q cancel"
+      : state.overlay ? "Keys: Esc close;arrows page;p Preview;w Explain;q cancel"
         : focusedControl === "models-edit" ? "Keys: ↑↓ move;Enter edit models;b back;p full Preview;q quit"
           : "Keys: ↑↓ move;←→ edit;Space toggle;Enter select;b back;p full Preview;q quit"
   ];
@@ -1423,13 +1448,13 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
     const gap = 1;
     const leftWidth = Math.floor((width - gap) * 0.58);
     const rightWidth = width - gap - leftWidth;
-    const reasons = rationaleLines(state).map((text) => ({ text, tone: text.includes("Changed from recommendation") ? "changed" : "normal" }));
+    const reasons = configurationExplanationLines(state).map((text) => ({ text }));
     const minimumContentHeight = layout === "inline" ? 1 : MIN_PANEL_CONTENT_HEIGHT;
     const leftContentHeight = Math.min(availableContentHeight, Math.max(minimumContentHeight, entriesHeight(entries, leftWidth - 2)));
     const rightContentHeight = Math.min(availableContentHeight, Math.max(minimumContentHeight, entriesHeight(reasons, rightWidth - 2)));
     const panelHeight = Math.max(leftContentHeight, rightContentHeight) + 2;
     const left = panel(state.phase, entries, leftWidth, leftContentHeight, { color, yOffset: 1 });
-    const right = panel("Rationale", reasons, rightWidth, rightContentHeight, { color, xOffset: leftWidth + gap, yOffset: 1 });
+    const right = panel("What this configuration changes", reasons, rightWidth, rightContentHeight, { color, xOffset: leftWidth + gap, yOffset: 1 });
     for (let index = 0; index < panelHeight; index += 1) {
       const leftLine = left.lines[index] || "";
       const rightLine = right.lines[index] || "";
@@ -1439,7 +1464,7 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
   } else {
     const minimumContentHeight = layout === "inline" ? 1 : MIN_PANEL_CONTENT_HEIGHT;
     const contentHeight = Math.min(availableContentHeight, Math.max(minimumContentHeight, entriesHeight(entries, width - 2)));
-    const single = panel(state.overlay?.type === "why" ? "Rationale" : state.overlay?.type === "preview" ? "Preview" : state.overlay?.type === "model-plan-review" ? "Exact models.json" : state.overlay?.type === "model-editor" ? "Manual model editor" : state.phase, entries, width, contentHeight, { color, yOffset: 1 });
+    const single = panel(state.overlay?.type === "why" ? "What this configuration changes" : state.overlay?.type === "preview" ? "Preview" : state.overlay?.type === "model-plan-review" ? "Exact models.json" : state.overlay?.type === "model-editor" ? "Manual model editor" : state.phase, entries, width, contentHeight, { color, yOffset: 1 });
     lines.push(...single.lines);
     hitRegions.push(...single.hitRegions);
   }

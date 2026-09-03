@@ -52,13 +52,10 @@ const adapters = [
     description: "Direct OAuth connection from ChatGPT Actions to Alfred Memory",
     relDir: "packages/chatgpt-adapter",
     commands: [
-      "In ChatGPT: My GPTs → Create → Configure → Actions → Import OpenAPI schema.",
-      "Import https://alfred-labs-memory.fly.dev/openapi.yaml.",
-      "Authentication: OAuth.",
-      "Authorization URL: https://alfred-labs-memory.fly.dev/oauth/authorize",
-      "Token URL: https://alfred-labs-memory.fly.dev/oauth/token",
-      "Scopes: memory:read memory:write.",
-      "After saving, choose Sign in and enter alk_... only on Alfred's consent page."
+      "Tenant user: open https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred.",
+      "Ask for your memories, choose Sign in, and enter alk_... only on Alfred's consent page.",
+      "Do not open the GPT editor or fill in Client ID or Client Secret; the published GPT is already configured.",
+      "Operator-only deployment details: packages/chatgpt-adapter/README.md."
     ]
   },
   {

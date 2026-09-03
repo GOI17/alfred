@@ -77,14 +77,15 @@
   </style>
 <!-- /* __ALFRED_BUILD_INJECT__ */ -->
 <script>
-  window.ALFRED_API_BASE = "http://localhost:3000";
-  window.ALFRED_BUILD_VERSION = "2026-07-02";
+  window.ALFRED_API_BASE = "https://alfred-labs-memory.fly.dev";
+  window.ALFRED_BUILD_VERSION = "0.7.0";
 </script>
 </head>
 <body>
 
 <div class="topbar">
   <div class="brand">Alfred <span class="dot">·</span> Memory Console</div>
+  <span id="apiStatus" class="small" role="status" aria-live="polite">locked</span>
 </div>
 
 <div class="container">
@@ -96,8 +97,9 @@
     <div id="signupBlock">
       <p class="hint"><strong>No terminal? No problem.</strong> Create a free tenant in 10 seconds.</p>
       <div class="row" style="margin-bottom: 8px;">
-        <input id="signupName" placeholder="display name (e.g. my-mem)" style="flex: 1; background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace;" />
+        <input id="signupName" maxlength="64" pattern="[A-Za-z0-9 _-]{1,64}" aria-describedby="signupNameHelp" placeholder="display name (e.g. my-mem)" style="flex: 1; background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace;" />
       </div>
+      <p class="small" id="signupNameHelp" style="margin: -4px 0 8px;">Use 1–64 letters, numbers, spaces, hyphens, or underscores.</p>
       <div class="row" style="margin-bottom: 8px;">
         <input id="signupEmail" type="email" placeholder="email (optional, for key recovery)" style="flex: 1; background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace;" />
       </div>
@@ -118,7 +120,7 @@
         <input id="apiKey" type="password" placeholder="alk_..." style="background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace; width: 100%;" />
         <button onclick="setKey()" style="margin-top: 8px;">Unlock</button>
       </div>
-      <p class="small" style="margin-top: 8px;">Paste an API key issued by your Alfred Memory server.</p>
+      <p class="small" style="margin-top: 8px;">Paste an API key from <code>alfred init</code> or <code>alfred keys issue</code>.</p>
     </details>
 
     <details style="margin-top: 16px;">
@@ -163,18 +165,19 @@
 
       <div class="step">
         <span class="step-num">1</span><strong>ChatGPT (Plus/Pro)</strong>
-        <div class="small" style="margin-top: 4px;">Connect Custom GPT Actions directly to Alfred through OAuth.</div>
+        <div class="small" style="margin-top: 4px;">Use the preconfigured Alfred GPT. Do not create or configure another GPT Action.</div>
         <details>
           <summary>Show steps</summary>
           <pre>
-1. In ChatGPT: My GPTs → Create → Configure → Actions → Import OpenAPI.
-2. Import: https://alfred-labs-memory.fly.dev/openapi.yaml
-3. Auth: OAuth
-   Authorization URL: https://alfred-labs-memory.fly.dev/oauth/authorize
-   Token URL: https://alfred-labs-memory.fly.dev/oauth/token
-   Scope: memory:read memory:write
-4. Save, choose "Sign in", and enter your alk_... key only on Alfred's page.
-5. Test: ask the GPT "list my last 5 memories"</pre>
+1. Open: https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred
+2. Ask Alfred to list your last 5 memories.
+3. Choose "Sign in" when ChatGPT offers it.
+4. Enter your alk_... key only on Alfred's consent page.
+5. Approve access and retry your request.
+
+Do not open the GPT editor or fill in Client ID or Client Secret. Those fields
+are already configured inside the published Alfred GPT. Your only credential
+is the alk_ key, and it is entered only on Alfred's consent page.</pre>
         </details>
       </div>
 
@@ -222,10 +225,10 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
           <summary>Show steps</summary>
           <pre>
 1. cd into your project directory.
-2. Use the guided installer to create or select a Memory tenant.
+2. Run: alfred init --profile=coding --name=&lt;project-name&gt;
 3. This writes .alfred/config.json in cwd with your API key.
 4. The agent reads it on every session start.
-5. Run the Alfred Memory server for that tenant.</pre>
+5. Run the server: alfred serve</pre>
         </details>
       </div>
     </div>
@@ -242,6 +245,23 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
 <script>
 let API_KEY = "";
 let CURRENT_TENANT = "";
+const TENANT_NAME_RE = /^[A-Za-z0-9 _-]{1,64}$/;
+
+function validateTenantName(name) {
+  if (!name) return "Pick a display name first.";
+  if (!TENANT_NAME_RE.test(name)) {
+    return "Use 1–64 letters, numbers, spaces, hyphens, or underscores. Apostrophes and other symbols are not supported.";
+  }
+  return null;
+}
+
+function tenantSchema(tenant) {
+  let metadata = tenant && tenant.metadata;
+  if (typeof metadata === "string") {
+    try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
+  }
+  return metadata && typeof metadata.schema === "string" ? metadata.schema : "ready";
+}
 
 function renderTurnstile() {
   // If the server build injected a site key, render the Turnstile widget.
@@ -267,8 +287,10 @@ async function signup() {
   const name = document.getElementById("signupName").value.trim();
   const kindRadio = document.querySelector('input[name="signupKind"]:checked');
   const kind = kindRadio ? kindRadio.value : "human_agent";
-  if (!name) { showErrorInline("signupHint", "Pick a display name first."); return; }
+  const nameError = validateTenantName(name);
+  if (nameError) { showErrorInline("signupHint", nameError); return; }
   const hint = document.getElementById("signupHint");
+  hint.style.color = "";
   hint.textContent = "Creating tenant…";
   try {
     const token = window.alfredTurnstileToken || null;
@@ -279,6 +301,12 @@ async function signup() {
       headers,
       body: JSON.stringify({ display_name: name, kind, turnstile_token: token, email: emailValue })
     });
+    if (!res || typeof res.api_key !== "string" || !res.tenant || typeof res.tenant.id !== "string") {
+      throw new ApiError("Alfred created an incomplete response. No credentials were stored; please retry.", {
+        status: 502,
+        code: "invalid_response"
+      });
+    }
     API_KEY = res.api_key;
     document.getElementById("apiStatus").textContent = "✓ unlocked";
     document.getElementById("locked").style.display = "none";
@@ -289,11 +317,14 @@ async function signup() {
       '<div class="panel" style="background: #1a2a1a; border-color: var(--good);">' +
       '<strong class="ok">Welcome! Your new API key for tenant ' + res.tenant.id + '</strong><br>' +
       '<div class="key-display">' + res.api_key + '</div>' +
-      '<div class="small">Copy this key now. It will not be shown again. Schema: <code>' + (res.tenant.db_connection || "").split("search_path=")[1] + '</code></div>' +
+      '<div class="small">Copy this key now. It will not be shown again. Schema: <code>' + tenantSchema(res.tenant) + '</code></div>' +
       '</div>';
-    loadAll();
+    hint.textContent = "Memory created successfully. Copy your API key now.";
+    hint.style.color = "var(--good)";
+    await loadAll();
   } catch (err) {
-    hint.innerHTML = '<span style="color: var(--bad);">' + err.message + '</span>';
+    hint.textContent = err && err.message ? err.message : "Alfred could not create the tenant. Please try again.";
+    hint.style.color = "var(--bad)";
   }
 }
 
@@ -301,22 +332,26 @@ async function requestRecovery() {
   const emailEl = document.getElementById("recoverEmail");
   const hint = document.getElementById("recoverHint");
   const email = emailEl.value.trim();
-  if (!email) { hint.innerHTML = '<span style="color: var(--bad);">Enter the email you used at signup.</span>'; return; }
+  if (!email) { showErrorInline("recoverHint", "Enter the email you used at signup."); return; }
+  hint.style.color = "";
   hint.textContent = "Sending recovery link…";
   try {
+    const continueTo = new URL(window.location.href).searchParams.get("continue_to");
     await api("/console/api/recover", {
       method: "POST",
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ email, continue_to: continueTo || undefined })
     });
-    hint.innerHTML = '<span class="ok">If the email is registered, a recovery link has been sent. Check your inbox.</span>';
+    hint.textContent = "If the email is registered, a recovery link has been sent. Check your inbox.";
+    hint.style.color = "var(--good)";
   } catch (err) {
-    hint.innerHTML = '<span style="color: var(--bad);">' + err.message + '</span>';
+    showErrorInline("recoverHint", err && err.message ? err.message : "Alfred could not send the recovery link.");
   }
 }
 
 function showErrorInline(elementId, message) {
   const el = document.getElementById(elementId);
-  el.innerHTML = '<span style="color: var(--bad);">' + message + '</span>';
+  el.textContent = message || "Alfred could not complete the request.";
+  el.style.color = "var(--bad)";
 }
 
 function setKey() {
@@ -360,13 +395,36 @@ async function api(path, options = {}) {
   if (options.body) headers["content-type"] = "application/json";
   const url = apiBase(path);
   const res = await fetch(url, { ...options, headers: { ...headers, ...(options.headers || {}) } });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(res.status + " " + res.statusText + ": " + text);
+  const text = await res.text();
+  let payload = null;
+  if (text) {
+    try { payload = JSON.parse(text); } catch { payload = null; }
   }
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return res.json();
-  return res.text();
+  if (!res.ok) {
+    const details = Array.isArray(payload && payload.error && payload.error.details)
+      ? payload.error.details.map(function (detail) { return detail.message; }).filter(Boolean)
+      : [];
+    const message = details.join(" ") ||
+      (payload && payload.error && payload.error.message) ||
+      (text && text.trim()) ||
+      ("Request failed with HTTP " + res.status + ".");
+    throw new ApiError(message, {
+      status: res.status,
+      code: payload && payload.error ? payload.error.code : "http_error",
+      details
+    });
+  }
+  return payload !== null ? payload : text;
+}
+
+class ApiError extends Error {
+  constructor(message, { status = 0, code = "unknown_error", details = [] } = {}) {
+    super(message || "Alfred could not complete the request.");
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
 }
 
 function pill(kind) {
@@ -385,7 +443,7 @@ async function loadTenants() {
   const sel = document.getElementById("keyTenant");
   sel.innerHTML = "";
   if (tenants.length === 0) {
-    document.getElementById("tenantsBody").innerHTML = '<div class="empty">No tenants yet. Use the guided installer or Memory console bootstrap to create one.</div>';
+    document.getElementById("tenantsBody").innerHTML = '<div class="empty">No tenants yet. Run <code>alfred init</code> in a terminal to create one.</div>';
     return;
   }
   let rows = "";
@@ -395,11 +453,11 @@ async function loadTenants() {
       "<td>" + (t.display_name || "—") + "</td>" +
       "<td>" + pill(t.kind) + "</td>" +
       "<td>" + t.storage_backend + "</td>" +
-      "<td class='small'>" + (t.db_path || t.db_connection || "—") + "</td>" +
-      "<td class='small'>" + t.created_at.slice(0, 10) + "</td>" +
+      "<td class='small'>" + tenantSchema(t) + "</td>" +
+      "<td class='small'>" + (t.created_at || "").slice(0, 10) + "</td>" +
       "</tr>";
   }
-  document.getElementById("tenantsBody").innerHTML = '<table><thead><tr><th>ID</th><th>Name</th><th>Kind</th><th>Backend</th><th>DB</th><th>Created</th></tr></thead><tbody>' + rows + "</tbody></table>";
+  document.getElementById("tenantsBody").innerHTML = '<table><thead><tr><th>ID</th><th>Name</th><th>Kind</th><th>Backend</th><th>Schema</th><th>Created</th></tr></thead><tbody>' + rows + "</tbody></table>";
   for (const t of tenants) {
     const opt = document.createElement("option");
     opt.value = t.id; opt.textContent = (t.display_name || t.id) + "  [" + t.kind + "]";
@@ -446,7 +504,7 @@ async function issueKey() {
       '<div class="panel" style="background: #1a2a1a; border-color: var(--good);">' +
       '<strong class="ok">New API key for tenant ' + tenantId + '</strong><br>' +
       '<div class="key-display">' + res.api_key + '</div>' +
-      '<div class="small">Copy this key now. It will not be shown again. The key is <code>' + res.key_prefix + '...</code></div>' +
+      '<div class="small">Copy this key now. It will not be shown again. The key is <code>' + res.key.key_prefix + '...</code></div>' +
       '</div>';
     loadKeys();
   } catch (err) { showError(err); }
@@ -463,7 +521,7 @@ async function revokeKey(keyId) {
 function showError(err) {
   const el = document.createElement("div");
   el.className = "error";
-  el.textContent = err.message;
+  el.textContent = err && err.message ? err.message : "Alfred could not complete the request.";
   document.querySelector(".container").prepend(el);
   setTimeout(() => el.remove(), 8000);
 }

@@ -7,6 +7,7 @@ const home = "/fixture/home";
 const cwd = "/fixture/worktree";
 const existing = new Set([
   "/tmp/ollama.sock",
+  path.join(cwd, ".alfred", "config.json"),
   path.join(home, ".alfred", "models.json"),
   path.join(home, ".alfred", "installs", "team")
 ]);
@@ -21,7 +22,9 @@ const report = discoverInstallEnvironment({
     PATH: "/fixture/bin",
     OPENAI_API_KEY: secret,
     ANTHROPIC_API_KEY: "another-secret",
-    OLLAMA_HOST: "http://secret-host:11434"
+    OLLAMA_HOST: "http://secret-host:11434",
+    ALFRED_MEMORY_BASE_URL: "https://private-memory.example",
+    ALFRED_MEMORY_API_KEY: "alk_private-memory-secret"
   },
   homeDir: home,
   cwd,
@@ -43,6 +46,12 @@ assert.equal(report.harnesses.opencode, "installed");
 assert.equal(report.harnesses["codex-cli"], "installed");
 assert.equal(report.install.target_exists, true);
 assert.equal(report.install.models_config_exists, true);
+assert.deepEqual(report.memory, {
+  workspace_config_exists: true,
+  environment_configured: true,
+  existing_connection: true,
+  source: "workspace-config+environment"
+});
 assert.equal(report.git.repository_state, "repository");
 assert.equal(report.git.linked_worktree_state, "linked-worktree");
 assert.equal(report.git.workspace_root, cwd);
@@ -64,7 +73,7 @@ assert.deepEqual(report.models.proposed_config.fallbacks, [
 ]);
 const serialized = JSON.stringify(report);
 assert.doesNotMatch(serialized, new RegExp(secret));
-assert.doesNotMatch(serialized, /another-secret|secret-host/);
+assert.doesNotMatch(serialized, /another-secret|secret-host|private-memory|alk_private/);
 
 const oldNode = discoverInstallEnvironment({
   env: {}, homeDir: home, cwd, nodeVersion: "v20.9.0",
@@ -74,6 +83,8 @@ const oldNode = discoverInstallEnvironment({
 assert.equal(oldNode.node.status, "too-old");
 assert.equal(oldNode.git.availability, "not-installed");
 assert.equal(oldNode.git.linked_worktree_state, "not-applicable");
+assert.equal(oldNode.memory.existing_connection, false);
+assert.equal(oldNode.memory.source, "none");
 assert.deepEqual(oldNode.models.suggestions, []);
 assert.deepEqual(oldNode.models.proposed_config, { fallbacks: [] });
 assert.equal(oldNode.provider_calls, 0);

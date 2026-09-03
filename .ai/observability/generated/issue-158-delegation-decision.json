@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-158-delegation-decision",
+  "timestamp": "2026-09-03T03:52:51Z",
+  "actor": "orchestrator",
+  "event": "delegation_decision",
+  "decision": "execute-directly",
+  "target": "issue-158-setup-onboarding",
+  "reason": "The installer, onboarding copy, and regression coverage form one bounded setup flow whose consistency benefits from direct execution.",
+  "data": {
+    "issue": 158,
+    "branch": "issue-158-setup-onboarding",
+    "provider_calls": 0
+  }
+}

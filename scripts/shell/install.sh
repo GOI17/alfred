@@ -280,9 +280,11 @@ EOF
 case "$PROFILE" in
   web)
     cat <<EOF2
-  - For ChatGPT: my GPTs > Create > Actions > Import
-    https://alfred-labs-memory.fly.dev/openapi.yaml
-    Auth: OAuth; then Sign in and enter \$API_KEY only on Alfred's page
+  - For ChatGPT: open the preconfigured Alfred GPT:
+    https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred
+    Choose Sign in and enter \$API_KEY only on Alfred's page.
+    Do not open the GPT editor or fill in Client ID or Client Secret;
+    those fields are already configured inside the published Alfred GPT.
   - For Claude Desktop: edit claude_desktop_config.json and add:
     {"mcpServers": {"alfred-memory": {"command": "node", "args": ["$TARGET_PATH/packages/anthropic-adapter/bin/alfred-mcp.mjs"], "env": {"ALFRED_MEMORY_API_KEY": "\$API_KEY"}}}}
   - For Gemini / AI Studio: Tools > Extensions > Import
