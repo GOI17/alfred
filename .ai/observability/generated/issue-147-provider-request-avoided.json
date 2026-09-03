@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-147-provider-request-avoided",
+  "timestamp": "2026-09-03T01:00:57Z",
+  "actor": "orchestrator",
+  "event": "provider_request_avoided",
+  "decision": "local-only",
+  "target": "issue-147-alfredlabs-email",
+  "reason": "Repository inspection, SMTP configuration, documentation, tests, and validation are deterministic local operations.",
+  "data": {
+    "issue": 147,
+    "branch": "issue-147-alfredlabs-email",
+    "provider_calls": 0
+  }
+}

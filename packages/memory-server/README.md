@@ -107,11 +107,11 @@ Test counts:
 | `ALFRED_OAUTH_CLIENT_ID` | none | yes when OAuth is enabled |
 | `ALFRED_OAUTH_CLIENT_SECRET` | none | yes when OAuth is enabled; 32+ characters |
 | `ALFRED_OAUTH_REDIRECT_URIS` | none | yes when OAuth is enabled; comma-separated exact URLs |
-| `ALFRED_SMTP_HOST` | none | yes for email verification and key recovery |
-| `ALFRED_SMTP_PORT` | `587` | yes for production email |
-| `ALFRED_SMTP_USER` | none | yes for authenticated SMTP |
-| `ALFRED_SMTP_PASSWORD` | none | yes for authenticated SMTP; use an App Password with Gmail |
-| `ALFRED_SMTP_FROM` | `noreply@alfred.local` | yes for production email |
+| `ALFRED_SMTP_HOST` | none | yes for email verification and key recovery; AlfredLabs production uses `smtp.resend.com` |
+| `ALFRED_SMTP_PORT` | `587` | yes for production email; AlfredLabs production uses implicit TLS on `465` |
+| `ALFRED_SMTP_USER` | none | yes for authenticated SMTP; AlfredLabs production uses `resend` |
+| `ALFRED_SMTP_PASSWORD` | none | yes for authenticated SMTP; AlfredLabs production uses a Resend sending-only key restricted to `alfredlabs.org` |
+| `ALFRED_SMTP_FROM` | `noreply@alfred.local` | yes for production email; AlfredLabs production uses `Alfred Memory <recovery@alfredlabs.org>` |
 
 OAuth remains disabled when all three `ALFRED_OAUTH_*` settings are absent.
 Supplying only part of the OAuth configuration fails startup rather than
@@ -122,6 +122,10 @@ transport is not configured or cannot authenticate, the endpoint returns
 `503 recovery_unavailable` for every address. Once SMTP is ready, registered
 and unregistered addresses share the same generic response to prevent account
 enumeration.
+
+The production sender migration and approval-gated DNS/secret procedure are
+documented in `.ai/docs/fly-deploy.md`. Secret values must not be committed,
+printed, or copied into issue/PR text.
 
 ## Web console
 

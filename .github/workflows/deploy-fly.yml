@@ -6,11 +6,7 @@ name: deploy-fly
 #   ALFRED_OAUTH_CLIENT_ID
 #   ALFRED_OAUTH_CLIENT_SECRET
 #   ALFRED_OAUTH_REDIRECT_URIS
-#   ALFRED_SMTP_HOST
-#   ALFRED_SMTP_PORT
-#   ALFRED_SMTP_USER
-#   ALFRED_SMTP_PASSWORD
-#   ALFRED_SMTP_FROM
+#   ALFRED_RESEND_SMTP_PASSWORD — Resend sending-only key restricted to alfredlabs.org
 #
 # This workflow is opt-in. To enable it, push a commit that touches
 # packages/memory-server/** or this file. To pause deploys, add `[skip deploy]`
@@ -81,17 +77,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Stage OAuth and SMTP secrets
+      - name: Stage OAuth and Resend SMTP configuration
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           ALFRED_OAUTH_CLIENT_ID: ${{ secrets.ALFRED_OAUTH_CLIENT_ID }}
           ALFRED_OAUTH_CLIENT_SECRET: ${{ secrets.ALFRED_OAUTH_CLIENT_SECRET }}
           ALFRED_OAUTH_REDIRECT_URIS: ${{ secrets.ALFRED_OAUTH_REDIRECT_URIS }}
-          ALFRED_SMTP_HOST: ${{ secrets.ALFRED_SMTP_HOST }}
-          ALFRED_SMTP_PORT: ${{ secrets.ALFRED_SMTP_PORT }}
-          ALFRED_SMTP_USER: ${{ secrets.ALFRED_SMTP_USER }}
-          ALFRED_SMTP_PASSWORD: ${{ secrets.ALFRED_SMTP_PASSWORD }}
-          ALFRED_SMTP_FROM: ${{ secrets.ALFRED_SMTP_FROM }}
+          ALFRED_RESEND_SMTP_PASSWORD: ${{ secrets.ALFRED_RESEND_SMTP_PASSWORD }}
         run: |
           set -euo pipefail
           APP="${{ github.event.inputs.app }}"
@@ -102,16 +94,16 @@ jobs:
             ALFRED_OAUTH_CLIENT_ID \
             ALFRED_OAUTH_CLIENT_SECRET \
             ALFRED_OAUTH_REDIRECT_URIS \
-            ALFRED_SMTP_HOST \
-            ALFRED_SMTP_PORT \
-            ALFRED_SMTP_USER \
-            ALFRED_SMTP_PASSWORD \
-            ALFRED_SMTP_FROM; do
+            ALFRED_RESEND_SMTP_PASSWORD; do
             if [ -z "${!name:-}" ]; then
               echo "Required production configuration is missing: $name" >&2
               exit 1
             fi
           done
+          ALFRED_SMTP_HOST='smtp.resend.com'
+          ALFRED_SMTP_PORT='465'
+          ALFRED_SMTP_USER='resend'
+          ALFRED_SMTP_FROM='Alfred Memory <recovery@alfredlabs.org>'
           {
             printf 'ALFRED_OAUTH_CLIENT_ID=%s\n' "$ALFRED_OAUTH_CLIENT_ID"
             printf 'ALFRED_OAUTH_CLIENT_SECRET=%s\n' "$ALFRED_OAUTH_CLIENT_SECRET"
@@ -119,7 +111,7 @@ jobs:
             printf 'ALFRED_SMTP_HOST=%s\n' "$ALFRED_SMTP_HOST"
             printf 'ALFRED_SMTP_PORT=%s\n' "$ALFRED_SMTP_PORT"
             printf 'ALFRED_SMTP_USER=%s\n' "$ALFRED_SMTP_USER"
-            printf 'ALFRED_SMTP_PASSWORD=%s\n' "$ALFRED_SMTP_PASSWORD"
+            printf 'ALFRED_SMTP_PASSWORD=%s\n' "$ALFRED_RESEND_SMTP_PASSWORD"
             printf 'ALFRED_SMTP_FROM=%s\n' "$ALFRED_SMTP_FROM"
           } | flyctl secrets import --stage --app "$APP"
       - name: Deploy

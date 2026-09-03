@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-147-delegation-decision",
+  "timestamp": "2026-09-03T01:00:57Z",
+  "actor": "orchestrator",
+  "event": "delegation_decision",
+  "decision": "execute-directly",
+  "target": "issue-147-alfredlabs-email",
+  "reason": "The bounded SMTP deployment and documentation change does not require specialist delegation.",
+  "data": {
+    "issue": 147,
+    "branch": "issue-147-alfredlabs-email",
+    "provider_calls": 0
+  }
+}

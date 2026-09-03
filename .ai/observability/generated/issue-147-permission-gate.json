@@ -1,0 +1,15 @@
+{
+  "trace_id": "issue-147-permission-gate",
+  "timestamp": "2026-09-03T01:00:57Z",
+  "actor": "orchestrator",
+  "event": "permission_denied",
+  "decision": "approval-required",
+  "target": "issue-147-external-email-activation",
+  "reason": "Provider signup, purchase, DNS mutation, production-secret rotation, deploy, and delivery verification require explicit human approval after review of the exact plan.",
+  "data": {
+    "issue": 147,
+    "repository_changes_allowed": true,
+    "external_mutations_allowed": false,
+    "provider_calls": 0
+  }
+}

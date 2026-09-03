@@ -1313,20 +1313,17 @@ test("console-web index.html includes the forgot-my-key panel", () => {
   assert.match(htmlText, /Forgot your API key\?/);
 });
 
-test("Fly deploy stages the complete SMTP configuration atomically", () => {
+test("Fly deploy stages the authenticated alfredlabs.org sender atomically", () => {
   const workflowPath = join(makeProjectRoot(), ".github/workflows/deploy-fly.yml");
   const workflow = readFileSync(workflowPath, "utf8");
-  const smtpNames = [
-    "ALFRED_SMTP_HOST",
-    "ALFRED_SMTP_PORT",
-    "ALFRED_SMTP_USER",
-    "ALFRED_SMTP_PASSWORD",
-    "ALFRED_SMTP_FROM"
-  ];
-  for (const name of smtpNames) {
-    assert.match(workflow, new RegExp(`secrets\\.${name}`));
-    assert.match(workflow, new RegExp(`printf '${name}=%s\\\\n'`));
-  }
+  assert.match(workflow, /secrets\.ALFRED_RESEND_SMTP_PASSWORD/);
+  assert.doesNotMatch(workflow, /secrets\.ALFRED_SMTP_(?:HOST|PORT|USER|PASSWORD|FROM)/);
+  assert.match(workflow, /ALFRED_SMTP_HOST='smtp\.resend\.com'/);
+  assert.match(workflow, /ALFRED_SMTP_PORT='465'/);
+  assert.match(workflow, /ALFRED_SMTP_USER='resend'/);
+  assert.match(workflow, /ALFRED_SMTP_FROM='Alfred Memory <recovery@alfredlabs\.org>'/);
+  assert.match(workflow, /printf 'ALFRED_SMTP_PASSWORD=%s\\n' "\$ALFRED_RESEND_SMTP_PASSWORD"/);
+  assert.doesNotMatch(workflow, /smtp\.gmail\.com|gmail-app-password|@gmail\.com/);
   assert.equal((workflow.match(/flyctl secrets import --stage/g) ?? []).length, 1);
 });
 
