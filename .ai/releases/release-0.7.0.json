@@ -3,7 +3,7 @@
   "version": "0.7.0",
   "candidate": "oauth-recovery-homebrew-0.7.0",
   "owner": "orchestrator",
-  "status": "candidate",
+  "status": "complete",
   "scope": "oauth-recovery-neon-setup-homebrew",
   "previous_release": "release-0.6.0",
   "issue": 153,
@@ -34,8 +34,21 @@
   ],
   "source_policy": {
     "release_tag": "v0.7.0",
-    "validated_commit_source": "pending",
-    "tap_commit": "pending"
+    "validated_commit_source": "f8ec19e26d9ea26306275ddcc8e62f8f3393ca50",
+    "tap_commit": "09430e8789ce0c1faacf4ea8e0b4c4b9b0975746"
+  },
+  "validation": {
+    "repository_checks": "pass",
+    "repository_release_gates": "19/19 pass",
+    "memory_server_tests": "229 pass; 2 environment-dependent skips",
+    "recovery_redirect_security_tests": "7/7 pass",
+    "homebrew_automatic_publish": "pass",
+    "homebrew_strict_audit": "pass",
+    "homebrew_upgrade": "0.6.0 to 0.7.0 pass",
+    "homebrew_test": "pass",
+    "alfred_version": "alfred 0.7.0",
+    "setup_preview": "pass; no files written",
+    "provider_calls": 0
   },
   "provider_calls_allowed": 0,
   "harness_config_writes_require_human_approval": true

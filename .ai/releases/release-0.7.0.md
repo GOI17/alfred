@@ -27,8 +27,17 @@ continuation.
 
 - Repository checks and full test suite: pass on the release candidate.
 - Release and Homebrew contract validation: pass on the release candidate.
-- Homebrew formula style, strict audit, upgrade, and test: pending publication.
+- Automatic tap publication: pass.
+- Homebrew formula style and strict audit: pass.
+- Homebrew upgrade from `0.6.0` to `0.7.0`: pass.
+- `brew test GOI17/tap/alfred`: pass.
+- `alfred version`: `alfred 0.7.0`.
+- Packaged `alfred setup` preview: pass; no files written.
 - Provider calls: 0.
+
+The formula is pinned to
+`GOI17/alfred@f8ec19e26d9ea26306275ddcc8e62f8f3393ca50` and published at
+`GOI17/homebrew-tap@09430e8789ce0c1faacf4ea8e0b4c4b9b0975746`.
 
 ## Traceability
 

@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-156-provider-request-avoided",
+  "timestamp": "2026-09-03T02:42:06Z",
+  "actor": "orchestrator",
+  "event": "provider_request_avoided",
+  "decision": "local-only",
+  "target": "issue-156-record-release-0.7.0",
+  "reason": "Release evidence is derived from deterministic GitHub, Git, and Homebrew outputs.",
+  "data": {
+    "issue": 156,
+    "branch": "issue-156-record-release-0.7.0",
+    "provider_calls": 0
+  }
+}

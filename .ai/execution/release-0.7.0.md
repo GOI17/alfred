@@ -41,9 +41,9 @@ domain, DNS, credential, delivery, and rollback checks are approved and pass.
 - [x] Issue #148 is merged into the release source.
 - [x] Version-bearing distribution contracts agree on `0.7.0`.
 - [x] Repository and release validators pass.
-- [ ] GitHub Release `v0.7.0` is published.
-- [ ] The tap formula points to the exact `v0.7.0` commit.
-- [ ] Homebrew upgrade and formula tests pass.
+- [x] GitHub Release `v0.7.0` is published.
+- [x] The tap formula points to the exact `v0.7.0` commit.
+- [x] Homebrew upgrade and formula tests pass.
 - [x] Provider calls remain `0`.
 
 ## Traceability

@@ -27,10 +27,11 @@ assert.match(homebrewWorkflow, /--version 0\.7\.0/);
 
 assert.equal(release.id, "release-0.7.0");
 assert.equal(release.version, "0.7.0");
-assert.equal(release.status, "candidate");
+assert.equal(release.status, "complete");
 assert.equal(release.previous_release, "release-0.6.0");
 assert.equal(release.source_policy.release_tag, "v0.7.0");
-assert.equal(release.source_policy.validated_commit_source, "pending");
+assert.match(release.source_policy.validated_commit_source, /^[0-9a-f]{40}$/);
+assert.match(release.source_policy.tap_commit, /^[0-9a-f]{40}$/);
 assert.equal(release.provider_calls_allowed, 0);
 assert.ok(release.includes.includes("recovery-oauth-continuation"));
 assert.ok(release.includes.includes("automatic-homebrew-tap-releases"));
@@ -38,7 +39,11 @@ assert.ok(release.excluded.includes("alfredlabs-resend-migration-pending-externa
 
 assert.equal(trace.release, "0.7.0");
 assert.equal(trace.provider_calls, 0);
-assert.equal(trace.result, "candidate-pass-pending-publication");
+assert.equal(trace.validated_commit_source, release.source_policy.validated_commit_source);
+assert.equal(trace.tap_commit, release.source_policy.tap_commit);
+assert.equal(trace.result, "pass");
+assert.equal(trace.external_validation.homebrew_test, "pass");
+assert.equal(release.validation.provider_calls, 0);
 assert.match(notes, /OAuth and account recovery/);
 assert.match(notes, /Provider calls: 0/);
 
