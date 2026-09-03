@@ -8,10 +8,13 @@ local bridge is required and the tenant API key is never stored in the GPT.
 Open the preconfigured
 [Alfred GPT](https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred),
 ask for your memories, choose **Sign in**, and enter your `alk_...` key only on
-Alfred's consent page. You do not need to configure a Client ID or Client
-Secret; AlfredLabs manages those values in the GPT.
+Alfred's consent page. Do not open the GPT editor or fill in Client ID or Client
+Secret; those fields are already configured inside the published Alfred GPT.
 
-## Operator-only Custom GPT configuration
+## Operator-only configuration for a different Custom GPT
+
+This section does not apply to users of the published Alfred GPT. Use it only
+when deliberately creating and hosting a separate GPT Action.
 
 Import the hosted schema:
 

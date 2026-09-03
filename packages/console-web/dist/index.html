@@ -77,7 +77,7 @@
   </style>
 <!-- /* __ALFRED_BUILD_INJECT__ */ -->
 <script>
-  window.ALFRED_API_BASE = "http://localhost:3000";
+  window.ALFRED_API_BASE = "https://alfred-labs-memory.fly.dev";
   window.ALFRED_BUILD_VERSION = "0.7.0";
 </script>
 </head>
@@ -165,7 +165,7 @@
 
       <div class="step">
         <span class="step-num">1</span><strong>ChatGPT (Plus/Pro)</strong>
-        <div class="small" style="margin-top: 4px;">Use the preconfigured Alfred GPT. You do not need to enter OAuth client credentials.</div>
+        <div class="small" style="margin-top: 4px;">Use the preconfigured Alfred GPT. Do not create or configure another GPT Action.</div>
         <details>
           <summary>Show steps</summary>
           <pre>
@@ -175,23 +175,9 @@
 4. Enter your alk_... key only on Alfred's consent page.
 5. Approve access and retry your request.
 
-No Client ID or Client Secret is needed for this path. AlfredLabs manages
-those credentials in the preconfigured GPT; your alk_ key is never entered
-in the GPT editor.</pre>
-        </details>
-        <details>
-          <summary>Operator: configure a separate Custom GPT</summary>
-          <pre>
-Schema: https://alfred-labs-memory.fly.dev/openapi.yaml
-Auth: OAuth
-Client ID: alfred-chatgpt
-Client Secret: the exact private ALFRED_OAUTH_CLIENT_SECRET configured on the server
-Authorization URL: https://alfred-labs-memory.fly.dev/oauth/authorize
-Token URL: https://alfred-labs-memory.fly.dev/oauth/token
-Scope: memory:read memory:write
-
-There is no public/default Client Secret. If you do not have the current
-value, rotate it and update the server and GPT editor together.</pre>
+Do not open the GPT editor or fill in Client ID or Client Secret. Those fields
+are already configured inside the published Alfred GPT. Your only credential
+is the alk_ key, and it is entered only on Alfred's consent page.</pre>
         </details>
       </div>
 

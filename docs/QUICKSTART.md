@@ -112,10 +112,11 @@ the same port (no CORS needed).
 4. Enter your `alk_...` key only on Alfred's consent page, approve access,
    and retry the request.
 
-You do not need a Client ID or Client Secret for this path. AlfredLabs manages
-those credentials in the preconfigured GPT. Operators creating a separate GPT
-must follow [the deployment guide](../.ai/docs/custom-gpt-deploy.md); there is
-no public/default client secret.
+Do not open the GPT editor or fill in Client ID or Client Secret. Those fields
+are already configured inside the published Alfred GPT; your only credential
+is the `alk_...` key entered on Alfred's consent page. The separate
+[deployment guide](../.ai/docs/custom-gpt-deploy.md) is only for operators who
+deliberately create and host a different GPT Action.
 
 ### Claude Desktop
 
