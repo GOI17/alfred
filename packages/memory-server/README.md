@@ -107,10 +107,21 @@ Test counts:
 | `ALFRED_OAUTH_CLIENT_ID` | none | yes when OAuth is enabled |
 | `ALFRED_OAUTH_CLIENT_SECRET` | none | yes when OAuth is enabled; 32+ characters |
 | `ALFRED_OAUTH_REDIRECT_URIS` | none | yes when OAuth is enabled; comma-separated exact URLs |
+| `ALFRED_SMTP_HOST` | none | yes for email verification and key recovery |
+| `ALFRED_SMTP_PORT` | `587` | yes for production email |
+| `ALFRED_SMTP_USER` | none | yes for authenticated SMTP |
+| `ALFRED_SMTP_PASSWORD` | none | yes for authenticated SMTP; use an App Password with Gmail |
+| `ALFRED_SMTP_FROM` | `noreply@alfred.local` | yes for production email |
 
 OAuth remains disabled when all three `ALFRED_OAUTH_*` settings are absent.
 Supplying only part of the OAuth configuration fails startup rather than
 falling back to an insecure mode.
+
+Key recovery checks the SMTP transport before looking up an address. If the
+transport is not configured or cannot authenticate, the endpoint returns
+`503 recovery_unavailable` for every address. Once SMTP is ready, registered
+and unregistered addresses share the same generic response to prevent account
+enumeration.
 
 ## Web console
 

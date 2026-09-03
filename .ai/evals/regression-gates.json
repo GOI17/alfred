@@ -90,7 +90,7 @@
         "packages/memory-server/test/neon-pooled-tenants.test.mjs"
       ],
       "command": "node --test packages/memory-server/test/console.test.mjs packages/memory-server/test/neon-pooled-tenants.test.mjs",
-      "expected_test_count": 103,
+      "expected_test_count": 108,
       "blocked_on_failure": true
     },
     {

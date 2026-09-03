@@ -31,7 +31,8 @@ export {
   createRecovery,
   RecoveryRateLimitedError,
   RecoveryNotFoundError,
-  RecoveryValidationError
+  RecoveryValidationError,
+  RecoveryUnavailableError
 } from "./recovery.js";
 
 export {

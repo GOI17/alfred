@@ -46,6 +46,15 @@ export class RecoveryValidationError extends Error {
   }
 }
 
+export class RecoveryUnavailableError extends Error {
+  constructor() {
+    super("Email recovery is temporarily unavailable. Please try again later.");
+    this.name = "RecoveryUnavailableError";
+    this.code = "recovery_unavailable";
+    this.status = 503;
+  }
+}
+
 export function createRecovery({ registry, userService, emailSender, baseUrl = "", now = () => Date.now(), clock = () => Date.now() } = {}) {
   if (!registry) throw new TypeError("createRecovery requires registry");
   if (!userService) throw new TypeError("createRecovery requires userService");
@@ -78,6 +87,8 @@ export function createRecovery({ registry, userService, emailSender, baseUrl = "
       if (!emailSender.isValidEmail(email)) {
         throw new RecoveryValidationError([{ field: "email", message: "email must be a valid address." }]);
       }
+      const readiness = await emailSender.checkReadiness();
+      if (!readiness?.ready) throw new RecoveryUnavailableError();
       const limit = checkRateLimit(ip);
       if (!limit.allowed) throw new RecoveryRateLimitedError(limit.retryAfterMinutes);
       recordAttempt(ip);

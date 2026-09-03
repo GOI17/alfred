@@ -1,8 +1,8 @@
 // Email sender for SaaS Web Onboarding.
 //
 // Thin wrapper around Nodemailer. The sender is OPT-IN: when
-// ALFRED_SMTP_HOST is unset, send() is a no-op that logs the would-be
-// email. This lets the server run in CI, local dev, and tests
+// ALFRED_SMTP_HOST is unset, readiness fails closed and send() is a no-op.
+// This lets the server run in CI, local dev, and tests
 // without requiring an SMTP server.
 //
 // Configuration via env vars:
@@ -12,8 +12,8 @@
 //   ALFRED_SMTP_PASSWORD      optional
 //   ALFRED_SMTP_FROM          default "noreply@alfred.local"
 //
-// The sender never blocks the bootstrap response. send() returns a
-// promise; failures are logged but do not throw to the caller.
+// SMTP diagnostics deliberately omit recipients, content, recovery links,
+// tokens, and credentials.
 
 import { randomBytes } from "node:crypto";
 
@@ -62,9 +62,25 @@ export function createEmailSender({
 
     generateToken,
 
+    async checkReadiness() {
+      if (!enabled) return { ready: false, reason: "not_configured" };
+      const tx = await getTransporter();
+      if (!tx) {
+        log.warn?.("[email-sender] SMTP transport unavailable");
+        return { ready: false, reason: "transport_unavailable" };
+      }
+      try {
+        if (typeof tx.verify === "function") await tx.verify();
+        return { ready: true };
+      } catch {
+        log.error?.("[email-sender] SMTP readiness check failed");
+        return { ready: false, reason: "transport_unavailable" };
+      }
+    },
+
     async send({ to, subject, text, html } = {}) {
       if (!enabled) {
-        log.warn?.(`[email-sender] SMTP not configured; would send to=${to} subject="${subject}" text=${text?.slice(0, 80)}...`);
+        log.warn?.("[email-sender] SMTP not configured; message skipped");
         return { sent: false, skipped: true };
       }
       if (!isValidEmail(to)) {
@@ -78,9 +94,9 @@ export function createEmailSender({
       try {
         await tx.sendMail({ from, to, subject, text, html });
         return { sent: true };
-      } catch (err) {
-        log.error?.("[email-sender] send failed: " + err.message);
-        return { sent: false, skipped: false, error: err.message };
+      } catch {
+        log.error?.("[email-sender] SMTP send failed");
+        return { sent: false, skipped: false, error: "delivery_failed" };
       }
     }
   };
