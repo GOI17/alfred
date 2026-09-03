@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -18,6 +19,7 @@ import { createOpenapiRouter } from "../src/openapi-router.js";
 const CLIENT_ID = "alfred-chatgpt";
 const CLIENT_SECRET = "test-secret-with-at-least-thirty-two-characters";
 const REDIRECT_URI = "https://chatgpt.com/aip/g-test/oauth/callback";
+const MCP_RESOURCE = "https://alfred-labs-memory.fly.dev/mcp";
 const PROJECT_ROOT = resolve(import.meta.dirname, "..", "..", "..");
 
 function config(overrides = {}) {
@@ -26,6 +28,7 @@ function config(overrides = {}) {
     clientId: CLIENT_ID,
     clientSecret: CLIENT_SECRET,
     publicUrl: "https://alfred-labs-memory.fly.dev",
+    mcpResource: MCP_RESOURCE,
     redirectUris: [REDIRECT_URI],
     authorizationCodeTtlSeconds: 300,
     accessTokenTtlSeconds: 3600,
@@ -123,6 +126,7 @@ test("OAuth configuration validates HTTPS URLs and exact redirect entries", () =
     ALFRED_PUBLIC_URL: "https://alfred-labs-memory.fly.dev/"
   });
   assert.equal(parsed.publicUrl, "https://alfred-labs-memory.fly.dev");
+  assert.equal(parsed.mcpResource, MCP_RESOURCE);
   assert.deepEqual(parsed.redirectUris, [REDIRECT_URI]);
   assert.throws(() => loadOAuthConfig({
     ALFRED_OAUTH_CLIENT_ID: CLIENT_ID,
@@ -130,6 +134,85 @@ test("OAuth configuration validates HTTPS URLs and exact redirect entries", () =
     ALFRED_OAUTH_REDIRECT_URIS: "http://example.com/callback",
     ALFRED_PUBLIC_URL: "https://alfred.example.com"
   }), /HTTPS/);
+});
+
+test("MCP authorization requires PKCE S256 and binds issued tokens to the resource", async () => {
+  const fx = await fixture();
+  const verifier = "alfred-mcp-verifier-abcdefghijklmnopqrstuvwxyz0123456789";
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  try {
+    assert.throws(
+      () => fx.oauthService.validateAuthorizationRequest(authorizationInput(fx.apiKey, { resource: MCP_RESOURCE })),
+      /PKCE/
+    );
+    assert.throws(
+      () => fx.oauthService.validateAuthorizationRequest(authorizationInput(fx.apiKey, {
+        resource: "https://attacker.example/mcp",
+        code_challenge: challenge,
+        code_challenge_method: "S256"
+      })),
+      /resource is not supported/
+    );
+
+    const { code } = await issueCode(fx, {
+      resource: MCP_RESOURCE,
+      code_challenge: challenge,
+      code_challenge_method: "S256"
+    });
+    const stored = fx.registry.rawHandle.prepare(`
+      SELECT resource, code_challenge, code_challenge_method
+        FROM oauth_authorization_codes
+    `).get();
+    assert.equal(stored.resource, MCP_RESOURCE);
+    assert.equal(stored.code_challenge, challenge);
+    assert.equal(stored.code_challenge_method, "S256");
+    assert.equal(JSON.stringify(stored).includes(verifier), false);
+
+    await assert.rejects(() => fx.oauthService.exchangeToken({
+      grant_type: "authorization_code",
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      redirect_uri: REDIRECT_URI,
+      code,
+      resource: MCP_RESOURCE,
+      code_verifier: `${verifier}wrong`
+    }), /PKCE verification failed/);
+
+    const tokens = await fx.oauthService.exchangeToken({
+      grant_type: "authorization_code",
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      redirect_uri: REDIRECT_URI,
+      code,
+      resource: MCP_RESOURCE,
+      code_verifier: verifier
+    });
+    const resolved = await fx.oauthService.resolveAccessToken(tokens.access_token, { resource: MCP_RESOURCE });
+    assert.equal(resolved.tenant_id, fx.tenant.id);
+    assert.equal(resolved.resource, MCP_RESOURCE);
+    assert.equal(
+      await fx.oauthService.resolveAccessToken(tokens.access_token, { resource: "https://attacker.example/mcp" }),
+      null
+    );
+
+    await assert.rejects(() => fx.oauthService.exchangeToken({
+      grant_type: "refresh_token",
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      refresh_token: tokens.refresh_token
+    }), /resource does not match/);
+    const refreshed = await fx.oauthService.exchangeToken({
+      grant_type: "refresh_token",
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      refresh_token: tokens.refresh_token,
+      resource: MCP_RESOURCE
+    });
+    assert.equal(
+      (await fx.oauthService.resolveAccessToken(refreshed.access_token, { resource: MCP_RESOURCE })).resource,
+      MCP_RESOURCE
+    );
+  } finally { fx.close(); }
 });
 
 test("authorization validates state, client, redirect URI, and scopes", async () => {
@@ -259,6 +342,23 @@ test("OAuth router renders consent and exchanges form-encoded tokens", async () 
     assert.equal(token.statusCode, 200);
     assert.ok(JSON.parse(token.body).access_token.startsWith("alo_"));
     assert.equal(token.headers["cache-control"], "no-store");
+  } finally { fx.close(); }
+});
+
+test("OAuth router publishes authorization-server metadata for MCP clients", async () => {
+  const fx = await fixture();
+  try {
+    const router = createOAuthRouter({ oauthService: fx.oauthService });
+    const res = fakeRes();
+    await router(fakeReq({ url: "/.well-known/oauth-authorization-server" }), res);
+
+    assert.equal(res.statusCode, 200);
+    const metadata = JSON.parse(res.body);
+    assert.equal(metadata.issuer, "https://alfred-labs-memory.fly.dev");
+    assert.equal(metadata.authorization_endpoint, "https://alfred-labs-memory.fly.dev/oauth/authorize");
+    assert.equal(metadata.token_endpoint, "https://alfred-labs-memory.fly.dev/oauth/token");
+    assert.deepEqual(metadata.code_challenge_methods_supported, ["S256"]);
+    assert.deepEqual(metadata.token_endpoint_auth_methods_supported, ["client_secret_basic", "client_secret_post"]);
   } finally { fx.close(); }
 });
 

@@ -31,6 +31,20 @@ function applySchema(db) {
   if (!recoveryColumns.some((column) => column.name === "continuation_path")) {
     db.exec("ALTER TABLE tenant_recoveries ADD COLUMN continuation_path TEXT");
   }
+  const authorizationCodeColumns = db.prepare("PRAGMA table_info(oauth_authorization_codes)").all();
+  for (const [name, definition] of [
+    ["resource", "TEXT"],
+    ["code_challenge", "TEXT"],
+    ["code_challenge_method", "TEXT"]
+  ]) {
+    if (!authorizationCodeColumns.some((column) => column.name === name)) {
+      db.exec(`ALTER TABLE oauth_authorization_codes ADD COLUMN ${name} ${definition}`);
+    }
+  }
+  const oauthTokenColumns = db.prepare("PRAGMA table_info(oauth_tokens)").all();
+  if (!oauthTokenColumns.some((column) => column.name === "resource")) {
+    db.exec("ALTER TABLE oauth_tokens ADD COLUMN resource TEXT");
+  }
 }
 
 // =============================================================================
@@ -430,14 +444,18 @@ export { applySchema as applySqliteRegistrySchema };
 // OAuth contract (issue #135, direct ChatGPT Actions authorization)
 // =============================================================================
 function createOAuthContract(db) {
-  function insertToken(row, { tenantId = row.tenant_id, scope = row.scope } = {}) {
+  function insertToken(row, {
+    tenantId = row.tenant_id,
+    scope = row.scope,
+    resource = row.resource ?? null
+  } = {}) {
     db.prepare(`
       INSERT INTO oauth_tokens
-        (id, token_hash, token_type, tenant_id, client_id, scope, family_id, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (id, token_hash, token_type, tenant_id, client_id, scope, resource, family_id, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       row.id, row.token_hash, row.token_type, tenantId, row.client_id,
-      scope, row.family_id, row.expires_at
+      scope, resource, row.family_id, row.expires_at
     );
   }
 
@@ -445,29 +463,40 @@ function createOAuthContract(db) {
     async createAuthorizationCode(input) {
       db.prepare(`
         INSERT INTO oauth_authorization_codes
-          (id, code_hash, tenant_id, client_id, redirect_uri, scope, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+          (id, code_hash, tenant_id, client_id, redirect_uri, scope, resource, code_challenge, code_challenge_method, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         input.id, input.code_hash, input.tenant_id, input.client_id,
-        input.redirect_uri, input.scope, input.expires_at
+        input.redirect_uri, input.scope, input.resource ?? null,
+        input.code_challenge ?? null, input.code_challenge_method ?? null,
+        input.expires_at
       );
       return { id: input.id };
     },
 
-    async exchangeAuthorizationCode({ code_hash, client_id, redirect_uri, now, access, refresh }) {
+    async findAuthorizationCode({ code_hash, client_id, redirect_uri, now }) {
+      return db.prepare(`
+        SELECT * FROM oauth_authorization_codes
+         WHERE code_hash = ? AND client_id = ? AND redirect_uri = ?
+           AND used_at IS NULL AND expires_at > ?
+      `).get(code_hash, client_id, redirect_uri, now) ?? null;
+    },
+
+    async exchangeAuthorizationCode({ code_hash, client_id, redirect_uri, code_challenge, now, access, refresh }) {
       db.exec("BEGIN IMMEDIATE");
       try {
         const code = db.prepare(`
           SELECT * FROM oauth_authorization_codes
            WHERE code_hash = ? AND client_id = ? AND redirect_uri = ?
+             AND code_challenge IS ?
              AND used_at IS NULL AND expires_at > ?
-        `).get(code_hash, client_id, redirect_uri, now);
+        `).get(code_hash, client_id, redirect_uri, code_challenge ?? null, now);
         if (!code) {
           db.exec("ROLLBACK");
           return null;
         }
-        insertToken(access, { tenantId: code.tenant_id, scope: code.scope });
-        insertToken(refresh, { tenantId: code.tenant_id, scope: code.scope });
+        insertToken(access, { tenantId: code.tenant_id, scope: code.scope, resource: code.resource });
+        insertToken(refresh, { tenantId: code.tenant_id, scope: code.scope, resource: code.resource });
         const changed = db.prepare(`
           UPDATE oauth_authorization_codes SET used_at = ?
            WHERE id = ? AND used_at IS NULL
@@ -477,7 +506,7 @@ function createOAuthContract(db) {
           return null;
         }
         db.exec("COMMIT");
-        return { tenant_id: code.tenant_id, scope: code.scope };
+        return { tenant_id: code.tenant_id, scope: code.scope, resource: code.resource ?? null };
       } catch (err) {
         try { db.exec("ROLLBACK"); } catch {}
         throw err;
@@ -486,7 +515,7 @@ function createOAuthContract(db) {
 
     async resolveAccessToken(tokenHash, now) {
       return db.prepare(`
-        SELECT id, tenant_id, client_id, scope, family_id, expires_at
+        SELECT id, tenant_id, client_id, scope, resource, family_id, expires_at
           FROM oauth_tokens
          WHERE token_hash = ? AND token_type = 'access'
            AND revoked_at IS NULL AND expires_at > ?
@@ -495,7 +524,7 @@ function createOAuthContract(db) {
 
     async findRefreshToken(tokenHash) {
       return db.prepare(`
-        SELECT id, tenant_id, client_id, scope, family_id, expires_at, revoked_at, replaced_by_id
+        SELECT id, tenant_id, client_id, scope, resource, family_id, expires_at, revoked_at, replaced_by_id
           FROM oauth_tokens
          WHERE token_hash = ? AND token_type = 'refresh'
       `).get(tokenHash) ?? null;
@@ -513,8 +542,8 @@ function createOAuthContract(db) {
           db.exec("ROLLBACK");
           return null;
         }
-        insertToken(access, { tenantId: current.tenant_id, scope: current.scope });
-        insertToken(refresh, { tenantId: current.tenant_id, scope: current.scope });
+        insertToken(access, { tenantId: current.tenant_id, scope: current.scope, resource: current.resource });
+        insertToken(refresh, { tenantId: current.tenant_id, scope: current.scope, resource: current.resource });
         const changed = db.prepare(`
           UPDATE oauth_tokens SET revoked_at = ?, replaced_by_id = ?
            WHERE id = ? AND revoked_at IS NULL
@@ -524,7 +553,7 @@ function createOAuthContract(db) {
           return null;
         }
         db.exec("COMMIT");
-        return { tenant_id: current.tenant_id, scope: current.scope };
+        return { tenant_id: current.tenant_id, scope: current.scope, resource: current.resource ?? null };
       } catch (err) {
         try { db.exec("ROLLBACK"); } catch {}
         throw err;

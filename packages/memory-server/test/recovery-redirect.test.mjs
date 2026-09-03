@@ -223,6 +223,31 @@ test("OAuth consent links to recovery with only the validated internal continuat
   assert.equal(nested, authorizationPath());
 });
 
+test("OAuth recovery preserves MCP resource and PKCE without accepting extra fields", () => {
+  const service = oauthService({
+    validateAuthorizationRequest(input) {
+      return { ...input };
+    }
+  });
+  const request = {
+    response_type: "code",
+    client_id: "alfred-chatgpt",
+    redirect_uri: "https://chatgpt.com/connector/oauth/test",
+    state: "state",
+    scope: "memory:read memory:write",
+    resource: "https://memory.example.test/mcp",
+    code_challenge: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+    code_challenge_method: "S256"
+  };
+  const href = buildOAuthRecoveryHref(request);
+  const nested = new URL(href, "https://alfred.example").searchParams.get("continue_to");
+  const parsed = new URL(nested, "https://alfred.example");
+
+  assert.equal(parsed.searchParams.get("resource"), request.resource);
+  assert.equal(parsed.searchParams.get("code_challenge"), request.code_challenge);
+  assert.equal(parsed.searchParams.get("code_challenge_method"), "S256");
+});
+
 test("cross-origin console redirects preserve only one continuation value", async () => {
   const router = createConsoleRouter({
     userService: {},

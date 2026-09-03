@@ -19,6 +19,13 @@ export interface ServerLike {
       description?: string;
       inputSchema?: unknown;
       outputSchema?: unknown;
+      securitySchemes?: Array<{ type: "oauth2"; scopes: string[] }>;
+      annotations?: {
+        readOnlyHint?: boolean;
+        openWorldHint?: boolean;
+        destructiveHint?: boolean;
+      };
+      _meta?: Record<string, unknown>;
     },
     handler: (input: unknown) => Promise<McpToolResult> | McpToolResult
   ): unknown;
@@ -29,8 +36,9 @@ export interface CreateMemoryMcpServerOptions {
   memoryClient: MemoryClient;
   server?: ServerLike;
   schema?: MemoryMcpSchemaAdapter;
-  McpServer?: new (serverInfo: { name: string; version: string }) => ServerLike;
+  McpServer?: new (serverInfo: { name: string; version: string }, options?: { instructions?: string }) => ServerLike;
   serverInfo?: { name: string; version: string };
+  serverOptions?: { instructions?: string };
 }
 
 export interface RegisterMemoryToolsOptions {
@@ -44,9 +52,13 @@ export interface MemoryMcpSchemaAdapter {
   updateInput: unknown;
   deleteInput: unknown;
   listInput: unknown;
+  memoryOutput: unknown;
+  deleteOutput: unknown;
+  listOutput: unknown;
 }
 
-export const MEMORY_MCP_SERVER_INFO: Readonly<{ name: "alfred-memory-mcp"; version: "0.0.0" }>;
+export const MEMORY_MCP_SERVER_INFO: Readonly<{ name: "alfred-memory-mcp"; version: "0.7.1" }>;
+export const MEMORY_MCP_SERVER_OPTIONS: Readonly<{ instructions: string }>;
 
 export function createMemoryMcpServer(options: CreateMemoryMcpServerOptions): Promise<ServerLike>;
 export function registerMemoryTools(server: ServerLike, options: RegisterMemoryToolsOptions): ServerLike;

@@ -72,6 +72,9 @@ test("zod schema adapter returns Standard Schema objects instead of raw shapes",
       shape,
       strict() {
         return this;
+      },
+      passthrough() {
+        return this;
       }
     };
   }
@@ -119,6 +122,9 @@ test("zod schema adapter returns Standard Schema objects instead of raw shapes",
       };
       return schema;
     },
+    boolean() {
+      return { kind: "boolean" };
+    },
     array(item) {
       return { kind: "array", item, optional: () => ({ kind: "optional-array", item }) };
     },
@@ -135,6 +141,24 @@ test("zod schema adapter returns Standard Schema objects instead of raw shapes",
   for (const [name, schema] of Object.entries(schemas)) {
     assert.equal(schema.kind, "object", `${name} must be wrapped with z.object(...)`);
   }
+});
+
+test("publishes OpenAI security schemes, output schemas, and accurate safety annotations", () => {
+  const { server } = register();
+  const byName = Object.fromEntries(server.tools.map((entry) => [entry.name, entry.config]));
+
+  for (const config of Object.values(byName)) {
+    assert.ok(config.outputSchema);
+    assert.deepEqual(config._meta.securitySchemes, config.securitySchemes);
+    assert.equal(config.annotations.openWorldHint, false);
+  }
+
+  assert.deepEqual(byName.memory_search.securitySchemes, [{ type: "oauth2", scopes: ["memory:read"] }]);
+  assert.equal(byName.memory_search.annotations.readOnlyHint, true);
+  assert.equal(byName.memory_list.annotations.readOnlyHint, true);
+  assert.equal(byName.memory_create.annotations.readOnlyHint, false);
+  assert.equal(byName.memory_update.annotations.destructiveHint, false);
+  assert.equal(byName.memory_delete.annotations.destructiveHint, true);
 });
 
 test("memory_search calls searchMemories and returns structuredContent", async () => {
@@ -250,6 +274,31 @@ test("Unexpected error maps safely", async () => {
   });
   assert.equal(serialized.includes("database exploded"), false);
   assert.equal(serialized.includes("secret-token"), false);
+});
+
+test("insufficient OAuth scope returns a safe MCP authentication challenge", async () => {
+  const { server } = register({
+    async createMemory() {
+      const error = new Error("scope missing");
+      error.name = "MemoryClientError";
+      error.code = "insufficient_scope";
+      error.status = 403;
+      error.mcpChallenge = 'Bearer resource_metadata="https://memory.example.test/.well-known/oauth-protected-resource", error="insufficient_scope", error_description="Reconnect Alfred"';
+      throw error;
+    }
+  });
+
+  const result = await tool(server, "memory_create").handler({
+    type: "fact",
+    content: "Private",
+    source: "test"
+  });
+
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.error.code, "insufficient_scope");
+  assert.equal(result.structuredContent.error.message, "Alfred needs an additional permission.");
+  assert.equal(result._meta["mcp/www_authenticate"].length, 1);
+  assert.equal(JSON.stringify(result).includes("scope missing"), false);
 });
 
 test("successful undefined payload still returns valid text content", async () => {

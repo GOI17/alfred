@@ -63,7 +63,8 @@ function clientCredentials(req, form) {
 }
 
 function consentPage(request, errorMessage = "") {
-  const hidden = ["response_type", "client_id", "redirect_uri", "state", "scope"]
+  const hidden = ["response_type", "client_id", "redirect_uri", "state", "scope", "resource", "code_challenge", "code_challenge_method"]
+    .filter((name) => request[name] !== null && request[name] !== undefined)
     .map((name) => `<input type="hidden" name="${name}" value="${escapeHtml(request[name])}">`).join("");
   const error = errorMessage ? `<p class="error" role="alert">${escapeHtml(errorMessage)}</p>` : "";
   const recoveryHref = escapeHtml(buildOAuthRecoveryHref(request));
@@ -77,6 +78,19 @@ export function createOAuthRouter({ oauthService = null } = {}) {
       return json(res, 503, { error: "temporarily_unavailable", error_description: "OAuth is not configured on this server." });
     }
     try {
+      if (url.pathname === "/.well-known/oauth-authorization-server" && req.method === "GET") {
+        const origin = oauthService.config.publicUrl;
+        return json(res, 200, {
+          issuer: origin,
+          authorization_endpoint: `${origin}/oauth/authorize`,
+          token_endpoint: `${origin}/oauth/token`,
+          response_types_supported: ["code"],
+          grant_types_supported: ["authorization_code", "refresh_token"],
+          token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post"],
+          code_challenge_methods_supported: ["S256"],
+          scopes_supported: ["memory:read", "memory:write"]
+        });
+      }
       if (url.pathname === "/oauth/authorize" && req.method === "GET") {
         const request = oauthService.validateAuthorizationRequest(Object.fromEntries(url.searchParams));
         return html(res, 200, consentPage(request));

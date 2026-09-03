@@ -1,0 +1,25 @@
+{
+  "trace_id": "issue-167-validation",
+  "timestamp": "2026-09-03T19:38:19Z",
+  "actor": "orchestrator",
+  "event": "validation_completed",
+  "decision": "local-contracts-passed",
+  "target": "issue-167-openai-mcp-plugin",
+  "reason": "The remote MCP transport, OAuth resource binding, PKCE, metadata discovery, scope enforcement, and existing compatibility paths were validated deterministically without an LLM provider request.",
+  "data": {
+    "issue": 167,
+    "root_syntax_check": "passed",
+    "memory_mcp_tests": {
+      "passed": 17,
+      "failed": 0
+    },
+    "memory_server_tests": {
+      "passed": 241,
+      "failed": 0,
+      "skipped": 2
+    },
+    "real_sdk_streamable_http_contract": "passed",
+    "yaml_parse": "passed",
+    "provider_calls": 0
+  }
+}

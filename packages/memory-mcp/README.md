@@ -2,6 +2,12 @@
 
 Thin MCP stdio adapter for Alfred Memory.
 
+The same tool definitions also power the authenticated Streamable HTTP endpoint
+at `/mcp` when `@alfred-labs/memory-server` is deployed. The remote endpoint is
+intended for OpenAI plugins and requires an OAuth token bound to its exact MCP
+resource URL; local stdio clients continue to use the API-key configuration
+documented below.
+
 This package exposes Alfred Memory operations as Model Context Protocol tools. It intentionally keeps business behavior in the Memory API client and only adapts MCP tool calls to `@alfred-labs/memory-client`.
 
 ## Dependencies

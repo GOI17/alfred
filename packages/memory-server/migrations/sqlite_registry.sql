@@ -296,6 +296,9 @@ CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
   client_id     TEXT NOT NULL,
   redirect_uri  TEXT NOT NULL,
   scope         TEXT NOT NULL,
+  resource      TEXT,
+  code_challenge TEXT,
+  code_challenge_method TEXT CHECK (code_challenge_method IS NULL OR code_challenge_method = 'S256'),
   expires_at    TEXT NOT NULL,
   used_at       TEXT,
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
@@ -311,6 +314,7 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
   tenant_id       TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   client_id       TEXT NOT NULL,
   scope           TEXT NOT NULL,
+  resource        TEXT,
   family_id       TEXT NOT NULL,
   expires_at      TEXT NOT NULL,
   revoked_at      TEXT,
