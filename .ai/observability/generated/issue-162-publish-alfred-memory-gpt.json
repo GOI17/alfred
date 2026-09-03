@@ -91,6 +91,10 @@
     {
       "event": "validation_limited",
       "result": "The repository-wide syntax check passed. The repository-wide test command reached installer-tui and stopped because @opentui/core is not installed in the clean worktree; package-specific and deployment CI tests passed without installing additional dependencies."
+    },
+    {
+      "event": "pull_request_validation",
+      "result": "Pull request 165 passed the linked-issue, Pages build-and-deploy, and real-Postgres cross-tenant isolation checks."
     }
   ],
   "provider_calls": 0

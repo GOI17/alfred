@@ -81,7 +81,7 @@ exactly.
 - [ ] The replacement GPT is accessible to anyone with the link.
 - [x] All stale repository references are replaced.
 - [x] No secret appears in source control, screenshots, logs, or trace output.
-- [ ] Relevant checks, tests, validators, and the linked PR pass.
+- [x] Relevant checks, tests, validators, and the linked PR pass.
 
 ## External publication constraint
 
