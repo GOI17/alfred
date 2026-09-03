@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-149-provider-request-avoided",
+  "timestamp": "2026-09-03T01:01:19Z",
+  "actor": "orchestrator",
+  "event": "provider_request_avoided",
+  "decision": "local-only",
+  "target": "issue-149-auto-tap-releases",
+  "reason": "Release validation, formula generation, workflow testing, and Git transport are deterministic operations.",
+  "data": {
+    "issue": 149,
+    "branch": "issue-149-auto-tap-releases",
+    "provider_calls": 0
+  }
+}
