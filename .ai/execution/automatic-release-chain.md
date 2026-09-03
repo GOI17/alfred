@@ -73,7 +73,7 @@ and update the private Homebrew tap from the exact immutable tag.
 - [x] Active version surfaces are release-managed and validated.
 - [x] No PAT or new cross-repository credential is required.
 - [x] Required tests and validators pass with provider calls at zero.
-- [ ] Repository authorization for Actions-created PRs is explicitly approved
+- [x] Repository authorization for Actions-created PRs is explicitly approved
       and enabled.
 
 ## References
