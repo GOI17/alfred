@@ -113,6 +113,10 @@ Notes:
 
 - **Gmail SMTP**: use an App Password, not your real Gmail password.
   https://myaccount.google.com/apppasswords
+- **Recovery readiness**: production deploys require the complete five-value
+  SMTP configuration. `POST /console/api/recover` returns
+  `503 recovery_unavailable` before any email lookup when the transport cannot
+  authenticate, so it does not falsely claim that a message was sent.
 - **Turnstile**: Cloudflare's free test keys. Get real ones at
   https://dash.cloudflare.com → Turnstile when you go to production.
 - **`ALFRED_PUBLIC_URL`** must match your actual domain.
@@ -184,6 +188,10 @@ To deploy on every push to `main`:
 2. Add it to GitHub: https://github.com/GOI17/alfred/settings/secrets/actions
    - Name: `FLY_API_TOKEN`
    - Value: the token from step 1
+
+   Add the five SMTP values from step 4 as Actions secrets too. The workflow
+   validates OAuth and SMTP as one complete production configuration and stages
+   them together before deploying.
 
 3. Push to `main`. The `.github/workflows/deploy-fly.yml` workflow will:
 

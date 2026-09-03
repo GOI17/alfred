@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-143-provider-request-avoided",
+  "timestamp": "2026-09-03T00:02:40Z",
+  "actor": "orchestrator",
+  "event": "provider_request_avoided",
+  "decision": "local-only",
+  "target": "issue-143-smtp-recovery",
+  "reason": "Repository changes, SMTP transport validation, tests, and deployment automation are deterministic operations.",
+  "data": {
+    "issue": 143,
+    "branch": "issue-143-smtp-recovery",
+    "provider_calls": 0
+  }
+}

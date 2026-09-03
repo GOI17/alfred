@@ -6,6 +6,11 @@ name: deploy-fly
 #   ALFRED_OAUTH_CLIENT_ID
 #   ALFRED_OAUTH_CLIENT_SECRET
 #   ALFRED_OAUTH_REDIRECT_URIS
+#   ALFRED_SMTP_HOST
+#   ALFRED_SMTP_PORT
+#   ALFRED_SMTP_USER
+#   ALFRED_SMTP_PASSWORD
+#   ALFRED_SMTP_FROM
 #
 # This workflow is opt-in. To enable it, push a commit that touches
 # packages/memory-server/** or this file. To pause deploys, add `[skip deploy]`
@@ -48,16 +53,18 @@ jobs:
         run: |
           git config --global user.name "Alfred CI"
           git config --global user.email "ci@alfred.local"
+      - name: Install Memory server dependencies
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile --filter @alfred-labs/memory-server
       - name: Validate Node syntax
-        # Alfred Memory v0.4.1.1 has zero external npm dependencies. There is
-        # no pnpm-lock.yaml, so we skip pnpm install and instead run a syntax
-        # check on every script + src file. If a future version adds external
-        # deps, restore the pnpm install block (see git history).
         run: |
           set -e
           for f in $(find packages scripts -name '*.mjs' -o -name '*.js' 2>/dev/null); do
             node --check "$f" || { echo "syntax error in $f"; exit 1; }
           done
+      - name: Test Memory server
+        run: pnpm --filter @alfred-labs/memory-server test
       - name: Validate policies
         run: node scripts/validate-policies.mjs
       - name: Validate release regression gates
@@ -74,21 +81,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Stage OAuth secrets
+      - name: Stage OAuth and SMTP secrets
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           ALFRED_OAUTH_CLIENT_ID: ${{ secrets.ALFRED_OAUTH_CLIENT_ID }}
           ALFRED_OAUTH_CLIENT_SECRET: ${{ secrets.ALFRED_OAUTH_CLIENT_SECRET }}
           ALFRED_OAUTH_REDIRECT_URIS: ${{ secrets.ALFRED_OAUTH_REDIRECT_URIS }}
+          ALFRED_SMTP_HOST: ${{ secrets.ALFRED_SMTP_HOST }}
+          ALFRED_SMTP_PORT: ${{ secrets.ALFRED_SMTP_PORT }}
+          ALFRED_SMTP_USER: ${{ secrets.ALFRED_SMTP_USER }}
+          ALFRED_SMTP_PASSWORD: ${{ secrets.ALFRED_SMTP_PASSWORD }}
+          ALFRED_SMTP_FROM: ${{ secrets.ALFRED_SMTP_FROM }}
         run: |
           set -euo pipefail
           APP="${{ github.event.inputs.app }}"
           if [ -z "$APP" ]; then
             APP=$(grep -E '^app\s*=' fly.toml | head -1 | sed -E 's/^app\s*=\s*"([^"]+)".*/\1/')
           fi
-          for name in ALFRED_OAUTH_CLIENT_ID ALFRED_OAUTH_CLIENT_SECRET ALFRED_OAUTH_REDIRECT_URIS; do
+          for name in \
+            ALFRED_OAUTH_CLIENT_ID \
+            ALFRED_OAUTH_CLIENT_SECRET \
+            ALFRED_OAUTH_REDIRECT_URIS \
+            ALFRED_SMTP_HOST \
+            ALFRED_SMTP_PORT \
+            ALFRED_SMTP_USER \
+            ALFRED_SMTP_PASSWORD \
+            ALFRED_SMTP_FROM; do
             if [ -z "${!name:-}" ]; then
-              echo "Required OAuth configuration is missing: $name" >&2
+              echo "Required production configuration is missing: $name" >&2
               exit 1
             fi
           done
@@ -96,6 +116,11 @@ jobs:
             printf 'ALFRED_OAUTH_CLIENT_ID=%s\n' "$ALFRED_OAUTH_CLIENT_ID"
             printf 'ALFRED_OAUTH_CLIENT_SECRET=%s\n' "$ALFRED_OAUTH_CLIENT_SECRET"
             printf 'ALFRED_OAUTH_REDIRECT_URIS=%s\n' "$ALFRED_OAUTH_REDIRECT_URIS"
+            printf 'ALFRED_SMTP_HOST=%s\n' "$ALFRED_SMTP_HOST"
+            printf 'ALFRED_SMTP_PORT=%s\n' "$ALFRED_SMTP_PORT"
+            printf 'ALFRED_SMTP_USER=%s\n' "$ALFRED_SMTP_USER"
+            printf 'ALFRED_SMTP_PASSWORD=%s\n' "$ALFRED_SMTP_PASSWORD"
+            printf 'ALFRED_SMTP_FROM=%s\n' "$ALFRED_SMTP_FROM"
           } | flyctl secrets import --stage --app "$APP"
       - name: Deploy
         env:

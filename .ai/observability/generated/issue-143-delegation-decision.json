@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-143-delegation-decision",
+  "timestamp": "2026-09-03T00:02:40Z",
+  "actor": "orchestrator",
+  "event": "delegation_decision",
+  "decision": "execute-directly",
+  "target": "issue-143-smtp-recovery",
+  "reason": "The bounded recovery and deployment change does not require specialist delegation.",
+  "data": {
+    "issue": 143,
+    "branch": "issue-143-smtp-recovery",
+    "provider_calls": 0
+  }
+}

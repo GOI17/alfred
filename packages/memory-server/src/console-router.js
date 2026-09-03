@@ -25,6 +25,7 @@ import {
   RecoveryRateLimitedError,
   RecoveryNotFoundError,
   RecoveryValidationError,
+  RecoveryUnavailableError,
   BootstrapValidationError,
   BootstrapConfigError,
   BootstrapRateLimitedError
@@ -182,7 +183,8 @@ export function createConsoleRouter({
   consoleDirOverride = null,
   consoleUrl = null,
   registry = null,                          // v0.3.1: needed for bootstrap_attempts
-  sharedUrl = process.env.ALFRED_SAAS_DATABASE_URL ?? null
+  sharedUrl = process.env.ALFRED_SAAS_DATABASE_URL ?? null,
+  emailSender: emailSenderOverride = null
 } = {}) {
   if (!userService) throw new TypeError("userService required");
   if (!tenantService) throw new TypeError("tenantService required");
@@ -191,7 +193,7 @@ export function createConsoleRouter({
   const rateLimiter = registry ? createRateLimiter({ registry }) : null;
   const schemaProvisioner = createSchemaProvisioner({ pgClient: sharedUrl ? pgClientFromUrl : noopPgClient });
   const captchaVerifier = createCaptchaVerifier();
-  const emailSender = createEmailSender();
+  const emailSender = emailSenderOverride ?? createEmailSender();
   const verification = registry ? createVerification({ registry, emailSender, baseUrl: process.env.ALFRED_PUBLIC_URL ?? "" }) : null;
   const recovery = registry ? createRecovery({ registry, userService, emailSender, baseUrl: process.env.ALFRED_PUBLIC_URL ?? "" }) : null;
   const bootstrap = registry
@@ -307,7 +309,7 @@ export function createConsoleRouter({
       catch (err) { return json(res, 400, { error: { code: "validation_error", message: errorMessage(err, "Invalid request body.") } }); }
       const ip = clientIpFromReq(req);
       try {
-        const result = await recovery.requestRecovery({ ip, email: body.email });
+        await recovery.requestRecovery({ ip, email: body.email });
         // Don't reveal whether the email exists: always 200 with a generic message.
         return json(res, 200, { ok: true, message: "If the email is registered, a recovery link has been sent." });
       } catch (err) {
@@ -316,6 +318,9 @@ export function createConsoleRouter({
         }
         if (err instanceof RecoveryRateLimitedError) {
           return json(res, 429, { error: { code: err.code, message: errorMessage(err), retry_after_minutes: err.retryAfterMinutes } });
+        }
+        if (err instanceof RecoveryUnavailableError) {
+          return json(res, 503, { error: { code: err.code, message: errorMessage(err) } });
         }
         return json(res, 500, { error: { code: "internal_error", message: errorMessage(err) } });
       }

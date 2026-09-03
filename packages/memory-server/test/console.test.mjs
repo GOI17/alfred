@@ -900,13 +900,34 @@ test("createEmailSender validates email format", () => {
   assert.equal(s.isValidEmail("a@b.c"), true);
 });
 
-test("createEmailSender.send is a no-op when disabled but logs the would-be send", async () => {
+test("createEmailSender disabled diagnostics do not expose message data", async () => {
   let logged = null;
   const s = createEmailSender({ host: null, log: { warn: (msg) => { logged = msg; } } });
   const r = await s.send({ to: "u@example.com", subject: "x", text: "hello" });
   assert.equal(r.sent, false);
   assert.equal(r.skipped, true);
-  assert.match(logged, /u@example.com/);
+  assert.match(logged, /message skipped/);
+  assert.doesNotMatch(logged, /u@example.com|hello/);
+});
+
+test("createEmailSender readiness fails closed when disabled", async () => {
+  const s = createEmailSender({ host: null });
+  assert.deepEqual(await s.checkReadiness(), { ready: false, reason: "not_configured" });
+});
+
+test("createEmailSender verifies a configured transport", async () => {
+  let verified = 0;
+  const nodemailer = {
+    createTransport() {
+      return {
+        async verify() { verified += 1; },
+        async sendMail() {}
+      };
+    }
+  };
+  const s = createEmailSender({ host: "smtp.example.com", nodemailer });
+  assert.deepEqual(await s.checkReadiness(), { ready: true });
+  assert.equal(verified, 1);
 });
 
 test("createEmailSender rejects invalid recipient", async () => {
@@ -1073,7 +1094,22 @@ test("cross-tenant-isolation-postgres test file exists and is opt-in", () => {
 // v0.4.0 phase 28: Forgot-my-key recovery
 // ============================================================================
 
-import { createRecovery, RecoveryRateLimitedError, RecoveryValidationError } from "../src/bootstrap/index.js";
+import {
+  createRecovery,
+  RecoveryRateLimitedError,
+  RecoveryUnavailableError,
+  RecoveryValidationError
+} from "../src/bootstrap/index.js";
+
+function makeReadyRecoverySender(overrides = {}) {
+  return {
+    isValidEmail: (email) => typeof email === "string" && email.includes("@"),
+    checkReadiness: async () => ({ ready: true }),
+    generateToken: () => "tok_recovery_12345678",
+    send: async () => ({ sent: true }),
+    ...overrides
+  };
+}
 
 function makeRecoveryFixture() {
   const emails = [];
@@ -1145,22 +1181,33 @@ test("createRecovery.requestRecovery rejects invalid email with validation_error
 
 test("createRecovery.requestRecovery returns generic 200-like result when email not registered (no enumeration)", async () => {
   const fx = makeRecoveryFixture();
-  const sender = createEmailSender({ host: null });
+  const sender = makeReadyRecoverySender();
   const r = createRecovery({ registry: fx.store, userService: { provisionApiKey: async () => ({ apiKey: "x", key: { id: "k" } }) }, emailSender: sender });
   const result = await r.requestRecovery({ ip: "1.1.1.1", email: "unknown@example.com" });
   assert.equal(result.sent, false);
   assert.equal(result.skipped, true);
 });
 
+test("createRecovery.requestRecovery fails before lookup when SMTP is unavailable", async () => {
+  const fx = makeRecoveryFixture();
+  let lookups = 0;
+  fx.store.recoveries.findLatestVerificationForEmail = async () => { lookups += 1; return null; };
+  const sender = makeReadyRecoverySender({ checkReadiness: async () => ({ ready: false, reason: "not_configured" }) });
+  const r = createRecovery({ registry: fx.store, userService: {}, emailSender: sender });
+  await assert.rejects(
+    r.requestRecovery({ ip: "1.1.1.1", email: "unknown@example.com" }),
+    (err) => err instanceof RecoveryUnavailableError && err.code === "recovery_unavailable"
+  );
+  assert.equal(lookups, 0);
+});
+
 test("createRecovery.requestRecovery issues a token and sends a link when email is registered", async () => {
   const fx = makeRecoveryFixture();
   fx.store.verifications.push({ id: "v1", tenant_id: "usr_t_abc", email: "user@example.com" });
   let sent = null;
-  const sender = {
-    isValidEmail: () => true,
-    generateToken: () => "tok_recovery_12345678",
+  const sender = makeReadyRecoverySender({
     send: async (msg) => { sent = msg; return { sent: false, skipped: true }; }
-  };
+  });
   const r = createRecovery({ registry: fx.store, userService: {}, emailSender: sender, baseUrl: "https://x" });
   const result = await r.requestRecovery({ ip: "1.1.1.1", email: "user@example.com" });
   assert.equal(fx.store._recoveryArr.length, 1);
@@ -1173,7 +1220,7 @@ test("createRecovery.requestRecovery issues a token and sends a link when email 
 test("createRecovery rate limits after 3 attempts in the window", async () => {
   const fx = makeRecoveryFixture();
   fx.store.verifications.push({ id: "v1", tenant_id: "usr_t_abc", email: "user@example.com" });
-  const sender = { isValidEmail: () => true, generateToken: () => "tok", send: async () => ({ sent: false, skipped: true }) };
+  const sender = makeReadyRecoverySender({ generateToken: () => "tok", send: async () => ({ sent: false, skipped: true }) });
   const r = createRecovery({ registry: fx.store, userService: {}, emailSender: sender });
   for (let i = 0; i < 3; i += 1) {
     await r.requestRecovery({ ip: "9.9.9.9", email: "user@example.com" });
@@ -1186,6 +1233,30 @@ test("createRecovery rate limits after 3 attempts in the window", async () => {
     assert.equal(err.code, "rate_limited");
     assert.ok(err.retryAfterMinutes >= 1);
   }
+});
+
+test("POST /console/api/recover maps global SMTP unavailability to 503", async () => {
+  const services = makeServices();
+  const fx = makeRecoveryFixture();
+  fx.store.recordBootstrapAttempt = async () => ({ id: "attempt" });
+  fx.store.countBootstrapAttempts = async () => 0;
+  fx.store.oldestBootstrapAttemptInWindow = async () => null;
+  const sender = makeReadyRecoverySender({ checkReadiness: async () => ({ ready: false, reason: "not_configured" }) });
+  const router = createConsoleRouter({
+    userService: services.userService,
+    tenantService: services.tenantService,
+    config: {},
+    consoleDirOverride: "",
+    registry: fx.store,
+    emailSender: sender
+  });
+  const res = await invoke(router, makeReq({
+    method: "POST",
+    url: "/console/api/recover",
+    body: { email: "unknown@example.com" }
+  }));
+  assert.equal(res.statusCode, 503);
+  assert.equal(JSON.parse(res.body).error.code, "recovery_unavailable");
 });
 
 test("createRecovery.consumeRecovery returns null for unknown token", async () => {
@@ -1240,6 +1311,23 @@ test("console-web index.html includes the forgot-my-key panel", () => {
   assert.match(htmlText, /requestRecovery/);
   assert.match(htmlText, /recoverEmail/);
   assert.match(htmlText, /Forgot your API key\?/);
+});
+
+test("Fly deploy stages the complete SMTP configuration atomically", () => {
+  const workflowPath = join(makeProjectRoot(), ".github/workflows/deploy-fly.yml");
+  const workflow = readFileSync(workflowPath, "utf8");
+  const smtpNames = [
+    "ALFRED_SMTP_HOST",
+    "ALFRED_SMTP_PORT",
+    "ALFRED_SMTP_USER",
+    "ALFRED_SMTP_PASSWORD",
+    "ALFRED_SMTP_FROM"
+  ];
+  for (const name of smtpNames) {
+    assert.match(workflow, new RegExp(`secrets\\.${name}`));
+    assert.match(workflow, new RegExp(`printf '${name}=%s\\\\n'`));
+  }
+  assert.equal((workflow.match(/flyctl secrets import --stage/g) ?? []).length, 1);
 });
 
 

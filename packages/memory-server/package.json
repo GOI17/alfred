@@ -12,6 +12,7 @@
     "./registry": "./src/registry/store-factory.js"
   },
   "dependencies": {
+    "nodemailer": "^9.1.1",
     "pg": "^8.13.0"
   },
   "scripts": {
