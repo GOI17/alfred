@@ -146,6 +146,7 @@ export function createApp({
 
     if (openapiRouter && (
       url.pathname === "/health" ||
+      url.pathname === "/privacy" ||
       url.pathname === "/agents/manifest" ||
       url.pathname === "/skills/manifest" ||
       url.pathname === "/openapi.yaml" ||

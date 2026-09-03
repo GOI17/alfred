@@ -3,6 +3,7 @@
 //
 // Endpoints (all relative to /):
 //   GET  /health                  -- public (no auth), used by GPT healthcheck
+//   GET  /privacy                 -- public Alfred Memory privacy policy
 //   GET  /agents/manifest         -- public, returns the 6 agents from
 //                                    .ai/agents/registry.json
 //   GET  /skills/manifest         -- public, returns the skill catalog from
@@ -25,6 +26,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { createActionRateLimiter } from "./bootstrap/action-rate-limiter.js";
+import { renderPrivacyPolicyPage } from "./privacy-policy-page.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -217,6 +219,19 @@ export function createOpenapiRouter({
 
     if (url.pathname === "/health" && req.method === "GET") {
       return json(res, 200, { status: "ok", version: "0.4.1", mode: "openapi" });
+    }
+
+    if (url.pathname === "/privacy" && req.method === "GET") {
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "public, max-age=300",
+        "content-security-policy": "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        "permissions-policy": "camera=(), geolocation=(), microphone=()",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY"
+      });
+      return res.end(renderPrivacyPolicyPage());
     }
 
     if (url.pathname === "/agents/manifest" && req.method === "GET") {

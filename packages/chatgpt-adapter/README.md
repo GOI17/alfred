@@ -5,21 +5,27 @@ local bridge is required and the tenant API key is never stored in the GPT.
 
 ## Tenant users
 
-Open the preconfigured
-[Alfred GPT](https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred),
-ask for your memories, choose **Sign in**, and enter your `alk_...` key only on
-Alfred's consent page. Do not open the GPT editor or fill in Client ID or Client
-Secret; those fields are already configured inside the published Alfred GPT.
+Open [My GPTs](https://chatgpt.com/gpts/mine), select **Alfred Memory**, ask for
+your memories, choose **Sign in**, and enter your `alk_...` key only on Alfred's
+consent page. The configured GPT is currently owner-only because its ChatGPT
+account does not offer public GPT sharing. If Alfred Memory is not present in
+your account, an operator must create it from the configuration below.
 
 ## Operator-only configuration for a different Custom GPT
 
-This section does not apply to users of the published Alfred GPT. Use it only
-when deliberately creating and hosting a separate GPT Action.
+Use this section when Alfred Memory is not already available under **My GPTs**
+or when deliberately creating and hosting a separate GPT Action.
 
 Import the hosted schema:
 
 ```text
 https://alfred-labs-memory.fly.dev/openapi.yaml
+```
+
+Use the public privacy policy URL when publishing the GPT:
+
+```text
+https://alfred-labs-memory.fly.dev/privacy
 ```
 
 Choose **OAuth** and configure:

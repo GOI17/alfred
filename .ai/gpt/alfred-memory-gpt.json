@@ -33,8 +33,11 @@
   "metadata": {
     "category": "productivity",
     "tags": ["memory", "second-brain", "knowledge-base", "self-hosted", "alfred"],
-    "gpt_id": "g-6a320e87e6908191a3f834b273221f99",
-    "public_url": "https://chatgpt.com/g/g-6a320e87e6908191a3f834b273221f99-alfred",
+    "gpt_id": "g-6a99052078c08191a73ea9133e6f2df9",
+    "owner_url": "https://chatgpt.com/g/g-6a99052078c08191a73ea9133e6f2df9-alfred-memory",
+    "public_url": null,
+    "visibility": "only_me",
+    "sharing_constraint": "The ChatGPT builder reported that sharing GPTs with the public is no longer available for this account on September 2, 2026.",
     "oauth_callback_id": "g-31ee07319349c89eb0a46bd25648afbf99fd6b84",
     "version": "0.7.0",
     "openapi_spec": "packages/memory-openapi/openapi.yaml",
