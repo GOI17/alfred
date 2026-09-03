@@ -1,0 +1,14 @@
+{
+  "trace_id": "issue-156-delegation-decision",
+  "timestamp": "2026-09-03T02:42:06Z",
+  "actor": "orchestrator",
+  "event": "delegation_decision",
+  "decision": "execute-directly",
+  "target": "issue-156-record-release-0.7.0",
+  "reason": "Recording immutable release evidence is a bounded deterministic documentation update.",
+  "data": {
+    "issue": 156,
+    "branch": "issue-156-record-release-0.7.0",
+    "provider_calls": 0
+  }
+}

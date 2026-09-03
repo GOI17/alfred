@@ -1,7 +1,8 @@
 {
   "event": "release_candidate_started",
   "release": "0.7.0",
-  "validated_commit_source": "pending",
+  "validated_commit_source": "f8ec19e26d9ea26306275ddcc8e62f8f3393ca50",
+  "tap_commit": "09430e8789ce0c1faacf4ea8e0b4c4b9b0975746",
   "timestamp_utc": "2026-09-03",
   "phase": "issue-153-release-0.7.0",
   "issue": 153,
@@ -15,5 +16,15 @@
     "homebrew_formula_style": "pass"
   },
   "provider_calls": 0,
-  "result": "candidate-pass-pending-publication"
+  "external_validation": {
+    "github_release": "https://github.com/GOI17/alfred/releases/tag/v0.7.0",
+    "automatic_tap_run": "https://github.com/GOI17/alfred/actions/runs/33708497828",
+    "private_tap": "https://github.com/GOI17/homebrew-tap",
+    "homebrew_strict_audit": "pass",
+    "homebrew_upgrade": "0.6.0 to 0.7.0 pass",
+    "homebrew_test": "pass",
+    "alfred_version": "alfred 0.7.0",
+    "setup_preview": "pass; no files written; provider calls 0"
+  },
+  "result": "pass"
 }
