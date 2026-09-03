@@ -22,6 +22,12 @@ Import the hosted schema:
 https://alfred-labs-memory.fly.dev/openapi.yaml
 ```
 
+Use the public privacy policy URL when publishing the GPT:
+
+```text
+https://alfred-labs-memory.fly.dev/privacy
+```
+
 Choose **OAuth** and configure:
 
 | Field | Value |

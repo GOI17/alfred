@@ -163,6 +163,23 @@ test("/health responds 200 with mode", async () => {
   assert.equal(body.status, "ok");
 });
 
+test("/privacy dispatches to the public OpenAPI router", async () => {
+  const services = makeWireServices();
+  const app = createApp({
+    ...services,
+    getMemoryService: services.getMemoryService,
+    config: { mode: "local", requireAuth: true, allowedOrigins: [], port: 0, bind: "127.0.0.1" },
+    openapiRouter: async (req, res) => {
+      assert.equal(req.url, "/privacy");
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end("<!doctype html><title>Alfred Memory Privacy Policy</title>");
+    }
+  });
+  const res = await invoke(app, fakeReq({ method: "GET", url: "/privacy" }));
+  assert.equal(res.statusCode, 200);
+  assert.match(res.body, /Alfred Memory Privacy Policy/);
+});
+
 test("/policy responds 200 with validatePolicy report", async () => {
   const services = makeWireServices();
   const app = createApp({

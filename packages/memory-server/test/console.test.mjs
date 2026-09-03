@@ -1682,6 +1682,28 @@ test("GET /health is public and returns version", async () => {
   assert.equal(body.version, "0.4.1");
 });
 
+test("GET /privacy is public, plain-language HTML with restrictive headers", async () => {
+  const { userService } = makeServices();
+  const router = createOpenapiRouter({
+    userService,
+    getMemoryService: async () => ({}),
+    projectRoot: makeProjectRoot()
+  });
+  const res = await invoke(router, makeReq({ url: "/privacy" }));
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers["content-type"], "text/html; charset=utf-8");
+  assert.equal(res.headers["x-content-type-options"], "nosniff");
+  assert.equal(res.headers["x-frame-options"], "DENY");
+  assert.equal(res.headers["referrer-policy"], "no-referrer");
+  assert.match(res.headers["content-security-policy"], /default-src 'none'/);
+  assert.match(res.body, /Alfred Memory Privacy Policy/);
+  assert.match(res.body, /Information we process/);
+  assert.match(res.body, /Retention and deletion/);
+  assert.match(res.body, /do not sell personal information/i);
+  assert.match(res.body, /not ChatGPT's native Memory feature/i);
+  assert.doesNotMatch(res.body, /<script/i);
+});
+
 test("GET /agents/manifest is public and lists the 6 active agents", async () => {
   const { userService } = makeServices();
   const router = createOpenapiRouter({

@@ -39,6 +39,7 @@ export { createConsoleRouter } from "./console-router.js";
 
 // v0.4.1: Custom GPT / OpenAPI surface
 export { createOpenapiRouter } from "./openapi-router.js";
+export { renderPrivacyPolicyPage } from "./privacy-policy-page.js";
 
 export {
   createOAuthService,
