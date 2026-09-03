@@ -22,6 +22,7 @@ import {
   createEmailSender,
   createVerification,
   createRecovery,
+  createRecoveryContinuationPolicy,
   RecoveryRateLimitedError,
   RecoveryNotFoundError,
   RecoveryValidationError,
@@ -100,8 +101,8 @@ async function noopPgClient() {
   throw new BootstrapConfigError("Schema provisioner is not configured (no registry bound).");
 }
 
-function json(res, status, body) {
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+function json(res, status, body, extraHeaders = {}) {
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8", ...extraHeaders });
   res.end(JSON.stringify(body) + "\n");
 }
 
@@ -189,7 +190,9 @@ export function createConsoleRouter({
   consoleUrl = null,
   registry = null,                          // v0.3.1: needed for bootstrap_attempts
   sharedUrl = process.env.ALFRED_SAAS_DATABASE_URL ?? null,
-  emailSender: emailSenderOverride = null
+  emailSender: emailSenderOverride = null,
+  oauthService = null,
+  trace: traceOverride = null
 } = {}) {
   if (!userService) throw new TypeError("userService required");
   if (!tenantService) throw new TypeError("tenantService required");
@@ -200,7 +203,20 @@ export function createConsoleRouter({
   const captchaVerifier = createCaptchaVerifier();
   const emailSender = emailSenderOverride ?? createEmailSender();
   const verification = registry ? createVerification({ registry, emailSender, baseUrl: process.env.ALFRED_PUBLIC_URL ?? "" }) : null;
-  const recovery = registry ? createRecovery({ registry, userService, emailSender, baseUrl: process.env.ALFRED_PUBLIC_URL ?? "" }) : null;
+  const continuationPolicy = createRecoveryContinuationPolicy({ oauthService });
+  const recoveryTrace = typeof traceOverride === "function"
+    ? traceOverride
+    : (typeof registry?.oauth?.recordTrace === "function"
+        ? (event) => registry.oauth.recordTrace(event)
+        : async () => {});
+  const recovery = registry ? createRecovery({
+    registry,
+    userService,
+    emailSender,
+    continuationPolicy,
+    trace: recoveryTrace,
+    baseUrl: process.env.ALFRED_PUBLIC_URL ?? ""
+  }) : null;
   const bootstrap = registry
     ? createBootstrap({
         tenantService,
@@ -277,7 +293,12 @@ export function createConsoleRouter({
     // Cross-origin upstream: redirect HTML index to the upstream URL.
     if (url.pathname === "/console" || url.pathname === "/console/") {
       if (upstreamConsoleUrl) {
-        res.writeHead(302, { location: upstreamConsoleUrl });
+        const target = new URL(upstreamConsoleUrl);
+        const continuationValues = url.searchParams.getAll("continue_to");
+        if (continuationValues.length === 1) {
+          target.searchParams.set("continue_to", continuationValues[0]);
+        }
+        res.writeHead(302, { location: target.toString() });
         res.end();
         return;
       }
@@ -317,7 +338,7 @@ export function createConsoleRouter({
       catch (err) { return json(res, 400, { error: { code: "validation_error", message: errorMessage(err, "Invalid request body.") } }); }
       const ip = clientIpFromReq(req);
       try {
-        await recovery.requestRecovery({ ip, email: body.email });
+        await recovery.requestRecovery({ ip, email: body.email, continueTo: body.continue_to });
         // Don't reveal whether the email exists: always 200 with a generic message.
         return json(res, 200, { ok: true, message: "If the email is registered, a recovery link has been sent." });
       } catch (err) {
@@ -377,7 +398,13 @@ export function createConsoleRouter({
           : sendRecoveryPage(res, 500, { state: "unavailable" });
       }
       if (!wantsJson) {
-        return sendRecoveryPage(res, 200, { state: "success", apiKey: result.api_key });
+        return sendRecoveryPage(res, 200, {
+          state: "success",
+          apiKey: result.api_key,
+          continueUrl: result.continue_url,
+          actionLabel: result.continue_label,
+          autoContinue: result.continuation_kind === "oauth"
+        });
       }
       return sendRecoveryJson(res, 200, {
         ok: true,
@@ -387,7 +414,9 @@ export function createConsoleRouter({
         key_prefix: result.key_prefix,
         key_id: result.key_id,
         old_key_id: result.old_key_id,
-        consumed_at: result.consumed_at
+        consumed_at: result.consumed_at,
+        continue_url: result.continue_url,
+        continue_label: result.continue_label
       });
     }
 

@@ -19,8 +19,10 @@ new key from entering caches, logs, URLs, traces, or unsafe markup.
 
 `GET /console/api/recover?token=...` currently consumes a recovery token and
 returns raw JSON. Issue #148 owns continuation-context and redirect policy.
-This change provides only a same-origin `/console` fallback and does not
-accept, retain, or interpret redirect targets.
+This change originally provided only a same-origin `/console` fallback. Issue
+#148 now supplies an independently validated internal OAuth continuation to
+this renderer; the renderer still rejects external action URLs and retains the
+console fallback.
 
 ## Requirements
 
@@ -42,7 +44,9 @@ accept, retain, or interpret redirect targets.
    previous key has been revoked.
 3. Error pages explain that no new key was shown and offer a same-origin path
    back to the Alfred console to request a new recovery link.
-4. The recovery service distinguishes invalid and already-used records without
+4. A successful OAuth recovery may use the validated issue #148 continuation
+   for its action and timed return; direct recovery retains the console action.
+5. The recovery service distinguishes invalid and already-used records without
    returning a previously issued key.
 
 ### R3: Secret-safe rendering and copy behavior

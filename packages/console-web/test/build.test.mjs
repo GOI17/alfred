@@ -19,7 +19,17 @@ test("src/index.html exists and is non-empty", () => {
 
 test("src/index.html has the key UI elements", () => {
   const text = readFileSync(srcIndex, "utf8");
-  for (const r of ["<title>", "setKey", "loadTenants", "issueKey", "loadKeys", "apiBase"]) {
+  for (const r of [
+    "<title>",
+    "setKey",
+    "loadTenants",
+    "issueKey",
+    "loadKeys",
+    "apiBase",
+    "requestRecovery",
+    "continue_to",
+    "new URL(window.location.href)"
+  ]) {
     assert.ok(text.includes(r), "missing: " + r);
   }
 });

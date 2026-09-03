@@ -1407,7 +1407,9 @@ test("recovery success rotates the key and negotiates a secure one-time result",
     key_prefix: "alk_newxxxx",
     key_id: "key_new",
     old_key_id: null,
-    consumed_at: JSON.parse(jsonRes.body).consumed_at
+    consumed_at: JSON.parse(jsonRes.body).consumed_at,
+    continue_url: "/console/",
+    continue_label: "Continue with Alfred"
   });
   assertRecoverySecurityHeaders(jsonRes);
 

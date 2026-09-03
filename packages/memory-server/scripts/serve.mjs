@@ -220,6 +220,7 @@ export async function run(argv = [], env = process.env) {
     userService, tenantService, config,
     ...consoleOpts,
     registry,
+    oauthService,
     sharedUrl: merged.ALFRED_SAAS_DATABASE_URL ?? null
   });
   const openapiRouter = createOpenapiRouter({

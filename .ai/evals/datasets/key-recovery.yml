@@ -94,3 +94,34 @@ vectors:
     invariants:
       - The response body does NOT contain api_key, alk_, or any
         value matching /alk_[A-Za-z0-9_-]{20,}/.
+
+  - id: recovery-oauth-continuation
+    description: OAuth recovery preserves a validated internal consent path
+    inputs:
+      continue_to: canonical_oauth_authorize_path
+    expected_status: 200
+    expected_response:
+      continue_label: Continue with Alfred
+      continue_url_prefix: "/oauth/authorize?"
+    invariants:
+      - The emailed link contains no continuation context
+      - The OAuth callback is exact-allowlisted before persistence
+      - Runtime traces contain no continuation URL or OAuth state
+
+  - id: recovery-external-continuation-rejected
+    description: Recovery cannot be used as an open redirect
+    inputs:
+      continue_to: external_url
+    expected_status: 400
+    expected_response:
+      ok: false
+      error: validation_error
+
+  - id: recovery-direct-safe-fallback
+    description: Direct recovery returns to the Alfred console
+    inputs:
+      continue_to: null
+    expected_status: 200
+    expected_response:
+      continue_label: Continue with Alfred
+      continue_url: "/console/"

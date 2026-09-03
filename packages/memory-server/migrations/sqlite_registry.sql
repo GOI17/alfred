@@ -238,6 +238,7 @@ CREATE TABLE IF NOT EXISTS tenant_recoveries (
   used_at TEXT,
   new_key_id TEXT,
   old_key_id TEXT,
+  continuation_path TEXT,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 

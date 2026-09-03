@@ -88,9 +88,37 @@ export function sendRecoveryJson(res, status, body) {
   res.end(JSON.stringify(body) + "\n");
 }
 
-export function sendRecoveryPage(res, status, { state, apiKey = null } = {}) {
+function safeContinueUrl(value) {
+  if (value === "/console" || value === "/console/") return value;
+  if (typeof value !== "string" || !value.startsWith("/oauth/authorize?")) return "/console";
+  try {
+    const parsed = new URL(value, "https://alfred.invalid");
+    return parsed.origin === "https://alfred.invalid" && parsed.pathname === "/oauth/authorize" && !parsed.hash
+      ? value
+      : "/console";
+  } catch {
+    return "/console";
+  }
+}
+
+export function sendRecoveryPage(res, status, {
+  state,
+  apiKey = null,
+  continueUrl = "/console",
+  actionLabel = null,
+  autoContinue = false
+} = {}) {
   const content = RECOVERY_STATES[state] ?? RECOVERY_STATES.unavailable;
   const nonce = createNonce();
+  const actionUrl = safeContinueUrl(continueUrl);
+  const actionText = actionLabel || content.actionLabel;
+  const shouldAutoContinue = state === "success" && autoContinue && actionUrl.startsWith("/oauth/authorize?");
+  const autoContinueMeta = shouldAutoContinue
+    ? `<meta http-equiv="refresh" content="30;url=${escapeHtml(actionUrl)}">`
+    : "";
+  const autoContinueNotice = shouldAutoContinue
+    ? `<p class="auto-return">Alfred will return to the connection flow in 30 seconds. Copy the new key before continuing.</p>`
+    : "";
   const keyMarkup = state === "success" && typeof apiKey === "string"
     ? `
         <section class="key-panel" aria-labelledby="key-label">
@@ -138,6 +166,7 @@ export function sendRecoveryPage(res, status, { state, apiKey = null } = {}) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
+  ${autoContinueMeta}
   <title>${content.title} · Alfred Memory</title>
   <style nonce="${nonce}">
     :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -156,6 +185,7 @@ export function sendRecoveryPage(res, status, { state, apiKey = null } = {}) {
     button:focus-visible, .action:focus-visible, input:focus-visible { outline: .2rem solid #fbbf24; outline-offset: .2rem; }
     .warning { margin: 1rem 0 0; color: #fde68a; line-height: 1.55; }
     .copy-status { min-height: 1.5em; margin: .65rem 0 0; color: #bfdbfe; line-height: 1.5; }
+    .auto-return { margin: 1rem 0 0; color: #bfdbfe; line-height: 1.55; }
     .actions { margin: 2rem 0 0; }
     @media (max-width: 34rem) { .copy-row { align-items: stretch; flex-direction: column; } button { width: 100%; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
@@ -165,8 +195,8 @@ export function sendRecoveryPage(res, status, { state, apiKey = null } = {}) {
   <main aria-labelledby="page-title">
     <p class="eyebrow">${content.eyebrow}</p>
     <h1 id="page-title">${content.title}</h1>
-    <p class="summary">${content.summary}</p>${keyMarkup}
-    <p class="actions"><a class="action" href="/console">${content.actionLabel}</a></p>
+    <p class="summary">${content.summary}</p>${keyMarkup}${autoContinueNotice}
+    <p class="actions"><a class="action" href="${escapeHtml(actionUrl)}">${escapeHtml(actionText)}</a></p>
   </main>${copyScript}
 </body>
 </html>`;

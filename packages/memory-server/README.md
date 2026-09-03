@@ -128,8 +128,10 @@ enumeration.
 Opening `GET /console/api/recover?token=...` in a browser returns an accessible
 HTML result page by default. The page sends `Cache-Control: no-store`, does not
 load external assets, and shows a newly issued key only on the first successful
-use of the link. Its Continue action is the fixed, same-origin `/console` path;
-continuation and redirect policy are intentionally outside this endpoint.
+use of the link. Direct recovery uses the same-origin `/console/` fallback.
+Recovery started from OAuth uses only a canonical internal `/oauth/authorize`
+continuation after Alfred revalidates the OAuth client, exact callback
+allowlist, state, and scopes. External continuation targets are rejected.
 
 Machine clients must explicitly send `Accept: application/json`. A successful
 JSON response retains the existing fields:
@@ -143,7 +145,9 @@ JSON response retains the existing fields:
   "key_prefix": "alk_...",
   "key_id": "key_...",
   "old_key_id": "key_...",
-  "consumed_at": "2026-09-03T00:00:00.000Z"
+  "consumed_at": "2026-09-03T00:00:00.000Z",
+  "continue_url": "/console/",
+  "continue_label": "Continue with Alfred"
 }
 ```
 
@@ -154,6 +158,11 @@ not JSON. Recovery GET responses carry the same no-store and restrictive
 security headers in both representations. The secret-bearing recovery GET is
 not exposed through browser CORS; machine clients should call it directly.
 Clients must never persist or log the returned `api_key`.
+
+The emailed recovery link remains unchanged: continuation context is stored
+server-side with the recovery record and is revalidated when consumed. The
+browser page attempts the OAuth return only after giving the user time to copy
+the new key, and always provides an explicit **Continue with Alfred** action.
 
 ## Web console
 
