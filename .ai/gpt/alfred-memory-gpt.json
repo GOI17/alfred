@@ -34,7 +34,7 @@
     "tags": ["memory", "second-brain", "knowledge-base", "self-hosted", "alfred"],
     "gpt_id": "g-6a320e87e6908191a3f834b273221f99",
     "oauth_callback_id": "g-31ee07319349c89eb0a46bd25648afbf99fd6b84",
-    "version": "0.6.0",
+    "version": "0.7.0",
     "openapi_spec": "packages/memory-openapi/openapi.yaml",
     "provider_calls_per_request": 0
   }

@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Alfred Memory API
   description: "Exposes Alfred Memory as a ChatGPT Action. A Custom GPT can search, list, create, update and delete durable memories for a user through this schema. This is not a native ChatGPT Memory integration: Alfred Memory remains an external service invoked by the Custom GPT at runtime."
-  version: 0.6.0
+  version: 0.7.0
   contact:
     name: Alfred Labs
 servers:

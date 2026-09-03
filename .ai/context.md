@@ -109,7 +109,7 @@ Install scripts validate paths (reject root `/` and protected paths like `.ai/`,
 
 ### 8. Homebrew Distribution
 
-Alfred `0.6.0` uses a versioned Homebrew packaging boundary. Collaborators use
+Alfred `0.7.0` uses a versioned Homebrew packaging boundary. Collaborators use
 the private `GOI17/homebrew-tap` and install the fully qualified formula with
 `brew install GOI17/tap/alfred`; the qualification avoids collision with the
 unrelated Alfred macOS application cask. The formula installs `alfred` and
