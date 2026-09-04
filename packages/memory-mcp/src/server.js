@@ -2,7 +2,11 @@ import { errorResult, validationErrorResult } from "./errors.js";
 
 export const MEMORY_MCP_SERVER_INFO = Object.freeze({
   name: "alfred-memory-mcp",
-  version: "0.0.0"
+  version: "0.7.1"
+});
+
+export const MEMORY_MCP_SERVER_OPTIONS = Object.freeze({
+  instructions: "Use search or list before creating duplicate memories. Treat memory IDs as opaque. Ask for confirmation before deleting a memory. Alfred Memory data is private to the connected tenant."
 });
 
 const MEMORY_TYPES = ["preference", "fact", "decision", "workflow", "project", "correction", "source"];
@@ -12,7 +16,8 @@ export async function createMemoryMcpServer(options = {}) {
   const memoryClient = requiredMemoryClient(options.memoryClient);
   const schema = options.schema ?? createZodSchemaAdapter(await loadZod());
   const server = options.server ?? new (options.McpServer ?? (await loadMcpServer()))(
-    options.serverInfo ?? MEMORY_MCP_SERVER_INFO
+    options.serverInfo ?? MEMORY_MCP_SERVER_INFO,
+    options.serverOptions ?? MEMORY_MCP_SERVER_OPTIONS
   );
 
   registerMemoryTools(server, { memoryClient, schema });
@@ -26,20 +31,26 @@ export function registerMemoryTools(server, options = {}) {
 
   registerTool("memory_search", {
     title: "Search memories",
-    description: "Search Alfred memories through the Memory API.",
-    inputSchema: schema.searchInput
+    description: "Use this when the user wants to find relevant memories in their private Alfred workspace.",
+    inputSchema: schema.searchInput,
+    outputSchema: schema.listOutput,
+    ...toolSecurity("memory:read", { readOnlyHint: true })
   }, async (input) => withSafeErrors(() => memoryClient.searchMemories(normalizeSearchInput(input))));
 
   registerTool("memory_create", {
     title: "Create memory",
-    description: "Create an Alfred memory through the Memory API.",
-    inputSchema: schema.createInput
+    description: "Use this when the user explicitly wants Alfred to remember a durable fact, preference, decision, workflow, project detail, correction, or source.",
+    inputSchema: schema.createInput,
+    outputSchema: schema.memoryOutput,
+    ...toolSecurity("memory:write")
   }, async (input) => withSafeErrors(() => memoryClient.createMemory(normalizeCreateInput(input))));
 
   registerTool("memory_update", {
     title: "Update memory",
-    description: "Update an Alfred memory by id through the Memory API.",
-    inputSchema: schema.updateInput
+    description: "Use this when the user wants to correct or revise an existing private Alfred memory identified by its exact ID.",
+    inputSchema: schema.updateInput,
+    outputSchema: schema.memoryOutput,
+    ...toolSecurity("memory:write")
   }, async (input) => {
     if (input?.patch && Object.hasOwn(input.patch, "namespace")) {
       return validationErrorResult("memory_update patch must not include namespace.", [
@@ -55,14 +66,18 @@ export function registerMemoryTools(server, options = {}) {
 
   registerTool("memory_delete", {
     title: "Delete memory",
-    description: "Delete an Alfred memory by id through the Memory API.",
-    inputSchema: schema.deleteInput
+    description: "Use this only after confirmation when the user wants to permanently delete an existing private Alfred memory identified by its exact ID.",
+    inputSchema: schema.deleteInput,
+    outputSchema: schema.deleteOutput,
+    ...toolSecurity("memory:write", { destructiveHint: true })
   }, async (input) => withSafeErrors(() => memoryClient.deleteMemory(normalizeIdInput(input, "memory_delete").id)));
 
   registerTool("memory_list", {
     title: "List memories",
-    description: "List Alfred memories through the Memory API.",
-    inputSchema: schema.listInput
+    description: "Use this when the user wants to browse or filter memories in their private Alfred workspace.",
+    inputSchema: schema.listInput,
+    outputSchema: schema.listOutput,
+    ...toolSecurity("memory:read", { readOnlyHint: true })
   }, async (input = {}) => withSafeErrors(() => memoryClient.listMemories(normalizeListInput(input))));
 
   return server;
@@ -96,7 +111,23 @@ export function createPlainSchemaAdapter() {
     deleteInput: {
       id: { type: "string", required: true }
     },
-    listInput: listSchemaFields()
+    listInput: listSchemaFields(),
+    memoryOutput: { type: "object", required: ["id"], additionalProperties: true },
+    deleteOutput: {
+      type: "object",
+      fields: { deleted: { type: "boolean", required: true } },
+      required: ["deleted"],
+      additionalProperties: true
+    },
+    listOutput: {
+      type: "object",
+      fields: {
+        items: { type: "object[]", required: true },
+        pagination: { type: "object", required: true }
+      },
+      required: ["items", "pagination"],
+      additionalProperties: true
+    }
   };
 }
 
@@ -104,6 +135,13 @@ export function createZodSchemaAdapter(zod) {
   const z = zod.z ?? zod.default ?? zod;
   const memoryType = z.enum(MEMORY_TYPES);
   const metadata = z.record(z.string(), z.unknown());
+
+  const memoryOutput = z.object({ id: z.string() }).passthrough();
+  const paginationOutput = z.object({
+    limit: z.number(),
+    offset: z.number(),
+    total: z.number()
+  }).passthrough();
 
   return {
     searchInput: z.object({
@@ -137,7 +175,30 @@ export function createZodSchemaAdapter(zod) {
     deleteInput: z.object({
       id: z.string().min(1)
     }),
-    listInput: z.object(zodListSchemaFields(z, memoryType))
+    listInput: z.object(zodListSchemaFields(z, memoryType)),
+    memoryOutput,
+    deleteOutput: z.object({ deleted: z.boolean() }).passthrough(),
+    listOutput: z.object({
+      items: z.array(z.record(z.string(), z.unknown())),
+      pagination: paginationOutput
+    }).passthrough()
+  };
+}
+
+function toolSecurity(scope, annotationOverrides = {}) {
+  const securitySchemes = [{ type: "oauth2", scopes: [scope] }];
+  return {
+    // `securitySchemes` is the current OpenAI tool-auth contract. Keep the
+    // mirrored metadata entry for MCP SDK/client versions that expose vendor
+    // extensions only through `_meta`.
+    securitySchemes,
+    _meta: { securitySchemes },
+    annotations: {
+      readOnlyHint: false,
+      openWorldHint: false,
+      destructiveHint: false,
+      ...annotationOverrides
+    }
   };
 }
 

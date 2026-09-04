@@ -1079,6 +1079,8 @@ test("ci-postgres.yml exists and runs the isolation test", () => {
   assert.match(t, /cross-tenant-isolation-postgres\.test\.mjs/);
   assert.match(t, /postgres:16-alpine/);
   assert.match(t, /ALFRED_TEST_POSTGRES_URL/);
+  assert.match(t, /pnpm install --frozen-lockfile --filter @alfred-labs\/memory-server\.\.\./);
+  assert.doesNotMatch(t, /\brun:\s+npm install/);
 });
 
 test("cross-tenant-isolation-postgres test file exists and is opt-in", () => {
@@ -1701,6 +1703,8 @@ test("GET /privacy is public, plain-language HTML with restrictive headers", asy
   assert.match(res.body, /Retention and deletion/);
   assert.match(res.body, /do not sell personal information/i);
   assert.match(res.body, /not ChatGPT's native Memory feature/i);
+  assert.match(res.body, /published by AlfredLabs/i);
+  assert.match(res.body, /alfred\.support@alfredlabs\.org/i);
   assert.doesNotMatch(res.body, /<script/i);
 });
 

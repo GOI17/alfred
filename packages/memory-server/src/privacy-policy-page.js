@@ -1,4 +1,4 @@
-const EFFECTIVE_DATE = "September 2, 2026";
+const EFFECTIVE_DATE = "September 3, 2026";
 
 export function renderPrivacyPolicyPage() {
   return `<!doctype html>
@@ -12,7 +12,7 @@ export function renderPrivacyPolicyPage() {
   <main>
     <h1>Alfred Memory Privacy Policy</h1>
     <p><strong>Effective date:</strong> ${EFFECTIVE_DATE}</p>
-    <p>Alfred Memory is an external, self-hostable memory service used by the Alfred Memory Custom GPT. It is not ChatGPT's native Memory feature.</p>
+    <p>Alfred Memory is an external, self-hostable memory service published by AlfredLabs. It is not ChatGPT's native Memory feature.</p>
 
     <h2>Information we process</h2>
     <ul>
@@ -38,9 +38,8 @@ export function renderPrivacyPolicyPage() {
     <p>Alfred Memory is not directed to children under 13, and we do not knowingly collect their personal information.</p>
 
     <h2>Changes and contact</h2>
-    <p>Material changes will be reflected on this page with a new effective date. For privacy questions or deletion assistance, open an issue in the <a href="https://github.com/GOI17/alfred/issues">Alfred repository</a>.</p>
+    <p>Material changes will be reflected on this page with a new effective date. For privacy questions or deletion assistance, email <a href="mailto:alfred.support@alfredlabs.org">alfred.support@alfredlabs.org</a>.</p>
   </main>
 </body>
 </html>\n`;
 }
-

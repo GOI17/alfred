@@ -4,8 +4,12 @@ const OAUTH_FIELDS = Object.freeze([
   "client_id",
   "redirect_uri",
   "state",
-  "scope"
+  "scope",
+  "resource",
+  "code_challenge",
+  "code_challenge_method"
 ]);
+const REQUIRED_OAUTH_FIELDS = Object.freeze(["response_type", "client_id", "redirect_uri", "state", "scope"]);
 const OAUTH_FIELD_SET = new Set(OAUTH_FIELDS);
 const PARSE_ORIGIN = "https://alfred.invalid";
 const MAX_CONTINUATION_LENGTH = 4096;
@@ -26,7 +30,9 @@ function invalidContinuation() {
 
 function canonicalOAuthPath(request) {
   const query = new URLSearchParams();
-  for (const field of OAUTH_FIELDS) query.set(field, request[field]);
+  for (const field of OAUTH_FIELDS) {
+    if (request[field] !== null && request[field] !== undefined) query.set(field, request[field]);
+  }
   return `${OAUTH_PATH}?${query.toString()}`;
 }
 
@@ -67,7 +73,8 @@ export function createRecoveryContinuationPolicy({ oauthService = null } = {}) {
       if (!OAUTH_FIELD_SET.has(name)) return invalidContinuation();
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
-    if (OAUTH_FIELDS.some((name) => counts.get(name) !== 1)) return invalidContinuation();
+    if (REQUIRED_OAUTH_FIELDS.some((name) => counts.get(name) !== 1)) return invalidContinuation();
+    if (OAUTH_FIELDS.some((name) => (counts.get(name) ?? 0) > 1)) return invalidContinuation();
     if (typeof oauthService?.validateAuthorizationRequest !== "function") return invalidContinuation();
 
     let request;

@@ -12,7 +12,7 @@ export function isMemoryClientError(error) {
 
 export function errorResult(error) {
   if (isMemoryClientError(error)) {
-    return resultFromSafeError(safeMemoryClientError(error));
+    return resultFromSafeError(safeMemoryClientError(error), safeChallenge(error.mcpChallenge));
   }
 
   return resultFromSafeError(DEFAULT_UNEXPECTED_ERROR);
@@ -26,11 +26,12 @@ export function validationErrorResult(message, details = undefined) {
   });
 }
 
-function resultFromSafeError(error) {
+function resultFromSafeError(error, challenge = null) {
   return {
     isError: true,
     content: [{ type: "text", text: JSON.stringify({ error }) }],
-    structuredContent: { error }
+    structuredContent: { error },
+    ...(challenge ? { _meta: { "mcp/www_authenticate": [challenge] } } : {})
   };
 }
 
@@ -47,7 +48,13 @@ function safeOperationalMessage(error) {
   if (error.code === "configuration_error") return "Memory MCP configuration failed.";
   if (error.code === "validation_error") return "Memory request validation failed.";
   if (error.code === "network_error") return "Memory API request failed.";
+  if (error.code === "insufficient_scope") return "Alfred needs an additional permission.";
   return "Memory API request failed.";
+}
+
+function safeChallenge(value) {
+  if (typeof value !== "string" || !value.startsWith("Bearer ") || /[\r\n]/.test(value)) return null;
+  return value;
 }
 
 function sanitizeValue(value, seen = new WeakSet()) {

@@ -1,0 +1,17 @@
+{
+  "trace_id": "issue-167-publisher-contact",
+  "timestamp": "2026-09-04T02:11:44Z",
+  "actor": "orchestrator",
+  "event": "publisher_contact_configured",
+  "decision": "alfredlabs-product-address",
+  "target": "issue-167-openai-mcp-plugin",
+  "reason": "The human selected AlfredLabs as publisher and required the product.action@alfredlabs.org email convention. No existing Alfred-specific rule was suitable, so an active Cloudflare Email Routing rule was configured for alfred.support@alfredlabs.org using the verified account destination.",
+  "data": {
+    "issue": 167,
+    "publisher": "AlfredLabs",
+    "support_address": "alfred.support@alfredlabs.org",
+    "email_convention": "product.action@alfredlabs.org",
+    "cloudflare_rule_active": true,
+    "provider_calls": 0
+  }
+}

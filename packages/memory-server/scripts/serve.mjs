@@ -14,6 +14,7 @@ import {
   createConsoleRouter,
   createOpenapiRouter,
   createOAuthRouter,
+  createMcpRouter,
   createOAuthService,
   loadOAuthConfig
 } from "../src/index.js";
@@ -233,6 +234,13 @@ export async function run(argv = [], env = process.env) {
     requireAuth: true,
     allowedOrigins: config.allowedOrigins
   });
+  const mcpRouter = createMcpRouter({
+    oauthService,
+    getMemoryService: memoryFactory,
+    publicUrl: oauthConfig.enabled ? oauthConfig.publicUrl : (merged.ALFRED_PUBLIC_URL ?? "http://localhost"),
+    challengeToken: merged.ALFRED_OPENAI_APPS_CHALLENGE ?? null,
+    trace: (event) => registry.oauth.recordTrace(event)
+  });
   const app = createApp({
     tenantService,
     memoryService: null,  // unused; we route per-tenant
@@ -241,6 +249,7 @@ export async function run(argv = [], env = process.env) {
     consoleRouter,
     openapiRouter,
     oauthRouter,
+    mcpRouter,
     registry
   });
 

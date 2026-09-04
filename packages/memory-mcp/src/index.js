@@ -1,5 +1,6 @@
 export {
   MEMORY_MCP_SERVER_INFO,
+  MEMORY_MCP_SERVER_OPTIONS,
   createMemoryMcpServer,
   createPlainSchemaAdapter,
   createZodSchemaAdapter,

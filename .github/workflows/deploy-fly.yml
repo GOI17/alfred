@@ -6,6 +6,7 @@ name: deploy-fly
 #   ALFRED_OAUTH_CLIENT_ID
 #   ALFRED_OAUTH_CLIENT_SECRET
 #   ALFRED_OAUTH_REDIRECT_URIS
+#   ALFRED_OPENAI_APPS_CHALLENGE — optional until the plugin portal issues it
 #   ALFRED_SMTP_HOST
 #   ALFRED_SMTP_PORT
 #   ALFRED_SMTP_USER
@@ -20,6 +21,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "packages/memory-mcp/**"
       - "packages/memory-server/**"
       - "scripts/**"
       - "Dockerfile"
@@ -87,6 +89,7 @@ jobs:
           ALFRED_OAUTH_CLIENT_ID: ${{ secrets.ALFRED_OAUTH_CLIENT_ID }}
           ALFRED_OAUTH_CLIENT_SECRET: ${{ secrets.ALFRED_OAUTH_CLIENT_SECRET }}
           ALFRED_OAUTH_REDIRECT_URIS: ${{ secrets.ALFRED_OAUTH_REDIRECT_URIS }}
+          ALFRED_OPENAI_APPS_CHALLENGE: ${{ secrets.ALFRED_OPENAI_APPS_CHALLENGE }}
           ALFRED_SMTP_HOST: ${{ secrets.ALFRED_SMTP_HOST }}
           ALFRED_SMTP_PORT: ${{ secrets.ALFRED_SMTP_PORT }}
           ALFRED_SMTP_USER: ${{ secrets.ALFRED_SMTP_USER }}
@@ -116,6 +119,9 @@ jobs:
             printf 'ALFRED_OAUTH_CLIENT_ID=%s\n' "$ALFRED_OAUTH_CLIENT_ID"
             printf 'ALFRED_OAUTH_CLIENT_SECRET=%s\n' "$ALFRED_OAUTH_CLIENT_SECRET"
             printf 'ALFRED_OAUTH_REDIRECT_URIS=%s\n' "$ALFRED_OAUTH_REDIRECT_URIS"
+            if [ -n "${ALFRED_OPENAI_APPS_CHALLENGE:-}" ]; then
+              printf 'ALFRED_OPENAI_APPS_CHALLENGE=%s\n' "$ALFRED_OPENAI_APPS_CHALLENGE"
+            fi
             printf 'ALFRED_SMTP_HOST=%s\n' "$ALFRED_SMTP_HOST"
             printf 'ALFRED_SMTP_PORT=%s\n' "$ALFRED_SMTP_PORT"
             printf 'ALFRED_SMTP_USER=%s\n' "$ALFRED_SMTP_USER"
@@ -152,3 +158,12 @@ jobs:
           done
           echo "Smoke test failed: $URL did not return ok within 25s"
           exit 1
+      - name: Smoke test MCP discovery
+        run: |
+          set -euo pipefail
+          APP=$(grep -E '^app\s*=' fly.toml | head -1 | sed -E 's/^app\s*=\s*"([^"]+)".*/\1/')
+          ORIGIN="https://${APP}.fly.dev"
+          RESOURCE=$(curl -fsS "${ORIGIN}/.well-known/oauth-protected-resource")
+          AUTH=$(curl -fsS "${ORIGIN}/.well-known/oauth-authorization-server")
+          echo "$RESOURCE" | grep -Fq "\"resource\":\"${ORIGIN}/mcp\""
+          echo "$AUTH" | grep -Fq '"code_challenge_methods_supported":["S256"]'

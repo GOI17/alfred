@@ -1,6 +1,8 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 export const OAUTH_SCOPES = Object.freeze(["memory:read", "memory:write"]);
+const PKCE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/;
+const PKCE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
 export class OAuthConfigError extends Error {
   constructor(message) {
@@ -75,6 +77,7 @@ export function loadOAuthConfig(env = process.env) {
     clientId,
     clientSecret,
     publicUrl,
+    mcpResource: `${publicUrl}/mcp`,
     redirectUris: Object.freeze([...new Set(redirectUris)]),
     authorizationCodeTtlSeconds: positiveInteger(env.ALFRED_OAUTH_CODE_TTL_SECONDS, 300, "ALFRED_OAUTH_CODE_TTL_SECONDS"),
     accessTokenTtlSeconds: positiveInteger(env.ALFRED_OAUTH_ACCESS_TTL_SECONDS, 3600, "ALFRED_OAUTH_ACCESS_TTL_SECONDS"),
@@ -111,6 +114,28 @@ function futureIso(nowMs, seconds) {
   return new Date(nowMs + seconds * 1000).toISOString();
 }
 
+function normalizeResource(value, config) {
+  if (value === undefined || value === null || value === "") return null;
+  if (value !== config.mcpResource) {
+    throw new OAuthError("invalid_target", "The requested OAuth resource is not supported.");
+  }
+  return value;
+}
+
+function pkceChallenge(verifier) {
+  return createHash("sha256").update(verifier).digest("base64url");
+}
+
+function normalizePkce(input, { required }) {
+  const challenge = input.code_challenge;
+  const method = input.code_challenge_method;
+  if (!challenge && !method && !required) return { code_challenge: null, code_challenge_method: null };
+  if (method !== "S256" || typeof challenge !== "string" || !PKCE_CHALLENGE_PATTERN.test(challenge)) {
+    throw new OAuthError("invalid_request", "PKCE code_challenge and code_challenge_method=S256 are required.");
+  }
+  return { code_challenge: challenge, code_challenge_method: "S256" };
+}
+
 export function createOAuthService({ config, registry, userService, now = () => Date.now(), trace = null } = {}) {
   if (!config?.enabled) throw new OAuthConfigError("OAuth is not enabled.");
   if (!registry?.oauth) throw new TypeError("createOAuthService requires registry.oauth.");
@@ -125,12 +150,16 @@ export function createOAuthService({ config, registry, userService, now = () => 
     if (typeof input.state !== "string" || input.state.length === 0 || input.state.length > 2048) {
       throw new OAuthError("invalid_request", "state is required.");
     }
+    const resource = normalizeResource(input.resource, config);
+    const pkce = normalizePkce(input, { required: Boolean(resource) });
     return {
       response_type: "code",
       client_id: config.clientId,
       redirect_uri: input.redirect_uri,
       state: input.state,
-      scope: normalizeScope(input.scope)
+      scope: normalizeScope(input.scope),
+      resource,
+      ...pkce
     };
   }
 
@@ -156,6 +185,9 @@ export function createOAuthService({ config, registry, userService, now = () => 
       client_id: request.client_id,
       redirect_uri: request.redirect_uri,
       scope: request.scope,
+      resource: request.resource,
+      code_challenge: request.code_challenge,
+      code_challenge_method: request.code_challenge_method,
       expires_at: futureIso(now(), config.authorizationCodeTtlSeconds)
     });
     await emit({
@@ -169,7 +201,7 @@ export function createOAuthService({ config, registry, userService, now = () => 
     return { redirect_uri: redirect.toString() };
   }
 
-  function tokenPair(tenantId, scope, familyId = `otf_${randomUUID().replace(/-/g, "")}`) {
+  function tokenPair(tenantId, scope, familyId = `otf_${randomUUID().replace(/-/g, "")}`, resource = null) {
     const issuedAt = now();
     const accessToken = opaque("alo");
     const refreshToken = opaque("alr");
@@ -178,13 +210,13 @@ export function createOAuthService({ config, registry, userService, now = () => 
       access: {
         id: `oat_${randomUUID().replace(/-/g, "")}`,
         token_hash: hashOAuthSecret(accessToken), token_type: "access", tenant_id: tenantId,
-        client_id: config.clientId, scope, family_id: familyId,
+        client_id: config.clientId, scope, resource, family_id: familyId,
         expires_at: futureIso(issuedAt, config.accessTokenTtlSeconds)
       },
       refresh: {
         id: `ort_${randomUUID().replace(/-/g, "")}`,
         token_hash: hashOAuthSecret(refreshToken), token_type: "refresh", tenant_id: tenantId,
-        client_id: config.clientId, scope, family_id: familyId,
+        client_id: config.clientId, scope, resource, family_id: familyId,
         expires_at: futureIso(issuedAt, config.refreshTokenTtlSeconds)
       }
     };
@@ -203,20 +235,33 @@ export function createOAuthService({ config, registry, userService, now = () => 
   async function exchangeAuthorizationCode(input) {
     authenticateClient(input);
     if (!input.code || !input.redirect_uri) throw new OAuthError("invalid_request", "code and redirect_uri are required.");
-    const pair = tokenPair(null, "");
-    const exchanged = await registry.oauth.exchangeAuthorizationCode({
+    const lookup = {
       code_hash: hashOAuthSecret(input.code),
       client_id: config.clientId,
       redirect_uri: input.redirect_uri,
-      now: new Date(now()).toISOString(),
+      now: new Date(now()).toISOString()
+    };
+    const pending = await registry.oauth.findAuthorizationCode(lookup);
+    if (!pending) throw new OAuthError("invalid_grant", "Authorization code is invalid, expired, or already used.");
+    if ((pending.resource ?? null) !== normalizeResource(input.resource, config)) {
+      throw new OAuthError("invalid_grant", "OAuth resource does not match the authorization code.");
+    }
+    if (pending.code_challenge) {
+      if (typeof input.code_verifier !== "string" || !PKCE_VERIFIER_PATTERN.test(input.code_verifier)) {
+        throw new OAuthError("invalid_grant", "A valid PKCE code_verifier is required.");
+      }
+      if (!safeEqual(pkceChallenge(input.code_verifier), pending.code_challenge)) {
+        throw new OAuthError("invalid_grant", "PKCE verification failed.");
+      }
+    }
+    const pair = tokenPair(pending.tenant_id, pending.scope, undefined, pending.resource ?? null);
+    const exchanged = await registry.oauth.exchangeAuthorizationCode({
+      ...lookup,
+      code_challenge: pending.code_challenge ?? null,
       access: pair.access,
       refresh: pair.refresh
     });
     if (!exchanged) throw new OAuthError("invalid_grant", "Authorization code is invalid, expired, or already used.");
-    pair.access.tenant_id = exchanged.tenant_id;
-    pair.access.scope = exchanged.scope;
-    pair.refresh.tenant_id = exchanged.tenant_id;
-    pair.refresh.scope = exchanged.scope;
     await emit({
       tenant_id: exchanged.tenant_id,
       event: "oauth.authorization_code_exchanged",
@@ -245,7 +290,10 @@ export function createOAuthService({ config, registry, userService, now = () => 
     if (current.revoked_at) {
       return rejectReuse(current);
     }
-    const pair = tokenPair(current.tenant_id, current.scope, current.family_id);
+    if ((current.resource ?? null) !== normalizeResource(input.resource, config)) {
+      throw new OAuthError("invalid_grant", "OAuth resource does not match the refresh token.");
+    }
+    const pair = tokenPair(current.tenant_id, current.scope, current.family_id, current.resource ?? null);
     const rotated = await registry.oauth.rotateRefreshToken({
       token_hash: tokenHash,
       client_id: config.clientId,
@@ -274,11 +322,17 @@ export function createOAuthService({ config, registry, userService, now = () => 
     throw new OAuthError("unsupported_grant_type", "Supported grants are authorization_code and refresh_token.");
   }
 
-  async function resolveAccessToken(token) {
+  async function resolveAccessToken(token, { resource = undefined } = {}) {
     if (typeof token !== "string" || !token.startsWith("alo_")) return null;
     const row = await registry.oauth.resolveAccessToken(hashOAuthSecret(token), new Date(now()).toISOString());
     if (!row) return null;
-    return { tenant_id: row.tenant_id, scopes: row.scope.split(/\s+/).filter(Boolean), token_id: row.id };
+    if (resource !== undefined && row.resource !== resource) return null;
+    return {
+      tenant_id: row.tenant_id,
+      scopes: row.scope.split(/\s+/).filter(Boolean),
+      token_id: row.id,
+      resource: row.resource ?? null
+    };
   }
 
   return { config, validateAuthorizationRequest, authorize, exchangeToken, resolveAccessToken };

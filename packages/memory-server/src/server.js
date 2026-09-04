@@ -105,6 +105,7 @@ export function createApp({
   consoleRouter,        // optional: created via createConsoleRouter
   openapiRouter,        // optional: created via createOpenapiRouter (v0.4.1)
   oauthRouter,          // optional: OAuth 2.0 authorization/token endpoints
+  mcpRouter,            // optional: remote Streamable HTTP MCP + discovery
   registry = null       // v0.3.1: pass-through for /console/api/bootstrap
 }) {
   return async function app(req, res) {
@@ -140,8 +141,19 @@ export function createApp({
       }
     }
 
-    if (oauthRouter && url.pathname.startsWith("/oauth/")) {
+    if (oauthRouter && (
+      url.pathname.startsWith("/oauth/") ||
+      url.pathname === "/.well-known/oauth-authorization-server"
+    )) {
       return oauthRouter(req, res);
+    }
+
+    if (mcpRouter && (
+      url.pathname === "/mcp" ||
+      url.pathname === "/.well-known/oauth-protected-resource" ||
+      url.pathname === "/.well-known/openai-apps-challenge"
+    )) {
+      return mcpRouter(req, res);
     }
 
     if (openapiRouter && (
