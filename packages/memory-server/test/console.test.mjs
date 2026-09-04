@@ -1079,6 +1079,8 @@ test("ci-postgres.yml exists and runs the isolation test", () => {
   assert.match(t, /cross-tenant-isolation-postgres\.test\.mjs/);
   assert.match(t, /postgres:16-alpine/);
   assert.match(t, /ALFRED_TEST_POSTGRES_URL/);
+  assert.match(t, /pnpm install --frozen-lockfile --filter @alfred-labs\/memory-server\.\.\./);
+  assert.doesNotMatch(t, /\brun:\s+npm install/);
 });
 
 test("cross-tenant-isolation-postgres test file exists and is opt-in", () => {

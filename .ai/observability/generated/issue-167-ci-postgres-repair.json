@@ -1,0 +1,17 @@
+{
+  "trace_id": "issue-167-ci-postgres-repair",
+  "timestamp": "2026-09-04T02:14:51Z",
+  "actor": "orchestrator",
+  "event": "ci_configuration_repaired",
+  "decision": "use-pinned-pnpm-workspace-install",
+  "target": "issue-167-openai-mcp-plugin",
+  "reason": "The real Postgres isolation job failed before tests because npm cannot resolve workspace:* dependencies from a package subdirectory. The workflow now uses the repository's pinned pnpm version and existing lockfile, including the Memory server's declared pg dependency.",
+  "data": {
+    "issue": 167,
+    "failed_step": "Install pg",
+    "failure_code": "EUNSUPPORTEDPROTOCOL",
+    "yaml_parse": "passed",
+    "workflow_contract_test": "passed",
+    "provider_calls": 0
+  }
+}
