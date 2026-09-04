@@ -15,8 +15,8 @@ test("ChatGPT uses the canonical hosted OpenAPI schema", () => {
 });
 
 test("ChatGPT schema declares read and write OAuth scopes", () => {
-  assert.match(schema, /"memory:read":/);
-  assert.match(schema, /"memory:write":/);
+  assert.match(schema, /^\s+memory:read:/m);
+  assert.match(schema, /^\s+memory:write:/m);
   assert.doesNotMatch(schema, /type:\s*http\s+[\s\S]*scheme:\s*bearer/);
 });
 

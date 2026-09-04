@@ -1,0 +1,17 @@
+{
+  "trace_id": "issue-167-chatgpt-contract-repair",
+  "timestamp": "2026-09-04T02:33:00Z",
+  "actor": "orchestrator",
+  "event": "deployment_gate_repaired",
+  "decision": "match-canonical-yaml-scopes",
+  "target": "issue-167-openai-mcp-plugin",
+  "reason": "The ChatGPT adapter contract expected JSON-quoted OAuth scope keys while the canonical API contract is YAML with unquoted keys. The assertion now validates the serialized format that is actually shipped.",
+  "data": {
+    "issue": 167,
+    "failed_workflow": "deploy-fly",
+    "failed_run": 33829712680,
+    "failed_gate": "chatgpt-adapter-contract",
+    "contract_file": "packages/memory-openapi/openapi.yaml",
+    "provider_calls": 0
+  }
+}
