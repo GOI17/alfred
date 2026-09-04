@@ -58,7 +58,7 @@ jobs:
       - name: Install Memory server dependencies
         run: |
           corepack enable
-          pnpm install --frozen-lockfile --filter @alfred-labs/memory-server
+          pnpm install --frozen-lockfile --filter @alfred-labs/memory-server...
       - name: Validate Node syntax
         run: |
           set -e

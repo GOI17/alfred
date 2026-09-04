@@ -1,0 +1,17 @@
+{
+  "trace_id": "issue-167-fly-ci-deps-repair",
+  "timestamp": "2026-09-04T02:23:00Z",
+  "actor": "orchestrator",
+  "event": "deployment_gate_repaired",
+  "decision": "include-workspace-dependencies",
+  "target": "issue-167-openai-mcp-plugin",
+  "reason": "The Fly validation gate installed only the Memory server package. The MCP integration test requires the SDK declared by its memory-mcp workspace dependency, so the pnpm filter now includes dependency packages.",
+  "data": {
+    "issue": 167,
+    "failed_workflow": "deploy-fly",
+    "failed_test": "mcp-router.test.mjs",
+    "failure_code": "ERR_MODULE_NOT_FOUND",
+    "missing_package": "@modelcontextprotocol/sdk",
+    "provider_calls": 0
+  }
+}
