@@ -17,7 +17,9 @@ https://alfred.alfredlabs.org/
 ├── /assets/*        → site/assets/*            (CSS, favicon)
 ├── /docs/*          → site/docs/*              (documentation)
 ├── /memory/         → site/memory/index.html   (memory console landing)
-└── /memory/app/     → built console-web SPA    (API-key manager)
+├── /memory/app/     → built console-web SPA    (API-key manager)
+├── /support/        → site/support/index.html  (AlfredLabs support)
+└── /terms/          → site/terms/index.html    (hosted service terms)
 ```
 
 The memory console is the existing standalone SPA from

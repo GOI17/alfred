@@ -33,7 +33,7 @@ export function createMcpRouter({
         scopes_supported: MCP_SCOPES,
         resource_documentation: "https://alfred.alfredlabs.org/docs/memory.html",
         resource_policy_uri: `${origin}/privacy`,
-        resource_tos_uri: "https://alfred.alfredlabs.org/terms"
+        resource_tos_uri: "https://alfred.alfredlabs.org/terms/"
       }, { "cache-control": "public, max-age=300" });
     }
 

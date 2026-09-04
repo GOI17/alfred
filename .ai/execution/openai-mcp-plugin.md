@@ -44,6 +44,9 @@ plugin review.
    require an embedded component.
 8. Provider calls remain zero; implementation, validation, and review fixtures
    are deterministic.
+9. Publish under the AlfredLabs identity. Product email addresses follow
+   `product.action@alfredlabs.org`; the public support contact is
+   `alfred.support@alfredlabs.org`.
 
 ## Requirements
 
@@ -110,11 +113,12 @@ plugin review.
 - [ ] OpenAI accepts the submission and the publisher releases Alfred Memory in
       the Plugins Directory.
 
-## External decision
+## Publisher decision
 
-The human must choose whether the verified publisher identity is the personal
-developer or AlfredLabs. That decision affects Platform verification and the
-public listing, but it does not affect the local transport and security work.
+The human selected AlfredLabs as the publisher identity. The public website,
+support page, privacy policy, terms, and OpenAI Platform verification must all
+use that identity. Cloudflare Email Routing forwards the active
+`alfred.support@alfredlabs.org` address to a verified private destination.
 
 ## References
 
@@ -123,4 +127,3 @@ public listing, but it does not affect the local transport and security work.
 - OpenAI submission guide: https://developers.openai.com/plugins/deploy/submission
 - Existing MCP adapter: `packages/memory-mcp`
 - Existing OAuth design: `.ai/execution/chatgpt-oauth.md`
-

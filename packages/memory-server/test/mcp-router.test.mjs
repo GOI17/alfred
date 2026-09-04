@@ -67,7 +67,7 @@ test("publishes MCP protected-resource metadata without authentication", async (
     scopes_supported: ["memory:read", "memory:write"],
     resource_documentation: "https://alfred.alfredlabs.org/docs/memory.html",
     resource_policy_uri: "https://memory.example.test/privacy",
-    resource_tos_uri: "https://alfred.alfredlabs.org/terms"
+    resource_tos_uri: "https://alfred.alfredlabs.org/terms/"
   });
 });
 

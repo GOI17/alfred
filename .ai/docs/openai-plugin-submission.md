@@ -16,9 +16,9 @@ submission flow for a remote MCP server without custom UI.
 | Website | https://alfred.alfredlabs.org/memory/ |
 | MCP server | https://alfred-labs-memory.fly.dev/mcp |
 | Privacy | https://alfred-labs-memory.fly.dev/privacy |
-| Publisher | **Pending human decision: verified personal identity or AlfredLabs** |
-| Support | **Pending public support email and final https://alfred.alfredlabs.org/support/ page** |
-| Terms | **Pending publisher identity and final https://alfred.alfredlabs.org/terms/ page** |
+| Publisher | AlfredLabs |
+| Support | https://alfred.alfredlabs.org/support/ · alfred.support@alfredlabs.org |
+| Terms | https://alfred.alfredlabs.org/terms/ |
 
 ### Long description
 
@@ -150,7 +150,7 @@ and deterministic review fixtures.
 
 - [ ] Publisher identity is verified in the OpenAI Platform organization.
 - [ ] The submitter has Apps Management write permission.
-- [ ] Public support and terms pages identify the same verified publisher.
+- [ ] Public support and terms pages identify AlfredLabs after production deployment.
 - [ ] Logo meets the portal's current dimensions and branding requirements.
 - [ ] Production dependency install and container build succeed.
 - [ ] Production MCP Inspector initialization and all five tool calls succeed.
@@ -166,4 +166,3 @@ and deterministic review fixtures.
 - https://developers.openai.com/plugins/build/mcp-server
 - https://developers.openai.com/plugins/build/auth
 - https://developers.openai.com/plugins/deploy/submission
-

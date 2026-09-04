@@ -22,6 +22,8 @@ const required = [
   "docs/install.html",
   "memory/index.html",
   "memory/app/index.html",
+  "support/index.html",
+  "terms/index.html",
   "_headers",
   "_redirects"
 ];
@@ -71,6 +73,15 @@ if (!consoleHtml.includes(`window.ALFRED_API_BASE = ${JSON.stringify(expectedApi
 }
 if (consoleHtml.includes('window.ALFRED_API_BASE = "http://localhost:3000"') && !expectedApiBase.includes("localhost")) {
   problems.push("production Memory Console still points to localhost");
+}
+
+const supportHtml = await readFile(join(outputDir, "support", "index.html"), "utf8");
+const termsHtml = await readFile(join(outputDir, "terms", "index.html"), "utf8");
+for (const [name, html] of [["support", supportHtml], ["terms", termsHtml]]) {
+  if (!html.includes("AlfredLabs")) problems.push(`${name}/index.html does not identify AlfredLabs`);
+  if (!html.includes("alfred.support@alfredlabs.org")) {
+    problems.push(`${name}/index.html does not contain the canonical Alfred support address`);
+  }
 }
 
 if (problems.length) {
