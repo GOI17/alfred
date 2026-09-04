@@ -1501,6 +1501,7 @@ test("Fly deploy stages the complete SMTP configuration atomically", () => {
     assert.match(workflow, new RegExp(`printf '${name}=%s\\\\n'`));
   }
   assert.equal((workflow.match(/flyctl secrets import --stage/g) ?? []).length, 1);
+  assert.match(workflow, /pnpm install --frozen-lockfile --filter @alfred-labs\/memory-server\.\.\./);
 });
 
 
