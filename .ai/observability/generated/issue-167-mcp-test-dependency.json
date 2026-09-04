@@ -1,0 +1,18 @@
+{
+  "trace_id": "issue-167-mcp-test-dependency",
+  "timestamp": "2026-09-04T02:35:00Z",
+  "actor": "orchestrator",
+  "event": "deployment_gate_repaired",
+  "decision": "declare-direct-test-dependency",
+  "target": "issue-167-openai-mcp-plugin",
+  "reason": "The Memory server MCP integration test imports the MCP SDK directly. pnpm's strict dependency isolation requires the importing workspace to declare that package, even when another workspace dependency also uses it.",
+  "data": {
+    "issue": 167,
+    "failed_workflow": "deploy-fly",
+    "failed_run": 33829456195,
+    "failed_test": "mcp-router.test.mjs",
+    "failure_code": "ERR_MODULE_NOT_FOUND",
+    "declared_dev_dependency": "@modelcontextprotocol/sdk",
+    "provider_calls": 0
+  }
+}
