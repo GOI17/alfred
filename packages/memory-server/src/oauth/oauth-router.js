@@ -2,6 +2,8 @@ import { OAuthError } from "./oauth-service.js";
 import { buildOAuthRecoveryHref } from "../bootstrap/recovery-continuation.js";
 
 const MAX_FORM_BYTES = 32 * 1024;
+const CHATGPT_CALLBACK_ORIGIN = "https://chatgpt.com";
+const OPENAI_PLATFORM_ORIGIN = "https://platform.openai.com";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -9,8 +11,15 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 
-function html(res, status, body, { formActionOrigin = null } = {}) {
-  const formAction = formActionOrigin ? `form-action 'self' ${formActionOrigin}` : "form-action 'self'";
+function formActionOrigins(request) {
+  const callbackOrigin = new URL(request.redirect_uri).origin;
+  return callbackOrigin === CHATGPT_CALLBACK_ORIGIN
+    ? [callbackOrigin, OPENAI_PLATFORM_ORIGIN]
+    : [callbackOrigin];
+}
+
+function html(res, status, body, { allowedFormActionOrigins = [] } = {}) {
+  const formAction = ["form-action", "'self'", ...allowedFormActionOrigins].join(" ");
   res.writeHead(status, {
     "content-type": "text/html; charset=utf-8",
     "cache-control": "no-store",
@@ -94,7 +103,9 @@ export function createOAuthRouter({ oauthService = null } = {}) {
       }
       if (url.pathname === "/oauth/authorize" && req.method === "GET") {
         const request = oauthService.validateAuthorizationRequest(Object.fromEntries(url.searchParams));
-        return html(res, 200, consentPage(request), { formActionOrigin: new URL(request.redirect_uri).origin });
+        return html(res, 200, consentPage(request), {
+          allowedFormActionOrigins: formActionOrigins(request)
+        });
       }
       if (url.pathname === "/oauth/authorize" && req.method === "POST") {
         const form = await readForm(req);
@@ -106,7 +117,7 @@ export function createOAuthRouter({ oauthService = null } = {}) {
           if (err instanceof OAuthError && err.code === "access_denied") {
             const request = oauthService.validateAuthorizationRequest(form);
             return html(res, err.status, consentPage(request, err.message), {
-              formActionOrigin: new URL(request.redirect_uri).origin
+              allowedFormActionOrigins: formActionOrigins(request)
             });
           }
           throw err;
