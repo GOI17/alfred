@@ -28,7 +28,10 @@ COPY --chown=alfred:alfred package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
 COPY --chown=alfred:alfred packages ./packages
 COPY --chown=alfred:alfred scripts ./scripts
 RUN corepack enable \
-  && pnpm install --prod --frozen-lockfile --filter @alfred-labs/memory-server
+  && pnpm install --prod --frozen-lockfile --filter @alfred-labs/memory-server...
+# Fail the image build if the production dependency graph cannot load the real
+# MCP server factory and register Alfred Memory's tools.
+RUN node scripts/check-memory-mcp-production.mjs
 # The openapi-router reads two registry files at runtime for /agents/manifest
 # and /skills/manifest. They live under .ai/ which is otherwise excluded.
 COPY --chown=alfred:alfred .ai/agents/registry.json ./.ai/agents/registry.json

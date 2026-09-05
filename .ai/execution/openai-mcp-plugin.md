@@ -107,6 +107,8 @@ plugin review.
 - Keep the MCP SDK as a production dependency of the package that dynamically
   imports the Streamable HTTP transport so production-only installs can start
   authenticated MCP sessions.
+- Install the complete Memory server workspace dependency graph in the
+  production image and execute the real MCP server factory during the build.
 - Convert MCP server or transport setup failures into controlled JSON-RPC
   errors instead of resetting the HTTP connection.
 - Classify failed MCP initialization by a stable, credential-free stage in
