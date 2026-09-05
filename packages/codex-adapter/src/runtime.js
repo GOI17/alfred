@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { loadArchitectureKernel } from "../../core/src/index.js";
+import { PRIMARY_BEGIN, PRIMARY_END } from "./primary-instructions.js";
 
 function writeTextAtomic(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -40,10 +41,32 @@ function buildCodexDeveloperInstructions({ root, agent }) {
     "",
     "Codex runtime rules:",
     "- Use this custom agent only when the parent Codex session explicitly delegates or spawns it.",
+    "- Keep your assigned specialist role; the project's main-session Orchestrator instructions do not apply to delegated agents.",
     "- Inherit the parent session sandbox and approval policy; never broaden permissions.",
     "- Keep model selection user-owned; this file intentionally does not set model or reasoning defaults.",
     "- Prefer deterministic local checks before any provider request and keep provider calls observable.",
     "- Do not update eval baselines, promote temporary agents, or write harness config without explicit human approval."
+  ].join("\n");
+}
+
+function buildPrimaryInstructions({ root, kernel }) {
+  const primary = kernel.agents.agents.find((agent) => agent.id === "orchestrator");
+  if (!primary) throw new Error("Codex requires the Alfred Orchestrator source agent");
+  const spec = readSourceText(root, primary.spec).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, "");
+  return [
+    PRIMARY_BEGIN,
+    "## Alfred Orchestrator for Codex",
+    "",
+    "These instructions apply only when running in Codex.",
+    "The main Codex session acts as Alfred Orchestrator and applies the role below.",
+    "Delegated subagents keep their assigned specialist roles; the Orchestrator role below does not apply to them.",
+    "Preserve all other project instructions and the session's permission boundaries.",
+    "Use the installed custom agents for delegated specialist work. If unavailable, report the missing setup.",
+    "",
+    spec,
+    "",
+    PRIMARY_END,
+    ""
   ].join("\n");
 }
 
@@ -102,7 +125,8 @@ Rules:
 
 export function buildCodexAdapterPreview({ root, kernel }) {
   const resolvedKernel = kernel ?? loadArchitectureKernel(root);
-  const agents = resolvedKernel.agents.agents.map((agent) => toCodexAgentArtifact({ root, agent }));
+  const agents = resolvedKernel.agents.agents.filter((agent) => agent.id !== "orchestrator")
+    .map((agent) => toCodexAgentArtifact({ root, agent }));
   const skills = resolvedKernel.skills.skills.map(toCodexSkill);
 
   return {
@@ -111,6 +135,7 @@ export function buildCodexAdapterPreview({ root, kernel }) {
     preview_only: false,
     adapter_package: "packages/codex-adapter",
     generated_artifacts: {
+      primary_agent: { name: "orchestrator", path: "AGENTS.md", scope: "main-session" },
       agents: agents.map(({ path, name, description, nickname_candidates }) => ({ path, name, description, nickname_candidates })),
       skills,
       instructions: {
@@ -202,6 +227,7 @@ export function buildCodexIntegrationPreview({ root }) {
     adapter_package: "packages/codex-adapter",
     generated_artifacts: {
       agents: preview.generated_artifacts.agents,
+      primary_agent: preview.generated_artifacts.primary_agent,
       skills: preview.generated_artifacts.skills,
       instructions: preview.generated_artifacts.instructions,
       stable_runtime_api: stableRuntime.runtime_api
@@ -215,7 +241,8 @@ export function buildCodexIntegrationPreview({ root }) {
 
 export function buildCodexInstallPreview({ root, outputDir = ".ai/generated/codex-install" }) {
   const kernel = loadArchitectureKernel(root);
-  const agentArtifacts = kernel.agents.agents.map((agent) => toCodexAgentArtifact({ root, agent }));
+  const agentArtifacts = kernel.agents.agents.filter((agent) => agent.id !== "orchestrator")
+    .map((agent) => toCodexAgentArtifact({ root, agent }));
   const skillArtifacts = kernel.skills.skills.map(toCodexSkill);
 
   return {
@@ -223,11 +250,19 @@ export function buildCodexInstallPreview({ root, outputDir = ".ai/generated/code
     install_mode: "preview",
     output_dir: outputDir,
     target_dirs: [".codex/agents", ".agents/skills"],
+    target_instruction_files: ["AGENTS.md", "AGENTS.override.md (when active)"],
     writes_harness_config_by_default: false,
     human_approval_required_before_write: true,
     restart_required_after_install: true,
     provider_calls: 0,
     files: [
+      {
+        path: `${outputDir}/AGENTS.md`,
+        install_path: "AGENTS.md",
+        kind: "instructions",
+        merge_strategy: "alfred-codex-managed-block",
+        content: buildPrimaryInstructions({ root, kernel })
+      },
       ...agentArtifacts.map((agentArtifact) => ({
         path: `${outputDir}/${agentArtifact.path}`,
         install_path: agentArtifact.path,

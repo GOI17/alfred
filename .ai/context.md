@@ -44,6 +44,11 @@ packages/
 | Codex | `executable-translation-spike` | `packages/codex-adapter/` |
 | Kiro | `compatibility-contract` | Design doc only |
 
+Codex uses the main session for the Orchestrator role through project
+instructions. The adapter generates a managed primary instruction block and
+five specialist custom agents. Approved installer application preserves existing
+AGENTS.md text and honors an active AGENTS.override.md.
+
 ## Agents
 
 Alfred ships with these agents, generated from `.ai/agents/` specs:
