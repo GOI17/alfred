@@ -151,6 +151,7 @@ export function createApp({
     if (mcpRouter && (
       url.pathname === "/mcp" ||
       url.pathname === "/.well-known/oauth-protected-resource" ||
+      url.pathname === "/.well-known/oauth-protected-resource/mcp" ||
       url.pathname === "/.well-known/openai-apps-challenge"
     )) {
       return mcpRouter(req, res);

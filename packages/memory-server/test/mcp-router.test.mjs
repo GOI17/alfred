@@ -53,11 +53,11 @@ function router(overrides = {}) {
   });
 }
 
-test("publishes MCP protected-resource metadata without authentication", async () => {
+test("publishes path-specific MCP protected-resource metadata without authentication", async () => {
   const handler = router();
   const res = response();
 
-  await handler(request({ url: "/.well-known/oauth-protected-resource" }), res);
+  await handler(request({ url: "/.well-known/oauth-protected-resource/mcp" }), res);
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.headers["cache-control"], "public, max-age=300");
@@ -69,6 +69,16 @@ test("publishes MCP protected-resource metadata without authentication", async (
     resource_policy_uri: "https://memory.example.test/privacy",
     resource_tos_uri: "https://alfred.alfredlabs.org/terms/"
   });
+});
+
+test("preserves the generic protected-resource metadata URL as a compatibility alias", async () => {
+  const handler = router();
+  const res = response();
+
+  await handler(request({ url: "/.well-known/oauth-protected-resource" }), res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(JSON.parse(res.body).resource, "https://memory.example.test/mcp");
 });
 
 test("serves the OpenAI domain challenge only when configured", async () => {
@@ -92,7 +102,7 @@ test("rejects unauthenticated MCP requests with protected-resource discovery", a
   await router()(request({ method: "POST", url: "/mcp" }), res);
 
   assert.equal(res.statusCode, 401);
-  assert.match(res.headers["www-authenticate"], /^Bearer resource_metadata="https:\/\/memory\.example\.test\/\.well-known\/oauth-protected-resource"/);
+  assert.match(res.headers["www-authenticate"], /^Bearer resource_metadata="https:\/\/memory\.example\.test\/\.well-known\/oauth-protected-resource\/mcp"/);
   assert.equal(JSON.parse(res.body).error.code, -32001);
 });
 

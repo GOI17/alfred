@@ -1,0 +1,18 @@
+{
+  "trace_id": "issue-175-mcp-oauth-resource-metadata",
+  "timestamp": "2026-09-05T07:40:00Z",
+  "event": "task_completed",
+  "actor": "codex",
+  "data": {
+    "operation": "add_path_specific_oauth_resource_metadata",
+    "issue": 175,
+    "status": "pass",
+    "human_approval": true,
+    "provider_calls": 0,
+    "tests": {
+      "passed": 242,
+      "failed": 0,
+      "skipped": 2
+    }
+  }
+}
