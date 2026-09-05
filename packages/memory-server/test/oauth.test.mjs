@@ -378,7 +378,7 @@ test("OAuth router renders consent and exchanges form-encoded tokens", async () 
     assert.doesNotMatch(consent.body, new RegExp(fx.apiKey));
     assert.equal(
       consent.headers["content-security-policy"],
-      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com; base-uri 'none'; frame-ancestors 'none'"
+      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com https://platform.openai.com; base-uri 'none'; frame-ancestors 'none'"
     );
     assert.doesNotMatch(
       consent.headers["content-security-policy"],
@@ -423,12 +423,53 @@ test("OAuth router renders consent and exchanges form-encoded tokens", async () 
   } finally { fx.close(); }
 });
 
-test("OAuth router does not reflect a rejected redirect origin into form-action CSP", async () => {
-  const fx = await fixture();
+test("OAuth form-action allows the fixed OpenAI relay only for validated chatgpt.com callbacks", async () => {
+  const legacyRedirect = "https://chat.openai.com/aip/g-test/oauth/callback";
+  const fx = await fixture({
+    oauthConfig: config({ redirectUris: [REDIRECT_URI, legacyRedirect] })
+  });
+  try {
+    const router = createOAuthRouter({ oauthService: fx.oauthService });
+    const chatgptQuery = new URLSearchParams(authorizationInput(fx.apiKey, {
+      state: "opaque-target=https://evil.example/continue"
+    }));
+    chatgptQuery.delete("api_key");
+    const chatgptResponse = fakeRes();
+
+    await router(fakeReq({ url: `/oauth/authorize?${chatgptQuery}` }), chatgptResponse);
+
+    assert.equal(
+      chatgptResponse.headers["content-security-policy"],
+      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com https://platform.openai.com; base-uri 'none'; frame-ancestors 'none'"
+    );
+    assert.doesNotMatch(chatgptResponse.headers["content-security-policy"], /evil\.example|opaque-target/);
+
+    const legacyQuery = new URLSearchParams(authorizationInput(fx.apiKey, {
+      redirect_uri: legacyRedirect,
+      state: "opaque-target=https://platform.openai.com/continue"
+    }));
+    legacyQuery.delete("api_key");
+    const legacyResponse = fakeRes();
+
+    await router(fakeReq({ url: `/oauth/authorize?${legacyQuery}` }), legacyResponse);
+
+    assert.equal(
+      legacyResponse.headers["content-security-policy"],
+      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chat.openai.com; base-uri 'none'; frame-ancestors 'none'"
+    );
+    assert.doesNotMatch(legacyResponse.headers["content-security-policy"], /platform\.openai\.com|opaque-target/);
+  } finally { fx.close(); }
+});
+
+test("OAuth router rejects the platform callback and does not grant its relay to a chatgpt.com lookalike", async () => {
+  const lookalikeRedirect = "https://chatgpt.com.evil.example/oauth/callback";
+  const fx = await fixture({
+    oauthConfig: config({ redirectUris: [REDIRECT_URI, lookalikeRedirect] })
+  });
   try {
     const router = createOAuthRouter({ oauthService: fx.oauthService });
     const query = new URLSearchParams(authorizationInput(fx.apiKey, {
-      redirect_uri: "https://evil.example/oauth/callback"
+      redirect_uri: "https://platform.openai.com/oauth/callback"
     }));
     query.delete("api_key");
     const response = fakeRes();
@@ -440,7 +481,22 @@ test("OAuth router does not reflect a rejected redirect origin into form-action 
       response.headers["content-security-policy"],
       "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
     );
-    assert.doesNotMatch(response.headers["content-security-policy"], /evil\.example|chatgpt\.com/);
+    assert.doesNotMatch(response.headers["content-security-policy"], /platform\.openai\.com|chatgpt\.com/);
+
+    const lookalikeQuery = new URLSearchParams(authorizationInput(fx.apiKey, {
+      redirect_uri: lookalikeRedirect
+    }));
+    lookalikeQuery.delete("api_key");
+    const lookalikeResponse = fakeRes();
+
+    await router(fakeReq({ url: `/oauth/authorize?${lookalikeQuery}` }), lookalikeResponse);
+
+    assert.equal(lookalikeResponse.statusCode, 200);
+    assert.equal(
+      lookalikeResponse.headers["content-security-policy"],
+      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com.evil.example; base-uri 'none'; frame-ancestors 'none'"
+    );
+    assert.doesNotMatch(lookalikeResponse.headers["content-security-policy"], /platform\.openai\.com/);
   } finally { fx.close(); }
 });
 

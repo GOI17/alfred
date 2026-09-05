@@ -1,7 +1,7 @@
 {
   "id": "issue-187-oauth-form-action-csp",
   "issue": 187,
-  "timestamp": "2026-09-05T08:47:30Z",
+  "timestamp": "2026-09-05T08:56:13Z",
   "actor": "developer",
   "status": "implemented",
   "strategy": "local-only",
@@ -42,6 +42,38 @@
     {
       "event": "validation",
       "result": "Router coverage additionally verifies that the authorization redirect preserves the exact allowlisted callback origin and path, returns the original state, and adds only code and state query parameters"
+    },
+    {
+      "event": "production_validation",
+      "result": "The validated chatgpt.com callback continued through the official platform.openai.com portal, which remained blocked by the original form-action policy"
+    },
+    {
+      "event": "task_classified",
+      "result": "bounded OAuth form-action redirect-chain continuation; fixed official origins are sufficient and state remains opaque"
+    },
+    {
+      "event": "delegation_decision",
+      "result": "Alfred Orchestrator retained the developer specialist for the scoped continuation; no further delegation was needed"
+    },
+    {
+      "event": "provider_request_avoided",
+      "reason": "The fixed-origin CSP continuation and its security regression tests are deterministic local operations."
+    },
+    {
+      "event": "validation",
+      "result": "OAuth-focused continuation tests passed: 20 passed, 0 failed; state-derived and non-chatgpt relay destinations remained blocked"
+    },
+    {
+      "event": "validation",
+      "result": "Memory server syntax checks passed; full suite passed: 249 passed, 0 failed, 2 opt-in tests skipped; diff whitespace validation passed"
+    },
+    {
+      "event": "review_approved",
+      "result": "QA approved the fixed-origin trust boundary and requested explicit negative coverage for the official portal as an unregistered callback and for a chatgpt.com hostname lookalike"
+    },
+    {
+      "event": "validation",
+      "result": "OAuth tests passed 20/20 after confirming that an unregistered platform.openai.com callback returns 400 with form-action self only and an allowlisted chatgpt.com lookalike cannot activate the official relay; syntax and diff checks passed"
     }
   ],
   "provider_calls": 0
