@@ -1047,6 +1047,10 @@ EOFRESULT
   const handoffTarget = join(fixture, "handoff-alfred-repo");
   mkdirSync(join(handoffTarget, "packages", "opencode-adapter", "src"), { recursive: true });
   mkdirSync(join(handoffTarget, "packages", "codex-adapter", "src"), { recursive: true });
+  copyFileSync(
+    join(root, "packages/codex-adapter/src/primary-instructions.js"),
+    join(handoffTarget, "packages/codex-adapter/src/primary-instructions.js")
+  );
   writeFileSync(
     join(handoffTarget, "packages", "opencode-adapter", "src", "cli.js"),
     "const fs = require('fs'); const path = require('path'); const output = process.argv[process.argv.indexOf('--output') + 1]; fs.mkdirSync(path.join(output, '.opencode', 'agents'), { recursive: true }); fs.writeFileSync(path.join(output, 'opencode.json.preview'), '{}\\n'); fs.writeFileSync(path.join(output, '.opencode', 'agents', 'orchestrator.md'), '# orchestrator\\n');\n"
@@ -1055,13 +1059,20 @@ EOFRESULT
     join(handoffTarget, "packages", "codex-adapter", "src", "cli.js"),
     "const fs = require('fs'); const path = require('path'); const output = process.argv[process.argv.indexOf('--output') + 1]; fs.mkdirSync(path.join(output, '.codex', 'agents'), { recursive: true }); fs.mkdirSync(path.join(output, '.agents', 'skills', 'typescript-project'), { recursive: true }); fs.writeFileSync(path.join(output, '.codex', 'agents', 'developer.toml'), 'name = \"developer\"\\n'); fs.writeFileSync(path.join(output, '.agents', 'skills', 'typescript-project', 'SKILL.md'), '# TypeScript\\n');\n"
   );
-  const handoffCopy = run(["--no-clone"], {
+  const primaryBlock = "<!-- alfred:codex-primary:begin -->\nMain Codex session is Alfred Orchestrator.\n<!-- alfred:codex-primary:end -->\n";
+  const stubPath = join(handoffTarget, "packages/codex-adapter/src/cli.js");
+  writeFileSync(stubPath, readFileSync(stubPath, "utf8") +
+    `fs.writeFileSync(path.join(output, 'AGENTS.md'), ${JSON.stringify(primaryBlock)});\n`);
+  const existingProjectInstructions = "# User project instructions\nKeep these rules.\n";
+  writeFileSync(join(cwd, "AGENTS.md"), existingProjectInstructions);
+  const handoffOptions = {
     env: {
       ALFRED_INSTALL_FORCE_TUI: "1",
       ALFRED_INSTALL_APP_TUI_EVENTS: `set:edition=coding,set:harnesses=opencode+codex-cli,set:profiles=true,set:name=copy-demo,set:path=${handoffTarget},set:apply=true,submit`,
       ALFRED_INSTALL_HANDOFF_INPUT: "2"
     }
-  });
+  };
+  const handoffCopy = run(["--no-clone"], handoffOptions);
   assert.equal(handoffCopy.status, 0, handoffCopy.stderr);
   assert.match(handoffCopy.stdout, /ALFRED INSTALL COMPLETE/);
   assert.match(handoffCopy.stdout, /Final handoff choices:/);
@@ -1073,6 +1084,13 @@ EOFRESULT
   assert.match(handoffCopy.stdout, /<project>\/opencode.json/);
   assert.match(handoffCopy.stdout, /<project>\/.codex/);
   assert.match(handoffCopy.stdout, /<project>\/.agents/);
+  assert.match(handoffCopy.stdout, /<project>\/AGENTS.md/);
+  const installedInstructions = readFileSync(join(cwd, "AGENTS.md"), "utf8");
+  assert.ok(installedInstructions.startsWith(existingProjectInstructions));
+  assert.ok(installedInstructions.includes(primaryBlock));
+  assert.equal(run(["--no-clone"], handoffOptions).status, 0);
+  assert.equal(readFileSync(join(cwd, "AGENTS.md"), "utf8"), installedInstructions,
+    "repeat handoff preserves project instructions without duplicating the managed block");
   assert.match(handoffCopy.stdout, /No global user-level harness config was written/);
   assert.equal(
     existsSync(join(cwd, "opencode.json")),

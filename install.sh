@@ -1128,6 +1128,13 @@ apply_codex_preview_to_project() {
     fi
   done
   [ -n "$preview_dir" ] || return 0
+  if [ -f "$preview_dir/AGENTS.md" ]; then
+    node "$TARGET_PATH/packages/codex-adapter/src/primary-instructions.js" \
+      "$preview_dir" "$CANONICAL_PROJECT_ROOT" --approved || err "Codex primary instructions could not be applied"
+    APPLIED_PROJECT_PATHS="${APPLIED_PROJECT_PATHS}
+  - $(pretty_path "$CANONICAL_PROJECT_ROOT")/AGENTS.md (or active AGENTS.override.md)"
+    APPLIED_ANY=true
+  fi
   apply_generated_directory "$preview_dir" ".codex"
   apply_generated_directory "$preview_dir" ".agents"
 }

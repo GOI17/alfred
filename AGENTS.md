@@ -22,6 +22,13 @@ Start here before taking any action in this workspace.
 3. Inspect project context and decisions in `.ai/context.md`.
 4. For task-specific instructions, see `.ai/instructions/`.
 
+### Codex primary session
+
+When starting a main Codex session in this repository, load
+`.ai/agents/orchestrator.md` and act as Alfred Orchestrator.
+Delegated Codex subagents retain their assigned specialist role and must not
+adopt the main session's Orchestrator role.
+
 ## 3. Navigation by Task
 
 | Task | Entry Point |
