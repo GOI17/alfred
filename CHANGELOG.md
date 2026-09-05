@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.7.2](https://github.com/GOI17/alfred/compare/v0.7.1...v0.7.2) (2026-09-05)
+
+
+### Features
+
+* **memory:** add Console API key and logout controls ([#163](https://github.com/GOI17/alfred/issues/163)) ([c6f0495](https://github.com/GOI17/alfred/commit/c6f0495408ce3c8e178a0d4ea2ebbc5b27e626a5)), closes [#161](https://github.com/GOI17/alfred/issues/161)
+* **memory:** publish Alfred Memory plugin foundation ([#169](https://github.com/GOI17/alfred/issues/169)) ([a5a560d](https://github.com/GOI17/alfred/commit/a5a560da0b6b1167f817216a047e0da533abc769)), closes [#167](https://github.com/GOI17/alfred/issues/167)
+
+
+### Bug Fixes
+
+* **codex:** activate Orchestrator in the main session ([#186](https://github.com/GOI17/alfred/issues/186)) ([053785f](https://github.com/GOI17/alfred/commit/053785f2379833601278b5112a2eee7fdfb07ac8))
+* **deploy:** declare MCP test dependency ([#171](https://github.com/GOI17/alfred/issues/171)) ([a54928b](https://github.com/GOI17/alfred/commit/a54928bb56545572beb6e07495099d331d138343))
+* **deploy:** include MCP workspace dependencies ([#170](https://github.com/GOI17/alfred/issues/170)) ([b42ea8a](https://github.com/GOI17/alfred/commit/b42ea8aff67244fc4fb0f6a3fe1291cb56416135)), closes [#167](https://github.com/GOI17/alfred/issues/167)
+* **docker:** install MCP dependency graph ([#185](https://github.com/GOI17/alfred/issues/185)) ([aa79590](https://github.com/GOI17/alfred/commit/aa7959058adc08fae66ca63e7e6cba2190c228d4))
+* **memory-server:** classify MCP failure stages ([#183](https://github.com/GOI17/alfred/issues/183)) ([2568b08](https://github.com/GOI17/alfred/commit/2568b08fe1ad7460b373f39bb2fa26c73bb7a323))
+* **memory-server:** publish MCP resource metadata path ([edd093d](https://github.com/GOI17/alfred/commit/edd093d1fc0eab49fb79b2e8a8bb465aec88de90)), closes [#175](https://github.com/GOI17/alfred/issues/175)
+* **memory-server:** ship MCP transport in production ([#180](https://github.com/GOI17/alfred/issues/180)) ([af42bd3](https://github.com/GOI17/alfred/commit/af42bd36845a8fffb7a7b4d6cc00cc8c2148240e))
+* **memory-server:** support PKCE public OAuth clients ([f7c13d9](https://github.com/GOI17/alfred/commit/f7c13d9d4078f0baa590f10560a7706fe52aa5c9)), closes [#177](https://github.com/GOI17/alfred/issues/177)
+* **opencode:** preserve active model inheritance ([#173](https://github.com/GOI17/alfred/issues/173)) ([#174](https://github.com/GOI17/alfred/issues/174)) ([0eb1746](https://github.com/GOI17/alfred/commit/0eb17466f031903960e1e0e9084f3e12597cb2cc))
+* **test:** match YAML OAuth scopes ([#172](https://github.com/GOI17/alfred/issues/172)) ([e9164a7](https://github.com/GOI17/alfred/commit/e9164a7bbb5c3da6e60760eaff610367806b82ca))
+
 ## [0.7.1](https://github.com/GOI17/alfred/compare/v0.7.0...v0.7.1) (2026-09-03)
 
 
