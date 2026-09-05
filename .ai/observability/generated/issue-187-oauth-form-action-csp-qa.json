@@ -1,0 +1,30 @@
+{
+  "trace_id": "issue-187-oauth-form-action-csp-qa",
+  "timestamp": "2026-09-05T08:41:21Z",
+  "event": "regression_finding",
+  "actor": "qa",
+  "data": {
+    "operation": "audit_oauth_consent_form_action_csp",
+    "issue": 187,
+    "status": "reproduced",
+    "provider_calls": 0,
+    "reproduction": {
+      "browser": "Chrome",
+      "observed_errors": 5,
+      "symptom": "POST /oauth/authorize receives a cross-origin callback redirect that is blocked by form-action 'self'"
+    },
+    "coverage_gap": "The OAuth router test asserts the successful 302 but does not assert the consent response Content-Security-Policy header.",
+    "recommended_regressions": [
+      "A validated ChatGPT redirect URI adds only its HTTPS origin to form-action alongside 'self'.",
+      "An unregistered redirect URI receives an error response whose form-action remains 'self' and never includes the rejected origin.",
+      "Other restrictive directives remain present: default-src 'none', base-uri 'none', and frame-ancestors 'none'.",
+      "The successful authorization redirect remains the exact allowlisted callback URI with code and state parameters."
+    ],
+    "baseline_tests": {
+      "command": "node --test packages/memory-server/test/oauth.test.mjs",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    }
+  }
+}
