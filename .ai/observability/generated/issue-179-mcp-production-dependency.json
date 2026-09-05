@@ -1,0 +1,23 @@
+{
+  "trace_id": "issue-179-mcp-production-dependency",
+  "timestamp": "2026-09-05T08:05:00Z",
+  "event": "task_completed",
+  "actor": "codex",
+  "data": {
+    "operation": "package_mcp_transport_for_production",
+    "issue": 179,
+    "status": "pass",
+    "human_approval": true,
+    "provider_calls": 0,
+    "security_invariants": [
+      "OAuth access tokens remain resource-bound",
+      "MCP setup errors do not expose credentials or memory content",
+      "production-only installs include the Streamable HTTP transport"
+    ],
+    "tests": {
+      "passed": 245,
+      "failed": 0,
+      "skipped": 2
+    }
+  }
+}

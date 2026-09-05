@@ -104,6 +104,11 @@ plugin review.
 - Add unit and contract coverage for annotations, transport behavior, OAuth
   metadata, PKCE, resource binding, scope enforcement, and tenant isolation.
 - Run the existing Memory API, Custom GPT OAuth, local MCP, and release gates.
+- Keep the MCP SDK as a production dependency of the package that dynamically
+  imports the Streamable HTTP transport so production-only installs can start
+  authenticated MCP sessions.
+- Convert MCP server or transport setup failures into controlled JSON-RPC
+  errors instead of resetting the HTTP connection.
 - Validate the deployed endpoint with MCP Inspector and ChatGPT developer mode.
 - Submit only after the publisher identity is verified in Platform and the
   reviewer tenant is reproducible without MFA, email, or private networking.

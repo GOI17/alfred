@@ -78,21 +78,23 @@ export function createMcpRouter({
 
     const challenge = bearerChallenge(metadataUrl, "insufficient_scope", "Reconnect Alfred with the required permission.");
     const memoryClient = memoryClientForTenant(memoryService, resolved.tenant_id, resolved.scopes, challenge);
-    const server = await serverFactory({ memoryClient });
-    const transport = await transportFactory();
+    let server = null;
+    let transport = null;
     let closed = false;
     const close = async () => {
       if (closed) return;
       closed = true;
       await Promise.allSettled([
-        typeof transport.close === "function" ? transport.close() : undefined,
-        typeof server.close === "function" ? server.close() : undefined
+        typeof transport?.close === "function" ? transport.close() : undefined,
+        typeof server?.close === "function" ? server.close() : undefined
       ]);
     };
 
     if (typeof res.on === "function") res.on("close", () => { void close(); });
 
     try {
+      server = await serverFactory({ memoryClient });
+      transport = await transportFactory();
       await server.connect(transport);
       await transport.handleRequest(req, res);
       await emitTrace(trace, {

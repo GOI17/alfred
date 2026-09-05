@@ -158,6 +158,41 @@ test("connects one stateless MCP server and transport for an authenticated reque
   assert.equal(events.at(-1).payload.provider_calls, 0);
 });
 
+test("returns a controlled protocol error when MCP transport setup fails", async () => {
+  const events = [];
+  const handler = router({
+    oauthService: {
+      async resolveAccessToken() {
+        return {
+          tenant_id: "tenant-1",
+          scopes: ["memory:read"],
+          resource: "https://memory.example.test/mcp"
+        };
+      }
+    },
+    async serverFactory() {
+      return { async close() {} };
+    },
+    async transportFactory() {
+      throw new Error("production dependency unavailable");
+    },
+    async trace(event) { events.push(event); }
+  });
+  const res = response();
+
+  await handler(request({ method: "POST", url: "/mcp", authorization: "Bearer alo_valid" }), res);
+
+  assert.equal(res.statusCode, 500);
+  assert.deepEqual(JSON.parse(res.body), {
+    jsonrpc: "2.0",
+    error: { code: -32603, message: "Alfred could not complete the MCP request." },
+    id: null
+  });
+  assert.equal(events.at(-1).event, "mcp.request_failed");
+  assert.equal(events.at(-1).payload.reason, "transport_error");
+  assert.equal(events.at(-1).payload.provider_calls, 0);
+});
+
 test("request-scoped memory client enforces scopes and tenant identity", async () => {
   const calls = [];
   const service = {
