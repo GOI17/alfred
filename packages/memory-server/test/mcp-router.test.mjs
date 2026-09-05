@@ -190,7 +190,38 @@ test("returns a controlled protocol error when MCP transport setup fails", async
   });
   assert.equal(events.at(-1).event, "mcp.request_failed");
   assert.equal(events.at(-1).payload.reason, "transport_error");
+  assert.equal(events.at(-1).payload.stage, "transport_factory");
   assert.equal(events.at(-1).payload.provider_calls, 0);
+  assert.equal(res.headers["x-alfred-mcp-error-stage"], "transport_factory");
+});
+
+test("identifies request handling as the safe MCP failure stage", async () => {
+  const handler = router({
+    oauthService: {
+      async resolveAccessToken() {
+        return {
+          tenant_id: "tenant-1",
+          scopes: ["memory:read"],
+          resource: "https://memory.example.test/mcp"
+        };
+      }
+    },
+    async serverFactory() {
+      return { async connect() {}, async close() {} };
+    },
+    async transportFactory() {
+      return {
+        async handleRequest() { throw new Error("request failed"); },
+        async close() {}
+      };
+    }
+  });
+  const res = response();
+
+  await handler(request({ method: "POST", url: "/mcp", authorization: "Bearer alo_valid" }), res);
+
+  assert.equal(res.statusCode, 500);
+  assert.equal(res.headers["x-alfred-mcp-error-stage"], "request");
 });
 
 test("request-scoped memory client enforces scopes and tenant identity", async () => {

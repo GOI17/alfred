@@ -92,10 +92,14 @@ export function createMcpRouter({
 
     if (typeof res.on === "function") res.on("close", () => { void close(); });
 
+    let stage = "server_factory";
     try {
       server = await serverFactory({ memoryClient });
+      stage = "transport_factory";
       transport = await transportFactory();
+      stage = "server_connect";
       await server.connect(transport);
+      stage = "request";
       await transport.handleRequest(req, res);
       await emitTrace(trace, {
         tenant_id: resolved.tenant_id,
@@ -106,10 +110,12 @@ export function createMcpRouter({
       await emitTrace(trace, {
         tenant_id: resolved.tenant_id,
         event: "mcp.request_failed",
-        payload: { reason: "transport_error", provider_calls: 0 }
+        payload: { reason: "transport_error", stage, provider_calls: 0 }
       });
       if (!res.headersSent) {
-        json(res, 500, jsonRpcError(-32603, "Alfred could not complete the MCP request."));
+        json(res, 500, jsonRpcError(-32603, "Alfred could not complete the MCP request."), {
+          "x-alfred-mcp-error-stage": stage
+        });
       }
     } finally {
       if (res.writableEnded || typeof res.on !== "function") await close();

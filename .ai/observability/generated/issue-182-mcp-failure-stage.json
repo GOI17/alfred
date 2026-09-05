@@ -1,0 +1,23 @@
+{
+  "trace_id": "issue-182-mcp-failure-stage",
+  "timestamp": "2026-09-05T08:14:00Z",
+  "event": "task_completed",
+  "actor": "codex",
+  "data": {
+    "operation": "classify_mcp_failure_stage",
+    "issue": 182,
+    "status": "pass",
+    "human_approval": true,
+    "provider_calls": 0,
+    "security_invariants": [
+      "diagnostics expose only a fixed stage identifier",
+      "exception messages and credentials remain private",
+      "OAuth access tokens remain resource-bound"
+    ],
+    "tests": {
+      "passed": 246,
+      "failed": 0,
+      "skipped": 2
+    }
+  }
+}

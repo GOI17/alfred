@@ -109,6 +109,8 @@ plugin review.
   authenticated MCP sessions.
 - Convert MCP server or transport setup failures into controlled JSON-RPC
   errors instead of resetting the HTTP connection.
+- Classify failed MCP initialization by a stable, credential-free stage in
+  traces and the `X-Alfred-MCP-Error-Stage` response header.
 - Validate the deployed endpoint with MCP Inspector and ChatGPT developer mode.
 - Submit only after the publisher identity is verified in Platform and the
   reviewer tenant is reproducible without MFA, email, or private networking.
