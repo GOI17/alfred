@@ -1,17 +1,31 @@
+---
+id: execution/model-assignment-per-agent/design
+description: OpenCode model inheritance design for issue 173
+owner: core
+phase: design
+---
+
 # model-assignment-per-agent Design
 
-Issue: #85 — Allow users to assign a specific model per agent while keeping agent specs model-agnostic.
+Issue: [#173](https://github.com/GOI17/alfred/issues/173) — emit resolved OpenCode agent models while preserving active-model inheritance.
+
+The decision in **Section 2** is authoritative for issue #173 and supersedes any conflicting OpenCode notes retained from the broader model-assignment design.
+
+Verification follow-up: the user authorized a repair limited to
+`packages/memory-openapi/test/openapi.test.js` so its YAML subset parser consumes
+the existing single-paragraph folded descriptions. This adds regression coverage
+without changing the published OpenAPI contract or package dependencies.
 
 ## 1. Technical Approach
 
-Add a hierarchical, user-owned model resolver in `packages/core`. The resolver never reads harness-specific internals; adapters read the resolved binding and translate it to their own config shape.
+Keep the hierarchical, user-owned model resolver harness-agnostic. For issue #173, the OpenCode adapter consumes its output and translates only a resolved `primary` into the generated agent markdown; no core, profile, installer, Codex, baseline, or harness-config work is in scope.
 
-Resolution order:
+Broader resolution context, unchanged by #173:
 
-1. **Harness override** — if the current harness adapter exposes per-agent model binding (e.g. opencode exposes `models` per agent), use it.
-2. **Profile override** — `profile-manager` overlays `models` per profile.
-3. **Global default** — `~/.alfred/models.json` maps agent ids or `*` to `{ primary, fallbacks }`.
-4. **System-wide fallback chain** — configured in `~/.alfred/models.json` under `fallbacks`.
+- Agent-specific user configuration may specialize a model assignment.
+- `profile-manager` may overlay models per profile.
+- `~/.alfred/models.json` may provide agent or `*` defaults.
+- System and per-agent fallback chains remain runtime inputs.
 
 TemporaryAgent inherits its creator's resolved model unless a `temporary` or `temporary:*` entry exists.
 
@@ -26,39 +40,39 @@ TemporaryAgent inherits its creator's resolved model unless a `temporary` or `te
 | TemporaryAgent inherits creator model by default. | Avoids surprising behavior; explicit `temporary` entry allows override. |
 | Fallback chain is per-agent-overrideable. | Lets power users keep a global chain while specializing individual agents. |
 | All resolution emits trace events. | Satisfies runtime hardening contract trace requirements. |
+| Generated `.opencode/agents/<id>.md` is the single native OpenCode agent definition. | Avoids two competing configuration sources. |
+| Emit `model: "<resolved-primary>"` only when resolved; otherwise omit the key. | Quoting is YAML-safe, while omission preserves OpenCode active-model inheritance. |
+| `opencode.json` has no custom top-level `model_assignment` and no parallel agent bindings. | OpenCode does not consume that custom shape. |
+| Fallbacks remain an Alfred runtime concern. | The adapter must not claim OpenCode natively enforces Alfred fallback chains. |
 
 ## 3. Data Flow
 
 ```
-+-------------------+     +-------------------------+     +------------------+
-| harness-specific  |---->|  adapter.translateModel |---->|                  |
-|   config          |     |  (opencode, codex, ...) |     |                  |
-+-------------------+     +-------------------------+     |  core.resolveModel |
-                                                          |    assignment      |
-+-------------------+     +-------------------------+     |                  |
-| profile-manager   |---->|   models overlay        |---->|                  |
-|   profiles/*      |     |   (deepMerge)           |     |                  |
-+-------------------+     +-------------------------+     +---------+--------+
-                                                                   |
-+-------------------+     +-------------------------+              |
-| ~/.alfred/models  |---->| global default +        |------------->|
-|    .json          |     | fallbacks               |              |
-+-------------------+     +-------------------------+              v
-                                                          +------------------+
-                                                          | model execution  |
-                                                          | (primary, retry,  |
-                                                          |  fallback chain) |
-                                                          +------------------+
+user-owned runtime configuration
+              |
+              v
+Alfred resolver -> { agent_id, primary?, fallbacks, provider_calls: 0 }
+              |                         |
+              |                         +-> Alfred runtime retry/fallback
+              v
+OpenCode adapter -> .opencode/agents/<id>.md
+                    - resolved: quoted YAML model
+                    - unresolved: model omitted
+
+opencode.json -> consumed base settings only; no agent model binding
 ```
 
 ## 4. File Changes
+
+Only the OpenCode runtime and test rows are implementation scope for #173. Other rows preserve the broader model-assignment context and are not tasks for this issue.
 
 | File | Change |
 |---|---|
 | `packages/core/src/model-assignment.js` | New resolver: `resolveModelAssignment`, `resolveFallbacks`, `resolveTemporaryModel`, `traceModelResolution`. |
 | `packages/core/src/index.js` | Re-export new model assignment functions; wire `loadArchitectureKernel` to read `.ai/policies/model-assignment.example.json`. |
 | `packages/profile-manager/src/index.js` | Add `resolveProfileModels({ repoPath, profile, agent })` that reads `profiles/{profile}/{agent}/models.jsonc` and merges with global defaults. |
-| `packages/opencode-adapter/src/runtime.js` | Extend `buildOpencodeJsonPreview` to include per-agent `models` from resolved binding; keep `model: "user-owned-runtime-configuration"` in generated agent frontmatter. |
+| `packages/opencode-adapter/src/runtime.js` | Pass each resolved primary to its generated agent markdown, emit it as quoted YAML, omit it when unresolved, and remove custom model assignment output from `opencode.json`. |
+| `packages/opencode-adapter/test/runtime.test.mjs` | Cover resolved and unresolved markdown, absence of JSON bindings, zero provider calls, and model-agnostic source specs. |
 | `packages/codex-adapter/src/runtime.js` | (if exists) Consume resolver and emit model binding in generated Codex config preview. |
 | `.ai/policies/model-assignment.example.json` | Schema example for global `models.json` with `*`, agent ids, and `temporary:*`. |
 | `.ai/evals/baselines/model-assignment.json` | Baseline asserting zero provider calls and correct resolution order. |
@@ -109,6 +123,13 @@ Resolution rules:
 - Missing `primary` falls back to `*` primary, then system fallback chain.
 - `temporary:*` overrides `temporary`; both override `*`.
 
+### OpenCode native artifact contract (#173)
+
+- Resolved: generated `.opencode/agents/<id>.md` contains `model: "provider/model"` in frontmatter.
+- Unresolved: generated markdown has no `model` key, so OpenCode inherits the active model.
+- `opencode.json` contains neither `model_assignment` nor a parallel JSON agent binding.
+- `fallbacks` may remain in Alfred's resolved runtime data but are not serialized or described as OpenCode-native enforcement.
+
 ## 6. Testing Strategy
 
 | Test | Scope |
@@ -116,15 +137,17 @@ Resolution rules:
 | Unit: global default via `*` | `packages/core/tests/model-assignment.test.js` |
 | Unit: agent-specific override | same |
 | Unit: profile overlay precedence | `packages/profile-manager/tests/model-assignment.test.js` |
-| Unit: harness override precedence | `packages/opencode-adapter/tests/runtime.test.js` |
+| Unit: resolved primary is quoted in generated agent markdown | `packages/opencode-adapter/test/runtime.test.mjs` |
+| Unit: unresolved primary omits markdown `model` | same |
+| Unit: `opencode.json` contains no custom or parallel model binding | same |
 | Unit: TemporaryAgent inheritance | `packages/core/tests/model-assignment.test.js` |
 | Integration: resolve → execute with mock provider gateway | `packages/core/tests/integration/model-assignment-integration.test.js` |
-| Regression: model names never appear in `.ai/agents/*.md` | eval script scanning agent specs |
+| Regression: model names never appear in `.ai/agents/*.md` | `packages/opencode-adapter/test/runtime.test.mjs` |
 | Trace: every resolution emits `model_assignment_resolved` | trace assertions in unit tests |
 
 No provider calls are permitted in deterministic resolution tests.
 
-## 7. Installer Integration
+## 7. Installer Integration (Broader Context; Out of Scope for #173)
 
 The Alfred installer becomes the primary way a user creates the initial model assignment. This applies to `alfred init` and `alfred update`.
 
@@ -165,15 +188,15 @@ The Alfred installer becomes the primary way a user creates the initial model as
 - No live harness config is written during model assignment.
 - `provider_calls` remain 0; detection is local.
 
-## 8. Migration / Rollout
+## 8. Migration / Rollout (Broader Context; #173 Is Step 5 Only)
 
 1. Ship resolver in `packages/core` with no breaking change to existing `loadArchitectureKernel` consumers.
 2. Add model-assignment step to `scripts/shell/install.sh` suite TUI.
 3. Add reconfiguration step to `scripts/shell/update.sh`.
 4. Update `packages/profile-manager` to detect local models and write profile-level model overlays.
-5. Update `opencode-adapter` to consume resolver and expose per-agent `models` in `opencode.json` preview.
+5. For #173, update `opencode-adapter` to emit resolved primary models only in generated agent markdown and remove `opencode.json.model_assignment`.
 6. Backfill baseline in `.ai/evals/baselines/model-assignment.json`.
-7. Mark capability in compatibility matrix: `model_assignment: "native"`.
+7. Do not represent Alfred fallback chains as OpenCode-native capability; they remain runtime-managed.
 
 ## 9. Open Questions (Resolved)
 
@@ -183,3 +206,5 @@ The Alfred installer becomes the primary way a user creates the initial model as
 | How are model names redacted in trace events when the harness marks them private? | Adapters may pass a `redact_model_names` flag; the resolver replaces model IDs with hashes in trace events when enabled. |
 | Should `models.json` support provider-qualified IDs (e.g. `anthropic/claude-opus-4`) or stay provider-agnostic? | Support provider-qualified IDs. They are optional but recommended for clarity. |
 | Do we validate `models.json` on `alfred init` or lazily on first provider request? | Validate at `alfred init` and on `alfred update` with a lightweight local JSON schema. |
+| Where does OpenCode receive an agent's resolved primary? | The generated agent markdown frontmatter, as the single native agent definition. |
+| What happens when no primary resolves? | Omit `model`; OpenCode inherits the active model. |
