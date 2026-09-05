@@ -24,8 +24,7 @@ function toOpencodeAgent(agent) {
     path: `.opencode/agents/${agent.id}.md`,
     mode: agent.id === "orchestrator" ? "primary" : "subagent",
     description: agent.description,
-    permission: "mapped-from-alfred-permission-policy",
-    model: "user-owned-runtime-configuration"
+    permission: "mapped-from-alfred-permission-policy"
   };
 }
 
@@ -49,14 +48,13 @@ function quoteMarkdownSource(sourceSpec) {
 }
 
 
-function buildAgentFileContent({ root, agent }) {
+function buildAgentFileContent({ root, agent, primaryModel }) {
   const mode = agent.id === "orchestrator" ? "primary" : "subagent";
   const sourceSpec = readSourceText(root, agent.spec);
   return `---
 description: Alfred ${toTitle(agent.id)} agent generated from .ai source of truth.
 mode: ${mode}
-model: "user-owned-runtime-configuration"
-permission:
+${primaryModel ? `model: ${JSON.stringify(primaryModel)}\n` : ""}permission:
   edit: ask
   bash: ask
 ---
@@ -119,23 +117,26 @@ Rules:
 }
 
 function normalizeModelAssignments(modelAssignments = []) {
-  const entries = Array.isArray(modelAssignments) ? modelAssignments.map((assignment) => [assignment.agent_id, assignment]) : Object.entries(modelAssignments);
-  return Object.fromEntries(
-    entries
-      .filter(([agentId, assignment]) => agentId && assignment?.primary)
-      .map(([agentId, assignment]) => [
-        agentId,
-        {
-          primary: assignment.primary,
-          fallbacks: Array.isArray(assignment.fallbacks) ? assignment.fallbacks : [],
-          source: "user-owned-runtime-configuration"
-        }
-      ])
-  );
+  const entries = Array.isArray(modelAssignments)
+    ? modelAssignments.map((assignment) => [assignment?.agent_id, assignment])
+    : modelAssignments && typeof modelAssignments === "object"
+      ? Object.entries(modelAssignments)
+      : [];
+  const normalized = new Map();
+
+  for (const [agentId, assignment] of entries) {
+    const normalizedAgentId = typeof agentId === "string" ? agentId.trim() : "";
+    const primary = typeof assignment?.primary === "string" ? assignment.primary.trim() : "";
+    if (normalizedAgentId && primary) {
+      normalized.set(normalizedAgentId, primary);
+    }
+  }
+
+  return normalized;
 }
 
-export function buildOpencodeJsonPreview({ modelAssignments = [] } = {}) {
-  const config = {
+export function buildOpencodeJsonPreview() {
+  return {
     $schema: "https://opencode.ai/config.json",
     default_agent: "orchestrator",
     instructions: ["AGENTS.md"],
@@ -158,14 +159,6 @@ export function buildOpencodeJsonPreview({ modelAssignments = [] } = {}) {
       }
     }
   };
-  const models = normalizeModelAssignments(modelAssignments);
-  if (Object.keys(models).length > 0) {
-    config.model_assignment = {
-      source: "resolved-user-owned-bindings",
-      agents: models
-    };
-  }
-  return config;
 }
 
 function writeTextAtomic(filePath, value) {
@@ -214,7 +207,7 @@ export function buildOpencodeAdapterPreview({ kernel }) {
     },
     invariants: {
       core_imports_opencode: false,
-      model_assignment_source: "user-owned-runtime-configuration",
+      model_assignment_user_owned: true,
       skill_bodies_loaded_by_default: false,
       permission_policy_source: ".ai/policies/permissions.example.json",
       local_first_policy_source: ".ai/policies/provider-request-policy.example.json"
@@ -285,7 +278,7 @@ export function buildOpencodeAdapterReadiness({ root }) {
     },
     invariants: {
       core_is_harness_agnostic: preview.invariants.core_imports_opencode === false,
-      model_assignment_user_owned: preview.invariants.model_assignment_source === "user-owned-runtime-configuration",
+      model_assignment_user_owned: preview.invariants.model_assignment_user_owned === true,
       provider_calls_are_local_first: preview.invariants.local_first_policy_source === ".ai/policies/provider-request-policy.example.json",
       skill_bodies_lazy_loaded: preview.invariants.skill_bodies_loaded_by_default === false,
       permissions_deny_by_default: preview.generated_artifacts.permissions.default === "deny"
@@ -384,6 +377,7 @@ export function buildOpencodeInstallPreview({
   const kernel = loadArchitectureKernel(projectRoot);
   const integration = buildOpencodeIntegrationPreview({ root: projectRoot });
   const relativeOutputDir = outputDir;
+  const normalizedModelAssignments = normalizeModelAssignments(modelAssignments);
 
   return {
     harness: "opencode",
@@ -399,13 +393,13 @@ export function buildOpencodeInstallPreview({
         path: `${relativeOutputDir}/opencode.json.preview`,
         install_path: "opencode.json",
         kind: "config",
-        content: `${JSON.stringify(buildOpencodeJsonPreview({ modelAssignments }), null, 2)}\n`
+        content: `${JSON.stringify(buildOpencodeJsonPreview(), null, 2)}\n`
       },
       ...kernel.agents.agents.map((agent) => ({
         path: `${relativeOutputDir}/.opencode/agents/${agent.id}.md`,
         install_path: `.opencode/agents/${agent.id}.md`,
         kind: "agent",
-        content: buildAgentFileContent({ root: projectRoot, agent })
+        content: buildAgentFileContent({ root: projectRoot, agent, primaryModel: normalizedModelAssignments.get(agent.id) })
       })),
       ...kernel.skills.skills.map((skill) => ({
         path: `${relativeOutputDir}/.opencode/skills/${skill.id}/SKILL.md`,
@@ -421,9 +415,10 @@ export function buildOpencodeInstallPreview({
 export function writeOpencodeInstallPreview({
   root,
   outputDir = ".ai/generated/opencode-install",
-  projectRoot = resolveProjectIdentity(root).project_root
+  projectRoot = resolveProjectIdentity(root).project_root,
+  modelAssignments = []
 }) {
-  const preview = buildOpencodeInstallPreview({ root, outputDir, projectRoot });
+  const preview = buildOpencodeInstallPreview({ root, outputDir, projectRoot, modelAssignments });
   for (const file of preview.files) {
     writeTextAtomic(path.join(root, file.path), file.content);
   }

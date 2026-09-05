@@ -39,6 +39,21 @@ describe("memory-openapi schema", () => {
     assert.equal(spec.openapi, "3.1.0");
   });
 
+  it("folds the schema's multiline descriptions and continues parsing sibling fields", () => {
+    assert.equal(spec.info.description,
+      "Exposes Alfred Memory as a ChatGPT Action. A Custom GPT can search, list, " +
+      "create, update and delete durable memories for a user through this schema. " +
+      "This is not a native ChatGPT Memory integration: Alfred Memory remains an " +
+      "external service invoked by the Custom GPT at runtime.");
+    assert.deepEqual(spec.info.contact, { name: "Alfred Labs" });
+    assert.equal(spec.components.schemas.CreateMemoryInput.properties.namespace.description,
+      "Defaults to personal or project:projectId when projectId is provided.");
+    assert.equal(findOperation(spec, "searchMemories").description,
+      "v0.4.1 search endpoint. mode: 'semantic' uses the local embedding model; " +
+      "'keyword' uses the in-memory filter; 'hybrid' (default) blends both via " +
+      "reciprocal rank fusion. Zero provider calls.");
+  });
+
   it("uses OAuth 2.0 Authorization Code with Alfred endpoints", () => {
     const security = spec.components?.securitySchemes?.oauth2;
     assert.ok(security, "oauth2 security scheme must exist");
@@ -331,6 +346,18 @@ function parseMapping(lines, startIndex, indent) {
 }
 
 function assignValue(object, key, rawValue, lines, index, nestedIndent) {
+  // The schema uses stripped, single-paragraph folded descriptions.
+  // Their contents are text, even when a line contains a colon or quotes.
+  if (rawValue === ">-") {
+    const parts = [];
+    while (index < lines.length && lines[index].indent >= nestedIndent) {
+      parts.push(lines[index].text);
+      index += 1;
+    }
+    object[key] = parts.join(" ");
+    return index;
+  }
+
   if (rawValue !== "") {
     object[key] = parseScalar(rawValue);
     return index;

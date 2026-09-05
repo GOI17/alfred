@@ -20,12 +20,16 @@ export function createMcpRouter({
   }
   const origin = normalizedOrigin(publicUrl);
   const resource = `${origin}/mcp`;
-  const metadataUrl = `${origin}/.well-known/oauth-protected-resource`;
+  const metadataPath = "/.well-known/oauth-protected-resource/mcp";
+  const metadataUrl = `${origin}${metadataPath}`;
 
   return async function mcpRouter(req, res) {
     const url = new URL(req.url ?? "/", origin);
 
-    if (url.pathname === "/.well-known/oauth-protected-resource") {
+    if (
+      url.pathname === metadataPath ||
+      url.pathname === "/.well-known/oauth-protected-resource"
+    ) {
       if (req.method !== "GET") return jsonRpcMethodNotAllowed(res);
       return json(res, 200, {
         resource,

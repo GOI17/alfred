@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
@@ -76,6 +76,18 @@ function loadKernel() {
   return loadArchitectureKernel(root);
 }
 
+function frontmatter(content) {
+  const match = /^---\n([\s\S]*?)\n---\n/.exec(content);
+  assert.ok(match, "expected YAML frontmatter");
+  return match[1];
+}
+
+function agentFile(preview, agentId) {
+  const file = preview.files.find((candidate) => candidate.install_path === `.opencode/agents/${agentId}.md`);
+  assert.ok(file, `expected generated agent file for ${agentId}`);
+  return file;
+}
+
 test("opencode preview emits current plural agent paths", () => {
   const preview = buildOpencodeAdapterPreview({ kernel: loadKernel() });
   assert.equal(preview.harness, "opencode");
@@ -83,6 +95,7 @@ test("opencode preview emits current plural agent paths", () => {
   for (const agent of preview.generated_artifacts.agents) {
     assert.match(agent.path, /^\.opencode\/agents\/[a-z-]+\.md$/);
     assert.doesNotMatch(agent.path, /^\.opencode\/agent\//);
+    assert.equal(agent.model, undefined);
   }
 });
 
@@ -91,19 +104,26 @@ test("opencode install preview maps files to installable opencode agent artifact
   const agents = preview.files.filter((file) => file.kind === "agent");
   assert.equal(agents.length, 6);
   assert.ok(agents.every((file) => file.install_path.startsWith(".opencode/agents/")));
+  assert.ok(agents.every((file) => !/^model:/m.test(frontmatter(file.content))));
+  assert.equal(preview.provider_calls, 0);
   const developer = agents.find((file) => file.install_path === ".opencode/agents/developer.md");
   assert.ok(developer);
   assert.match(developer.content, /Mission: implement scoped code changes under policy\./);
-  assert.match(developer.content, /model: "user-owned-runtime-configuration"/);
   assert.doesNotMatch(developer.content, /anthropic\/claude|openai\/gpt|ollama\//);
 
   assert.match(developer.content, /Alfred source agent spec \(\.ai\/agents\/developer\.md\), quoted to avoid nested frontmatter parsing:/);
   assert.match(developer.content, /> Mission: implement scoped code changes under policy\./);
   assert.doesNotMatch(developer.content, /\n---\nid: developer\n/);
 
+  const agentSpecs = readdirSync(join(root, ".ai/agents")).filter((file) => file.endsWith(".md"));
+  assert.ok(agentSpecs.length > 0);
+  for (const file of agentSpecs) {
+    const content = readFileSync(join(root, ".ai/agents", file), "utf8");
+    assert.doesNotMatch(content, /^model\s*:/m, `${file} must not hardcode a model`);
+  }
 });
 
-test("opencode config preview can include resolved per-agent model assignments", () => {
+test("opencode config preview omits custom and parallel agent model bindings", () => {
   const config = buildOpencodeJsonPreview({
     modelAssignments: [
       {
@@ -115,26 +135,54 @@ test("opencode config preview can include resolved per-agent model assignments",
     ]
   });
 
-  assert.equal(config.model_assignment.source, "resolved-user-owned-bindings");
-  assert.deepEqual(config.model_assignment.agents.developer, {
-    primary: "anthropic/claude-sonnet-4",
-    fallbacks: ["openai/gpt-4.1-mini"],
-    source: "user-owned-runtime-configuration"
-  });
+  assert.equal(Object.hasOwn(config, "model_assignment"), false);
+  assert.equal(Object.hasOwn(config, "agent"), false);
+  assert.doesNotMatch(JSON.stringify(config), /user-owned-runtime-configuration|openai\/gpt-4\.1-mini/);
 });
 
-test("opencode install preview passes model assignments only to opencode.json preview", () => {
+test("opencode install preview emits normalized assignments only in matching agent frontmatter", () => {
+  const primary = 'acme/model: "quoted" \\ preview';
+  const fallback = "openai/fallback-must-not-be-native";
+  const unknownPrimary = "acme/unknown-agent-model";
   const preview = buildOpencodeInstallPreview({
     root,
     outputDir: ".ai/generated/test-opencode-install",
-    modelAssignments: [{ agent_id: "developer", primary: "openai/gpt-4.1-mini", fallbacks: [] }]
+    modelAssignments: [
+      { agent_id: "developer", primary, fallbacks: [fallback] },
+      { agent_id: "not-an-alfred-agent", primary: unknownPrimary }
+    ]
   });
   const config = JSON.parse(preview.files.find((file) => file.install_path === "opencode.json").content);
-  const developer = preview.files.find((file) => file.install_path === ".opencode/agents/developer.md");
+  const developer = agentFile(preview, "developer");
+  const nativeArtifactContent = preview.files.map((file) => file.content).join("\n");
 
-  assert.equal(config.model_assignment.agents.developer.primary, "openai/gpt-4.1-mini");
-  assert.match(developer.content, /model: "user-owned-runtime-configuration"/);
-  assert.doesNotMatch(developer.content, /openai\/gpt-4\.1-mini/);
+  assert.match(frontmatter(developer.content), new RegExp(`^model: ${JSON.stringify(primary).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"));
+  for (const file of preview.files.filter((candidate) => candidate.kind === "agent" && candidate !== developer)) {
+    assert.doesNotMatch(frontmatter(file.content), /^model:/m);
+  }
+  assert.equal(Object.hasOwn(config, "model_assignment"), false);
+  assert.equal(Object.hasOwn(config, "agent"), false);
+  assert.doesNotMatch(nativeArtifactContent, new RegExp(fallback));
+  assert.doesNotMatch(nativeArtifactContent, new RegExp(unknownPrimary));
+  assert.doesNotMatch(JSON.stringify(preview), /user-owned-runtime-configuration/);
+  assert.equal(preview.provider_calls, 0);
+
+  const objectFallback = "anthropic/fallback-must-not-be-native";
+  const objectPreview = buildOpencodeInstallPreview({
+    root,
+    outputDir: ".ai/generated/test-opencode-install",
+    modelAssignments: {
+      developer: { primary: "  anthropic/claude-sonnet-4  ", fallbacks: [objectFallback] },
+      qa: { primary: "   ", fallbacks: [objectFallback] },
+      reviewer: { primary: "", fallbacks: [] }
+    }
+  });
+
+  assert.match(frontmatter(agentFile(objectPreview, "developer").content), /^model: "anthropic\/claude-sonnet-4"$/m);
+  assert.doesNotMatch(frontmatter(agentFile(objectPreview, "qa").content), /^model:/m);
+  assert.doesNotMatch(frontmatter(agentFile(objectPreview, "reviewer").content), /^model:/m);
+  assert.doesNotMatch(objectPreview.files.map((file) => file.content).join("\n"), new RegExp(objectFallback));
+  assert.equal(objectPreview.provider_calls, 0);
 });
 
 test("opencode config preview keeps permission gates conservative", () => {
@@ -150,14 +198,35 @@ test("opencode config preview keeps permission gates conservative", () => {
 });
 
 test("writeOpencodeInstallPreview writes only preview files under requested output dir", () => {
-  const outputDir = `.ai/generated/test-opencode-install-${process.pid}`;
+  const outputDir = `.ai/generated/test-opencode-install-model-${process.pid}`;
+  const primary = "anthropic/claude-sonnet-4";
+  const fallback = "openai/fallback-must-not-be-native";
   try {
-    const preview = writeOpencodeInstallPreview({ root, outputDir });
+    const preview = writeOpencodeInstallPreview({
+      root,
+      outputDir,
+      modelAssignments: [{ agent_id: "developer", primary, fallbacks: [fallback] }]
+    });
     const orchestrator = preview.files.find((file) => file.install_path === ".opencode/agents/orchestrator.md");
     assert.ok(orchestrator);
     const writtenPath = join(root, orchestrator.path);
     assert.ok(existsSync(writtenPath));
     assert.match(readFileSync(writtenPath, "utf8"), /# Orchestrator/);
+    const developer = agentFile(preview, "developer");
+    const writtenDeveloper = readFileSync(join(root, developer.path), "utf8");
+    const configFile = preview.files.find((file) => file.install_path === "opencode.json");
+    assert.ok(configFile);
+    const writtenConfig = JSON.parse(readFileSync(join(root, configFile.path), "utf8"));
+    const writtenContent = preview.files.map((file) => readFileSync(join(root, file.path), "utf8")).join("\n");
+
+    assert.match(frontmatter(writtenDeveloper), /^model: "anthropic\/claude-sonnet-4"$/m);
+    assert.doesNotMatch(writtenContent, new RegExp(fallback));
+    assert.doesNotMatch(writtenContent, /user-owned-runtime-configuration/);
+    assert.equal(Object.hasOwn(writtenConfig, "model_assignment"), false);
+    assert.equal(Object.hasOwn(writtenConfig, "agent"), false);
+    assert.equal(writtenConfig.permission.edit, "ask");
+    assert.equal(writtenConfig.permission.bash["rm *"], "deny");
+    assert.equal(preview.provider_calls, 0);
   } finally {
     rmSync(join(root, outputDir), { recursive: true, force: true });
   }

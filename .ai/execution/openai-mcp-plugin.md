@@ -69,7 +69,10 @@ plugin review.
 
 ### R3: MCP OAuth 2.1 compatibility
 
-- Publish `/.well-known/oauth-protected-resource` for the MCP resource.
+- Publish the RFC 9728 path-specific metadata URL
+  `/.well-known/oauth-protected-resource/mcp` for the `/mcp` resource.
+- Preserve `/.well-known/oauth-protected-resource` as a compatibility alias.
+- Advertise the path-specific metadata URL in Bearer authentication challenges.
 - Publish `/.well-known/oauth-authorization-server` for Alfred's issuer.
 - Require PKCE S256 for MCP authorization codes.
 - Preserve the requested `resource` through authorization and token exchange,
