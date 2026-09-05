@@ -75,6 +75,9 @@ plugin review.
 - Advertise the path-specific metadata URL in Bearer authentication challenges.
 - Publish `/.well-known/oauth-authorization-server` for Alfred's issuer.
 - Require PKCE S256 for MCP authorization codes.
+- Support public OAuth clients with `token_endpoint_auth_method=none` only for
+  resource-bound MCP grants protected by PKCE S256; keep legacy non-PKCE flows
+  confidential.
 - Preserve the requested `resource` through authorization and token exchange,
   then bind issued access and refresh tokens to that resource.
 - Preserve the legacy confidential client flow used by the Custom GPT Action.

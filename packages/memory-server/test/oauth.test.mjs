@@ -215,6 +215,55 @@ test("MCP authorization requires PKCE S256 and binds issued tokens to the resour
   } finally { fx.close(); }
 });
 
+test("resource-bound MCP grants support a PKCE public client without a secret", async () => {
+  const fx = await fixture();
+  const verifier = "alfred-public-client-verifier-abcdefghijklmnopqrstuvwxyz0123456789";
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  try {
+    const { code } = await issueCode(fx, {
+      resource: MCP_RESOURCE,
+      code_challenge: challenge,
+      code_challenge_method: "S256"
+    });
+    const tokens = await fx.oauthService.exchangeToken({
+      grant_type: "authorization_code",
+      client_id: CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      code,
+      resource: MCP_RESOURCE,
+      code_verifier: verifier
+    });
+    assert.match(tokens.access_token, /^alo_/);
+    assert.match(tokens.refresh_token, /^alr_/);
+
+    const rotated = await fx.oauthService.exchangeToken({
+      grant_type: "refresh_token",
+      client_id: CLIENT_ID,
+      refresh_token: tokens.refresh_token,
+      resource: MCP_RESOURCE
+    });
+    assert.match(rotated.access_token, /^alo_/);
+    assert.notEqual(rotated.refresh_token, tokens.refresh_token);
+  } finally {
+    fx.close();
+  }
+});
+
+test("legacy non-PKCE grants still require confidential client authentication", async () => {
+  const fx = await fixture();
+  try {
+    const { code } = await issueCode(fx);
+    await assert.rejects(() => fx.oauthService.exchangeToken({
+      grant_type: "authorization_code",
+      client_id: CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      code
+    }), /Public clients require a resource-bound PKCE authorization code/);
+  } finally {
+    fx.close();
+  }
+});
+
 test("authorization validates state, client, redirect URI, and scopes", async () => {
   const fx = await fixture();
   try {
@@ -358,7 +407,7 @@ test("OAuth router publishes authorization-server metadata for MCP clients", asy
     assert.equal(metadata.authorization_endpoint, "https://alfred-labs-memory.fly.dev/oauth/authorize");
     assert.equal(metadata.token_endpoint, "https://alfred-labs-memory.fly.dev/oauth/token");
     assert.deepEqual(metadata.code_challenge_methods_supported, ["S256"]);
-    assert.deepEqual(metadata.token_endpoint_auth_methods_supported, ["client_secret_basic", "client_secret_post"]);
+    assert.deepEqual(metadata.token_endpoint_auth_methods_supported, ["none", "client_secret_basic", "client_secret_post"]);
   } finally { fx.close(); }
 });
 
