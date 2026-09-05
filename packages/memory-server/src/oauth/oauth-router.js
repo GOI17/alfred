@@ -9,11 +9,12 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 
-function html(res, status, body) {
+function html(res, status, body, { formActionOrigin = null } = {}) {
+  const formAction = formActionOrigin ? `form-action 'self' ${formActionOrigin}` : "form-action 'self'";
   res.writeHead(status, {
     "content-type": "text/html; charset=utf-8",
     "cache-control": "no-store",
-    "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+    "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; ${formAction}; base-uri 'none'; frame-ancestors 'none'`,
     "x-content-type-options": "nosniff",
     "referrer-policy": "no-referrer"
   });
@@ -93,7 +94,7 @@ export function createOAuthRouter({ oauthService = null } = {}) {
       }
       if (url.pathname === "/oauth/authorize" && req.method === "GET") {
         const request = oauthService.validateAuthorizationRequest(Object.fromEntries(url.searchParams));
-        return html(res, 200, consentPage(request));
+        return html(res, 200, consentPage(request), { formActionOrigin: new URL(request.redirect_uri).origin });
       }
       if (url.pathname === "/oauth/authorize" && req.method === "POST") {
         const form = await readForm(req);
@@ -104,7 +105,9 @@ export function createOAuthRouter({ oauthService = null } = {}) {
         } catch (err) {
           if (err instanceof OAuthError && err.code === "access_denied") {
             const request = oauthService.validateAuthorizationRequest(form);
-            return html(res, err.status, consentPage(request, err.message));
+            return html(res, err.status, consentPage(request, err.message), {
+              formActionOrigin: new URL(request.redirect_uri).origin
+            });
           }
           throw err;
         }

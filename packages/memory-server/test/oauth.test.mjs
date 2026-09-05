@@ -37,7 +37,10 @@ function config(overrides = {}) {
   };
 }
 
-async function fixture({ now = Date.parse("2026-09-02T12:00:00.000Z") } = {}) {
+async function fixture({
+  now = Date.parse("2026-09-02T12:00:00.000Z"),
+  oauthConfig = config()
+} = {}) {
   const dir = mkdtempSync(join(tmpdir(), "alfred-oauth-"));
   const registry = await createSqliteRegistryStore({ dbPath: join(dir, "registry.sqlite") });
   const tenant = await registry.tenants.createTenant({
@@ -50,7 +53,7 @@ async function fixture({ now = Date.parse("2026-09-02T12:00:00.000Z") } = {}) {
   const { apiKey } = await userService.provisionApiKey({ tenant_id: tenant.id, label: "oauth-test" });
   let clock = now;
   const oauthService = createOAuthService({
-    config: config(), registry, userService, now: () => clock
+    config: oauthConfig, registry, userService, now: () => clock
   });
   return {
     dir, registry, tenant, userService, apiKey, oauthService,
@@ -359,7 +362,11 @@ test("OAuth trace records outcomes without credentials and with zero provider ca
 });
 
 test("OAuth router renders consent and exchanges form-encoded tokens", async () => {
-  const fx = await fixture();
+  const fx = await fixture({
+    oauthConfig: config({
+      redirectUris: [REDIRECT_URI, "https://chat.openai.com/aip/g-test/oauth/callback"]
+    })
+  });
   try {
     const router = createOAuthRouter({ oauthService: fx.oauthService });
     const query = new URLSearchParams(authorizationInput(fx.apiKey));
@@ -369,6 +376,23 @@ test("OAuth router renders consent and exchanges form-encoded tokens", async () 
     assert.equal(consent.statusCode, 200);
     assert.match(consent.body, /Conectar Alfred Memory/);
     assert.doesNotMatch(consent.body, new RegExp(fx.apiKey));
+    assert.equal(
+      consent.headers["content-security-policy"],
+      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com; base-uri 'none'; frame-ancestors 'none'"
+    );
+    assert.doesNotMatch(
+      consent.headers["content-security-policy"],
+      /g-test|oauth\/callback|chat\.openai\.com|evil\.example/
+    );
+
+    const denied = fakeRes();
+    await router(fakeReq({
+      method: "POST", url: "/oauth/authorize",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(authorizationInput("alk_invalid")).toString()
+    }), denied);
+    assert.equal(denied.statusCode, 401);
+    assert.equal(denied.headers["content-security-policy"], consent.headers["content-security-policy"]);
 
     const authorize = fakeRes();
     await router(fakeReq({
@@ -377,7 +401,12 @@ test("OAuth router renders consent and exchanges form-encoded tokens", async () 
       body: new URLSearchParams(authorizationInput(fx.apiKey)).toString()
     }), authorize);
     assert.equal(authorize.statusCode, 302);
-    const code = new URL(authorize.headers.location).searchParams.get("code");
+    const callback = new URL(authorize.headers.location);
+    assert.equal(`${callback.origin}${callback.pathname}`, REDIRECT_URI);
+    assert.equal(callback.searchParams.get("state"), "chatgpt-state");
+    assert.deepEqual([...callback.searchParams.keys()].sort(), ["code", "state"]);
+    const code = callback.searchParams.get("code");
+    assert.ok(code?.startsWith("alc_"));
 
     const token = fakeRes();
     await router(fakeReq({
@@ -391,6 +420,27 @@ test("OAuth router renders consent and exchanges form-encoded tokens", async () 
     assert.equal(token.statusCode, 200);
     assert.ok(JSON.parse(token.body).access_token.startsWith("alo_"));
     assert.equal(token.headers["cache-control"], "no-store");
+  } finally { fx.close(); }
+});
+
+test("OAuth router does not reflect a rejected redirect origin into form-action CSP", async () => {
+  const fx = await fixture();
+  try {
+    const router = createOAuthRouter({ oauthService: fx.oauthService });
+    const query = new URLSearchParams(authorizationInput(fx.apiKey, {
+      redirect_uri: "https://evil.example/oauth/callback"
+    }));
+    query.delete("api_key");
+    const response = fakeRes();
+
+    await router(fakeReq({ url: `/oauth/authorize?${query}` }), response);
+
+    assert.equal(response.statusCode, 400);
+    assert.equal(
+      response.headers["content-security-policy"],
+      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+    );
+    assert.doesNotMatch(response.headers["content-security-policy"], /evil\.example|chatgpt\.com/);
   } finally { fx.close(); }
 });
 
