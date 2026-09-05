@@ -163,8 +163,13 @@ export function createOAuthService({ config, registry, userService, now = () => 
     };
   }
 
-  function authenticateClient({ client_id, client_secret }) {
-    if (client_id !== config.clientId || !safeEqual(client_secret, config.clientSecret)) {
+  function authenticateClient({ client_id, client_secret }, { allowPublic = false } = {}) {
+    const secretProvided = typeof client_secret === "string" && client_secret.length > 0;
+    if (
+      client_id !== config.clientId ||
+      (secretProvided && !safeEqual(client_secret, config.clientSecret)) ||
+      (!secretProvided && !allowPublic)
+    ) {
       throw new OAuthError("invalid_client", "Client authentication failed.", 401);
     }
   }
@@ -233,7 +238,7 @@ export function createOAuthService({ config, registry, userService, now = () => 
   }
 
   async function exchangeAuthorizationCode(input) {
-    authenticateClient(input);
+    authenticateClient(input, { allowPublic: true });
     if (!input.code || !input.redirect_uri) throw new OAuthError("invalid_request", "code and redirect_uri are required.");
     const lookup = {
       code_hash: hashOAuthSecret(input.code),
@@ -243,6 +248,10 @@ export function createOAuthService({ config, registry, userService, now = () => 
     };
     const pending = await registry.oauth.findAuthorizationCode(lookup);
     if (!pending) throw new OAuthError("invalid_grant", "Authorization code is invalid, expired, or already used.");
+    const publicClient = typeof input.client_secret !== "string" || input.client_secret.length === 0;
+    if (publicClient && (!pending.resource || !pending.code_challenge)) {
+      throw new OAuthError("invalid_client", "Public clients require a resource-bound PKCE authorization code.", 401);
+    }
     if ((pending.resource ?? null) !== normalizeResource(input.resource, config)) {
       throw new OAuthError("invalid_grant", "OAuth resource does not match the authorization code.");
     }
@@ -271,12 +280,16 @@ export function createOAuthService({ config, registry, userService, now = () => 
   }
 
   async function exchangeRefreshToken(input) {
-    authenticateClient(input);
+    authenticateClient(input, { allowPublic: true });
     if (!input.refresh_token) throw new OAuthError("invalid_request", "refresh_token is required.");
     const tokenHash = hashOAuthSecret(input.refresh_token);
     const current = await registry.oauth.findRefreshToken(tokenHash);
     if (!current || current.client_id !== config.clientId || new Date(current.expires_at).getTime() <= now()) {
       throw new OAuthError("invalid_grant", "Refresh token is invalid or expired.");
+    }
+    const publicClient = typeof input.client_secret !== "string" || input.client_secret.length === 0;
+    if (publicClient && !current.resource) {
+      throw new OAuthError("invalid_client", "Public clients require a resource-bound refresh token.", 401);
     }
     async function rejectReuse(token) {
       await registry.oauth.revokeTokenFamily(token.family_id, new Date(now()).toISOString());

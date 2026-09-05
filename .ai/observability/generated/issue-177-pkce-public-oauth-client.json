@@ -1,0 +1,23 @@
+{
+  "trace_id": "issue-177-pkce-public-oauth-client",
+  "timestamp": "2026-09-05T07:47:00Z",
+  "event": "task_completed",
+  "actor": "codex",
+  "data": {
+    "operation": "enable_pkce_public_oauth_client",
+    "issue": 177,
+    "status": "pass",
+    "human_approval": true,
+    "provider_calls": 0,
+    "security_invariants": [
+      "public authorization-code grants require a resource-bound PKCE code",
+      "public refresh grants require a resource-bound token",
+      "legacy non-PKCE grants remain confidential"
+    ],
+    "tests": {
+      "passed": 244,
+      "failed": 0,
+      "skipped": 2
+    }
+  }
+}
