@@ -1,0 +1,23 @@
+{
+  "trace_id": "issue-184-docker-mcp-dependency-graph",
+  "timestamp": "2026-09-05T08:20:00Z",
+  "event": "task_completed",
+  "actor": "codex",
+  "data": {
+    "operation": "install_mcp_workspace_dependency_graph",
+    "issue": 184,
+    "status": "pass",
+    "human_approval": true,
+    "provider_calls": 0,
+    "security_invariants": [
+      "production validation does not call memory storage",
+      "no credentials or tokens are required during image build",
+      "the runtime SDK remains a direct server dependency"
+    ],
+    "tests": {
+      "passed": 247,
+      "failed": 0,
+      "skipped": 2
+    }
+  }
+}
