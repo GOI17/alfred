@@ -545,7 +545,7 @@ for (const layout of ["fullscreen", "inline"]) {
       const maximumRows = layout === "fullscreen" ? 23 : 24;
       const maximumWidth = layout === "inline" ? 79 : 80;
       assert.ok(lines.length <= maximumRows && lines.every((line) => displayWidth(line) <= maximumWidth), `${layout} ${phase} ${type} overlay fits 80x24 without autowrap`);
-      assert.match(rendered.text, /Keys:\nEsc Close\n↑↓\/←→ Pages\n\? Help\np Preview\nq Cancel/, `${layout} ${phase} ${type} overlay keeps its specific footer visible`);
+      assert.match(rendered.text, /Keys:\n↑↓\/←→ Pages\nEsc Close/, `${layout} ${phase} ${type} overlay keeps its specific footer visible`);
       assert.equal(rendered.text.match(/^Keys:/gm)?.length, 1, `${layout} ${phase} ${type} overlay has one Keys line`);
       assert.equal(lines.findLastIndex((line) => /└─+┘/.test(line)) + 1, lines.indexOf("Keys:"), `${phase} ${type} keys immediately follow the panel`);
     }
@@ -758,13 +758,13 @@ assert.deepEqual(printableInputAction("?", { textFieldFocused: true }), { type: 
 
 const chooseHelp = transition(discoverHelp, { type: "CUSTOMIZE" });
 const chooseHelpText = stepExplanationLines(chooseHelp).join("\n");
-for (const pattern of [/Coding —.*Use for/, /Memory —.*Use for/, /Full —.*Use when/, /Runtime Profiles — enabled/, /Runtime Profiles — skipped/]) assert.match(chooseHelpText, pattern);
+for (const pattern of [/Coding —.*Use for/, /Memory —.*Use for/, /Full —.*Use when/, /Runtime profiles:/, /  - Enabled —/, /  - Skipped \(Configure later\) —/]) assert.match(chooseHelpText, pattern);
 assert.doesNotMatch(chooseHelpText, /Install name —|Target path —|Memory — Postgres/);
 assert.match(render(chooseHelp, { columns: 80, rows: 24 }).text, /Edition: ← Coding →/);
 assert.equal(transition(chooseHelp, { type: "CHANGE", delta: 1 }).decisions.edition, "memory");
 assert.equal(transition(chooseHelp, { type: "CHANGE", delta: -1 }).decisions.edition, "full");
 const memoryChooseHelp = transition(chooseHelp, { type: "PATCH", key: "edition", value: "memory" });
-assert.doesNotMatch(stepExplanationLines(memoryChooseHelp).join("\n"), /Runtime Profiles — enabled|Runtime Profiles — skipped/);
+assert.doesNotMatch(stepExplanationLines(memoryChooseHelp).join("\n"), /Runtime profiles:|  - Enabled —|  - Skipped/);
 
 let helpFlow = chooseHelp;
 for (const action of [{ type: "NEXT" }, { type: "NEXT" }, { type: "REVIEW_DECISION", intent: "preview-only" }, { type: "BACK" }]) {
@@ -777,7 +777,7 @@ for (const action of [{ type: "NEXT" }, { type: "NEXT" }, { type: "REVIEW_DECISI
 assert.equal(helpFlow.phase, "Review");
 const configureHelpText = stepExplanationLines({ ...chooseHelp, phase: "Configure" }).join("\n");
 assert.match(configureHelpText, /Install name —/);
-assert.match(configureHelpText, /Execution —/);
+assert.match(configureHelpText, /Intent —/);
 assert.doesNotMatch(configureHelpText, /Available editions|Runtime Profiles —|Harnesses —/);
 
 for (const columns of [60, 80, 100, 120]) {
@@ -795,8 +795,8 @@ for (const columns of [60, 80, 100, 120]) {
     assert.ok(frame.split("\n").every((line) => displayWidth(line) <= columns));
     combined += frame;
   }
-  assert.match(combined, /Runtime Profiles — skipped/);
-  assert.match(combined, /Provider calls: 0/);
+  assert.match(combined, /  - Skipped \(Configure later\) —/);
+  assert.doesNotMatch(combined, /Provider calls:/);
   const end = transition(paged, { type: "PAGE", delta: 1, pageSize, totalItems: all.length });
   assert.equal(end.overlay.page, totalPages - 1);
 }
@@ -822,7 +822,7 @@ for (const layout of ["inline", "fullscreen"]) {
       state = transition(state, { type: "PAGE", delta: page ? 1 : 0, pageSize, totalItems: source.length });
       const rendered = render(state, viewport).text;
       assert.match(rendered.split("\n")[1], new RegExp(`page ${page + 1}/${totalPages}`));
-      assert.match(rendered, /└─+┘\nKeys:\nEsc Close/);
+      assert.match(rendered, /└─+┘\nKeys:\n↑↓\/←→ Pages\nEsc Close/);
       renderedRows.push(...rendered.split("\n").filter((line) => line.startsWith("│")).map((line) => line.slice(1, -1).trimEnd()));
     }
     const normalized = (text) => text.replace(/\s/g, "");
@@ -886,5 +886,49 @@ const unvisitedConfirm = { ...transition(hintsApply, { type: "FOCUS_CONTROL", co
 assert.doesNotMatch(keyboardHintLines(unvisitedConfirm).join("\n"), /Enter/);
 assert.ok(!keyboardHintLines({ ...hintsChoose, history: [] }).includes("b Back"));
 assert.ok(keyboardHintLines(hintsChoose).includes("b Back"));
+
+
+
+for (const phase of PHASES) {
+  const state = { ...createPathfinderState(), phase };
+  assert.doesNotMatch(stepExplanationLines(state).join("\n"), /Provider calls:/i);
+  assert.match(configurationExplanationLines(state).join("\n"), /Provider calls: 0/, "the complete summary API retains telemetry");
+  for (const type of ["OPEN_WHY", "OPEN_PREVIEW"]) {
+    const overlay = transition(state, { type });
+    assert.deepEqual(keyboardHintLines(overlay), ["Keys:", "↑↓/←→ Pages", "Esc Close"]);
+  }
+}
+for (const [targetPath, expectedName] of [
+  ["", "saved-name"], ["/custom/install-leaf", "install-leaf"],
+  ["/custom/install-leaf///", "install-leaf"], ["./install-leaf/", "install-leaf"],
+  [String.raw`C:\Alfred\install-leaf\\`, "install-leaf"]
+]) {
+  const state = { ...createPathfinderState({ current: { name: "saved-name", targetPath } }), phase: "Configure" };
+  const before = serializeAssignments(state.decisions);
+  const text = stepExplanationLines(state).join("\n");
+  assert.ok(text.includes(`Install name — ${expectedName}: the final folder name in the target path.`));
+  assert.match(text, /Intent — Preview only/);
+  assert.doesNotMatch(text, /Execution —|Continue —|Provider calls:/);
+  assert.equal(serializeAssignments(state.decisions), before, "help does not mutate saved name or target");
+  assert.match(configurationExplanationLines(state).join("\n"), /Install name — saved-name:/);
+}
+const groupedHelp = transition(createPathfinderState(), { type: "CUSTOMIZE" });
+const groupedSource = stepExplanationLines(groupedHelp);
+assert.ok(groupedSource.includes("Editions:"));
+assert.ok(groupedSource.includes("Runtime profiles:"));
+assert.equal(groupedSource.filter((line) => line.startsWith("  - ")).length, 5);
+assert.doesNotMatch(groupedSource.join("\n"), /Harnesses —|Continue —|Provider calls:/);
+for (const width of [16, 22, 78]) {
+  const wrapped = explanationPageLines(groupedHelp, width);
+  let insideBullet = false;
+  for (const line of wrapped) {
+    if (!line || /^(Editions|Runtime profiles):$/.test(line)) insideBullet = false;
+    else if (line.startsWith("  - ")) insideBullet = true;
+    else if (insideBullet) assert.match(line, /^    \S/, "wrapped bullet continuations retain indentation");
+    assert.ok(displayWidth(line) <= width);
+  }
+  const normalized = (text) => text.replace(/\s/g, "");
+  assert.equal(normalized(wrapped.join("")), normalized(groupedSource.slice(1).join("")));
+}
 
 console.log("install pathfinder tests ok");

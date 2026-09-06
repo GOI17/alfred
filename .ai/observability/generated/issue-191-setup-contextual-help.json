@@ -213,6 +213,43 @@
         "git_diff_check": "pass"
       },
       "provider_calls": 0
+    },
+    {
+      "event": "delegation_decision",
+      "scope": "R8 grouped explanations and reduced overlay keys",
+      "target": "developer",
+      "reason": "Orchestrator requires developer for shared contextual help and renderer paging changes.",
+      "provider_calls": 0
+    },
+    {
+      "event": "delegation_decision",
+      "scope": "R8",
+      "target": "reviewer",
+      "reason": "Verify grouped help wrapping, pagination, and display-only target-name derivation.",
+      "provider_calls": 0
+    },
+    {
+      "event": "review_completed",
+      "scope": "R8",
+      "decision": "approved",
+      "frames_verified": 283,
+      "decisions_modified": false,
+      "provider_calls": 0
+    },
+    {
+      "event": "validation_completed",
+      "scope": "R8",
+      "results": {
+        "pathfinder": "pass",
+        "opentui_tests": {
+          "baseline_passed": 21,
+          "current_passed": 22,
+          "regressions": 0
+        },
+        "syntax_checks": "pass",
+        "git_diff_check": "pass"
+      },
+      "provider_calls": 0
     }
   ],
   "data": {

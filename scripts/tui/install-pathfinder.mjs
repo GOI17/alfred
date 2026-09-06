@@ -1114,20 +1114,23 @@ export function stepExplanationLines(state) {
     ];
   } else if (state.phase === "Choose") {
     lines = [
-      "Available editions — use ←/→ to choose:",
-      "Coding — agent operations, skills, adapters, and evals. Use for coding workflows without Memory services.",
-      "Memory — Memory API, server, console, and external-agent adapters. Use for Memory services without coding operations or Runtime Profiles.",
-      "Full — coding operations and Memory components. Use when you need both together.",
-      ...summary.filter((line) => line.startsWith("Harnesses —"))
+      "Editions:",
+      "  - Coding — agent operations, skills, adapters, and evals. Use for coding workflows without Memory services.",
+      "  - Memory — Memory API, server, console, and external-agent adapters. Use for Memory services without coding operations or Runtime Profiles.",
+      "  - Full — coding operations and Memory components. Use when you need both together."
     ];
     if (profilesApplicable(current)) lines.push(
-      "Runtime Profiles — enabled: initializes shared profiles/ and private profiles.local/. Use to switch work, personal, or client configurations; activation requires a separate preview and approval.",
-      "Runtime Profiles — skipped (Configure later): keeps each harness's current configuration. Use when you do not need profile switching or want to set it up later."
+      "",
+      "Runtime profiles:",
+      "  - Enabled — initializes shared profiles/ and private profiles.local/. Use to switch work, personal, or client configurations; activation requires a separate preview and approval.",
+      "  - Skipped (Configure later) — keeps each harness's current configuration. Use when you do not need profile switching or want to set it up later."
     );
-    lines.push("Continue — opens Configure for the installation name, target path, and execution intent.");
   } else if (state.phase === "Configure") {
-    lines = summary.filter((line) => /^(Memory|Install name|Target path|Execution) —/.test(line));
-    lines.push("Continue — opens Review to inspect the settings before choosing whether to apply them.");
+    const installFolder = effectiveTargetPath(current).replace(/[\\/]+$/, "").split(/[\\/]/).at(-1) || current.name;
+    lines = summary.filter((line) => /^(Memory|Install name|Target path|Execution) —/.test(line)).map((line) => {
+      if (line.startsWith("Install name —")) return `Install name — ${installFolder}: the final folder name in the target path.`;
+      return line.replace(/^Execution —/, "Intent —");
+    });
   } else if (state.phase === "Review") {
     lines = [...summary,
       "Accept & apply reviewed settings — proceeds to final confirmation; it does not write files yet.",
@@ -1140,11 +1143,14 @@ export function stepExplanationLines(state) {
       "Back to Review — returns to the settings decision. Cancel setup — exits without applying the plan."
     ];
   }
-  return [title, ...lines, "Provider calls: 0"].map(sanitizeTerminalText);
+  return [title, ...lines].map(sanitizeTerminalText);
 }
 
 export function explanationPageLines(state, width = 78) {
-  return stepExplanationLines(state).slice(1).flatMap((line) => wrapAnsi(line, width));
+  return stepExplanationLines(state).slice(1).flatMap((line) => {
+    if (!line.startsWith("  - ")) return wrapAnsi(line, width);
+    return wrapAnsi(line.slice(4), Math.max(1, width - 4)).map((part, index) => `${index === 0 ? "  - " : "    "}${part}`);
+  });
 }
 
 export function previewPageLines(state, width = 78) {
@@ -1153,7 +1159,7 @@ export function previewPageLines(state, width = 78) {
 
 export function keyboardHintLines(state) {
   if (state.editing) return ["Keys:", "←→ Cursor", "Enter Save", "Esc Cancel edit", "Backspace Erase before", "Delete Erase after"];
-  if (state.overlay) return ["Keys:", "Esc Close", "↑↓/←→ Pages", "? Help", "p Preview", "q Cancel"];
+  if (state.overlay) return ["Keys:", "↑↓/←→ Pages", "Esc Close"];
   const control = controlsFor(state)[boundedFocus(state)];
   let actions = [];
   if (["edition", "profile", "memory", "intent"].includes(control)) {

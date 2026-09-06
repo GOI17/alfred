@@ -20,7 +20,9 @@ disabled.
 Setup explanations are hidden by default. Press `?` to open or close **What
 this configuration changes** for the current step, use arrow keys to read its
 pages, and press Escape to dismiss it. Discover explains the recommended setup;
-Choose explains each edition and the available Runtime Profiles choices.
+Choose groups edition descriptions and the available Runtime Profiles choices
+under separate headings. Configure derives its displayed install name from the
+target folder and explains the selected intent.
 Changing steps starts with help hidden. The existing `w` help and `r` recommended
 setup shortcuts remain supported.
 
@@ -28,7 +30,7 @@ Keyboard hints appear as a vertical **Keys** list immediately below the main
 container. Each line shows one shortcut and its action for the focused option: selectors
 show change keys, harness checkboxes show toggle keys, fields show edit keys,
 and buttons show their available activation. Text editing and overlays have
-their own hints. Bottom status and preview summaries are
+their own hints. Read-only help and preview overlays show only Pages and Close. Bottom status and preview summaries are
 omitted; `p` opens the full preview and wide terminals retain the separate live
 preview panel. Help and preview page numbers appear inside the panel. Panel
 height accounts for the keyboard list so focused controls and all pages remain

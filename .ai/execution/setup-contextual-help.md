@@ -54,7 +54,16 @@ Reduce default setup clutter and explain visible settings on demand.
 - Show the same left/right arrow indicators as Edition around the current Profiles value in Choose and Intent value in Configure.
 - Apply to Node and OpenTUI; preserve values, change markers, focus-specific keys, and selection behavior.
 
+### R8: Focused and grouped configuration explanations
+- Remove Provider calls from the contextual What this configuration changes view in every step.
+- Read-only help/preview overlay Keys show only Pages and Close; preserve dynamic keys in the underlying steps and editing mode.
+- Choose help groups edition descriptions under Editions (Coding, Memory, Full) and applicable profile descriptions under Runtime profiles (Enabled, Skipped), with visibly indented list items. Remove Harnesses and Continue from Choose help.
+- Configure help displays Install name derived from the final directory segment of the effective target path, including explicit custom paths and trailing separators. This is an explanation display change; do not alter saved name or path decisions.
+- Configure help removes Continue and labels execution intent as Intent.
+- Preserve help paging, readable grouping across wrapped lines, full content accessibility in both renderers, and existing approval behavior.
+
 ## Completion conditions
+- [x] R8 explanation content and overlay Keys are implemented and verified.
 - [x] R7 selector indicators are rendered and verified in both adapters.
 - [x] R6 focus-specific hints are implemented and regression-checked.
 - [x] R5 is implemented and regression-checked in both renderers.

@@ -30,7 +30,7 @@ test("maps overlay arrows to deterministic paging", () => {
   assert.deepEqual(keyEventAction(key("right", "\u001b[C"), state, { columns: 80, rows: 24 }), {
     type: "PAGE",
     delta: 1,
-    pageSize: 11
+    pageSize: 14
   });
 });
 
@@ -226,7 +226,7 @@ test("Choose shows edition alternatives and pages through editions and profile u
       assert.ok(view.main.rows.every(({ text }) => !text.includes("…")), "help wraps without clipping words");
     }
     const text = pages.join(" ");
-    for (const pattern of [/Coding —.*Use for/, /Memory —.*Use for/, /Full —.*Use when/, /Runtime Profiles — enabled/, /Runtime Profiles — skipped/]) assert.match(text, pattern);
+    for (const pattern of [/Coding —.*Use\s+for/, /Memory —.*Use\s+for/, /Full —.*Use\s+when/, /Runtime profiles:/, /  - Enabled —/, /  - Skipped \(Configure later\) —/]) assert.match(text, pattern);
     assert.doesNotMatch(text, /Install name —|Memory — Postgres|model assignment/);
     assert.equal(transition(state, keyEventAction(key("right"), state, viewport)).overlay.page, pageCount - 1);
     const dismissed = transition(state, keyEventAction(key("escape"), state));
@@ -361,4 +361,35 @@ test("keyboard and direct focus changes refresh the option-specific keys and foo
   state = transition(state, { type: "FOCUS_CONTROL", control: "name" });
   assert.ok(openTuiViewForState(state).footer.includes("Enter Edit name"));
   assert.doesNotMatch(openTuiViewForState(state).footer.join("\n"), /Change|Toggle/);
+});
+
+
+test("help groups options without telemetry and overlay keys only show pages and close", () => {
+  const base = createInstallerState({});
+  for (const phase of ["Discover", "Choose", "Configure", "Review", "Apply"]) {
+    const state = { ...base, phase };
+    for (const type of ["OPEN_WHY", "OPEN_PREVIEW"]) {
+      let opened = transition(state, { type });
+      const view = openTuiViewForState(opened);
+      assert.deepEqual(view.footer, ["Keys:", "↑↓/←→ Pages", "Esc Close"]);
+      if (type === "OPEN_WHY") {
+        opened = view.state;
+        const totalPages = Number(view.main.subtitle.match(/page 1\/(\d+)/)[1]);
+        for (let page = 0; page < totalPages; page += 1) {
+          const current = openTuiViewForState(opened);
+          assert.doesNotMatch(current.main.rows.map(({ text }) => text).join(" "), /Provider calls:/i);
+          opened = transition(current.state, keyEventAction(key("right"), current.state));
+        }
+      }
+    }
+  }
+  const choose = transition(base, { type: "CUSTOMIZE" });
+  const grouped = openTuiViewForState(transition(choose, { type: "OPEN_WHY" }), { columns: 80, rows: 50 });
+  const text = grouped.main.rows.map(({ text }) => text).join("\n");
+  assert.match(text, /^Editions:$/m);
+  assert.match(text, /^  - Coding —/m);
+  assert.match(text, /^Runtime profiles:$/m);
+  assert.match(text, /^  - Enabled —/m);
+  assert.match(text, /^    \S/m, "wrapped descriptions keep a hanging indent");
+  assert.doesNotMatch(text, /Harnesses —|Continue —/);
 });
