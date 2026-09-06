@@ -23,6 +23,8 @@ import {
   normalizeDiscovery,
   previewModel,
   explanationPageLines,
+  keyboardHintLines,
+  previewPageLines,
   serializeAssignments,
   stripAnsi,
   textEditingActive,
@@ -88,12 +90,12 @@ export function keyEventAction(key, state, viewport = { columns: 80, rows: 24 })
     return { type: "BACK" };
   }
   if (name === "up" || name === "down") {
-    if (overlayPaged(state)) return { type: "PAGE", delta: name === "up" ? -1 : 1, pageSize: openTuiPageMetrics(viewport).pageSize };
+    if (overlayPaged(state)) return { type: "PAGE", delta: name === "up" ? -1 : 1, pageSize: openTuiPageMetrics(viewport, state).pageSize };
     if (!state.overlay || state.overlay.type === "model-editor") return { type: "MOVE", delta: name === "up" ? -1 : 1 };
     return null;
   }
   if (name === "left" || name === "right") {
-    if (overlayPaged(state)) return { type: "PAGE", delta: name === "left" ? -1 : 1, pageSize: openTuiPageMetrics(viewport).pageSize };
+    if (overlayPaged(state)) return { type: "PAGE", delta: name === "left" ? -1 : 1, pageSize: openTuiPageMetrics(viewport, state).pageSize };
     if (!state.overlay || state.overlay.type === "model-editor") return { type: "CHANGE", delta: name === "left" ? -1 : 1 };
     return null;
   }
@@ -150,15 +152,16 @@ export function responsiveLayout(viewport = { columns: 80, rows: 24 }) {
     width: Math.min(columns, mode === "wide" ? 148 : mode === "medium" ? 112 : 80),
     height: Math.min(rows, rows >= 30 ? 34 : rows),
     headerHeight: mode === "compact" ? 4 : 5,
-    footerHeight: 4
+    footerHeight: 9
   };
 }
 
-function openTuiPageMetrics(viewportOrLayout, minimumContentWidth = 24) {
+function openTuiPageMetrics(viewportOrLayout, state) {
   const layout = viewportOrLayout?.mode ? viewportOrLayout : responsiveLayout(viewportOrLayout);
+  const footerHeight = state ? keyboardHintLines(state).length : layout.footerHeight;
   return {
-    pageSize: Math.max(1, layout.height - layout.headerHeight - layout.footerHeight - 6),
-    contentWidth: Math.max(minimumContentWidth, layout.width - (layout.mode === "wide" ? 68 : layout.mode === "medium" ? 32 : 8))
+    pageSize: Math.max(1, layout.height - layout.headerHeight - footerHeight - 3),
+    contentWidth: Math.max(["why", "preview"].includes(state?.overlay?.type) ? 1 : 24, layout.width - (layout.mode === "wide" ? 68 : layout.mode === "medium" ? 32 : 8))
   };
 }
 
@@ -532,7 +535,7 @@ function modelEditorRows(state) {
 }
 
 function overlayRows(state, layout) {
-  const { pageSize, contentWidth } = openTuiPageMetrics(layout, state.overlay?.type === "why" ? 1 : 24);
+  const { pageSize, contentWidth } = openTuiPageMetrics(layout, state);
   if (state.overlay.type === "model-editor") return modelEditorRows(state);
   let source;
   let title;
@@ -543,14 +546,14 @@ function overlayRows(state, layout) {
     source = modelPlanReviewLines(state, contentWidth);
     title = "Exact models.json";
   } else {
-    source = previewModel(state.decisions, state.discovery).lines.slice(1);
+    source = previewPageLines(state, contentWidth);
     title = "Full installation preview";
   }
   const pageCount = Math.max(1, Math.ceil(source.length / pageSize));
   const page = Math.max(0, Math.min(pageCount - 1, state.overlay.page || 0));
   return {
     title,
-    subtitle: `${state.overlay.type === "why" ? "Practical effects" : "Read-only"} · page ${page + 1}/${pageCount}`,
+    subtitle: `page ${page + 1}/${pageCount} · ${state.overlay.type === "why" ? "Practical effects" : "Read-only"}`,
     rows: source.slice(page * pageSize, (page + 1) * pageSize).map((text) => row(text, {
       tone: /provider calls:\s*0|safety:/i.test(text) ? "green" : /blocker|blocked|not inspected/i.test(text) ? "red" : "foreground"
     }))
@@ -624,30 +627,13 @@ function navigationSteps(state) {
   }));
 }
 
-function footerLines(state, layout) {
-  const preview = previewModel(state.decisions, state.discovery).concise;
-  const keys = state.editing
-    ? "←→ cursor  Enter save  Esc cancel  Backspace/Delete edit"
-    : state.overlay
-      ? "Esc close  ←→/↑↓ pages  ? help  p preview  q cancel"
-      : layout.mode === "compact"
-        ? "↑↓ Move  ←→ Change  Space Toggle  Enter Select  ? Help  b Back  p Preview  q Quit"
-        : "↑↓ move  ←→ change  Space toggle  Enter select  ? help  b back  p preview  q quit";
-  return [
-    layout.mode === "wide"
-      ? "Safety · Preview-first · human approval required · provider calls 0"
-      : `Preview · ${preview}`,
-    keys
-  ];
-}
-
 function normalizePagedState(state, layout) {
-  const { pageSize, contentWidth } = openTuiPageMetrics(layout, state.overlay?.type === "why" ? 1 : 24);
+  const { pageSize, contentWidth } = openTuiPageMetrics(layout, state);
   if (state.overlay?.type === "why") {
     return transition(state, { type: "PAGE", delta: 0, pageSize, totalItems: explanationPageLines(state, contentWidth).length });
   }
   if (state.overlay?.type === "preview") {
-    return transition(state, { type: "PAGE", delta: 0, pageSize });
+    return transition(state, { type: "PAGE", delta: 0, pageSize, totalItems: previewPageLines(state, contentWidth).length });
   }
   if (state.overlay?.type === "model-plan-review") {
     const totalItems = modelPlanReviewLines(state, contentWidth).length;
@@ -675,7 +661,17 @@ export function openTuiViewForState(state, viewport = { columns: 80, rows: 24 })
         decisions: { ...state.decisions, modelStrategy: "configure-later", modelWriteApproved: false }
       }
     : state;
+  layout.footerHeight = keyboardHintLines(setupState).length;
   const normalized = normalizePagedState(setupState, layout);
+  const main = phaseSurface(normalized, layout);
+  const preview = previewRows(normalized);
+  const naturalBodyHeight = Math.max(
+    6,
+    main.rows.length + 3,
+    layout.mode === "wide" ? preview.length + 3 : 0,
+    layout.mode !== "compact" ? PHASES.length + 2 : 0
+  );
+  const bodyHeight = Math.min(layout.height - layout.headerHeight - layout.footerHeight, naturalBodyHeight);
   return {
     state: normalized,
     layout,
@@ -683,13 +679,14 @@ export function openTuiViewForState(state, viewport = { columns: 80, rows: 24 })
     tagline: "Local-first agent runtime",
     modeLabel: normalized.decisions.applyIntent === "apply-safe-steps" ? "APPLY REQUESTED" : "PREVIEW MODE",
     steps: navigationSteps(normalized),
-    main: phaseSurface(normalized, layout),
+    main,
+    bodyHeight,
     preview: {
       title: "LIVE PREVIEW",
-      rows: previewRows(normalized),
+      rows: preview,
       concise: previewModel(normalized.decisions, normalized.discovery).concise
     },
-    footer: footerLines(normalized, layout),
+    footer: keyboardHintLines(normalized),
     provider_calls: 0
   };
 }
@@ -711,11 +708,12 @@ function padText(text, width) {
   return `${clipped}${" ".repeat(Math.max(0, width - displayWidth(clipped)))}`;
 }
 
-function framedLines(title, rows, width, height) {
+function framedLines(title, rows, width, height, subtitle = "") {
   const inner = Math.max(1, width - 2);
   const label = clipText(` ${title} `, inner);
   const result = [`┌${label}${"─".repeat(Math.max(0, inner - displayWidth(label)))}┐`];
-  const fitted = fitRows(rows, Math.max(0, height - 2));
+  if (subtitle) result.push(`│${padText(`  ${subtitle}`, inner)}│`);
+  const fitted = fitRows(rows, Math.max(0, height - 2 - (subtitle ? 1 : 0)));
   fitted.forEach((entry) => result.push(`│${padText(`${entry.focused ? "› " : "  "}${entry.text}`, inner)}│`));
   while (result.length < height - 1) result.push(`│${" ".repeat(inner)}│`);
   result.push(`└${"─".repeat(inner)}┘`);
@@ -738,7 +736,7 @@ function fitRows(rows, available) {
 export function frameForState(state, viewport = { columns: 80, rows: 24 }) {
   const view = openTuiViewForState(state, viewport);
   const { layout } = view;
-  if (layout.width < 20 || layout.height < 8) {
+  if (layout.width < 20 || view.bodyHeight < 6) {
     return {
       state: view.state,
       lines: ["Resize terminal", "q cancel"].slice(0, layout.height),
@@ -746,11 +744,12 @@ export function frameForState(state, viewport = { columns: 80, rows: 24 }) {
       provider_calls: 0
     };
   }
-  const bodyHeight = Math.max(4, layout.height - layout.headerHeight - layout.footerHeight);
+  const bodyHeight = view.bodyHeight;
   const header = [
     `${view.title}  ·  ${view.tagline}`,
     `${view.steps.map(({ phase, marker }) => `${marker} ${phase}`).join("  ")}  ·  [${view.modeLabel}]  ·  PROVIDERS 0`
   ];
+  while (header.length < layout.headerHeight) header.push("");
   let body;
   if (layout.mode === "wide") {
     const gap = 1;
@@ -760,7 +759,7 @@ export function frameForState(state, viewport = { columns: 80, rows: 24 }) {
     const navRows = view.steps.map(({ phase, marker, status, tone }) => row(`${marker} ${phase}  ${status}`, { tone }));
     const columns = [
       framedLines("INSTALL", navRows, navWidth, bodyHeight),
-      framedLines(view.main.title, view.main.rows, mainWidth, bodyHeight),
+      framedLines(view.main.title, view.main.rows, mainWidth, bodyHeight, view.main.subtitle),
       framedLines(view.preview.title, view.preview.rows, previewWidth, bodyHeight)
     ];
     body = Array.from({ length: bodyHeight }, (_, index) =>
@@ -771,12 +770,12 @@ export function frameForState(state, viewport = { columns: 80, rows: 24 }) {
     const mainWidth = layout.width - navWidth - 1;
     const navRows = view.steps.map(({ phase, marker, status, tone }) => row(`${marker} ${phase}  ${status}`, { tone }));
     const nav = framedLines("INSTALL", navRows, navWidth, bodyHeight);
-    const main = framedLines(view.main.title, view.main.rows, mainWidth, bodyHeight);
+    const main = framedLines(view.main.title, view.main.rows, mainWidth, bodyHeight, view.main.subtitle);
     body = Array.from({ length: bodyHeight }, (_, index) =>
       `${padText(nav[index] || "", navWidth)} ${main[index] || ""}`
     );
   } else {
-    body = framedLines(view.main.title, view.main.rows, layout.width, bodyHeight);
+    body = framedLines(view.main.title, view.main.rows, layout.width, bodyHeight, view.main.subtitle);
   }
   const lines = [
     ...header,
@@ -784,8 +783,8 @@ export function frameForState(state, viewport = { columns: 80, rows: 24 }) {
     ...view.footer.map((line) => clipText(line, layout.width))
   ].slice(0, layout.height);
   const hitRegions = [];
-  let actionY = layout.headerHeight;
-  for (const entry of fitRows(view.main.rows, Math.max(0, bodyHeight - 2))) {
+  let actionY = layout.headerHeight + 2 + (view.main.subtitle ? 1 : 0);
+  for (const entry of fitRows(view.main.rows, Math.max(0, bodyHeight - 2 - (view.main.subtitle ? 1 : 0)))) {
     if (entry.action) hitRegions.push({ x1: 1, x2: layout.width, y1: actionY, y2: actionY, action: entry.action });
     actionY += 1;
   }
@@ -906,7 +905,7 @@ function addPanel(renderer, parent, {
 function renderOpenTuiView(renderer, root, view, dispatch, colorEnabled) {
   const { layout } = view;
   clearChildren(root);
-  if (layout.width < 20 || layout.height < 8) {
+  if (layout.width < 20 || view.bodyHeight < 6) {
     const resize = new BoxRenderable(renderer, {
       id: "resize-terminal",
       width: Math.max(1, layout.width),
@@ -969,7 +968,7 @@ function renderOpenTuiView(renderer, root, view, dispatch, colorEnabled) {
     }, colorEnabled);
   }
 
-  const bodyHeight = Math.max(1, layout.height - layout.headerHeight - layout.footerHeight);
+  const bodyHeight = view.bodyHeight;
   const body = new BoxRenderable(renderer, {
     id: "installer-body",
     width: "100%",
@@ -1026,20 +1025,14 @@ function renderOpenTuiView(renderer, root, view, dispatch, colorEnabled) {
     width: "100%",
     height: layout.footerHeight,
     flexDirection: "column",
-    border: true,
-    borderStyle: "single",
-    borderColor: colorEnabled ? THEME.border : undefined,
-    title: "KEYBOARD",
-    titleColor: colorEnabled ? THEME.muted : undefined,
     backgroundColor: colorEnabled ? THEME.background : undefined,
-    paddingX: 1,
     shouldFill: true
   });
   shell.add(footer);
   view.footer.forEach((content, index) => addText(renderer, footer, {
     id: `footer-${index}`,
     content,
-    tone: index === 0 ? "green" : "muted"
+    tone: "muted"
   }, colorEnabled));
 }
 
@@ -1115,7 +1108,7 @@ export async function runOpenTuiInstaller({
         state = transition(state, {
           type: "PAGE",
           delta,
-          pageSize: openTuiPageMetrics({ columns: renderer.width, rows: renderer.height }).pageSize
+          pageSize: openTuiPageMetrics({ columns: renderer.width, rows: renderer.height }, state).pageSize
         });
         redraw();
       }

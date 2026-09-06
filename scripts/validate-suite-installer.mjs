@@ -573,6 +573,8 @@ try {
       TMPDIR: appTuiTemp,
       ALFRED_INSTALL_FORCE_TUI: "1",
       ALFRED_INSTALL_APP_TUI_LAYOUT: "inline",
+      ALFRED_INSTALL_APP_TUI_COLUMNS: "80",
+      ALFRED_INSTALL_APP_TUI_ROWS: "24",
       ALFRED_INSTALL_APP_TUI_RENDER: "1",
       ALFRED_INSTALL_APP_TUI_EVENTS:
         "set:edition=full,set:harnesses=opencode+codex-cli+codex-app,set:profiles=true,set:memory=postgres,set:name=app-demo,set:apply=false,submit"
@@ -586,11 +588,10 @@ try {
   assert.doesNotMatch(appTuiOutput, /model|models\.json/i);
   assert.match(appTuiOutput, /Git: /);
   assert.match(appTuiOutput, /Use recommended setup/);
-  assert.match(appTuiOutput, /Phase 1\/5: Discover/);
-  assert.match(appTuiOutput, /layout: inline/, "install.sh forwards the inherited inline layout selector");
-  assert.match(appTuiOutput, /Preview: Full \| opencode, Codex CLI, Codex App/);
-  assert.match(appTuiOutput, /p full Preview/);
-  assert.match(appTuiOutput, /provider calls: 0/);
+  assert.match(appTuiOutput, /1\/5 Discover/);
+  assert.equal(appTuiPreview.stderr.split("\n").find((line) => line.startsWith("┌ Discover")).length, 79, "install.sh forwards inline layout and reserves the last column");
+  assert.doesNotMatch(appTuiPreview.stderr, /^Phase |^Preview:|layout:|provider calls:/m);
+  assert.match(appTuiPreview.stderr, /└─+┘\nKeys:\n↑↓ Move\nEnter Select\n\? Help\np Preview\nq Quit/);
   assert.doesNotMatch(appTuiPreview.stderr, /\x1b\[[0-?]*[ -/]*[@-~]/, "redirected playback render must not emit ANSI color");
   assert.match(appTuiPreview.stdout, /ALFRED SUITE INSTALL PREVIEW/);
   assert.match(appTuiPreview.stdout, /Edition:\s+full/);
@@ -622,13 +623,17 @@ try {
     env: {
       ...process.env,
       ALFRED_INSTALL_APP_TUI_LAYOUT: "inline",
+      ALFRED_INSTALL_APP_TUI_COLUMNS: "80",
+      ALFRED_INSTALL_APP_TUI_ROWS: "24",
       ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
       ALFRED_INSTALL_APP_TUI_RENDER: "1"
     },
     encoding: "utf8"
   });
   assert.equal(inlinePlaybackRender.status, 0, inlinePlaybackRender.stderr);
-  assert.match(inlinePlaybackRender.stderr, /layout: inline/, "layout selection is deterministic without a TTY");
+  assert.equal(inlinePlaybackRender.stderr.split("\n").find((line) => line.startsWith("┌ Discover")).length, 79, "inline layout reserves the last column without a TTY");
+  assert.match(inlinePlaybackRender.stderr, /└─+┘\nKeys:/);
+  assert.match(inlinePlaybackRender.stderr, /q Quit\n$/);
   assert.doesNotMatch(inlinePlaybackRender.stderr, /\x1b\[\?1049|\x1b\[\?1000|\x1b\[\?1006|\x1b\[2J/);
 
   const unknownLayoutRender = spawnSync("node", [appTui], {
@@ -636,13 +641,17 @@ try {
     env: {
       ...process.env,
       ALFRED_INSTALL_APP_TUI_LAYOUT: "unknown-layout",
+      ALFRED_INSTALL_APP_TUI_COLUMNS: "80",
+      ALFRED_INSTALL_APP_TUI_ROWS: "24",
       ALFRED_INSTALL_APP_TUI_EVENTS: "submit",
       ALFRED_INSTALL_APP_TUI_RENDER: "1"
     },
     encoding: "utf8"
   });
   assert.equal(unknownLayoutRender.status, 0, unknownLayoutRender.stderr);
-  assert.match(unknownLayoutRender.stderr, /layout: fullscreen/, "unknown layout values safely normalize to fullscreen");
+  assert.equal(unknownLayoutRender.stderr.split("\n").find((line) => line.startsWith("┌ Discover")).length, 80, "unknown layouts safely normalize to fullscreen width");
+  assert.equal(unknownLayoutRender.stderr.split("\n").length, 24, "fullscreen reserves one physical row plus the output newline");
+  assert.match(unknownLayoutRender.stderr, /q Quit\n+$/);
 
   const modeNodeBin = join(fixture, "mode-node-bin");
   const modeTuiTemp = join(fixture, "mode-tui-tmp");

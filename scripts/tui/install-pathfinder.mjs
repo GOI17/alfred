@@ -283,10 +283,11 @@ export function normalizeDiscovery(input, legacyHarnessStatus = {}) {
   };
 }
 
-export function previewPageSize({ columns = 80, rows = 24 } = {}) {
+export function previewPageSize({ columns = 80, rows = 24, layout = "fullscreen" } = {}) {
   const width = terminalDimension(columns, 80);
   const height = terminalDimension(rows, 24);
-  return width >= 100 ? Math.max(1, height - 8) : Math.max(1, Math.min(PREVIEW_PAGE_SIZE, height - 8));
+  const available = height - (normalizeTuiLayout(layout) === "fullscreen" ? 1 : 0) - 3 - keyboardHintLines({ overlay: { type: "preview" } }).length;
+  return Math.max(1, width >= 100 ? available : Math.min(PREVIEW_PAGE_SIZE, available));
 }
 
 function asStatusMap(status) {
@@ -770,8 +771,8 @@ export function transition(state, action = {}) {
           modelInspection: { revision: state.modelRevision, pageSize, totalItems, totalPages, pagesViewed, inspectionKey: requestedInspectionKey ?? existing?.inspectionKey ?? null }
         };
       }
-      if (state.overlay.type === "why") {
-        const totalItems = Math.max(1, Number(action.totalItems) || state.overlay.totalItems || explanationPageLines(state).length);
+      if (["why", "preview"].includes(state.overlay.type)) {
+        const totalItems = Math.max(1, Number(action.totalItems) || state.overlay.totalItems || (state.overlay.type === "why" ? explanationPageLines(state).length : previewPageLines(state).length));
         const helpPageSize = action.totalItems ? pageSize : state.overlay.pageSize || pageSize;
         const maxPage = Math.max(0, Math.ceil(totalItems / helpPageSize) - 1);
         return { ...state, overlay: { ...state.overlay, totalItems, pageSize: helpPageSize, page: Math.max(0, Math.min(maxPage, state.overlay.page + Math.sign(action.delta || 0))) } };
@@ -1146,6 +1147,22 @@ export function explanationPageLines(state, width = 78) {
   return stepExplanationLines(state).slice(1).flatMap((line) => wrapAnsi(line, width));
 }
 
+export function previewPageLines(state, width = 78) {
+  return previewModel(state.decisions, state.discovery).lines.flatMap((line) => wrapAnsi(line, width));
+}
+
+export function keyboardHintLines(state) {
+  if (state.editing) return ["Keys:", "←→ Cursor", "Enter Save", "Esc Cancel edit", "Backspace Erase before", "Delete Erase after"];
+  if (state.overlay) return ["Keys:", "Esc Close", "↑↓/←→ Pages", "? Help", "p Preview", "q Cancel"];
+  return [
+    "Keys:", "↑↓ Move",
+    ...(["Choose", "Configure"].includes(state.phase) ? ["←→ Change", "Space Toggle"] : []),
+    "Enter Select", "? Help",
+    ...(state.phase !== "Discover" ? ["b Back"] : []),
+    "p Preview", "q Quit"
+  ];
+}
+
 // Backward-compatible export for adapter integrations. User-facing surfaces
 // render configuration consequences, not recommendation rationale.
 export function rationaleLines(state) {
@@ -1472,49 +1489,42 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
   let pageLabel = "";
   if (state.overlay?.type === "why") {
     const all = explanationPageLines(state, width - 2);
-    const pageSize = previewPageSize({ columns: width, rows: height });
+    const pageSize = previewPageSize({ columns: width, rows: height, layout });
     const pageCount = Math.max(1, Math.ceil(all.length / pageSize));
     const page = Math.min(state.overlay.page, pageCount - 1);
     entries = all.slice(page * pageSize, (page + 1) * pageSize).map((text) => ({ text }));
-    pageLabel = ` | page ${page + 1}/${pageCount}`;
+    pageLabel = `page ${page + 1}/${pageCount} | `;
   }
   else if (state.overlay?.type === "preview") {
-    const all = previewModel(state.decisions, state.discovery).lines;
-    const pageSize = previewPageSize({ columns: width, rows: height });
+    const all = previewPageLines(state, width - 2);
+    const pageSize = previewPageSize({ columns: width, rows: height, layout });
     const pageCount = Math.max(1, Math.ceil(all.length / pageSize));
     const page = Math.min(state.overlay.page, pageCount - 1);
     entries = all.slice(page * pageSize, (page + 1) * pageSize).map((text) => ({ text }));
-    pageLabel = ` | page ${page + 1}/${pageCount}`;
+    pageLabel = `page ${page + 1}/${pageCount} | `;
   } else if (state.overlay?.type === "model-plan-review") {
     const all = modelPlanReviewLines(state, width - 2);
-    const pageSize = previewPageSize({ columns: width, rows: height });
+    const pageSize = previewPageSize({ columns: width, rows: height, layout });
     const pageCount = Math.max(1, Math.ceil(all.length / pageSize));
     const page = Math.min(state.overlay.page, pageCount - 1);
     entries = all.slice(page * pageSize, (page + 1) * pageSize).map((text) => ({ text }));
-    pageLabel = ` | page ${page + 1}/${pageCount}`;
+    pageLabel = `page ${page + 1}/${pageCount} | `;
   } else entries = bodyEntries(state);
-  const focusedControl = controlsFor(state)[boundedFocus(state)];
-  const footer = [
-    `Phase ${phaseIndex + 1}/${PHASES.length}: ${state.phase}${state.overlay ? ` | ${state.overlay.type}${pageLabel}` : ""} | layout: ${layout} | provider calls: 0`,
-    `Preview: ${previewModel(state.decisions, state.discovery).concise}`,
-    state.overlay?.type === "model-editor"
-      ? (state.editing ? "Keys: ←→ cursor;Enter commit;Esc cancel;Backspace/Delete edit" : "Keys: ↑↓ move;Enter edit/action;Esc close;p Preview;q quit")
-      : state.overlay ? "Keys: Esc close;arrows page;? Explain;p Preview;q cancel"
-        : focusedControl === "models-edit" ? "Keys: ↑↓ move;Enter edit models;b back;p full Preview;q quit"
-          : "Keys: ↑↓ move;←→ edit;Space toggle;Enter select;? Help;b back;p Preview;q quit"
-  ];
+  const footer = keyboardHintLines(state);
+  if (renderHeight < footer.length + 4) return resizePrompt(width, renderHeight, layout);
   const availableContentHeight = Math.max(1, renderHeight - footer.length - 3);
   const lines = [clipAnsi(paint(title, "focus", color), width)];
   const hitRegions = [];
   {
     const minimumContentHeight = layout === "inline" ? 1 : MIN_PANEL_CONTENT_HEIGHT;
     const contentHeight = Math.min(availableContentHeight, Math.max(minimumContentHeight, entriesHeight(entries, width - 2)));
-    const single = panel(state.overlay?.type === "why" ? "What this configuration changes" : state.overlay?.type === "preview" ? "Preview" : state.overlay?.type === "model-plan-review" ? "Exact models.json" : state.overlay?.type === "model-editor" ? "Manual model editor" : state.phase, entries, width, contentHeight, { color, yOffset: 1 });
+    const panelTitle = state.overlay?.type === "why" ? "What this configuration changes" : state.overlay?.type === "preview" ? "Preview" : state.overlay?.type === "model-plan-review" ? "Exact models.json" : state.overlay?.type === "model-editor" ? "Manual model editor" : state.phase;
+    const single = panel(`${pageLabel}${panelTitle}`, entries, width, contentHeight, { color, yOffset: 1 });
     lines.push(...single.lines);
     hitRegions.push(...single.hitRegions);
   }
-  if (layout === "fullscreen") while (lines.length < renderHeight - footer.length) lines.push("");
   for (const line of footer) lines.push(clipAnsi(sanitizeTerminalText(line), width));
+  if (layout === "fullscreen") while (lines.length < renderHeight) lines.push("");
   return { text: sanitizeTerminalOutput(lines.slice(0, renderHeight).join("\n")), hitRegions, providerCalls: 0, provider_calls: 0 };
 }
 

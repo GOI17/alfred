@@ -15,6 +15,8 @@ import {
   controlsFor,
   configurationExplanationLines,
   explanationPageLines,
+  keyboardHintLines,
+  previewPageLines,
   stepExplanationLines,
   createPathfinderState,
   displayWidth,
@@ -298,13 +300,13 @@ for (const phase of PHASES) {
 const narrow = render(createPathfinderState(), { columns: 80, rows: 24 });
 assert.ok(narrow.text.split("\n").length <= 23);
 assert.ok(narrow.text.split("\n").every((line) => displayWidth(line) <= 80));
-assert.match(narrow.text, /Phase 1\/5: Discover/);
-assert.match(narrow.text, /Preview:/);
+assert.match(narrow.text, /1\/5 Discover/);
+assert.doesNotMatch(narrow.text, /^Phase |^Preview:|layout:|provider calls:/m);
 assert.match(narrow.text, /p Preview/);
-assert.match(narrow.text, /layout: fullscreen/);
-assert.equal(narrow.text.match(/^Keys:/gm)?.length, 1, "the footer has one compact help line");
+assert.match(narrow.text, /Keys:\n↑↓ Move\nEnter Select\n\? Help\np Preview\nq Quit/);
+assert.equal(narrow.text.match(/^Keys:/gm)?.length, 1, "the footer has one Keys label");
 assert.equal(narrow.text.split("\n").length, 23, "fullscreen reserves the physical last row");
-assert.match(narrow.text.split("\n").at(-1), /^Keys:/, "fullscreen help ends at physical row rows-1");
+assert.match(narrow.text, /└─+┘\nKeys:/, "keys immediately follow the main panel");
 assert.doesNotMatch(narrow.text, /model|models\.json/i);
 assert.equal(narrow.provider_calls, 0);
 assert.match(stripAnsi(narrow.text), /┌ Discover/);
@@ -494,11 +496,10 @@ assert.doesNotMatch(stripAnsi(wide.text), /┌ What this configuration changes/)
 const tallWide = render(createPathfinderState(), { columns: 120, rows: 50, color: false });
 const tallWideLines = tallWide.text.split("\n");
 assert.equal(tallWideLines.length, 49, "tall fullscreen rendering reserves one safe terminal row");
-assert.match(tallWideLines.at(-3), /^Phase 1\/5: Discover/, "status is in the bottom footer region");
-assert.match(tallWideLines.at(-2), /^Preview:/, "preview is in the bottom footer region");
-assert.match(tallWideLines.at(-1), /^Keys:/, "help occupies the final owned row, not the physical last row");
+assert.doesNotMatch(tallWide.text, /^Phase |^Preview:|layout:|provider calls:/m);
+assert.match(tallWide.text, /└─+┘\nKeys:/, "keys follow the panel before fullscreen padding");
 const finalPanelBorder = tallWideLines.findLastIndex((line) => /└─+┘/.test(line));
-assert.ok(finalPanelBorder > 0 && finalPanelBorder < tallWideLines.length - 4, "compact panels remain at the top with blank space before the footer");
+assert.ok(finalPanelBorder > 0 && finalPanelBorder < tallWideLines.length - 4, "compact panels and keyboard hints remain at the top");
 const tallConfigure = render({ ...createPathfinderState({ discovery }), phase: "Configure" }, { columns: 120, rows: 50, color: false });
 assert.equal(tallConfigure.text.split("\n").length, 49);
 assert.ok(tallConfigure.text.split("\n").findLastIndex((line) => /└─+┘/.test(line)) < 45, "wide Configure does not add an empty boxed area");
@@ -524,17 +525,17 @@ for (const layout of ["fullscreen", "inline"]) {
     const maximumWidth = layout === "inline" ? 79 : 80;
     assert.ok(lines.length <= maximumRows, `${layout} ${phase} fits an 80x24 viewport`);
     assert.ok(lines.every((line) => displayWidth(line) <= maximumWidth), `${layout} ${phase} preserves a non-wrapping ANSI-aware width at 80 columns`);
-    assert.match(lines.at(-1), /^Keys:/, `${layout} ${phase} footer is not clipped at 80x24`);
-    if (!phaseState.overlay) {
-      assert.match(lines.at(-1), /←→ edit/, `${layout} ${phase} footer identifies horizontal editing`);
-      assert.match(lines.at(-1), /Space toggle/, `${layout} ${phase} footer identifies Space toggling`);
-      assert.match(lines.at(-1), /Enter select/, `${layout} ${phase} footer identifies Enter selection`);
+    assert.deepEqual(lines.slice(lines.indexOf("Keys:"), lines.indexOf("Keys:") + keyboardHintLines(phaseState).length), keyboardHintLines(phaseState), `${layout} ${phase} keyboard list is complete`);
+    if (["Choose", "Configure"].includes(phase)) {
+      assert.match(rendered.text, /←→ Change/, `${layout} ${phase} footer identifies horizontal editing`);
+      assert.match(rendered.text, /Space Toggle/, `${layout} ${phase} footer identifies Space toggling`);
+      assert.match(rendered.text, /Enter Select/, `${layout} ${phase} footer identifies Enter selection`);
     }
-    assert.match(lines.at(-3), new RegExp(`layout: ${layout}`), `${layout} ${phase} identifies its layout`);
+    assert.doesNotMatch(rendered.text, /^Phase |^Preview:|layout:|provider calls:/m);
     assert.equal(rendered.text.match(/^Keys:/gm)?.length, 1, `${layout} ${phase} has one Keys line`);
     assert.equal(rendered.hitRegions.length, controlsFor(phaseState).length, `${layout} ${phase} keeps every active control visible at 80x24`);
     assert.ok(rendered.hitRegions.every(({ y1, y2 }) => y1 <= y2 && y1 > 0 && y2 <= lines.length), `${layout} ${phase} hit regions retain rendered y coordinates`);
-    if (layout === "inline") assert.equal(lines.findLastIndex((line) => /└─+┘/.test(line)) + 4, lines.length, `${phase} inline footer immediately follows its natural panel height`);
+    assert.equal(lines.findLastIndex((line) => /└─+┘/.test(line)) + 1, lines.indexOf("Keys:"), `${phase} keys immediately follow the panel`);
   }
 
   for (const phase of PHASES) {
@@ -544,9 +545,9 @@ for (const layout of ["fullscreen", "inline"]) {
       const maximumRows = layout === "fullscreen" ? 23 : 24;
       const maximumWidth = layout === "inline" ? 79 : 80;
       assert.ok(lines.length <= maximumRows && lines.every((line) => displayWidth(line) <= maximumWidth), `${layout} ${phase} ${type} overlay fits 80x24 without autowrap`);
-      assert.match(lines.at(-1), /^Keys: Esc close;arrows page/, `${layout} ${phase} ${type} overlay keeps its specific footer visible`);
+      assert.match(rendered.text, /Keys:\nEsc Close\n↑↓\/←→ Pages\n\? Help\np Preview\nq Cancel/, `${layout} ${phase} ${type} overlay keeps its specific footer visible`);
       assert.equal(rendered.text.match(/^Keys:/gm)?.length, 1, `${layout} ${phase} ${type} overlay has one Keys line`);
-      if (layout === "inline") assert.equal(lines.findLastIndex((line) => /└─+┘/.test(line)) + 4, lines.length, `${phase} ${type} inline footer immediately follows its natural panel height`);
+      assert.equal(lines.findLastIndex((line) => /└─+┘/.test(line)) + 1, lines.indexOf("Keys:"), `${phase} ${type} keys immediately follow the panel`);
     }
   }
 }
@@ -574,7 +575,7 @@ assert.equal(render(createPathfinderState(), { columns: 80, rows: 0, layout: "fu
 const inlineNatural = render(createPathfinderState(), { columns: 80, rows: 24, color: false, layout: "inline" });
 const inlineNaturalLines = inlineNatural.text.split("\n");
 const inlinePanelEnd = inlineNaturalLines.findLastIndex((line) => /└─+┘/.test(line));
-assert.equal(inlineNaturalLines.length, inlinePanelEnd + 4, "inline status, preview, and help immediately follow the natural panel height");
+assert.equal(inlineNaturalLines.length, inlinePanelEnd + 1 + keyboardHintLines(createPathfinderState()).length, "inline keyboard list immediately follows the natural panel height");
 assert.ok(inlineNaturalLines.length < 24, "inline Discover has no viewport filler");
 assert.ok(inlineNaturalLines.every((line) => line.length > 0), "inline natural content contains no filler rows");
 assert.equal(normalizeTuiLayout("inline"), "inline");
@@ -736,7 +737,7 @@ for (const phase of PHASES) {
       const viewport = { columns, rows: 24, layout };
       const initial = render(base, viewport).text;
       assert.doesNotMatch(initial, /What this configuration changes/, `${phase} ${columns} ${layout} help is hidden`);
-      assert.match(initial.split("\n").at(-1), /\? Help/, "help shortcut stays visible");
+      assert.match(initial, /^\? Help$/m, "help shortcut stays visible");
       const opened = transition(base, terminalTokenAction(base, "?"));
       assert.match(render(opened, viewport).text, /What this configuration changes/);
       assert.deepEqual(transition(opened, { type: "OPEN_WHY" }), base, "? toggles without altering focus or decisions");
@@ -798,6 +799,35 @@ for (const columns of [60, 80, 100, 120]) {
   assert.match(combined, /Provider calls: 0/);
   const end = transition(paged, { type: "PAGE", delta: 1, pageSize, totalItems: all.length });
   assert.equal(end.overlay.page, totalPages - 1);
+}
+
+
+
+for (const layout of ["inline", "fullscreen"]) {
+  let base = transition(createPathfinderState(), { type: "CUSTOMIZE" });
+  base = transition(base, { type: "NEXT" });
+  base = transition(base, { type: "FOCUS_CONTROL", control: "name" });
+  const editing = transition(base, { type: "ACTIVATE" });
+  const frame = render(editing, { columns: 80, rows: 24, layout }).text;
+  assert.match(frame, /└─+┘\nKeys:\n←→ Cursor\nEnter Save\nEsc Cancel edit\nBackspace Erase before\nDelete Erase after/);
+  for (const columns of [24, 80, 120]) {
+    const width = layout === "inline" ? columns - 1 : columns;
+    const viewport = { columns, rows: 24, layout };
+    const pageSize = previewPageSize({ ...viewport, columns: width });
+    const source = previewPageLines(base, width - 2);
+    const totalPages = Math.ceil(source.length / pageSize);
+    let state = transition(base, { type: "OPEN_PREVIEW" });
+    const renderedRows = [];
+    for (let page = 0; page < totalPages; page += 1) {
+      state = transition(state, { type: "PAGE", delta: page ? 1 : 0, pageSize, totalItems: source.length });
+      const rendered = render(state, viewport).text;
+      assert.match(rendered.split("\n")[1], new RegExp(`page ${page + 1}/${totalPages}`));
+      assert.match(rendered, /└─+┘\nKeys:\nEsc Close/);
+      renderedRows.push(...rendered.split("\n").filter((line) => line.startsWith("│")).map((line) => line.slice(1, -1).trimEnd()));
+    }
+    const normalized = (text) => text.replace(/\s/g, "");
+    assert.equal(normalized(renderedRows.join("")), normalized(previewModel(base.decisions, base.discovery).lines.join("")), `${layout} ${columns} preserves all preview text above vertical keys`);
+  }
 }
 
 console.log("install pathfinder tests ok");

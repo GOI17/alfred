@@ -95,6 +95,64 @@
       "state": "draft",
       "pending": "Full local tests require protected-path read authorization",
       "provider_calls": 0
+    },
+    {
+      "event": "task_received",
+      "timestamp": "2026-09-06T02:43:51.486703+00:00",
+      "scope": "batch2 vertical keyboard hints and removal of footer summaries"
+    },
+    {
+      "event": "delegation_decision",
+      "target": "developer",
+      "reason": "Orchestrator requires application-code implementation by developer; footer geometry and pagination must stay consistent across renderers.",
+      "provider_calls": 0
+    },
+    {
+      "event": "delegation_decision",
+      "target": "reviewer",
+      "reason": "Independent review of vertical hint geometry, control reachability, and pagination across both renderers.",
+      "provider_calls": 0
+    },
+    {
+      "event": "review_completed",
+      "scope": "batch2",
+      "decision": "approved",
+      "checked_frames": {
+        "opentui": 240,
+        "node": 640
+      },
+      "help_and_preview_paging": "complete",
+      "apply_gates": "preserved",
+      "provider_calls": 0
+    },
+    {
+      "event": "validation_completed",
+      "scope": "batch2 direct CLI playback",
+      "layouts": [
+        "inline",
+        "fullscreen"
+      ],
+      "scenario": "Choose, open help, advance to page2; vertical keys directly below panel and no status/preview footer summaries",
+      "result": "pass",
+      "provider_calls": 0
+    },
+    {
+      "event": "validation_completed",
+      "scope": "batch2 final focused checks",
+      "results": {
+        "pathfinder": "pass",
+        "opentui_tests": {
+          "baseline_passed": 17,
+          "current_passed": 20,
+          "regressions": 0
+        },
+        "installer_tui_check": "pass",
+        "node_syntax": "pass",
+        "suite_validator_syntax": "pass",
+        "git_diff_check": "pass"
+      },
+      "full_suite": "not run; protected-path read authorization pending",
+      "provider_calls": 0
     }
   ],
   "data": {

@@ -8,8 +8,7 @@ keyboard events, resize handling, and optional mouse input.
 The visual shell is responsive:
 
 - `128+` columns: step navigation, decision surface, and live preview;
-- `96–127` columns: step navigation plus the decision surface and a compact
-  preview summary;
+- `96–127` columns: step navigation plus the decision surface;
 - below `96` columns: compact stepper and a single focused decision surface,
   including the supported `80x24` baseline.
 
@@ -24,6 +23,14 @@ pages, and press Escape to dismiss it. Discover explains the recommended setup;
 Choose explains each edition and the available Runtime Profiles choices.
 Changing steps starts with help hidden. The existing `w` help and `r` recommended
 setup shortcuts remain supported.
+
+Keyboard hints appear as a vertical **Keys** list immediately below the main
+container. Each line shows one shortcut and its action, with hints adapted for
+navigation, text editing, or overlays. Bottom status and preview summaries are
+omitted; `p` opens the full preview and wide terminals retain the separate live
+preview panel. Help and preview page numbers appear inside the panel. Panel
+height accounts for the keyboard list so focused controls and all pages remain
+reachable at `80x24`.
 
 ## Development
 

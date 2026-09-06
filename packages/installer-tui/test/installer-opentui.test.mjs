@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { displayWidth, stepExplanationLines, transition } from "../../../scripts/tui/install-pathfinder.mjs";
+import { controlsFor, displayWidth, keyboardHintLines, previewModel, stepExplanationLines, transition } from "../../../scripts/tui/install-pathfinder.mjs";
 import {
   assignmentsForState,
   createInstallerState,
@@ -30,7 +30,7 @@ test("maps overlay arrows to deterministic paging", () => {
   assert.deepEqual(keyEventAction(key("right", "\u001b[C"), state, { columns: 80, rows: 24 }), {
     type: "PAGE",
     delta: 1,
-    pageSize: 10
+    pageSize: 11
   });
 });
 
@@ -70,7 +70,7 @@ test("bounds and adapts the visual shell instead of stretching it", () => {
     width: 80,
     height: 24,
     headerHeight: 4,
-    footerHeight: 4
+    footerHeight: 9
   });
   assert.equal(responsiveLayout({ columns: 110, rows: 40 }).mode, "medium");
   assert.equal(responsiveLayout({ columns: 240, rows: 70 }).mode, "wide");
@@ -174,7 +174,7 @@ test("? toggles contextual help in every step and responsive layout", () => {
       const state = { ...createInstallerState({}), phase, focus: 1 };
       const initial = frameForState(state, viewport);
       assert.doesNotMatch(initial.lines.join("\n"), /What this configuration changes/);
-      assert.match(initial.lines.at(-1), /\? [Hh]elp/);
+      assert.ok(initial.lines.includes("? Help"));
       const action = keyEventAction(key("?", "?", { shift: true }), state);
       assert.deepEqual(action, { type: "OPEN_WHY" });
       const opened = transition(state, action);
@@ -265,7 +265,7 @@ test("24-column help preserves every character across rendered pages", () => {
     }
     assert.equal(state.overlay.page, page);
     const frame = frameForState(state, viewport);
-    const contentRows = frame.lines.filter((line) => line.startsWith("│"));
+    const contentRows = frame.lines.filter((line) => line.startsWith("│")).slice(1);
     for (const { text } of view.main.rows) {
       assert.ok(displayWidth(text) <= 16, "help fits after the native panel padding and pointer");
       assert.ok(contentRows.some((line) => line.startsWith(`│  ${text}`)), `rendered help preserves: ${text}`);
@@ -274,4 +274,64 @@ test("24-column help preserves every character across rendered pages", () => {
   }
   const normalized = (text) => text.replace(/\s/g, "");
   assert.equal(normalized(renderedRows.join("")), normalized(stepExplanationLines(choose).slice(1).join("")));
+});
+
+
+test("vertical keyboard hints immediately follow the container and preserve focused controls", () => {
+  for (const phase of ["Discover", "Choose", "Configure", "Review", "Apply"]) {
+    for (const viewport of [{ columns: 80, rows: 24 }, { columns: 148, rows: 50 }]) {
+      const base = { ...createInstallerState({}), phase };
+      for (const control of controlsFor(base)) {
+        const state = transition(base, { type: "FOCUS_CONTROL", control });
+        const view = openTuiViewForState(state, viewport);
+        const frame = frameForState(state, viewport);
+        const keysIndex = frame.lines.indexOf("Keys:");
+        assert.match(frame.lines[keysIndex - 1], /└─+┘$/, "keys directly follow the container border");
+        assert.deepEqual(frame.lines.slice(keysIndex), keyboardHintLines(state));
+        assert.equal(view.layout.footerHeight, view.footer.length);
+        assert.doesNotMatch(view.footer.join("\n"), /Phase|layout:|provider calls|Preview:|Safety/i);
+        const focused = view.main.rows.find((entry) => entry.control === control);
+        assert.ok(focused?.focused, `${phase} focuses ${control}`);
+        assert.ok(frame.lines.some((line) => line.includes(`› ${focused.text.slice(0, 25)}`)), `${phase} ${control} stays visible at ${viewport.columns}x${viewport.rows}`);
+      }
+    }
+  }
+});
+
+test("editing and overlay keyboard lists reserve their actual height", () => {
+  let state = transition(createInstallerState({}), { type: "CUSTOMIZE" });
+  state = transition(state, { type: "NEXT" });
+  state = transition(state, { type: "FOCUS_CONTROL", control: "name" });
+  const editing = transition(state, { type: "ACTIVATE" });
+  for (const current of [editing, transition(state, { type: "OPEN_WHY" }), transition(state, { type: "OPEN_PREVIEW" })]) {
+    const frame = frameForState(current);
+    const keysIndex = frame.lines.indexOf("Keys:");
+    assert.match(frame.lines[keysIndex - 1], /└─+┘$/);
+    assert.deepEqual(frame.lines.slice(keysIndex), keyboardHintLines(current));
+    assert.ok(frame.lines.length <= 24);
+    if (current.editing) assert.ok(frame.lines.includes("Backspace Erase before"));
+    else assert.ok(frame.lines.some((line) => /page 1\/\d+/.test(line)), "page counts stay inside the panel");
+  }
+});
+
+test("wrapped preview pages remain complete above the vertical keyboard list", () => {
+  const base = createInstallerState({});
+  const normalized = (text) => text.replace(/\s/g, "");
+  for (const columns of [24, 80]) {
+    const viewport = { columns, rows: 24 };
+    let state = transition(base, { type: "OPEN_PREVIEW" });
+    let view = openTuiViewForState(state, viewport);
+    state = view.state;
+    const pageCount = Number(view.main.subtitle.match(/page 1\/(\d+)/)[1]);
+    const renderedRows = [];
+    for (let page = 0; page < pageCount; page += 1) {
+      if (page > 0) state = transition(state, keyEventAction(key("right"), state, viewport));
+      view = openTuiViewForState(state, viewport);
+      state = view.state;
+      const frame = frameForState(state, viewport);
+      assert.ok(frame.lines.some((line) => line.includes(`page ${page + 1}/${pageCount}`)));
+      renderedRows.push(...frame.lines.filter((line) => line.startsWith("│")).slice(1).map((line) => line.slice(3, -1).trimEnd()));
+    }
+    assert.equal(normalized(renderedRows.join("")), normalized(previewModel(base.decisions, base.discovery).lines.join("")));
+  }
 });

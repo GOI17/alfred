@@ -16,6 +16,7 @@ import {
   modelPlanReviewLines,
   parseHarnessSelection,
   previewPageSize,
+  previewPageLines,
   render,
   sanitizeTerminalOutput,
   serializeAssignments,
@@ -149,10 +150,9 @@ function colorEnabled(stream) {
 }
 
 function screen(output = process.stdout, layout = selectedTuiLayout, viewport = dimensions(output)) {
-  if (state.overlay?.type === "preview") state = transition(state, { type: "PAGE", delta: 0, pageSize: previewPageSize(viewport) });
-  if (state.overlay?.type === "why") {
+  if (["why", "preview"].includes(state.overlay?.type)) {
     const width = normalizeTuiLayout(layout) === "inline" ? Math.max(0, viewport.columns - 1) : viewport.columns;
-    state = transition(state, { type: "PAGE", delta: 0, pageSize: previewPageSize({ ...viewport, columns: width }), totalItems: explanationPageLines(state, width - 2).length });
+    state = transition(state, { type: "PAGE", delta: 0, pageSize: previewPageSize({ ...viewport, columns: width, layout }), totalItems: (state.overlay.type === "why" ? explanationPageLines : previewPageLines)(state, width - 2).length });
   }
   if (state.overlay?.type === "model-plan-review") {
     const width = normalizeTuiLayout(layout) === "inline" ? Math.max(0, viewport.columns - 1) : viewport.columns;
