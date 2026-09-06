@@ -25,8 +25,10 @@ Changing steps starts with help hidden. The existing `w` help and `r` recommende
 setup shortcuts remain supported.
 
 Keyboard hints appear as a vertical **Keys** list immediately below the main
-container. Each line shows one shortcut and its action, with hints adapted for
-navigation, text editing, or overlays. Bottom status and preview summaries are
+container. Each line shows one shortcut and its action for the focused option: selectors
+show change keys, harness checkboxes show toggle keys, fields show edit keys,
+and buttons show their available activation. Text editing and overlays have
+their own hints. Bottom status and preview summaries are
 omitted; `p` opens the full preview and wide terminals retain the separate live
 preview panel. Help and preview page numbers appear inside the panel. Panel
 height accounts for the keyboard list so focused controls and all pages remain

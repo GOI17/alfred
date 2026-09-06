@@ -1154,11 +1154,31 @@ export function previewPageLines(state, width = 78) {
 export function keyboardHintLines(state) {
   if (state.editing) return ["Keys:", "←→ Cursor", "Enter Save", "Esc Cancel edit", "Backspace Erase before", "Delete Erase after"];
   if (state.overlay) return ["Keys:", "Esc Close", "↑↓/←→ Pages", "? Help", "p Preview", "q Cancel"];
+  const control = controlsFor(state)[boundedFocus(state)];
+  let actions = [];
+  if (["edition", "profile", "memory", "intent"].includes(control)) {
+    actions = ["←→ Change", "Space Change"];
+  } else if (control?.startsWith("harness:")) {
+    actions = ["Space Toggle", "Enter Toggle"];
+  } else if (control === "name" || control === "path") {
+    actions = [`Enter Edit ${control}`];
+  } else {
+    const activation = {
+      recommended: "Review setup",
+      customize: "Customize",
+      next: "Continue",
+      "review-apply": canContinueReview(state) ? "Continue to apply" : null,
+      "review-preview": canContinueReview(state) ? "Keep preview" : null,
+      edit: "Edit settings",
+      confirm: state.reviewVisited && canContinueReview(state) ? "Confirm" : null,
+      back: state.history.length ? "Back" : null,
+      cancel: "Cancel"
+    }[control];
+    if (activation) actions = [`Enter ${activation}`];
+  }
   return [
-    "Keys:", "↑↓ Move",
-    ...(["Choose", "Configure"].includes(state.phase) ? ["←→ Change", "Space Toggle"] : []),
-    "Enter Select", "? Help",
-    ...(state.phase !== "Discover" ? ["b Back"] : []),
+    "Keys:", "↑↓ Move", ...actions, "? Help",
+    ...(state.history.length ? ["b Back"] : []),
     "p Preview", "q Quit"
   ];
 }

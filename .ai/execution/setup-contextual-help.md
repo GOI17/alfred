@@ -43,7 +43,15 @@ Reduce default setup clutter and explain visible settings on demand.
 - Reserve actual space for the vertical list so focused controls remain reachable and help/preview pages remain fully readable, including 80x24 and narrow supported sizes.
 - Apply consistently to Node inline/fullscreen, OpenTUI frame, and the native OpenTUI renderer. Preserve header/step navigation and the wide view's separate live preview panel.
 
+### R6: Hints follow the focused control
+- Compute keyboard hints from the currently focused control, not just the phase.
+- Selectors show change actions; harness checkboxes show toggle actions; name/path fields show edit actions; buttons show their activation action.
+- Do not advertise keys that are no-ops on the focused control, including Enter on selectors under current handlers.
+- Preserve applicable global shortcuts and contextual editing/overlay hints. Refresh immediately after keyboard or mouse focus changes.
+- Keep both renderers on the shared hint list, preserving vertical placement and dynamic height, pagination, and approval gates.
+
 ## Completion conditions
+- [x] R6 focus-specific hints are implemented and regression-checked.
 - [x] R5 is implemented and regression-checked in both renderers.
 - [x] Both renderers satisfy R1–R3.
 - [x] Focused Pathfinder/OpenTUI regression tests and syntax checks pass.

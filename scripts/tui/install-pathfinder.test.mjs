@@ -303,7 +303,7 @@ assert.ok(narrow.text.split("\n").every((line) => displayWidth(line) <= 80));
 assert.match(narrow.text, /1\/5 Discover/);
 assert.doesNotMatch(narrow.text, /^Phase |^Preview:|layout:|provider calls:/m);
 assert.match(narrow.text, /p Preview/);
-assert.match(narrow.text, /Keys:\n↑↓ Move\nEnter Select\n\? Help\np Preview\nq Quit/);
+assert.match(narrow.text, /Keys:\n↑↓ Move\nEnter Review setup\n\? Help\np Preview\nq Quit/);
 assert.equal(narrow.text.match(/^Keys:/gm)?.length, 1, "the footer has one Keys label");
 assert.equal(narrow.text.split("\n").length, 23, "fullscreen reserves the physical last row");
 assert.match(narrow.text, /└─+┘\nKeys:/, "keys immediately follow the main panel");
@@ -526,11 +526,11 @@ for (const layout of ["fullscreen", "inline"]) {
     assert.ok(lines.length <= maximumRows, `${layout} ${phase} fits an 80x24 viewport`);
     assert.ok(lines.every((line) => displayWidth(line) <= maximumWidth), `${layout} ${phase} preserves a non-wrapping ANSI-aware width at 80 columns`);
     assert.deepEqual(lines.slice(lines.indexOf("Keys:"), lines.indexOf("Keys:") + keyboardHintLines(phaseState).length), keyboardHintLines(phaseState), `${layout} ${phase} keyboard list is complete`);
-    if (["Choose", "Configure"].includes(phase)) {
-      assert.match(rendered.text, /←→ Change/, `${layout} ${phase} footer identifies horizontal editing`);
-      assert.match(rendered.text, /Space Toggle/, `${layout} ${phase} footer identifies Space toggling`);
-      assert.match(rendered.text, /Enter Select/, `${layout} ${phase} footer identifies Enter selection`);
+    if (phase === "Choose") {
+      assert.match(rendered.text, /←→ Change\nSpace Change/, "edition supports arrows and Space");
+      assert.doesNotMatch(keyboardHintLines(phaseState).join("\n"), /Enter/, "Enter is a no-op on edition");
     }
+    if (phase === "Configure") assert.match(rendered.text, /Enter Edit name/, "name advertises editing");
     assert.doesNotMatch(rendered.text, /^Phase |^Preview:|layout:|provider calls:/m);
     assert.equal(rendered.text.match(/^Keys:/gm)?.length, 1, `${layout} ${phase} has one Keys line`);
     assert.equal(rendered.hitRegions.length, controlsFor(phaseState).length, `${layout} ${phase} keeps every active control visible at 80x24`);
@@ -829,5 +829,62 @@ for (const layout of ["inline", "fullscreen"]) {
     assert.equal(normalized(renderedRows.join("")), normalized(previewModel(base.decisions, base.discovery).lines.join("")), `${layout} ${columns} preserves all preview text above vertical keys`);
   }
 }
+
+
+
+const hintsDiscover = createPathfinderState({ current: { edition: "full" } });
+const hintsChoose = transition(hintsDiscover, { type: "CUSTOMIZE" });
+const hintsConfigure = transition(hintsChoose, { type: "NEXT" });
+const hintsReview = transition(hintsConfigure, { type: "NEXT" });
+const hintsApply = transition(hintsReview, { type: "REVIEW_DECISION", intent: "preview-only" });
+for (const [base, control] of [[hintsChoose, "edition"], [hintsChoose, "profile"], [hintsConfigure, "memory"], [hintsConfigure, "intent"]]) {
+  const focused = transition(base, { type: "FOCUS_CONTROL", control });
+  const keys = keyboardHintLines(focused).join("\n");
+  assert.match(keys, /←→ Change\nSpace Change/);
+  assert.doesNotMatch(keys, /Enter|Toggle|Edit/);
+  assert.deepEqual(transition(focused, { type: "ACTIVATE" }), focused, `${control} Enter remains a no-op`);
+  assert.notDeepEqual(transition(focused, { type: "SPACE" }).decisions, focused.decisions, `${control} Space changes the selection`);
+  assert.notDeepEqual(transition(focused, { type: "CHANGE", delta: 1 }).decisions, focused.decisions);
+}
+for (const control of controlsFor(hintsChoose).filter((value) => value.startsWith("harness:"))) {
+  const focused = transition(hintsChoose, { type: "FOCUS_CONTROL", control });
+  const keys = keyboardHintLines(focused).join("\n");
+  assert.match(keys, /Space Toggle\nEnter Toggle/);
+  assert.doesNotMatch(keys, /Change|Edit/);
+  assert.deepEqual(transition(focused, { type: "CHANGE", delta: 1 }), focused);
+  assert.notDeepEqual(transition(focused, { type: "ACTIVATE" }).decisions.selectedHarnesses, focused.decisions.selectedHarnesses);
+  assert.deepEqual(transition(focused, { type: "SPACE" }).decisions.selectedHarnesses, transition(focused, { type: "ACTIVATE" }).decisions.selectedHarnesses);
+}
+for (const control of ["name", "path"]) {
+  const focused = transition(hintsConfigure, { type: "FOCUS_CONTROL", control });
+  assert.ok(keyboardHintLines(focused).includes(`Enter Edit ${control}`));
+  assert.doesNotMatch(keyboardHintLines(focused).join("\n"), /Change|Toggle/);
+  assert.equal(transition(focused, { type: "ACTIVATE" }).editing.control, control);
+}
+for (const [base, control, hint] of [
+  [hintsDiscover, "recommended", "Enter Review setup"], [hintsDiscover, "customize", "Enter Customize"],
+  [hintsChoose, "next", "Enter Continue"], [hintsReview, "review-apply", "Enter Continue to apply"],
+  [hintsReview, "review-preview", "Enter Keep preview"], [hintsReview, "edit", "Enter Edit settings"],
+  [hintsApply, "confirm", "Enter Confirm"], [hintsApply, "back", "Enter Back"], [hintsApply, "cancel", "Enter Cancel"]
+]) {
+  const focused = transition(base, { type: "FOCUS_CONTROL", control });
+  assert.ok(keyboardHintLines(focused).includes(hint));
+  assert.doesNotMatch(keyboardHintLines(focused).join("\n"), /Change|Toggle/);
+  assert.notDeepEqual(transition(focused, { type: "ACTIVATE" }), focused, `${control} activates the advertised action`);
+  for (const layout of ["inline", "fullscreen"]) {
+    const lines = render(focused, { columns: 80, rows: 24, layout }).text.split("\n");
+    const keysIndex = lines.indexOf("Keys:");
+    assert.deepEqual(lines.slice(keysIndex, keysIndex + keyboardHintLines(focused).length), keyboardHintLines(focused));
+  }
+}
+for (const [base, control] of [[hintsReview, "review-apply"], [hintsReview, "review-preview"], [hintsApply, "confirm"]]) {
+  const focused = { ...transition(base, { type: "FOCUS_CONTROL", control }), reviewedModelRevision: null };
+  assert.doesNotMatch(keyboardHintLines(focused).join("\n"), /Enter/);
+  assert.deepEqual(transition(focused, { type: "ACTIVATE" }), focused, "blocked review actions are not advertised");
+}
+const unvisitedConfirm = { ...transition(hintsApply, { type: "FOCUS_CONTROL", control: "confirm" }), reviewVisited: false };
+assert.doesNotMatch(keyboardHintLines(unvisitedConfirm).join("\n"), /Enter/);
+assert.ok(!keyboardHintLines({ ...hintsChoose, history: [] }).includes("b Back"));
+assert.ok(keyboardHintLines(hintsChoose).includes("b Back"));
 
 console.log("install pathfinder tests ok");

@@ -153,6 +153,43 @@
       },
       "full_suite": "not run; protected-path read authorization pending",
       "provider_calls": 0
+    },
+    {
+      "event": "delegation_decision",
+      "scope": "focus-specific keyboard hints",
+      "target": "developer",
+      "reason": "Required developer implementation; shared keyboard hints must accurately describe the focused control without changing handlers.",
+      "provider_calls": 0
+    },
+    {
+      "event": "delegation_decision",
+      "scope": "R6",
+      "target": "reviewer",
+      "reason": "Validate hints against real control handlers and approval guards.",
+      "provider_calls": 0
+    },
+    {
+      "event": "review_completed",
+      "scope": "R6",
+      "decision": "approved",
+      "actions_verified": 83,
+      "handler_changes": false,
+      "provider_calls": 0
+    },
+    {
+      "event": "validation_completed",
+      "scope": "R6",
+      "results": {
+        "pathfinder": "pass",
+        "opentui_tests": {
+          "baseline_passed": 20,
+          "current_passed": 21,
+          "regressions": 0
+        },
+        "syntax_checks": "pass",
+        "git_diff_check": "pass"
+      },
+      "provider_calls": 0
     }
   ],
   "data": {

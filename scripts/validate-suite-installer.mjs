@@ -591,7 +591,7 @@ try {
   assert.match(appTuiOutput, /1\/5 Discover/);
   assert.equal(appTuiPreview.stderr.split("\n").find((line) => line.startsWith("┌ Discover")).length, 79, "install.sh forwards inline layout and reserves the last column");
   assert.doesNotMatch(appTuiPreview.stderr, /^Phase |^Preview:|layout:|provider calls:/m);
-  assert.match(appTuiPreview.stderr, /└─+┘\nKeys:\n↑↓ Move\nEnter Select\n\? Help\np Preview\nq Quit/);
+  assert.match(appTuiPreview.stderr, /└─+┘\nKeys:\n↑↓ Move\nEnter Review setup\n\? Help\np Preview\nq Quit/);
   assert.doesNotMatch(appTuiPreview.stderr, /\x1b\[[0-?]*[ -/]*[@-~]/, "redirected playback render must not emit ANSI color");
   assert.match(appTuiPreview.stdout, /ALFRED SUITE INSTALL PREVIEW/);
   assert.match(appTuiPreview.stdout, /Edition:\s+full/);

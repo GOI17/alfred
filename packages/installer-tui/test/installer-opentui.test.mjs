@@ -335,3 +335,30 @@ test("wrapped preview pages remain complete above the vertical keyboard list", (
     assert.equal(normalized(renderedRows.join("")), normalized(previewModel(base.decisions, base.discovery).lines.join("")));
   }
 });
+
+
+test("keyboard and direct focus changes refresh the option-specific keys and footer height", () => {
+  let state = transition(createInstallerState({}), { type: "CUSTOMIZE" });
+  const expected = [
+    ["edition", ["←→ Change", "Space Change"]],
+    ["harness:opencode", ["Space Toggle", "Enter Toggle"]],
+    ["next", ["Enter Continue"]]
+  ];
+  for (const [control, actions] of expected) {
+    state = transition(state, { type: "FOCUS_CONTROL", control });
+    const view = openTuiViewForState(state);
+    assert.deepEqual(view.footer.slice(2, -4), actions);
+    assert.equal(view.layout.footerHeight, actions.length + 6);
+    const frame = frameForState(state);
+    assert.deepEqual(frame.lines.slice(frame.lines.indexOf("Keys:")), view.footer);
+    assert.ok(frame.lines.length <= 24);
+  }
+  state = transition(state, keyEventAction(key("down"), state));
+  assert.equal(controlsFor(state)[state.focus], "edition");
+  assert.ok(openTuiViewForState(state).footer.includes("Space Change"));
+  assert.ok(!openTuiViewForState(state).footer.some((line) => line.startsWith("Enter")));
+  state = transition(state, { type: "NEXT" });
+  state = transition(state, { type: "FOCUS_CONTROL", control: "name" });
+  assert.ok(openTuiViewForState(state).footer.includes("Enter Edit name"));
+  assert.doesNotMatch(openTuiViewForState(state).footer.join("\n"), /Change|Toggle/);
+});
