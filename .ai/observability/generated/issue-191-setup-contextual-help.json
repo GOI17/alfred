@@ -88,6 +88,13 @@
       ],
       "read_only": true,
       "provider_calls": 0
+    },
+    {
+      "event": "handoff_completed",
+      "target": "https://github.com/GOI17/alfred/pull/192",
+      "state": "draft",
+      "pending": "Full local tests require protected-path read authorization",
+      "provider_calls": 0
     }
   ],
   "data": {

@@ -39,10 +39,11 @@ Reduce default setup clutter and explain visible settings on demand.
 - [x] Both renderers satisfy R1–R3.
 - [x] Focused Pathfinder/OpenTUI regression tests and syntax checks pass.
 - [ ] Full suite and installer validator: awaiting protected-path read authorization.
-- [ ] Reviewable PR links Closes #191.
+- [x] Draft PR #192 links Closes #191.
 
 ## References
 - Issue: https://github.com/GOI17/alfred/issues/191
+- Draft PR: https://github.com/GOI17/alfred/pull/192
 - Prior spec: `.ai/execution/setup-onboarding-explanations.md`
 - Shared state machine: `scripts/tui/install-pathfinder.mjs`
 - OpenTUI renderer: `packages/installer-tui/src/installer-opentui.mjs`
