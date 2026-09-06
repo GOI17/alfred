@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { controlsFor, displayWidth, keyboardHintLines, previewModel, stepExplanationLines, transition } from "../../../scripts/tui/install-pathfinder.mjs";
+import { clearSessionMemoryKey, controlsFor, displayWidth, hasSessionMemoryKey, keyboardHintLines, previewModel, stepExplanationLines, transition } from "../../../scripts/tui/install-pathfinder.mjs";
 import {
   assignmentsForState,
   createInstallerState,
@@ -38,7 +38,7 @@ test("preserves printable text only while editing", () => {
   let state = createInstallerState({});
   state = transition(state, { type: "CUSTOMIZE" });
   state = transition(state, { type: "NEXT" });
-  state = transition(state, { type: "FOCUS_CONTROL", control: "name" });
+  state = transition(state, { type: "FOCUS_CONTROL", control: "path" });
   state = transition(state, { type: "ACTIVATE" });
   assert.deepEqual(keyEventAction(key("z"), state), { type: "INPUT", text: "z" });
 });
@@ -243,7 +243,7 @@ test("? is text while editing and w remains a help alias", () => {
   let state = transition(createInstallerState({}), { type: "CUSTOMIZE" });
   assert.deepEqual(keyEventAction(key("w"), state), { type: "OPEN_WHY" });
   state = transition(state, { type: "NEXT" });
-  state = transition(state, { type: "FOCUS_CONTROL", control: "name" });
+  state = transition(state, { type: "FOCUS_CONTROL", control: "path" });
   state = transition(state, { type: "ACTIVATE" });
   assert.deepEqual(keyEventAction(key("?"), state), { type: "INPUT", text: "?" });
 });
@@ -301,7 +301,7 @@ test("vertical keyboard hints immediately follow the container and preserve focu
 test("editing and overlay keyboard lists reserve their actual height", () => {
   let state = transition(createInstallerState({}), { type: "CUSTOMIZE" });
   state = transition(state, { type: "NEXT" });
-  state = transition(state, { type: "FOCUS_CONTROL", control: "name" });
+  state = transition(state, { type: "FOCUS_CONTROL", control: "path" });
   const editing = transition(state, { type: "ACTIVATE" });
   for (const current of [editing, transition(state, { type: "OPEN_WHY" }), transition(state, { type: "OPEN_PREVIEW" })]) {
     const frame = frameForState(current);
@@ -358,8 +358,8 @@ test("keyboard and direct focus changes refresh the option-specific keys and foo
   assert.ok(openTuiViewForState(state).footer.includes("Space Change"));
   assert.ok(!openTuiViewForState(state).footer.some((line) => line.startsWith("Enter")));
   state = transition(state, { type: "NEXT" });
-  state = transition(state, { type: "FOCUS_CONTROL", control: "name" });
-  assert.ok(openTuiViewForState(state).footer.includes("Enter Edit name"));
+  state = transition(state, { type: "FOCUS_CONTROL", control: "path" });
+  assert.ok(openTuiViewForState(state).footer.includes("Enter Edit path"));
   assert.doesNotMatch(openTuiViewForState(state).footer.join("\n"), /Change|Toggle/);
 });
 
@@ -392,4 +392,85 @@ test("help groups options without telemetry and overlay keys only show pages and
   assert.match(text, /^  - Enabled —/m);
   assert.match(text, /^    \S/m, "wrapped descriptions keep a hanging indent");
   assert.doesNotMatch(text, /Harnesses —|Continue —/);
+});
+
+
+test("Configure exposes one Path field and editing starts from its displayed value", () => {
+  for (const environment of [{}, { ALFRED_INSTALL_CURRENT_NAME: "old-name", ALFRED_INSTALL_CURRENT_PATH: "/tmp/path-name///" }]) {
+    let state = transition(createInstallerState(environment), { type: "CUSTOMIZE" });
+    state = transition(state, { type: "NEXT" });
+    const view = openTuiViewForState(state);
+    assert.deepEqual(controlsFor(state), ["path", "intent", "next"]);
+    assert.ok(!view.main.rows.some(({ control }) => control === "name"));
+    const pathRow = view.main.rows.find(({ control }) => control === "path");
+    const expectedPath = environment.ALFRED_INSTALL_CURRENT_PATH || "~/.alfred/installs/acme";
+    assert.ok(pathRow.text.includes(`[ ${expectedPath} ]`));
+    assert.ok(view.footer.includes("Enter Edit path"));
+    const editing = transition(state, keyEventAction(key("return"), state));
+    assert.equal(editing.editing.draft, expectedPath);
+    const changed = transition(editing, { type: "INPUT", text: "new-folder" });
+    assert.deepEqual(transition(changed, keyEventAction(key("escape"), changed)), state);
+    const saved = transition(changed, keyEventAction(key("return"), changed));
+    assert.equal(saved.decisions.name, environment.ALFRED_INSTALL_CURRENT_PATH ? "new-folder" : "acmenew-folder");
+    assert.ok(frameForState(saved).lines.length <= 24);
+    assert.ok(!openTuiViewForState(saved).main.rows.some(({ control }) => control === "name"));
+    assert.ok(assignmentsForState(saved, {}).includes(`NAME='${saved.decisions.name}'`));
+    assert.doesNotMatch(assignmentsForState(saved, {}), /^TARGET_PATH='~/m);
+  }
+});
+
+
+test("existing Memory tenant exposes masked session-only key capture in both view and frame", () => {
+  const syntheticKey = "alk_opentui_synthetic_key_DO_NOT_USE";
+  let state = createInstallerState({ ALFRED_INSTALL_CURRENT_EDITION: "memory", ALFRED_INSTALL_CURRENT_MEMORY: "existing-tenant" });
+  state = transition(transition(state, { type: "CUSTOMIZE" }), { type: "NEXT" });
+  state = transition(state, { type: "FOCUS_CONTROL", control: "memory-key" });
+  let view = openTuiViewForState(state);
+  assert.ok(view.main.rows.some(({ control, text }) => control === "memory-key" && text.includes("not provided")));
+  assert.ok(view.main.rows.some(({ text }) => text === "Session only. Not saved or connected."));
+  assert.ok(view.footer.includes("Enter Edit API key"));
+  state = transition(state, keyEventAction(key("return"), state));
+  state = transition(state, keyEventAction(key("text", syntheticKey), state));
+  for (const viewport of [{ columns: 80, rows: 24 }, { columns: 148, rows: 34 }]) {
+    view = openTuiViewForState(state, viewport);
+    assert.ok(view.main.rows.some(({ control, text }) => control === "memory-key" && text.includes("••••")));
+    assert.ok(!JSON.stringify(view).includes(syntheticKey));
+    assert.ok(!JSON.stringify(frameForState(state, viewport)).includes(syntheticKey));
+    assert.ok(!assignmentsForState(state, {}).includes(syntheticKey));
+  }
+  state = transition(state, keyEventAction(key("return"), state));
+  assert.equal(hasSessionMemoryKey(state), true);
+  assert.ok(!JSON.stringify(openTuiViewForState(state)).includes(syntheticKey));
+  const saved = state;
+  state = transition(state, keyEventAction(key("return"), state));
+  state = transition(state, keyEventAction(key("text", "alk_synthetic_replacement"), state));
+  state = transition(state, keyEventAction(key("escape"), state));
+  assert.deepEqual(state, saved);
+  assert.equal(hasSessionMemoryKey(state), true);
+  for (const control of controlsFor(state)) {
+    const focused = transition(state, { type: "FOCUS_CONTROL", control });
+    const focusedRow = openTuiViewForState(focused).main.rows.find((entry) => entry.control === control);
+    assert.ok(frameForState(focused).lines.some((line) => line.includes(`› ${focusedRow.text.slice(0, 25)}`)), `${control} remains reachable at 80x24`);
+  }
+  state = transition(state, keyEventAction(key("c", "\u0003", { ctrl: true }), state));
+  assert.equal(state.cancelled, true);
+  assert.equal(hasSessionMemoryKey(saved), false);
+  assert.ok(!JSON.stringify(state).includes(syntheticKey));
+});
+
+test("invalid keys stay masked and render only a generic local syntax error", () => {
+  const invalidKey = "synthetic_invalid_key_DO_NOT_USE";
+  let state = createInstallerState({ ALFRED_INSTALL_CURRENT_EDITION: "full", ALFRED_INSTALL_CURRENT_MEMORY: "existing-tenant" });
+  state = transition(transition(state, { type: "CUSTOMIZE" }), { type: "NEXT" });
+  state = transition(state, { type: "FOCUS_CONTROL", control: "memory-key" });
+  state = transition(state, { type: "ACTIVATE" });
+  state = transition(state, { type: "INPUT", text: invalidKey });
+  state = transition(state, { type: "ACTIVATE" });
+  const view = openTuiViewForState(state);
+  assert.equal(hasSessionMemoryKey(state), false);
+  assert.ok(view.main.rows.some(({ text }) => text.startsWith("Use alk_ followed by")));
+  assert.ok(!JSON.stringify(view).includes(invalidKey));
+  assert.ok(!JSON.stringify(frameForState(state)).includes(invalidKey));
+  assert.deepEqual(view.footer, ["Keys:", "←→ Cursor", "Enter Save", "Esc Cancel edit", "Backspace Erase before", "Delete Erase after"]);
+  clearSessionMemoryKey(state);
 });

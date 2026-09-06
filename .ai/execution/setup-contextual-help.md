@@ -62,7 +62,25 @@ Reduce default setup clutter and explain visible settings on demand.
 - Configure help removes Continue and labels execution intent as Intent.
 - Preserve help paging, readable grouping across wrapped lines, full content accessibility in both renderers, and existing approval behavior.
 
+### R9: One installation target field
+- Configure presents a single editable Path field in Node and OpenTUI; remove the independent Name row/control from normal guided navigation.
+- The final directory segment of the effective target path determines the guided installation name, consistently across help, review, and NAME/TARGET_PATH shell output. This supersedes R8's display-only name derivation for the guided flow.
+- Preserve the existing default path and initially supplied paths. Enter edits the actual displayed effective path, not an empty placeholder. Save synchronizes the name; Escape cancels both changes.
+- Update focus-specific Keys and keyboard/mouse navigation for the single field. Path edits, trailing separators, and returning from Review must remain coherent.
+- Preserve noninteractive CLI flags, existing assignment field names, preview-first behavior, and approval gates. Keep legacy playback setters accepted where practical without exposing a second interactive field.
+- Verify existing and focused regressions in both renderers at 80x24.
+
+### R10: Existing tenant API-key capture (UI scope)
+- Configure exposes a masked API-key input when Memory is Use existing tenant; ask for an alk_ key and support entering/replacing/cancelling it in both renderers.
+- Validate only basic alk_ syntax locally; never claim server validation or connectivity.
+- Keep raw key and edit drafts out of public state/view JSON, preview/help, traces, shell assignments, stdout/stderr and persisted files. Use private session storage with opaque references or an equivalent bounded mechanism.
+- Show only masked/provided/missing status. Clear private material on setup cancellation/completion or deselecting existing tenant.
+- Explain in the interface that the key is session-only. Durable connection storage and use remain a separate scope pending the user's preference and server URL; do not pretend capture configures a connection.
+- Preserve normal editing/navigation/approval gates and zero network/provider calls. Use synthetic test keys only.
+
 ## Completion conditions
+- [x] R10 masked session-only API-key prompt is implemented and verified.
+- [x] R9 single target field and derived name are implemented and verified.
 - [x] R8 explanation content and overlay Keys are implemented and verified.
 - [x] R7 selector indicators are rendered and verified in both adapters.
 - [x] R6 focus-specific hints are implemented and regression-checked.

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +17,8 @@ import {
   configurationExplanationLines,
   explanationPageLines,
   keyboardHintLines,
+  hasSessionMemoryKey,
+  clearSessionMemoryKey,
   previewPageLines,
   stepExplanationLines,
   createPathfinderState,
@@ -136,7 +139,7 @@ for (const state of [createPathfinderState(), createPathfinderState({ discovery 
   }
 }
 const disabledConfigure = { ...createPathfinderState({ discovery }), phase: "Configure" };
-assert.deepEqual(controlsFor(disabledConfigure), ["name", "path", "intent", "next"]);
+assert.deepEqual(controlsFor(disabledConfigure), ["path", "intent", "next"]);
 for (const output of [render(disabledConfigure, { columns: 80, rows: 24, color: false }).text, previewModel(disabledConfigure.decisions, discovery).lines.join("\n"), configurationExplanationLines(disabledConfigure).join("\n")]) {
   assert.doesNotMatch(output, /model|models\.json|ollama|anthropic/i);
 }
@@ -147,7 +150,7 @@ for (const overlay of ["model-editor", "model-plan-review"]) {
     editing: { kind: "model", control: "model:wildcard", draft: "provider/model", cursor: 0 },
     decisions: { ...disabledConfigure.decisions, modelStrategy: "custom-models", modelWriteApproved: true }
   };
-  assert.deepEqual(controlsFor(injected), ["name", "path", "intent", "next"]);
+  assert.deepEqual(controlsFor(injected), ["path", "intent", "next"]);
   assert.doesNotMatch(render(injected, { columns: 80, rows: 24, color: false }).text, /model|models\.json|provider\/model/i);
   const ignored = transition(injected, { type: overlay === "model-editor" ? "OPEN_MODEL_EDITOR" : "OPEN_MODEL_PLAN_REVIEW" });
   assert.equal(ignored.overlay, null);
@@ -420,7 +423,7 @@ let injectedState = createPathfinderState({
 });
 injectedState = transition(injectedState, { type: "CUSTOMIZE" });
 injectedState = transition(injectedState, { type: "NEXT" });
-assert.equal(injectedState.decisions.name, "cur name", "current install names are normalized before rendering");
+assert.equal(injectedState.decisions.name, "current path", "the guided name derives from the sanitized target path");
 assert.equal(injectedState.decisions.targetPath, "/tmp/current path", "current install paths are normalized before rendering");
 assertSafeRenderedControls(render(injectedState, { columns: 80, rows: 24, color: true, layout: "inline" }).text, "current name/path controls are removed");
 injectedState = transition(injectedState, { type: "PATCH", key: "name", value: `edited${terminalAttacks.oscTitle}\r\nname\b` });
@@ -530,7 +533,7 @@ for (const layout of ["fullscreen", "inline"]) {
       assert.match(rendered.text, /←→ Change\nSpace Change/, "edition supports arrows and Space");
       assert.doesNotMatch(keyboardHintLines(phaseState).join("\n"), /Enter/, "Enter is a no-op on edition");
     }
-    if (phase === "Configure") assert.match(rendered.text, /Enter Edit name/, "name advertises editing");
+    if (phase === "Configure") assert.match(rendered.text, /Enter Edit path/, "path advertises editing");
     assert.doesNotMatch(rendered.text, /^Phase |^Preview:|layout:|provider calls:/m);
     assert.equal(rendered.text.match(/^Keys:/gm)?.length, 1, `${layout} ${phase} has one Keys line`);
     assert.equal(rendered.hitRegions.length, controlsFor(phaseState).length, `${layout} ${phase} keeps every active control visible at 80x24`);
@@ -633,13 +636,13 @@ const exactPathPreview = previewModel({ ...discoveredRecommendation.decisions, t
 assert.match(exactPathPreview.lines.join("\n"), /Target path: \/home\/test\/\.alfred\/installs\/exact-preview-path/, "full Preview preserves the exact target path");
 
 const codingConfigure = { ...createPathfinderState({ discovery }), phase: "Configure" };
-assert.deepEqual(controlsFor(codingConfigure), ["name", "path", "intent", "next"]);
+assert.deepEqual(controlsFor(codingConfigure), ["path", "intent", "next"]);
 assert.doesNotMatch(stripAnsi(render(codingConfigure, { columns: 100, rows: 30, color: false }).text), /Memory:/);
 const memoryConfigure = { ...createPathfinderState({ current: { edition: "memory" }, discovery }), phase: "Configure" };
-assert.deepEqual(controlsFor(memoryConfigure), ["memory", "name", "path", "intent", "next"]);
+assert.deepEqual(controlsFor(memoryConfigure), ["memory", "path", "intent", "next"]);
 assert.doesNotMatch(stripAnsi(render(memoryConfigure, { columns: 100, rows: 30, color: false }).text), /Profiles:|Models:/);
 const fullConfigure = { ...createPathfinderState({ current: { edition: "full" }, discovery }), phase: "Configure" };
-assert.deepEqual(controlsFor(fullConfigure), ["memory", "name", "path", "intent", "next"]);
+assert.deepEqual(controlsFor(fullConfigure), ["memory", "path", "intent", "next"]);
 for (const rendered of [render(codingConfigure, { color: false }), render(memoryConfigure, { color: false }), render(fullConfigure, { color: false })]) {
   assert.doesNotMatch(rendered.text, /not-needed-for-/);
   assert.doesNotMatch(rendered.text, /model|models\.json/i);
@@ -806,7 +809,7 @@ for (const columns of [60, 80, 100, 120]) {
 for (const layout of ["inline", "fullscreen"]) {
   let base = transition(createPathfinderState(), { type: "CUSTOMIZE" });
   base = transition(base, { type: "NEXT" });
-  base = transition(base, { type: "FOCUS_CONTROL", control: "name" });
+  base = transition(base, { type: "FOCUS_CONTROL", control: "path" });
   const editing = transition(base, { type: "ACTIVATE" });
   const frame = render(editing, { columns: 80, rows: 24, layout }).text;
   assert.match(frame, /└─+┘\nKeys:\n←→ Cursor\nEnter Save\nEsc Cancel edit\nBackspace Erase before\nDelete Erase after/);
@@ -855,7 +858,7 @@ for (const control of controlsFor(hintsChoose).filter((value) => value.startsWit
   assert.notDeepEqual(transition(focused, { type: "ACTIVATE" }).decisions.selectedHarnesses, focused.decisions.selectedHarnesses);
   assert.deepEqual(transition(focused, { type: "SPACE" }).decisions.selectedHarnesses, transition(focused, { type: "ACTIVATE" }).decisions.selectedHarnesses);
 }
-for (const control of ["name", "path"]) {
+for (const control of ["path"]) {
   const focused = transition(hintsConfigure, { type: "FOCUS_CONTROL", control });
   assert.ok(keyboardHintLines(focused).includes(`Enter Edit ${control}`));
   assert.doesNotMatch(keyboardHintLines(focused).join("\n"), /Change|Toggle/);
@@ -910,7 +913,7 @@ for (const [targetPath, expectedName] of [
   assert.match(text, /Intent — Preview only/);
   assert.doesNotMatch(text, /Execution —|Continue —|Provider calls:/);
   assert.equal(serializeAssignments(state.decisions), before, "help does not mutate saved name or target");
-  assert.match(configurationExplanationLines(state).join("\n"), /Install name — saved-name:/);
+  assert.ok(configurationExplanationLines(state).join("\n").includes(`Install name — ${expectedName}:`));
 }
 const groupedHelp = transition(createPathfinderState(), { type: "CUSTOMIZE" });
 const groupedSource = stepExplanationLines(groupedHelp);
@@ -929,6 +932,156 @@ for (const width of [16, 22, 78]) {
   }
   const normalized = (text) => text.replace(/\s/g, "");
   assert.equal(normalized(wrapped.join("")), normalized(groupedSource.slice(1).join("")));
+}
+
+
+
+function configurePathState(current = {}) {
+  return transition(transition(createPathfinderState({ current, discovery }), { type: "CUSTOMIZE" }), { type: "NEXT" });
+}
+const oneTarget = configurePathState();
+assert.deepEqual(controlsFor(oneTarget), ["path", "intent", "next"]);
+assert.deepEqual(transition(oneTarget, { type: "FOCUS_CONTROL", control: "name" }), oneTarget, "Name is no longer a guided control");
+assert.doesNotMatch(render(oneTarget).text, /Name: \[/);
+assert.match(render(oneTarget).text, /Path: \[~\/\.alfred\/installs\/acme\]/);
+const defaultPathEdit = transition(oneTarget, { type: "ACTIVATE" });
+assert.equal(defaultPathEdit.editing.control, "path");
+assert.equal(defaultPathEdit.editing.draft, "~/.alfred/installs/acme", "Enter prefills the visible effective path");
+assert.deepEqual(transition(defaultPathEdit, { type: "ACTIVATE" }), oneTarget, "saving the unedited default preserves implicit HOME expansion");
+assert.doesNotMatch(serializeAssignments(transition(defaultPathEdit, { type: "ACTIVATE" }).decisions), /^TARGET_PATH=/m);
+const unsavedPath = transition(defaultPathEdit, { type: "INPUT", text: "-cancelled" });
+assert.deepEqual(unsavedPath.decisions, oneTarget.decisions, "typing does not alter saved target or name");
+assert.deepEqual(transition(unsavedPath, { type: "ESCAPE" }), oneTarget, "Escape preserves both original decisions");
+
+let savedPath = transition(defaultPathEdit, { type: "INPUT", text: "-renamed/" });
+savedPath = transition(savedPath, { type: "ACTIVATE" });
+assert.equal(savedPath.decisions.name, "acme-renamed");
+assert.equal(savedPath.decisions.targetPath, "/home/test/.alfred/installs/acme-renamed/");
+assert.match(serializeAssignments(savedPath.decisions), /^NAME='acme-renamed'$/m);
+assert.match(serializeAssignments(savedPath.decisions), /^TARGET_PATH='\/home\/test\/\.alfred\/installs\/acme-renamed\/'$/m);
+assert.doesNotMatch(serializeAssignments(savedPath.decisions), /^TARGET_PATH='~/m, "guided tilde input never reaches shell IPC as a relative literal");
+const savedReview = transition(savedPath, { type: "NEXT" });
+assert.match(previewModel(savedReview.decisions, discovery).lines.join("\n"), /Install name: acme-renamed/);
+assert.match(stepExplanationLines(savedReview).join("\n"), /Install name — acme-renamed:/);
+const returnedPath = transition(savedReview, { type: "EDIT" });
+assert.equal(controlsFor(returnedPath)[returnedPath.focus], "path");
+assert.equal(transition(returnedPath, { type: "ACTIVATE" }).editing.draft, savedPath.decisions.targetPath);
+
+for (const [targetPath, expectedPath, expectedName] of [
+  ["/tmp/custom-target///", "/tmp/custom-target///", "custom-target"],
+  ["./relative-target/", "./relative-target/", "relative-target"],
+  ["~/custom-target/", "/home/test/custom-target/", "custom-target"]
+]) {
+  const state = configurePathState({ name: "previous-name", targetPath });
+  assert.equal(state.decisions.name, expectedName);
+  assert.equal(state.recommendation.decisions.name, expectedName);
+  assert.equal(state.decisions.targetPath, expectedPath);
+  assert.equal(transition(state, { type: "ACTIVATE" }).editing.draft, expectedPath);
+  assert.ok(serializeAssignments(state.decisions).includes(`NAME='${expectedName}'`));
+  assert.ok(serializeAssignments(state.decisions).includes(`TARGET_PATH='${expectedPath}'`));
+  assert.equal(transition(state, { type: "USE_RECOMMENDED" }).decisions.name, expectedName);
+  assert.equal(transition(state, { type: "PATCH", key: "name", value: "legacy-name" }).decisions.name, expectedName, "legacy name setters cannot disagree with an explicit target");
+}
+
+
+
+const syntheticMemoryKey = "alk_synthetic_test_key_DO_NOT_USE";
+const syntheticReplacementKey = "alk_synthetic_replacement_DO_NOT_USE";
+function memoryKeyState() {
+  const base = configurePathState({ edition: "full", memory: "existing-tenant" });
+  return transition(base, { type: "FOCUS_CONTROL", control: "memory-key" });
+}
+function captureMemoryKey(state = memoryKeyState(), key = syntheticMemoryKey) {
+  const editing = transition(state, { type: "ACTIVATE" });
+  return transition(transition(editing, { type: "INPUT", text: key }), { type: "ACTIVATE" });
+}
+function assertMemoryKeyPrivate(state, ...keys) {
+  const outputs = [JSON.stringify(state), JSON.stringify(state.traceEvents), JSON.stringify(render(state)), serializeAssignments(state.decisions), ...previewModel(state.decisions, state.discovery).lines, ...stepExplanationLines(state)];
+  for (const key of keys) assert.ok(outputs.every((output) => !output.includes(key)), "keys stay out of public state, renders, traces, preview, help, and IPC");
+  assert.equal(state.provider_calls, 0);
+}
+const emptyMemoryKey = memoryKeyState();
+assert.ok(controlsFor(emptyMemoryKey).includes("memory-key"));
+assert.ok(!controlsFor(configurePathState()).includes("memory-key"));
+assert.ok(keyboardHintLines(emptyMemoryKey).includes("Enter Edit API key"));
+assert.match(render(emptyMemoryKey).text, /API key \(alk_\): \[not provided\]/);
+assert.match(render(emptyMemoryKey).text, /Session only. Not saved or connected./);
+assert.equal(transition(emptyMemoryKey, { type: "NEXT" }).phase, "Review", "session capture does not add an apply gate");
+for (const invalid of ["", "alk_", "synthetic_invalid_key", "alk_synthetic bad", "alk_synthetic\n"]) {
+  let state = transition(emptyMemoryKey, { type: "ACTIVATE" });
+  state = transition(state, { type: "INPUT", text: invalid });
+  assertMemoryKeyPrivate(state, ...(invalid.length > 4 ? [invalid] : []));
+  state = transition(state, { type: "ACTIVATE" });
+  assert.equal(state.editing.kind, "memory-key");
+  assert.match(state.editing.error, /Use alk_ followed by/);
+  assert.equal(hasSessionMemoryKey(state), false);
+  assert.deepEqual(transition(state, { type: "ESCAPE" }), emptyMemoryKey);
+}
+let privateDraft = transition(emptyMemoryKey, { type: "ACTIVATE" });
+privateDraft = transition(privateDraft, { type: "INPUT", text: syntheticMemoryKey });
+assert.match(privateDraft.editing.draft, /^•+$/);
+assertMemoryKeyPrivate(privateDraft, syntheticMemoryKey);
+const oldDraftRef = privateDraft.editing.secretRef;
+privateDraft = transition(privateDraft, { type: "CHANGE", delta: -1 });
+privateDraft = transition(privateDraft, { type: "BACKSPACE" });
+assert.notEqual(privateDraft.editing.secretRef, oldDraftRef, "draft revisions use distinct opaque references");
+privateDraft = transition(privateDraft, { type: "DELETE" });
+assertMemoryKeyPrivate(privateDraft, syntheticMemoryKey);
+let providedMemoryKey = captureMemoryKey();
+assert.equal(hasSessionMemoryKey(providedMemoryKey), true);
+assert.match(render(providedMemoryKey).text, /•••••••• · provided/);
+assertMemoryKeyPrivate(providedMemoryKey, syntheticMemoryKey);
+let replacementDraft = transition(providedMemoryKey, { type: "ACTIVATE" });
+assert.equal(replacementDraft.editing.draft, "", "replacement starts blank without exposing the saved value");
+replacementDraft = transition(replacementDraft, { type: "INPUT", text: syntheticReplacementKey });
+assertMemoryKeyPrivate(replacementDraft, syntheticMemoryKey, syntheticReplacementKey);
+assert.deepEqual(transition(replacementDraft, { type: "ESCAPE" }), providedMemoryKey);
+assert.equal(hasSessionMemoryKey(providedMemoryKey), true, "Escape preserves the saved key");
+const replacedMemoryKey = captureMemoryKey(providedMemoryKey, syntheticReplacementKey);
+assert.equal(hasSessionMemoryKey(replacedMemoryKey), true);
+assert.equal(hasSessionMemoryKey(providedMemoryKey), false, "replacement discards the previous private value");
+assertMemoryKeyPrivate(replacedMemoryKey, syntheticMemoryKey, syntheticReplacementKey);
+clearSessionMemoryKey(replacedMemoryKey);
+for (const finish of [
+  (state) => transition(state, { type: "CANCEL" }),
+  (state) => transition(state, { type: "PATCH", key: "memory", value: "local-sqlite" }),
+  (state) => transition(state, { type: "PATCH", key: "edition", value: "coding" }),
+  (state) => transition(transition(transition(state, { type: "NEXT" }), { type: "REVIEW_DECISION", intent: "preview-only" }), { type: "CONFIRM" }),
+  clearSessionMemoryKey
+]) {
+  const stored = captureMemoryKey();
+  const finished = finish(stored);
+  assert.equal(hasSessionMemoryKey(finished), false);
+  assert.equal(hasSessionMemoryKey(stored), false, "session cleanup removes values even through old opaque references");
+  assert.equal(finished.memoryKeySessionRef, null);
+  assert.equal(finished.memoryKeyRef, null);
+  assertMemoryKeyPrivate(finished, syntheticMemoryKey);
+}
+const cancelledDraft = transition(privateDraft, { type: "CANCEL" });
+assert.equal(cancelledDraft.editing, null);
+assert.equal(hasSessionMemoryKey(transition(privateDraft, { type: "ACTIVATE" })), false, "cancelled drafts cannot be restored through retained state");
+
+const memoryKeyFixture = mkdtempSync(join(tmpdir(), "alfred-key-output-"));
+try {
+  const outputPath = join(memoryKeyFixture, "result.env");
+  const playback = spawnSync(process.execPath, [new URL("./install-app.mjs", import.meta.url).pathname], {
+    env: {
+      ...process.env,
+      ALFRED_INSTALL_APP_TUI_EVENTS: `set:edition=memory,set:memory=existing-tenant,down,enter,down,down,down,down,down,enter,down,enter,text:${syntheticMemoryKey},enter,submit`,
+      ALFRED_INSTALL_APP_TUI_RESULT_FILE: outputPath,
+      ALFRED_INSTALL_APP_TUI_RENDER: "1"
+    },
+    encoding: "utf8"
+  });
+  assert.equal(playback.status, 0);
+  assert.match(playback.stderr, /•••••••• · provided/, "playback actually captured the synthetic key before output cleanup");
+  assert.ok(!playback.stdout.includes(syntheticMemoryKey) && !playback.stderr.includes(syntheticMemoryKey));
+  const output = readFileSync(outputPath, "utf8");
+  assert.ok(!output.includes(syntheticMemoryKey));
+  assert.doesNotMatch(output, /API_KEY|MEMORY_KEY|alk_/);
+  assert.deepEqual(readdirSync(memoryKeyFixture), ["result.env"]);
+} finally {
+  rmSync(memoryKeyFixture, { recursive: true, force: true });
 }
 
 console.log("install pathfinder tests ok");

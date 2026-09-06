@@ -10,6 +10,7 @@ import {
   MEMORY_SETUPS,
   controlsFor,
   createPathfinderState,
+  clearSessionMemoryKey,
   explanationPageLines,
   normalizeTuiLayout,
   normalizeDiscovery,
@@ -399,6 +400,7 @@ function parseBytes(data, { flushEscape = false, mouseEnabled = true } = {}) {
 }
 
 async function writeAssignments() {
+  state = clearSessionMemoryKey(state);
   const output = serializeAssignments(state.decisions);
   const resultFile = process.env.ALFRED_INSTALL_APP_TUI_RESULT_FILE;
   if (resultFile) writeFileSync(resultFile, output);
@@ -406,20 +408,24 @@ async function writeAssignments() {
 }
 
 async function runPlayback() {
-  const script = process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT || "";
-  const tokens = script.split(/[,\n]+/).flatMap((item) => {
-    const withoutLeadingSeparatorSpace = item.replace(/^\s+/, "");
-    if (/^set:model(?:Wildcard|Orchestrator|Developer|Fallback)=/.test(withoutLeadingSeparatorSpace)) return [withoutLeadingSeparatorSpace];
-    const token = item.trim();
-    return token ? [token] : [];
-  });
-  for (const token of tokens) handleToken(token, { playback: true });
-  if (process.env.ALFRED_INSTALL_APP_TUI_RENDER === "1") process.stderr.write(`${screen(process.stderr)}\n`);
-  if (state.cancelled) {
-    process.exitCode = 130;
-    return;
+  try {
+    const script = process.env.ALFRED_INSTALL_APP_TUI_EVENTS || process.env.ALFRED_INSTALL_APP_TUI_SCRIPT || "";
+    const tokens = script.split(/[,\n]+/).flatMap((item) => {
+      const withoutLeadingSeparatorSpace = item.replace(/^\s+/, "");
+      if (/^set:model(?:Wildcard|Orchestrator|Developer|Fallback)=/.test(withoutLeadingSeparatorSpace)) return [withoutLeadingSeparatorSpace];
+      const token = item.trim();
+      return token ? [token] : [];
+    });
+    for (const token of tokens) handleToken(token, { playback: true });
+    if (process.env.ALFRED_INSTALL_APP_TUI_RENDER === "1") process.stderr.write(`${screen(process.stderr)}\n`);
+    if (state.cancelled) {
+      process.exitCode = 130;
+      return;
+    }
+    await writeAssignments();
+  } finally {
+    state = clearSessionMemoryKey(state);
   }
-  await writeAssignments();
 }
 
 export async function runInteractive({ stdin = process.stdin, stdout = process.stdout, layout: layoutInput = selectedTuiLayout } = {}) {
@@ -453,6 +459,8 @@ export async function runInteractive({ stdin = process.stdin, stdout = process.s
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
+    state = clearSessionMemoryKey(state);
+    pendingInput = "";
     if (escapeTimer) clearTimeout(escapeTimer);
     try {
       if (fullscreen) stdout.write("\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l");

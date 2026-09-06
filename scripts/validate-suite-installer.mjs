@@ -775,7 +775,7 @@ printf '%s\\n' "EDITION='coding'" "HARNESS='none'" "PROFILE_STRATEGY='runtime-pr
   assert.match(guidedCustomizePath.stdout, /EDITION='memory'/);
   assert.match(guidedCustomizePath.stdout, /HARNESS='opencode'/);
   assert.match(guidedCustomizePath.stdout, /MEMORY_SETUP='local-sqlite'/);
-  assert.match(guidedCustomizePath.stdout, /NAME='acm-legacy'/);
+  assert.match(guidedCustomizePath.stdout, /NAME='legacy'/);
   assert.match(guidedCustomizePath.stdout, /TARGET_PATH='\/tmp\/legacy'/);
   assert.match(guidedCustomizePath.stdout, /APPLY='true'/);
 

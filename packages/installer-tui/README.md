@@ -21,8 +21,9 @@ Setup explanations are hidden by default. Press `?` to open or close **What
 this configuration changes** for the current step, use arrow keys to read its
 pages, and press Escape to dismiss it. Discover explains the recommended setup;
 Choose groups edition descriptions and the available Runtime Profiles choices
-under separate headings. Configure derives its displayed install name from the
-target folder and explains the selected intent.
+under separate headings. Configure has one editable Path field. Its final folder determines the install
+name throughout help, review, and installer output. Enter prefills the effective
+path; saving updates the target and name together, and Escape cancels the edit.
 Changing steps starts with help hidden. The existing `w` help and `r` recommended
 setup shortcuts remain supported.
 
@@ -35,6 +36,12 @@ omitted; `p` opens the full preview and wide terminals retain the separate live
 preview panel. Help and preview page numbers appear inside the panel. Panel
 height accounts for the keyboard list so focused controls and all pages remain
 reachable at `80x24`.
+
+When Memory uses an existing tenant, Configure offers a masked `alk_` API-key
+field. It checks syntax locally and keeps the key only for this setup session;
+it does not save a connection or contact a server. Escape cancels a replacement.
+Completing/cancelling setup, leaving the existing-tenant option, or closing the
+session discards the key. Raw values stay out of views, traces, and shell output.
 
 ## Development
 

@@ -24,6 +24,8 @@ import {
   previewModel,
   explanationPageLines,
   keyboardHintLines,
+  hasSessionMemoryKey,
+  clearSessionMemoryKey,
   previewPageLines,
   serializeAssignments,
   stripAnsi,
@@ -355,6 +357,13 @@ function configureRows(state) {
       )
     );
   }
+  if (memoryApplicable(state) && decisions.memorySetup === "existing-tenant") {
+    rows.push(
+      actionRow(state, "memory-key", `API key (alk_) [ ${editingValue(state, "memory-key", hasSessionMemoryKey(state) ? "•••••••• · provided" : "not provided", "")} ]`, { type: "FOCUS_CONTROL", control: "memory-key" }),
+      row("Session only. Not saved or connected.", { tone: "muted", kind: "description" })
+    );
+    if (state.editing?.kind === "memory-key" && state.editing.error) rows.push(row(state.editing.error, { tone: "red" }));
+  }
   if (modelsApplicable(state)) {
     rows.push(
       section("Models"),
@@ -372,14 +381,8 @@ function configureRows(state) {
     section("Install target"),
     actionRow(
       state,
-      "name",
-      `Name          [ ${editingValue(state, "name", decisions.name, "acme")} ]`,
-      { type: "FOCUS_CONTROL", control: "name" }
-    ),
-    actionRow(
-      state,
       "path",
-      `Path          [ ${editingValue(state, "path", decisions.targetPath, `~/.alfred/installs/${decisions.name || "acme"}`)} ]`,
+      `Path          [ ${editingValue(state, "path", effectiveTarget(state), "")} ]`,
       { type: "FOCUS_CONTROL", control: "path" }
     ),
     section("Execution"),
@@ -1146,6 +1149,7 @@ export async function runOpenTuiInstaller({
     redraw();
     await session;
   } finally {
+    state = clearSessionMemoryKey(state);
     for (const [signal, handler] of signalHandlers) process.off(signal, handler);
     try {
       renderer?.destroy();

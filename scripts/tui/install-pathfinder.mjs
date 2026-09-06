@@ -319,6 +319,19 @@ function freezeRecommendation(value) {
   return Object.freeze(value);
 }
 
+function installNameForPath(targetPath, fallback = "acme") {
+  return targetPath.replace(/[\\/]+$/, "").split(/[\\/]/).at(-1) || fallback;
+}
+
+function guidedTarget(decisions, discovery) {
+  let targetPath = decisions.targetPath;
+  const home = inferredHome(discovery) || process.env.HOME || process.env.USERPROFILE;
+  if (home && /^~(?:[\\/]|$)/.test(targetPath.trim())) {
+    targetPath = `${home.replace(/[\\/]+$/, "")}${targetPath.trim().slice(1).replaceAll("\\", "/")}`;
+  }
+  return { ...decisions, targetPath, name: installNameForPath(effectiveTargetPath({ ...decisions, targetPath }), decisions.name) };
+}
+
 export function recommend({ current = {}, harnessStatus = {}, discovery: discoveryInput } = {}) {
   const discovery = normalizeDiscovery(discoveryInput, harnessStatus);
   const status = asStatusMap(discovery.harnesses);
@@ -337,7 +350,7 @@ export function recommend({ current = {}, harnessStatus = {}, discovery: discove
     : MEMORY_SETUPS.some((item) => item.value === memorySeed)
       ? memorySeed
       : discovery.memory.existing_connection ? "existing-tenant" : "decide-later";
-  const decisions = {
+  const decisions = guidedTarget({
     edition,
     selectedHarnesses,
     profileStrategy,
@@ -349,7 +362,7 @@ export function recommend({ current = {}, harnessStatus = {}, discovery: discove
     targetPath: sanitizeTerminalText(current.targetPath ?? current.path ?? ""),
     applyIntent: "preview-only",
     apply: false
-  };
+  }, discovery);
   const reasons = [
     EDITIONS.some((item) => item.value === current.edition) ? "edition-current-value" : "edition-coding-default",
     explicitHarness ? "harness-explicit-selection" : selectedHarnesses.length ? "harness-installed-auto" : "harness-none-installed",
@@ -372,6 +385,83 @@ export function recommend({ current = {}, harnessStatus = {}, discovery: discove
   });
 }
 
+// Credentials never enter serializable installer state. Opaque references let
+// immutable editing states discard drafts without changing a saved key.
+const memoryKeyValues = new WeakMap();
+const memoryKeySessions = new WeakMap();
+
+function privateMemoryKeyRef(session, value) {
+  const reference = Object.freeze({});
+  memoryKeyValues.set(reference, value);
+  memoryKeySessions.get(session).add(reference);
+  return reference;
+}
+
+function retainMemoryKeyRefs(state, keep = []) {
+  const references = memoryKeySessions.get(state.memoryKeySessionRef);
+  if (!references) return;
+  for (const reference of references) {
+    if (keep.includes(reference)) continue;
+    memoryKeyValues.delete(reference);
+    references.delete(reference);
+  }
+}
+
+export function hasSessionMemoryKey(state) {
+  return Boolean(state?.memoryKeyRef && memoryKeyValues.has(state.memoryKeyRef));
+}
+
+export function clearSessionMemoryKey(state) {
+  if (!state?.memoryKeySessionRef) return state;
+  retainMemoryKeyRefs(state);
+  memoryKeySessions.delete(state.memoryKeySessionRef);
+  return {
+    ...state,
+    memoryKeySessionRef: null,
+    memoryKeyRef: null,
+    editing: state.editing?.kind === "memory-key" ? null : state.editing
+  };
+}
+
+function startMemoryKeyEditing(state) {
+  if (!memoryKeyApplicable(state.decisions)) return state;
+  let session = state.memoryKeySessionRef;
+  if (!session || !memoryKeySessions.has(session)) {
+    session = Object.freeze({});
+    memoryKeySessions.set(session, new Set());
+  }
+  const reference = privateMemoryKeyRef(session, "");
+  const next = {
+    ...state,
+    memoryKeySessionRef: session,
+    editing: { kind: "memory-key", control: "memory-key", draft: "", cursor: 0, secretRef: reference, error: null }
+  };
+  retainMemoryKeyRefs(next, [state.memoryKeyRef, reference]);
+  return next;
+}
+
+function updateMemoryKeyDraft(state, value, cursor) {
+  if (!memoryKeySessions.has(state.memoryKeySessionRef)) return clearSessionMemoryKey(state);
+  const reference = privateMemoryKeyRef(state.memoryKeySessionRef, value);
+  retainMemoryKeyRefs(state, [state.memoryKeyRef, reference]);
+  return { ...state, editing: { ...state.editing, secretRef: reference, draft: "•".repeat(graphemes(value).length), cursor, error: null } };
+}
+
+function cancelMemoryKeyEditing(state) {
+  if (!hasSessionMemoryKey(state)) return clearSessionMemoryKey(state);
+  retainMemoryKeyRefs(state, [state.memoryKeyRef]);
+  return { ...state, editing: null };
+}
+
+function commitMemoryKeyEditing(state) {
+  const value = memoryKeyValues.get(state.editing.secretRef) || "";
+  if (!/^alk_[A-Za-z0-9_-]+$/.test(value)) {
+    return { ...state, editing: { ...state.editing, error: "Use alk_ followed by letters, numbers, - or _." } };
+  }
+  retainMemoryKeyRefs(state, [state.editing.secretRef]);
+  return { ...state, memoryKeyRef: state.editing.secretRef, editing: null };
+}
+
 export function createPathfinderState(input = {}) {
   const recommendation = recommend(input);
   return {
@@ -389,6 +479,8 @@ export function createPathfinderState(input = {}) {
     reviewedModelRevision: null,
     modelInspection: null,
     editing: null,
+    memoryKeySessionRef: null,
+    memoryKeyRef: null,
     selectedFallback: 0,
     traceEvents: [recommendation.traceEvent],
     providerCalls: 0,
@@ -401,6 +493,7 @@ export function createPathfinderState(input = {}) {
 function modelsApplicable() { return false; }
 function memoryApplicable(decisions) { return decisions.edition !== "coding"; }
 function profilesApplicable(decisions) { return decisions.edition !== "memory"; }
+function memoryKeyApplicable(decisions) { return memoryApplicable(decisions) && decisions.memorySetup === "existing-tenant"; }
 
 function withoutSetupModelAssignment(state) {
   const legacyOverlay = ["model-editor", "model-plan-review"].includes(state.overlay?.type);
@@ -422,8 +515,9 @@ export function controlsFor(state) {
   if (state.phase === "Choose") return ["edition", ...HARNESSES.map((item) => `harness:${item.value}`), ...(profilesApplicable(state.decisions) ? ["profile"] : []), "next"];
   if (state.phase === "Configure") return [
     ...(memoryApplicable(state.decisions) ? ["memory"] : []),
+    ...(memoryKeyApplicable(state.decisions) ? ["memory-key"] : []),
     ...(modelsApplicable(state.decisions) ? ["models", ...(state.decisions.modelStrategy === "custom-models" ? ["models-edit"] : [])] : []),
-    "name", "path", "intent", "next"
+    "path", "intent", "next"
   ];
   if (state.phase === "Review") return [
     ...(modelsApplicable(state.decisions) && state.decisions.modelStrategy === "custom-models" ? ["model-plan-review"] : []),
@@ -473,6 +567,7 @@ function patchDecision(state, key, value) {
   }
   if (key === "name") decisions.name = sanitizeTerminalText(value);
   if (key === "path" || key === "targetPath") decisions.targetPath = sanitizeTerminalText(value);
+  if (["name", "path", "targetPath"].includes(key)) decisions = guidedTarget(decisions, state.discovery);
   if (key === "apply") {
     decisions.apply = value === true || value === "true" || value === "yes";
     decisions.applyIntent = decisions.apply ? "apply-safe-steps" : "preview-only";
@@ -544,20 +639,29 @@ function startEditing(state, control) {
 }
 
 function startInstallEditing(state, control) {
-  const value = control === "name" ? state.decisions.name : control === "path" ? state.decisions.targetPath : null;
+  const value = control === "name" ? state.decisions.name : control === "path" ? effectiveTargetPath(state.decisions) : null;
   if (value === null) return state;
   return { ...state, editing: { kind: "install", control, original: value, draft: value, cursor: graphemes(value).length } };
 }
 
 function commitEditing(state) {
   if (!state.editing) return state;
-  const { kind, control, draft } = state.editing;
+  if (state.editing.kind === "memory-key") return commitMemoryKeyEditing(state);
+  const { kind, control, draft, original } = state.editing;
+  if (kind === "install" && draft === original) return { ...state, editing: null };
   if (kind === "install") return { ...patchDecision({ ...state, editing: null }, control, draft), editing: null };
   return { ...replaceCustomModelValue({ ...state, editing: null }, control, draft), editing: null };
 }
 
 function editInput(state, text) {
   if (!state.editing) return state;
+  if (state.editing.kind === "memory-key") {
+    if (typeof text !== "string" || !text) return state;
+    const current = graphemes(memoryKeyValues.get(state.editing.secretRef) || "");
+    const input = graphemes(text);
+    current.splice(state.editing.cursor, 0, ...input);
+    return updateMemoryKeyDraft(state, current.join(""), state.editing.cursor + input.length);
+  }
   const safeText = state.editing.kind === "model" ? sanitizeModelInput(text) : sanitizeTerminalText(text);
   if (safeText === null || safeText === "") return state;
   const input = graphemes(safeText);
@@ -568,12 +672,13 @@ function editInput(state, text) {
 
 function editDelete(state, direction) {
   if (!state.editing) return state;
-  const current = graphemes(state.editing.draft);
+  const current = graphemes(state.editing.kind === "memory-key" ? memoryKeyValues.get(state.editing.secretRef) || "" : state.editing.draft);
   let cursor = state.editing.cursor;
   const index = direction < 0 ? cursor - 1 : cursor;
   if (index < 0 || index >= current.length) return state;
   current.splice(index, 1);
   if (direction < 0) cursor -= 1;
+  if (state.editing.kind === "memory-key") return updateMemoryKeyDraft(state, current.join(""), cursor);
   return { ...state, editing: { ...state.editing, draft: current.join(""), cursor } };
 }
 
@@ -699,6 +804,7 @@ function activate(state) {
   if (control === "confirm") return transition(state, { type: "CONFIRM" });
   if (control === "back") return back(state);
   if (control === "cancel") return transition(state, { type: "CANCEL" });
+  if (control === "memory-key") return startMemoryKeyEditing(state);
   if (control === "name" || control === "path") return startInstallEditing(state, control);
   return state;
 }
@@ -709,10 +815,15 @@ function space(state) {
 }
 
 export function transition(state, action = {}) {
+  const next = transitionState(state, action);
+  return next && (next.done || !memoryKeyApplicable(next.decisions)) ? clearSessionMemoryKey(next) : next;
+}
+
+function transitionState(state, action = {}) {
   if (!state || state.done) return state;
   state = withoutSetupModelAssignment(state);
   if (action.type === "CANCEL") return { ...state, done: true, cancelled: true, providerCalls: 0, provider_calls: 0 };
-  if (action.type === "ESCAPE" && state.editing) return { ...state, editing: null };
+  if (action.type === "ESCAPE" && state.editing) return state.editing.kind === "memory-key" ? cancelMemoryKeyEditing(state) : { ...state, editing: null };
   if (state.editing) {
     if (action.type === "ACTIVATE") return commitEditing(state);
     if (action.type === "INPUT") return editInput(state, action.text);
@@ -996,9 +1107,15 @@ function bodyEntries(state) {
       parts.splice(state.editing.cursor, 0, "▏");
       return parts.join("") || "▏";
     };
+    if (memoryKeyApplicable(d)) {
+      entries.push(
+        { text: `${marker(focus === "memory-key")} API key (alk_): [${installEditorValue("memory-key", hasSessionMemoryKey(state) ? "•••••••• · provided" : "not provided", "")}]`, action: { type: "FOCUS_CONTROL", control: "memory-key" }, focused: focus === "memory-key" },
+        { text: "Session only. Not saved or connected.", tone: "normal" }
+      );
+      if (state.editing?.kind === "memory-key" && state.editing.error) entries.push({ text: state.editing.error, tone: "blocker" });
+    }
     entries.push(
-      { text: `${marker(focus === "name")} Name: [${installEditorValue("name", d.name, "acme")}]`, action: { type: "FOCUS_CONTROL", control: "name" }, focused: focus === "name" },
-      { text: `${marker(focus === "path")} Path: [${installEditorValue("path", d.targetPath, `~/.alfred/installs/${d.name}`)}]`, action: { type: "FOCUS_CONTROL", control: "path" }, focused: focus === "path" },
+      { text: `${marker(focus === "path")} Path: [${installEditorValue("path", effectiveTargetPath(d), "")}]`, action: { type: "FOCUS_CONTROL", control: "path" }, focused: focus === "path" },
       { text: `${marker(focus === "intent")} Intent: ← ${LABELS.intents[d.applyIntent]} →${changedSuffix(decisionChanged(state, "applyIntent"))}`, action: { type: "CHANGE", delta: 1 }, focused: focus === "intent", tone: d.applyIntent === "apply-safe-steps" ? "changed" : "normal" },
       { text: `${marker(focus === "next")} Continue to mandatory Review`, action: { type: "NEXT" }, focused: focus === "next" }
     );
@@ -1126,11 +1243,12 @@ export function stepExplanationLines(state) {
       "  - Skipped (Configure later) — keeps each harness's current configuration. Use when you do not need profile switching or want to set it up later."
     );
   } else if (state.phase === "Configure") {
-    const installFolder = effectiveTargetPath(current).replace(/[\\/]+$/, "").split(/[\\/]/).at(-1) || current.name;
+    const installFolder = installNameForPath(effectiveTargetPath(current), current.name);
     lines = summary.filter((line) => /^(Memory|Install name|Target path|Execution) —/.test(line)).map((line) => {
       if (line.startsWith("Install name —")) return `Install name — ${installFolder}: the final folder name in the target path.`;
       return line.replace(/^Execution —/, "Intent —");
     });
+    if (memoryKeyApplicable(current)) lines.push("API key — enter an alk_ key for this session only. Setup does not save it or connect to a server.");
   } else if (state.phase === "Review") {
     lines = [...summary,
       "Accept & apply reviewed settings — proceeds to final confirmation; it does not write files yet.",
@@ -1166,6 +1284,8 @@ export function keyboardHintLines(state) {
     actions = ["←→ Change", "Space Change"];
   } else if (control?.startsWith("harness:")) {
     actions = ["Space Toggle", "Enter Toggle"];
+  } else if (control === "memory-key") {
+    actions = ["Enter Edit API key"];
   } else if (control === "name" || control === "path") {
     actions = [`Enter Edit ${control}`];
   } else {

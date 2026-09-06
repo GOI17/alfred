@@ -250,6 +250,85 @@
         "git_diff_check": "pass"
       },
       "provider_calls": 0
+    },
+    {
+      "event": "delegation_decision",
+      "scope": "R9 single Configure target field",
+      "target": "developer",
+      "reason": "Orchestrator requires developer for state, UI, and serialization consistency changes.",
+      "provider_calls": 0
+    },
+    {
+      "event": "delegation_decision",
+      "scope": "existing Memory tenant alk input",
+      "target": "architect",
+      "reason": "Determine existing credential configuration and private IPC boundaries before implementing secret capture and potential confirmed-Apply persistence.",
+      "provider_calls": 0
+    },
+    {
+      "event": "review_completed",
+      "scope": "R9",
+      "decision": "approved",
+      "provider_calls": 0
+    },
+    {
+      "event": "architecture_decision",
+      "scope": "existing tenant API-key capture",
+      "decision": "session-only UI capture for this UX batch",
+      "reason": "User requested a prompt; durable remote configuration needs server URL and an explicit consumer. Existing .alfred/config.json is a local tenant/Pi configuration and must not be repurposed. Persistence preference question remains unanswered.",
+      "provider_calls": 0
+    },
+    {
+      "event": "delegation_decision",
+      "scope": "R10",
+      "target": "developer",
+      "reason": "Implement masked input with private session storage and no secret serialization; coding requires developer.",
+      "provider_calls": 0
+    },
+    {
+      "event": "validation_completed",
+      "scope": "R9",
+      "results": {
+        "pathfinder": "pass",
+        "opentui_tests": {
+          "baseline_passed": 22,
+          "current_passed": 23,
+          "regressions": 0
+        },
+        "syntax_checks": "pass",
+        "manual_render_and_ipc": "single field, derived NAME, prefill and cancellation pass"
+      },
+      "provider_calls": 0
+    },
+    {
+      "event": "delegation_decision",
+      "scope": "R10",
+      "target": "reviewer",
+      "reason": "Independent review of private key lifetime, masking, conditional controls, and serialization boundaries.",
+      "provider_calls": 0
+    },
+    {
+      "event": "review_completed",
+      "scope": "R10",
+      "decision": "approved",
+      "findings": 0,
+      "provider_calls": 0
+    },
+    {
+      "event": "validation_completed",
+      "scope": "R9-R10",
+      "results": {
+        "pathfinder": "pass, including synthetic-key lifecycle and playback output checks",
+        "opentui_tests": {
+          "baseline_passed": 22,
+          "current_passed": 25,
+          "regressions": 0
+        },
+        "syntax_checks": "pass",
+        "git_diff_check": "pass",
+        "manual_render_and_ipc": "single Path and masked key pass; no raw key in state, views, preview, or assignments"
+      },
+      "provider_calls": 0
     }
   ],
   "data": {
