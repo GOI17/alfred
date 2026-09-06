@@ -971,7 +971,7 @@ function bodyEntries(state) {
         tone: discovery.harnesses[item.value] === "installed" ? "safe" : "normal"
       }))
     ];
-    if (profilesApplicable(d)) entries.push({ text: `${marker(focus === "profile")} Profiles: ${LABELS.profiles[d.profileStrategy]}${changedSuffix(decisionChanged(state, "profileStrategy"))}`, action: { type: "CHANGE", delta: 1 }, focused: focus === "profile", tone: decisionChanged(state, "profileStrategy") ? "changed" : "normal" });
+    if (profilesApplicable(d)) entries.push({ text: `${marker(focus === "profile")} Profiles: ← ${LABELS.profiles[d.profileStrategy]} →${changedSuffix(decisionChanged(state, "profileStrategy"))}`, action: { type: "CHANGE", delta: 1 }, focused: focus === "profile", tone: decisionChanged(state, "profileStrategy") ? "changed" : "normal" });
     entries.push({ text: `${marker(focus === "next")} Continue to Configure`, action: { type: "NEXT" }, focused: focus === "next" });
     return entries;
   }
@@ -999,7 +999,7 @@ function bodyEntries(state) {
     entries.push(
       { text: `${marker(focus === "name")} Name: [${installEditorValue("name", d.name, "acme")}]`, action: { type: "FOCUS_CONTROL", control: "name" }, focused: focus === "name" },
       { text: `${marker(focus === "path")} Path: [${installEditorValue("path", d.targetPath, `~/.alfred/installs/${d.name}`)}]`, action: { type: "FOCUS_CONTROL", control: "path" }, focused: focus === "path" },
-      { text: `${marker(focus === "intent")} Intent: ${LABELS.intents[d.applyIntent]}${changedSuffix(decisionChanged(state, "applyIntent"))}`, action: { type: "CHANGE", delta: 1 }, focused: focus === "intent", tone: d.applyIntent === "apply-safe-steps" ? "changed" : "normal" },
+      { text: `${marker(focus === "intent")} Intent: ← ${LABELS.intents[d.applyIntent]} →${changedSuffix(decisionChanged(state, "applyIntent"))}`, action: { type: "CHANGE", delta: 1 }, focused: focus === "intent", tone: d.applyIntent === "apply-safe-steps" ? "changed" : "normal" },
       { text: `${marker(focus === "next")} Continue to mandatory Review`, action: { type: "NEXT" }, focused: focus === "next" }
     );
     return entries;

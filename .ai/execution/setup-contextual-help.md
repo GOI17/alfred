@@ -50,7 +50,12 @@ Reduce default setup clutter and explain visible settings on demand.
 - Preserve applicable global shortcuts and contextual editing/overlay hints. Refresh immediately after keyboard or mouse focus changes.
 - Keep both renderers on the shared hint list, preserving vertical placement and dynamic height, pagination, and approval gates.
 
+### R7: Consistent selector indicators
+- Show the same left/right arrow indicators as Edition around the current Profiles value in Choose and Intent value in Configure.
+- Apply to Node and OpenTUI; preserve values, change markers, focus-specific keys, and selection behavior.
+
 ## Completion conditions
+- [x] R7 selector indicators are rendered and verified in both adapters.
 - [x] R6 focus-specific hints are implemented and regression-checked.
 - [x] R5 is implemented and regression-checked in both renderers.
 - [x] Both renderers satisfy R1–R3.

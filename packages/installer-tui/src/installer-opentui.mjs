@@ -298,7 +298,7 @@ function chooseRows(state) {
       actionRow(
         state,
         "profile",
-        `Profiles      ‹ ${LABELS.profiles[decisions.profileStrategy]} ›  ${decisionTag(state, "profileStrategy")}`,
+        `Profiles      ← ${LABELS.profiles[decisions.profileStrategy]} →  ${decisionTag(state, "profileStrategy")}`,
         { type: "CHANGE", delta: 1 },
         decisionChanged(state, "profileStrategy") ? "yellow" : "foreground"
       )
@@ -386,7 +386,7 @@ function configureRows(state) {
     actionRow(
       state,
       "intent",
-      `Intent        ‹ ${LABELS.intents[decisions.applyIntent]} ›  ${decisionTag(state, "applyIntent")}`,
+      `Intent        ← ${LABELS.intents[decisions.applyIntent]} →  ${decisionTag(state, "applyIntent")}`,
       { type: "CHANGE", delta: 1 },
       decisions.applyIntent === "apply-safe-steps" ? "yellow" : "green"
     ),

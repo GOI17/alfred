@@ -190,6 +190,29 @@
         "git_diff_check": "pass"
       },
       "provider_calls": 0
+    },
+    {
+      "event": "delegation_decision",
+      "scope": "R7 Profiles/Intent arrow indicators",
+      "target": "developer",
+      "reason": "Orchestrator requires developer for application edits; four scoped display-string edits with existing-test and render verification.",
+      "provider_calls": 0
+    },
+    {
+      "event": "validation_completed",
+      "scope": "R7 four display strings",
+      "results": {
+        "pathfinder": "pass",
+        "opentui_tests": {
+          "baseline_passed": 21,
+          "current_passed": 21,
+          "regressions": 0
+        },
+        "syntax_checks": "pass",
+        "render_check": "Profiles and Intent arrows verified in both adapters at80x24",
+        "git_diff_check": "pass"
+      },
+      "provider_calls": 0
     }
   ],
   "data": {
