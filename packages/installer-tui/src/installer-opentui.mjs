@@ -22,7 +22,7 @@ import {
   modelPlanReviewLines,
   normalizeDiscovery,
   previewModel,
-  configurationExplanationLines,
+  explanationPageLines,
   serializeAssignments,
   stripAnsi,
   textEditingActive,
@@ -114,7 +114,7 @@ export function keyEventAction(key, state, viewport = { columns: 80, rows: 24 })
   if (textEditingActive(state)) return { type: "INPUT", text: printable };
   if (printable === "q") return { type: "CANCEL" };
   if (printable === "p") return { type: "OPEN_PREVIEW" };
-  if (printable === "w") return { type: "OPEN_WHY" };
+  if (printable === "?" || printable === "w") return { type: "OPEN_WHY" };
   if (printable === "b") return { type: "BACK" };
   if (printable === "r" && state.phase === "Discover" && !state.overlay) return { type: "USE_RECOMMENDED" };
   return null;
@@ -154,11 +154,11 @@ export function responsiveLayout(viewport = { columns: 80, rows: 24 }) {
   };
 }
 
-function openTuiPageMetrics(viewportOrLayout) {
+function openTuiPageMetrics(viewportOrLayout, minimumContentWidth = 24) {
   const layout = viewportOrLayout?.mode ? viewportOrLayout : responsiveLayout(viewportOrLayout);
   return {
     pageSize: Math.max(1, layout.height - layout.headerHeight - layout.footerHeight - 6),
-    contentWidth: Math.max(24, layout.width - (layout.mode === "wide" ? 64 : 8))
+    contentWidth: Math.max(minimumContentWidth, layout.width - (layout.mode === "wide" ? 68 : layout.mode === "medium" ? 32 : 8))
   };
 }
 
@@ -257,7 +257,7 @@ function discoverRows(state) {
       tone: discovery.git.repository_state === "repository" ? "green" : "foreground"
     }),
     section("Start"),
-    actionRow(state, "recommended", "Use recommended setup                         [r]", { type: "USE_RECOMMENDED" }, "green"),
+    actionRow(state, "recommended", "Use recommended setup", { type: "USE_RECOMMENDED" }, "green"),
     actionRow(state, "customize", "Customize important choices", { type: "CUSTOMIZE" })
   ];
 }
@@ -270,7 +270,7 @@ function chooseRows(state) {
     actionRow(
       state,
       "edition",
-      `Edition       ‹ ${LABELS.editions[decisions.edition]} ›  ${decisionTag(state, "edition")}`,
+      `Edition       ← ${LABELS.editions[decisions.edition]} →  ${decisionTag(state, "edition")}`,
       { type: "CHANGE", delta: 1 },
       decisionChanged(state, "edition") ? "yellow" : "foreground"
     ),
@@ -532,12 +532,12 @@ function modelEditorRows(state) {
 }
 
 function overlayRows(state, layout) {
-  const { pageSize, contentWidth } = openTuiPageMetrics(layout);
+  const { pageSize, contentWidth } = openTuiPageMetrics(layout, state.overlay?.type === "why" ? 1 : 24);
   if (state.overlay.type === "model-editor") return modelEditorRows(state);
   let source;
   let title;
   if (state.overlay.type === "why") {
-    source = configurationExplanationLines(state).slice(1);
+    source = explanationPageLines(state, contentWidth);
     title = "What this configuration changes";
   } else if (state.overlay.type === "model-plan-review") {
     source = modelPlanReviewLines(state, contentWidth);
@@ -629,10 +629,10 @@ function footerLines(state, layout) {
   const keys = state.editing
     ? "←→ cursor  Enter save  Esc cancel  Backspace/Delete edit"
     : state.overlay
-      ? "Esc close  ←→/↑↓ pages  p preview  w explain  q cancel"
+      ? "Esc close  ←→/↑↓ pages  ? help  p preview  q cancel"
       : layout.mode === "compact"
-        ? "↑↓ Move · ←→ Change · Space Toggle · Enter Select · b Back · p Preview · q Quit"
-        : "↑↓ move  ←→ change  Space toggle  Enter select  b back  p preview  w explain  q quit";
+        ? "↑↓ Move  ←→ Change  Space Toggle  Enter Select  ? Help  b Back  p Preview  q Quit"
+        : "↑↓ move  ←→ change  Space toggle  Enter select  ? help  b back  p preview  q quit";
   return [
     layout.mode === "wide"
       ? "Safety · Preview-first · human approval required · provider calls 0"
@@ -642,7 +642,10 @@ function footerLines(state, layout) {
 }
 
 function normalizePagedState(state, layout) {
-  const { pageSize, contentWidth } = openTuiPageMetrics(layout);
+  const { pageSize, contentWidth } = openTuiPageMetrics(layout, state.overlay?.type === "why" ? 1 : 24);
+  if (state.overlay?.type === "why") {
+    return transition(state, { type: "PAGE", delta: 0, pageSize, totalItems: explanationPageLines(state, contentWidth).length });
+  }
   if (state.overlay?.type === "preview") {
     return transition(state, { type: "PAGE", delta: 0, pageSize });
   }

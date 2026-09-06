@@ -1,0 +1,98 @@
+{
+  "trace_id": "issue-191-setup-contextual-help",
+  "timestamp": "2026-09-06T02:18:16.061854+00:00",
+  "actor": "orchestrator",
+  "events": [
+    {
+      "event": "task_classified",
+      "decision": "scoped-setup-ui-change"
+    },
+    {
+      "event": "permission_allowed",
+      "reason": "User requested setup changes; repository SDD requires issue, spec, branch, and PR. Protected paths excluded."
+    },
+    {
+      "event": "delegation_decision",
+      "decision": "delegate",
+      "target": "developer",
+      "reason": "Orchestrator spec requires delegation of application-code edits."
+    },
+    {
+      "event": "provider_request_avoided",
+      "decision": "local-only",
+      "reason": "Setup implementation and verification require no external LLM provider requests."
+    },
+    {
+      "event": "delegation_decision",
+      "decision": "delegate",
+      "target": "reviewer",
+      "reason": "Independent review of keyboard navigation, paging, and preserved approval gates across both renderers.",
+      "skills_considered": [],
+      "skills_loaded": [],
+      "permissions_requested": []
+    },
+    {
+      "event": "permission_requested",
+      "reason": "Full test suite and suite installer validator access repository paths protected by AGENTS.md. User asked for read-only test access; response pending.",
+      "target": "protected-repository-paths",
+      "scope": "read-only for tests"
+    },
+    {
+      "event": "validation_completed",
+      "scope": "focused setup checks",
+      "results": {
+        "pathfinder": "pass",
+        "opentui_tests": {
+          "baseline_passed": 12,
+          "current_passed": 16,
+          "regressions": 0
+        },
+        "installer_tui_check": "pass",
+        "node_syntax": "pass",
+        "git_diff_check": "pass"
+      },
+      "provider_calls": 0
+    },
+    {
+      "event": "review_completed",
+      "decision": "changes_requested",
+      "finding": "OpenTUI help width minimum clips text at 20\u201329 columns",
+      "target": "packages/installer-tui/src/installer-opentui.mjs",
+      "followup": "developer assigned correction and 24-column regression",
+      "provider_calls": 0
+    },
+    {
+      "event": "validation_completed",
+      "scope": "final focused checks after narrow-terminal fix",
+      "results": {
+        "pathfinder": "pass",
+        "opentui_tests": {
+          "baseline_passed": 12,
+          "current_passed": 17,
+          "regressions": 0
+        },
+        "installer_tui_check": "pass",
+        "node_syntax": "pass",
+        "git_diff_check": "pass"
+      },
+      "provider_calls": 0
+    },
+    {
+      "event": "review_completed",
+      "decision": "approved",
+      "prior_finding": "resolved",
+      "checked_columns": [
+        20,
+        24,
+        29
+      ],
+      "read_only": true,
+      "provider_calls": 0
+    }
+  ],
+  "data": {
+    "issue": 191,
+    "branch": "issue-191-setup-contextual-help",
+    "provider_calls": 0
+  }
+}

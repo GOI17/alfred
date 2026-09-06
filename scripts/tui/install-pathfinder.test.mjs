@@ -14,6 +14,8 @@ import {
   clipAnsi,
   controlsFor,
   configurationExplanationLines,
+  explanationPageLines,
+  stepExplanationLines,
   createPathfinderState,
   displayWidth,
   normalizeTuiLayout,
@@ -298,7 +300,7 @@ assert.ok(narrow.text.split("\n").length <= 23);
 assert.ok(narrow.text.split("\n").every((line) => displayWidth(line) <= 80));
 assert.match(narrow.text, /Phase 1\/5: Discover/);
 assert.match(narrow.text, /Preview:/);
-assert.match(narrow.text, /p full/);
+assert.match(narrow.text, /p Preview/);
 assert.match(narrow.text, /layout: fullscreen/);
 assert.equal(narrow.text.match(/^Keys:/gm)?.length, 1, "the footer has one compact help line");
 assert.equal(narrow.text.split("\n").length, 23, "fullscreen reserves the physical last row");
@@ -484,10 +486,10 @@ assert.equal(resizedPreview.overlay.page, 0, "wide viewport page bounds use the 
 
 const wide = render(createPathfinderState(), { columns: 120, rows: 30 });
 assert.match(wide.text, /\[Discover\] > Choose > Configure > Review > Apply/);
-assert.match(wide.text, /What this configuration changes/);
+assert.doesNotMatch(wide.text, /What this configuration changes/);
 assert.ok(wide.text.split("\n").every((line) => displayWidth(line) <= 120));
 assert.match(stripAnsi(wide.text), /┌ Discover/);
-assert.match(stripAnsi(wide.text), /┌ What this configuration changes/);
+assert.doesNotMatch(stripAnsi(wide.text), /┌ What this configuration changes/);
 
 const tallWide = render(createPathfinderState(), { columns: 120, rows: 50, color: false });
 const tallWideLines = tallWide.text.split("\n");
@@ -501,13 +503,13 @@ const tallConfigure = render({ ...createPathfinderState({ discovery }), phase: "
 assert.equal(tallConfigure.text.split("\n").length, 49);
 assert.ok(tallConfigure.text.split("\n").findLastIndex((line) => /└─+┘/.test(line)) < 45, "wide Configure does not add an empty boxed area");
 
-let longExplanationState = createPathfinderState();
+let longExplanationState = { ...createPathfinderState(), phase: "Configure" };
 longExplanationState = transition(longExplanationState, { type: "PATCH", key: "name", value: "a-very-long-install-name-that-keeps-the-configuration-explanation-readable-across-lines" });
 const longWideExplanation = stripAnsi(render(longExplanationState, { columns: 120, rows: 50, color: true }).text);
 const longExplanationText = configurationExplanationLines(longExplanationState).join("\n");
 assert.match(longExplanationText, /labels this local suite installation and its traces/);
 assert.match(longExplanationText, /it is not a tenant name/);
-assert.doesNotMatch(longWideExplanation, /…/, "wide two-column explanations wrap without clipping");
+assert.doesNotMatch(longWideExplanation, /…/, "wide configuration wraps without clipping");
 const longOverlayExplanation = stripAnsi(render(transition(longExplanationState, { type: "OPEN_WHY" }), { columns: 80, rows: 24, color: true }).text);
 assert.match(longOverlayExplanation, /What this configuration changes/);
 assert.doesNotMatch(longOverlayExplanation, /Changed from recommendation|selection is respected/);
@@ -724,5 +726,78 @@ assert.deepEqual(decodeTerminalEvent("\x1b[3~"), { type: "token", token: "delete
 assert.equal(decodeTerminalEvent("\x1b[20").type, "incomplete", "fragmented CSI waits for completion");
 assert.equal(decodeTerminalEvent("\x1b[20" + "0~").type, "ignore", "completed CSI fragments are ignored as one sequence");
 assert.equal(decodeTerminalEvent("\x1b]0;title\u0007").type, "ignore", "complete OSC is ignored");
+
+
+// Contextual help remains opt-in across phases, sizes, and both Node layouts.
+for (const phase of PHASES) {
+  for (const columns of [60, 80, 100, 120]) {
+    for (const layout of ["inline", "fullscreen"]) {
+      const base = { ...createPathfinderState({ discovery }), phase, focus: 1 };
+      const viewport = { columns, rows: 24, layout };
+      const initial = render(base, viewport).text;
+      assert.doesNotMatch(initial, /What this configuration changes/, `${phase} ${columns} ${layout} help is hidden`);
+      assert.match(initial.split("\n").at(-1), /\? Help/, "help shortcut stays visible");
+      const opened = transition(base, terminalTokenAction(base, "?"));
+      assert.match(render(opened, viewport).text, /What this configuration changes/);
+      assert.deepEqual(transition(opened, { type: "OPEN_WHY" }), base, "? toggles without altering focus or decisions");
+      assert.deepEqual(transition(opened, { type: "ESCAPE" }), base, "Escape dismisses help without changing the step");
+      assert.equal(opened.provider_calls, 0);
+      assert.doesNotMatch(stepExplanationLines(opened).join("\n"), /models?\.json|model assignment/i);
+    }
+  }
+}
+
+const discoverHelp = createPathfinderState({ discovery });
+assert.match(stepExplanationLines(discoverHelp).join("\n"), /Use recommended setup.*Coding/);
+assert.match(stepExplanationLines(discoverHelp).join("\n"), /Recommended setup opens Review in preview-only mode/);
+assert.doesNotMatch(render(discoverHelp, { columns: 120, rows: 40 }).text, /Memory connection|\[r\]/);
+assert.equal(transition(discoverHelp, { type: "USE_RECOMMENDED" }).phase, "Review");
+assert.deepEqual(printableInputAction("?"), { type: "token", token: "?" });
+assert.deepEqual(printableInputAction("?", { textFieldFocused: true }), { type: "input", text: "?" });
+
+const chooseHelp = transition(discoverHelp, { type: "CUSTOMIZE" });
+const chooseHelpText = stepExplanationLines(chooseHelp).join("\n");
+for (const pattern of [/Coding —.*Use for/, /Memory —.*Use for/, /Full —.*Use when/, /Runtime Profiles — enabled/, /Runtime Profiles — skipped/]) assert.match(chooseHelpText, pattern);
+assert.doesNotMatch(chooseHelpText, /Install name —|Target path —|Memory — Postgres/);
+assert.match(render(chooseHelp, { columns: 80, rows: 24 }).text, /Edition: ← Coding →/);
+assert.equal(transition(chooseHelp, { type: "CHANGE", delta: 1 }).decisions.edition, "memory");
+assert.equal(transition(chooseHelp, { type: "CHANGE", delta: -1 }).decisions.edition, "full");
+const memoryChooseHelp = transition(chooseHelp, { type: "PATCH", key: "edition", value: "memory" });
+assert.doesNotMatch(stepExplanationLines(memoryChooseHelp).join("\n"), /Runtime Profiles — enabled|Runtime Profiles — skipped/);
+
+let helpFlow = chooseHelp;
+for (const action of [{ type: "NEXT" }, { type: "NEXT" }, { type: "REVIEW_DECISION", intent: "preview-only" }, { type: "BACK" }]) {
+  helpFlow = transition(helpFlow, { type: "OPEN_WHY" });
+  helpFlow = transition(helpFlow, { type: "ESCAPE" });
+  helpFlow = transition(helpFlow, action);
+  assert.equal(helpFlow.overlay, null, `${helpFlow.phase} starts with help hidden`);
+  assert.doesNotMatch(render(helpFlow, { columns: 120, rows: 40 }).text, /What this configuration changes/);
+}
+assert.equal(helpFlow.phase, "Review");
+const configureHelpText = stepExplanationLines({ ...chooseHelp, phase: "Configure" }).join("\n");
+assert.match(configureHelpText, /Install name —/);
+assert.match(configureHelpText, /Execution —/);
+assert.doesNotMatch(configureHelpText, /Available editions|Runtime Profiles —|Harnesses —/);
+
+for (const columns of [60, 80, 100, 120]) {
+  const viewport = { columns, rows: 24 };
+  const all = explanationPageLines(chooseHelp, columns - 2);
+  const pageSize = previewPageSize(viewport);
+  const totalPages = Math.ceil(all.length / pageSize);
+  let paged = transition(chooseHelp, { type: "OPEN_WHY" });
+  let combined = "";
+  for (let page = 0; page < totalPages; page += 1) {
+    paged = transition(paged, { type: "PAGE", delta: page === 0 ? 0 : 1, pageSize, totalItems: all.length });
+    assert.equal(paged.overlay.page, page);
+    const frame = render(paged, viewport).text;
+    assert.match(frame, new RegExp(`page ${page + 1}/${totalPages}`));
+    assert.ok(frame.split("\n").every((line) => displayWidth(line) <= columns));
+    combined += frame;
+  }
+  assert.match(combined, /Runtime Profiles — skipped/);
+  assert.match(combined, /Provider calls: 0/);
+  const end = transition(paged, { type: "PAGE", delta: 1, pageSize, totalItems: all.length });
+  assert.equal(end.overlay.page, totalPages - 1);
+}
 
 console.log("install pathfinder tests ok");

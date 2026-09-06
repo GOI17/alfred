@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { transition } from "../../../scripts/tui/install-pathfinder.mjs";
+import { displayWidth, stepExplanationLines, transition } from "../../../scripts/tui/install-pathfinder.mjs";
 import {
   assignmentsForState,
   createInstallerState,
@@ -164,4 +164,114 @@ test("ignores injected legacy model overlays", () => {
     assert.equal(view.state.decisions.modelWriteApproved, false);
     assert.doesNotMatch(text, /model|models\.json|provider\/model/i);
   }
+});
+
+
+test("? toggles contextual help in every step and responsive layout", () => {
+  for (const phase of ["Discover", "Choose", "Configure", "Review", "Apply"]) {
+    for (const columns of [60, 80, 110, 148]) {
+      const viewport = { columns, rows: 24 };
+      const state = { ...createInstallerState({}), phase, focus: 1 };
+      const initial = frameForState(state, viewport);
+      assert.doesNotMatch(initial.lines.join("\n"), /What this configuration changes/);
+      assert.match(initial.lines.at(-1), /\? [Hh]elp/);
+      const action = keyEventAction(key("?", "?", { shift: true }), state);
+      assert.deepEqual(action, { type: "OPEN_WHY" });
+      const opened = transition(state, action);
+      const view = openTuiViewForState(opened, viewport);
+      assert.equal(view.main.title, "What this configuration changes");
+      assert.ok(view.main.rows.length > 0);
+      assert.deepEqual(transition(opened, keyEventAction(key("?"), opened)), state);
+      assert.deepEqual(transition(opened, keyEventAction(key("escape"), opened)), state);
+      assert.equal(view.provider_calls, 0);
+    }
+  }
+});
+
+test("Discover keeps the recommended action and hides the shortcut label and Memory row", () => {
+  const state = createInstallerState({});
+  const view = openTuiViewForState(state);
+  const text = view.main.rows.map(({ text }) => text).join("\n");
+  assert.match(text, /Use recommended setup/);
+  assert.doesNotMatch(text, /\[r\]|Memory connection/);
+  assert.equal(transition(state, keyEventAction(key("r"), state)).phase, "Review");
+  const help = openTuiViewForState(transition(state, keyEventAction(key("?"), state)));
+  assert.match(help.main.rows.map(({ text }) => text).join(" "), /Use recommended setup.*Coding/);
+});
+
+test("Choose shows edition alternatives and pages through editions and profile use cases", () => {
+  const choose = transition(createInstallerState({}), { type: "CUSTOMIZE" });
+  const choice = openTuiViewForState(choose).main.rows.find(({ control }) => control === "edition");
+  assert.match(choice.text, /← Coding →/);
+  assert.equal(transition(choose, keyEventAction(key("right"), choose)).decisions.edition, "memory");
+  assert.equal(transition(choose, keyEventAction(key("left"), choose)).decisions.edition, "full");
+
+  for (const columns of [60, 80, 110, 148]) {
+    const viewport = { columns, rows: 24 };
+    let state = transition(choose, keyEventAction(key("?"), choose));
+    let view = openTuiViewForState(state, viewport);
+    state = view.state;
+    const pageCount = Number(view.main.subtitle.match(/page 1\/(\d+)/)[1]);
+    assert.ok(pageCount > 1, "compact help must allow reading all options");
+    const pages = [];
+    for (let page = 0; page < pageCount; page += 1) {
+      if (page > 0) {
+        state = transition(state, keyEventAction(key("right"), state, viewport));
+        view = openTuiViewForState(state, viewport);
+        state = view.state;
+      }
+      assert.equal(state.overlay.page, page);
+      pages.push(view.main.rows.map(({ text }) => text).join(" "));
+      assert.ok(frameForState(state, viewport).lines.slice(2).every((line) => displayWidth(line) <= columns));
+      assert.ok(view.main.rows.every(({ text }) => !text.includes("…")), "help wraps without clipping words");
+    }
+    const text = pages.join(" ");
+    for (const pattern of [/Coding —.*Use for/, /Memory —.*Use for/, /Full —.*Use when/, /Runtime Profiles — enabled/, /Runtime Profiles — skipped/]) assert.match(text, pattern);
+    assert.doesNotMatch(text, /Install name —|Memory — Postgres|model assignment/);
+    assert.equal(transition(state, keyEventAction(key("right"), state, viewport)).overlay.page, pageCount - 1);
+    const dismissed = transition(state, keyEventAction(key("escape"), state));
+    assert.equal(dismissed.focus, choose.focus);
+    assert.deepEqual(dismissed.decisions, choose.decisions);
+    const next = transition(dismissed, { type: "NEXT" });
+    assert.equal(next.phase, "Configure");
+    assert.equal(next.overlay, null);
+    assert.doesNotMatch(frameForState(next, viewport).lines.join("\n"), /What this configuration changes/);
+  }
+});
+
+test("? is text while editing and w remains a help alias", () => {
+  let state = transition(createInstallerState({}), { type: "CUSTOMIZE" });
+  assert.deepEqual(keyEventAction(key("w"), state), { type: "OPEN_WHY" });
+  state = transition(state, { type: "NEXT" });
+  state = transition(state, { type: "FOCUS_CONTROL", control: "name" });
+  state = transition(state, { type: "ACTIVATE" });
+  assert.deepEqual(keyEventAction(key("?"), state), { type: "INPUT", text: "?" });
+});
+
+
+test("24-column help preserves every character across rendered pages", () => {
+  const viewport = { columns: 24, rows: 24 };
+  const choose = transition(createInstallerState({}), { type: "CUSTOMIZE" });
+  let state = transition(choose, keyEventAction(key("?"), choose));
+  let view = openTuiViewForState(state, viewport);
+  state = view.state;
+  const pageCount = Number(view.main.subtitle.match(/page 1\/(\d+)/)[1]);
+  const renderedRows = [];
+  for (let page = 0; page < pageCount; page += 1) {
+    if (page > 0) {
+      state = transition(state, keyEventAction(key("right"), state, viewport));
+      view = openTuiViewForState(state, viewport);
+      state = view.state;
+    }
+    assert.equal(state.overlay.page, page);
+    const frame = frameForState(state, viewport);
+    const contentRows = frame.lines.filter((line) => line.startsWith("│"));
+    for (const { text } of view.main.rows) {
+      assert.ok(displayWidth(text) <= 16, "help fits after the native panel padding and pointer");
+      assert.ok(contentRows.some((line) => line.startsWith(`│  ${text}`)), `rendered help preserves: ${text}`);
+    }
+    renderedRows.push(...contentRows.map((line) => line.slice(3, -1).trimEnd()));
+  }
+  const normalized = (text) => text.replace(/\s/g, "");
+  assert.equal(normalized(renderedRows.join("")), normalized(stepExplanationLines(choose).slice(1).join("")));
 });

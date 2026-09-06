@@ -18,6 +18,13 @@ readable instead of stretching across the viewport. Detected, suggested,
 chosen, blocked, and approved values retain textual markers when color is
 disabled.
 
+Setup explanations are hidden by default. Press `?` to open or close **What
+this configuration changes** for the current step, use arrow keys to read its
+pages, and press Escape to dismiss it. Discover explains the recommended setup;
+Choose explains each edition and the available Runtime Profiles choices.
+Changing steps starts with help hidden. The existing `w` help and `r` recommended
+setup shortcuts remain supported.
+
 ## Development
 
 OpenTUI native rendering requires Bun or Node 26.4+ with experimental FFI.

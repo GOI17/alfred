@@ -433,11 +433,11 @@ export function controlsFor(state) {
 }
 
 function boundedFocus(state, focus = state.focus) { return Math.max(0, Math.min(controlsFor(state).length - 1, focus)); }
-function go(state, phase) { return { ...state, phase, focus: 0, history: [...state.history, state.phase] }; }
+function go(state, phase) { return { ...state, phase, overlay: null, focus: 0, history: [...state.history, state.phase] }; }
 function back(state) {
   if (!state.history.length) return state;
   const history = [...state.history];
-  return { ...state, phase: history.pop(), history, focus: 0 };
+  return { ...state, phase: history.pop(), overlay: null, history, focus: 0 };
 }
 function cycle(values, value, delta) {
   const index = Math.max(0, values.indexOf(value));
@@ -746,7 +746,7 @@ export function transition(state, action = {}) {
     return state;
   }
   if (state.overlay) {
-    if (action.type === "CLOSE_OVERLAY") return { ...state, overlay: null };
+    if (action.type === "CLOSE_OVERLAY" || action.type === "ESCAPE") return { ...state, overlay: null };
     if (action.type === "PAGE") {
       const pageSize = Math.max(1, Number(action.pageSize) || PREVIEW_PAGE_SIZE);
       if (state.overlay.type === "model-plan-review") {
@@ -769,6 +769,12 @@ export function transition(state, action = {}) {
           overlay: { ...state.overlay, page },
           modelInspection: { revision: state.modelRevision, pageSize, totalItems, totalPages, pagesViewed, inspectionKey: requestedInspectionKey ?? existing?.inspectionKey ?? null }
         };
+      }
+      if (state.overlay.type === "why") {
+        const totalItems = Math.max(1, Number(action.totalItems) || state.overlay.totalItems || explanationPageLines(state).length);
+        const helpPageSize = action.totalItems ? pageSize : state.overlay.pageSize || pageSize;
+        const maxPage = Math.max(0, Math.ceil(totalItems / helpPageSize) - 1);
+        return { ...state, overlay: { ...state.overlay, totalItems, pageSize: helpPageSize, page: Math.max(0, Math.min(maxPage, state.overlay.page + Math.sign(action.delta || 0))) } };
       }
       const maxPage = state.overlay.type === "preview" ? Math.max(0, Math.ceil(previewModel(state.decisions, state.discovery).lines.length / pageSize) - 1) : 0;
       return { ...state, overlay: { ...state.overlay, page: Math.max(0, Math.min(maxPage, state.overlay.page + Math.sign(action.delta || 0))) } };
@@ -948,17 +954,16 @@ function bodyEntries(state) {
       { text: `OS: ${discovery.os.platform} ${discovery.os.release} · ${discovery.os.architecture}`, tone: "safe" },
       { text: `Node: ${discovery.node.version} · ${discovery.node.status} (requires ${discovery.node.required_major}+)`, tone: discovery.node.status === "ok" ? "safe" : "blocker" },
       { text: `Harnesses: ${harnesses.length ? harnesses.join(", ") : "none detected"}`, tone: harnesses.length ? "safe" : "normal" },
-      { text: `Memory connection: ${discovery.memory.existing_connection ? `detected via ${discovery.memory.source}` : "not detected"}`, tone: discovery.memory.existing_connection ? "safe" : "normal" },
       { text: `Existing install: ${discovery.install.target_exists ? "found" : "not found"} at ${displayPath(discovery.install.selected_target)}`, tone: discovery.install.target_exists ? "safe" : "normal" },
       { text: `Git: ${discovery.git.repository_state} · ${discovery.git.linked_worktree_state} · ${displayPath(discovery.git.workspace_root)}`, tone: discovery.git.repository_state === "repository" ? "safe" : "normal" },
       { text: `Project root: ${displayPath(discovery.git.project_root)}`, tone: discovery.git.repository_state === "repository" ? "safe" : "normal" },
-      { text: `${marker(focus === "recommended")} [r] Use recommended setup`, action: { type: "USE_RECOMMENDED" }, focused: focus === "recommended" },
+      { text: `${marker(focus === "recommended")} Use recommended setup`, action: { type: "USE_RECOMMENDED" }, focused: focus === "recommended" },
       { text: `${marker(focus === "customize")} Customize choices`, action: { type: "CUSTOMIZE" }, focused: focus === "customize" }
     ];
   }
   if (state.phase === "Choose") {
     const entries = [
-      { text: `${marker(focus === "edition")} Edition: ${LABELS.editions[d.edition]}${changedSuffix(decisionChanged(state, "edition"))}`, action: { type: "CHANGE", delta: 1 }, focused: focus === "edition", tone: decisionChanged(state, "edition") ? "changed" : "normal" },
+      { text: `${marker(focus === "edition")} Edition: ← ${LABELS.editions[d.edition]} →${changedSuffix(decisionChanged(state, "edition"))}`, action: { type: "CHANGE", delta: 1 }, focused: focus === "edition", tone: decisionChanged(state, "edition") ? "changed" : "normal" },
       ...HARNESSES.map((item) => ({
         text: `${marker(focus === `harness:${item.value}`)} ${d.selectedHarnesses.includes(item.value) ? "[x]" : "[ ]"} ${item.label} (${LABELS.status[discovery.harnesses[item.value]]})`,
         action: { type: "TOGGLE_HARNESS", value: item.value }, focused: focus === `harness:${item.value}`,
@@ -1089,6 +1094,56 @@ export function configurationExplanationLines(state) {
   );
   lines.push("Provider calls: 0");
   return lines.map(sanitizeTerminalText);
+}
+
+// Keep the complete summary above available to noninteractive integrations.
+// Help follows the visible decisions and actions in the current step.
+export function stepExplanationLines(state) {
+  const title = "What this configuration changes";
+  const current = effective(state.decisions);
+  const summary = configurationExplanationLines(state).slice(1, -1);
+  let lines;
+  if (state.phase === "Discover") {
+    const recommended = state.recommendation.decisions;
+    const harnesses = recommended.selectedHarnesses.map((id) => HARNESSES.find((item) => item.value === id)?.label || id);
+    lines = [
+      `Use recommended setup — reviews the suggested ${LABELS.editions[recommended.edition]} edition with ${harnesses.length ? harnesses.join(", ") : "no harnesses selected"}${profilesApplicable(recommended) ? ` and ${LABELS.profiles[recommended.profileStrategy]}` : ""}. Detected tools and supplied settings determine these defaults; a fresh setup defaults to Coding + Runtime Profiles.`,
+      "Recommended setup opens Review in preview-only mode. Nothing is installed until you choose apply and confirm it.",
+      "Customize choices — opens Choose so you can change the edition, harnesses, and applicable profiles before configuring installation."
+    ];
+  } else if (state.phase === "Choose") {
+    lines = [
+      "Available editions — use ←/→ to choose:",
+      "Coding — agent operations, skills, adapters, and evals. Use for coding workflows without Memory services.",
+      "Memory — Memory API, server, console, and external-agent adapters. Use for Memory services without coding operations or Runtime Profiles.",
+      "Full — coding operations and Memory components. Use when you need both together.",
+      ...summary.filter((line) => line.startsWith("Harnesses —"))
+    ];
+    if (profilesApplicable(current)) lines.push(
+      "Runtime Profiles — enabled: initializes shared profiles/ and private profiles.local/. Use to switch work, personal, or client configurations; activation requires a separate preview and approval.",
+      "Runtime Profiles — skipped (Configure later): keeps each harness's current configuration. Use when you do not need profile switching or want to set it up later."
+    );
+    lines.push("Continue — opens Configure for the installation name, target path, and execution intent.");
+  } else if (state.phase === "Configure") {
+    lines = summary.filter((line) => /^(Memory|Install name|Target path|Execution) —/.test(line));
+    lines.push("Continue — opens Review to inspect the settings before choosing whether to apply them.");
+  } else if (state.phase === "Review") {
+    lines = [...summary,
+      "Accept & apply reviewed settings — proceeds to final confirmation; it does not write files yet.",
+      "Keep preview only — proceeds to confirmation of the plan without writing files.",
+      "Edit settings / back — returns to Configure. Cancel setup — exits without applying the plan."
+    ];
+  } else {
+    lines = [...summary,
+      "Confirm — completes preview-only output or explicitly authorizes the reviewed safe apply steps, according to the selected intent.",
+      "Back to Review — returns to the settings decision. Cancel setup — exits without applying the plan."
+    ];
+  }
+  return [title, ...lines, "Provider calls: 0"].map(sanitizeTerminalText);
+}
+
+export function explanationPageLines(state, width = 78) {
+  return stepExplanationLines(state).slice(1).flatMap((line) => wrapAnsi(line, width));
 }
 
 // Backward-compatible export for adapter integrations. User-facing surfaces
@@ -1415,7 +1470,14 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
   const title = sanitizeTerminalText(wide ? `Alfred installer | ${PHASES.map((phase) => phase === state.phase ? `[${phase}]` : phase).join(" > ")}` : `Alfred installer | ${phaseIndex + 1}/${PHASES.length} ${state.phase}`);
   let entries;
   let pageLabel = "";
-  if (state.overlay?.type === "why") entries = configurationExplanationLines(state).map((text) => ({ text }));
+  if (state.overlay?.type === "why") {
+    const all = explanationPageLines(state, width - 2);
+    const pageSize = previewPageSize({ columns: width, rows: height });
+    const pageCount = Math.max(1, Math.ceil(all.length / pageSize));
+    const page = Math.min(state.overlay.page, pageCount - 1);
+    entries = all.slice(page * pageSize, (page + 1) * pageSize).map((text) => ({ text }));
+    pageLabel = ` | page ${page + 1}/${pageCount}`;
+  }
   else if (state.overlay?.type === "preview") {
     const all = previewModel(state.decisions, state.discovery).lines;
     const pageSize = previewPageSize({ columns: width, rows: height });
@@ -1437,31 +1499,14 @@ export function render(state, { columns = 80, rows = 24, color = false, layout: 
     `Preview: ${previewModel(state.decisions, state.discovery).concise}`,
     state.overlay?.type === "model-editor"
       ? (state.editing ? "Keys: ←→ cursor;Enter commit;Esc cancel;Backspace/Delete edit" : "Keys: ↑↓ move;Enter edit/action;Esc close;p Preview;q quit")
-      : state.overlay ? "Keys: Esc close;arrows page;p Preview;w Explain;q cancel"
+      : state.overlay ? "Keys: Esc close;arrows page;? Explain;p Preview;q cancel"
         : focusedControl === "models-edit" ? "Keys: ↑↓ move;Enter edit models;b back;p full Preview;q quit"
-          : "Keys: ↑↓ move;←→ edit;Space toggle;Enter select;b back;p full Preview;q quit"
+          : "Keys: ↑↓ move;←→ edit;Space toggle;Enter select;? Help;b back;p Preview;q quit"
   ];
   const availableContentHeight = Math.max(1, renderHeight - footer.length - 3);
   const lines = [clipAnsi(paint(title, "focus", color), width)];
   const hitRegions = [];
-  if (wide && !state.overlay) {
-    const gap = 1;
-    const leftWidth = Math.floor((width - gap) * 0.58);
-    const rightWidth = width - gap - leftWidth;
-    const reasons = configurationExplanationLines(state).map((text) => ({ text }));
-    const minimumContentHeight = layout === "inline" ? 1 : MIN_PANEL_CONTENT_HEIGHT;
-    const leftContentHeight = Math.min(availableContentHeight, Math.max(minimumContentHeight, entriesHeight(entries, leftWidth - 2)));
-    const rightContentHeight = Math.min(availableContentHeight, Math.max(minimumContentHeight, entriesHeight(reasons, rightWidth - 2)));
-    const panelHeight = Math.max(leftContentHeight, rightContentHeight) + 2;
-    const left = panel(state.phase, entries, leftWidth, leftContentHeight, { color, yOffset: 1 });
-    const right = panel("What this configuration changes", reasons, rightWidth, rightContentHeight, { color, xOffset: leftWidth + gap, yOffset: 1 });
-    for (let index = 0; index < panelHeight; index += 1) {
-      const leftLine = left.lines[index] || "";
-      const rightLine = right.lines[index] || "";
-      lines.push(`${padAnsi(leftLine, leftWidth)}${rightLine ? ` ${rightLine}` : ""}`);
-    }
-    hitRegions.push(...left.hitRegions, ...right.hitRegions);
-  } else {
+  {
     const minimumContentHeight = layout === "inline" ? 1 : MIN_PANEL_CONTENT_HEIGHT;
     const contentHeight = Math.min(availableContentHeight, Math.max(minimumContentHeight, entriesHeight(entries, width - 2)));
     const single = panel(state.overlay?.type === "why" ? "What this configuration changes" : state.overlay?.type === "preview" ? "Preview" : state.overlay?.type === "model-plan-review" ? "Exact models.json" : state.overlay?.type === "model-editor" ? "Manual model editor" : state.phase, entries, width, contentHeight, { color, yOffset: 1 });

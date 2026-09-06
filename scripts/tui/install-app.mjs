@@ -10,6 +10,7 @@ import {
   MEMORY_SETUPS,
   controlsFor,
   createPathfinderState,
+  explanationPageLines,
   normalizeTuiLayout,
   normalizeDiscovery,
   modelPlanReviewLines,
@@ -82,7 +83,7 @@ export function sgrMouseAction(event, { overlayOpen = false } = {}) {
 export function printableInputAction(text, { textFieldFocused = false, phase = "Discover", overlayOpen = false } = {}) {
   if (textFieldFocused) return { type: "input", text };
   if (text === "p") return { type: "token", token: "p" };
-  if (text === "w") return { type: "token", token: "w" };
+  if (text === "?" || text === "w") return { type: "token", token: text };
   if (text === "r" && phase === "Discover" && !overlayOpen) return { type: "token", token: "r" };
   if (text === "b") return { type: "token", token: "b" };
   if (text === "q") return { type: "token", token: "cancel" };
@@ -149,6 +150,10 @@ function colorEnabled(stream) {
 
 function screen(output = process.stdout, layout = selectedTuiLayout, viewport = dimensions(output)) {
   if (state.overlay?.type === "preview") state = transition(state, { type: "PAGE", delta: 0, pageSize: previewPageSize(viewport) });
+  if (state.overlay?.type === "why") {
+    const width = normalizeTuiLayout(layout) === "inline" ? Math.max(0, viewport.columns - 1) : viewport.columns;
+    state = transition(state, { type: "PAGE", delta: 0, pageSize: previewPageSize({ ...viewport, columns: width }), totalItems: explanationPageLines(state, width - 2).length });
+  }
   if (state.overlay?.type === "model-plan-review") {
     const width = normalizeTuiLayout(layout) === "inline" ? Math.max(0, viewport.columns - 1) : viewport.columns;
     const contentWidth = Math.max(1, width - 2);
@@ -324,6 +329,7 @@ function pagedOverlay(state) {
 }
 
 export function terminalTokenAction(currentState, token, pageSize = 8) {
+  if ((token === "?" || token === "w") && !currentState.editing) return { type: "OPEN_WHY" };
   if (token === "esc") return currentState.editing
     ? { type: "ESCAPE" }
     : currentState.overlay
@@ -353,7 +359,7 @@ function handleToken(token, { playback = false } = {}) {
   if (playback && legacyPlayback && handleLegacyToken(token)) return;
   if (token === "cancel" || token === "q") return dispatch({ type: "CANCEL" });
   if (token === "p") return dispatch({ type: "OPEN_PREVIEW" });
-  if (token === "w") return dispatch({ type: "OPEN_WHY" });
+  if (token === "?" || token === "w") return dispatch(terminalTokenAction(state, token));
   if (token === "esc") return dispatch(terminalTokenAction(state, token, previewPageSize(dimensions())));
   if (token === "r" && state.phase === "Discover" && !state.overlay) return dispatch({ type: "USE_RECOMMENDED" });
   if (token === "back" || token === "b") return dispatch({ type: "BACK" });
