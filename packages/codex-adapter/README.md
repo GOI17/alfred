@@ -7,6 +7,8 @@ Generates Codex-native Alfred agent artifacts from the `.ai/` source of truth.
 - Main-session Orchestrator instructions in a managed `AGENTS.md` block.
 - Five delegated specialists under `.codex/agents/*.toml`.
 - Repo-scoped Codex skills under `.agents/skills/*/SKILL.md`.
+- Canonical skill bodies are copied into the preview; bodies remain lazily loaded
+  by Codex discovery rather than global instructions.
 - No model defaults: model selection remains user-owned in Codex runtime config.
 - No direct writes to live Codex config by default: the CLI writes an install preview.
 
@@ -40,6 +42,12 @@ Then install the preview's specialist and skill directories using the existing
 approval flow. Start a new Codex session in that project. The main session loads
 the Orchestrator role automatically; no custom primary-agent selector is needed.
 Delegated specialists explicitly retain their roles.
+
+Skill execution is session-only. The adapter does not provide durable loops,
+background continuation, restart/resume state, or guaranteed native slash-command
+aliases. In particular, ULW only activates when the already-running Codex session
+authoritatively reports both approval and sandbox bypass; the skill never enables
+or configures either bypass.
 
 Older installations may still contain `orchestrator.toml`. That file is no
 longer generated or needed for main-session startup; upgrades preserve existing

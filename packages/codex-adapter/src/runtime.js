@@ -29,6 +29,12 @@ function readSourceText(root, relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8").trim();
 }
 
+function readSourceMarkdownBody(root, relativePath) {
+  return readSourceText(root, relativePath)
+    .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
+    .trim();
+}
+
 function buildCodexDeveloperInstructions({ root, agent }) {
   const sourceSpec = readSourceText(root, agent.spec);
   return [
@@ -101,25 +107,16 @@ function toCodexSkill(skill) {
   };
 }
 
-function buildCodexSkillFileContent(skill) {
+function buildCodexSkillFileContent({ root, skill }) {
   const name = skill.id;
   const description = skill.description ?? `Use when Alfred needs ${name} project context.`;
+  const body = readSourceMarkdownBody(root, skill.bodyPath);
   return `---
 name: ${name}
 description: ${description}
 ---
 
-# ${toTitle(name)}
-
-This Codex skill is generated from Alfred metadata.
-
-Source body: ${skill.bodyPath}
-
-Rules:
-- Load only when the task matches the skill description, trigger words, or explicit $${name} invocation.
-- Preserve progressive disclosure: do not paste the source body into global instructions.
-- Do not override Alfred security, provider request, or baseline-update policy.
-- Keep provider calls local-first and observable.
+${body}
 `;
 }
 
@@ -275,7 +272,7 @@ export function buildCodexInstallPreview({ root, outputDir = ".ai/generated/code
           path: `${outputDir}/${skillArtifact.path}`,
           install_path: skillArtifact.path,
           kind: "skill",
-          content: buildCodexSkillFileContent(sourceSkill)
+          content: buildCodexSkillFileContent({ root, skill: sourceSkill })
         };
       })
     ],

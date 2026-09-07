@@ -24,6 +24,42 @@
       "bodyPath": ".ai/skills/project/architecture-docs/SKILL.md",
       "allowedAgents": ["orchestrator", "architect", "librarian", "reviewer"],
       "loadsBodyByDefault": false
+    },
+    {
+      "id": "goal",
+      "name": "goal",
+      "description": "Use when work must stay constrained to one explicit objective with observable acceptance criteria and evidence.",
+      "triggers": ["goal", "objective", "acceptance criteria", "bounded objective"],
+      "projectSignals": ["AGENTS.md", ".ai/manifest.json"],
+      "source": "project",
+      "scope": "project",
+      "bodyPath": ".ai/skills/project/goal/SKILL.md",
+      "allowedAgents": ["orchestrator", "developer", "architect", "qa", "reviewer", "librarian"],
+      "loadsBodyByDefault": false
+    },
+    {
+      "id": "loop",
+      "name": "loop",
+      "description": "Use when a task needs bounded repetition with explicit iteration, retry, cancellation, and no-progress controls.",
+      "triggers": ["loop", "repeat", "retry", "iterate", "until done"],
+      "projectSignals": ["AGENTS.md", ".ai/manifest.json"],
+      "source": "project",
+      "scope": "project",
+      "bodyPath": ".ai/skills/project/loop/SKILL.md",
+      "allowedAgents": ["orchestrator", "developer", "architect", "qa", "reviewer", "librarian"],
+      "loadsBodyByDefault": false
+    },
+    {
+      "id": "ulw",
+      "name": "ulw",
+      "description": "Use only for intensive orchestration in a current Codex session that already proves user-owned approval and sandbox bypass.",
+      "triggers": ["ulw", "ultrawork", "intensive orchestration", "codex yolo"],
+      "projectSignals": ["AGENTS.md", ".ai/manifest.json"],
+      "source": "project",
+      "scope": "project",
+      "bodyPath": ".ai/skills/project/ulw/SKILL.md",
+      "allowedAgents": ["orchestrator"],
+      "loadsBodyByDefault": false
     }
   ],
   "policy": {

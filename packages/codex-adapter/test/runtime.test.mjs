@@ -56,16 +56,35 @@ test("codex install preview writes valid custom agent fields without hard-coded 
   assert.equal(preview.files.some((file) => file.install_path.endsWith("orchestrator.toml")), false);
 });
 
-test("codex install preview emits repo skill artifacts with progressive disclosure", () => {
+test("codex install preview emits canonical repo skill artifacts with progressive disclosure", () => {
   const preview = buildCodexInstallPreview({ root, outputDir: ".ai/generated/test-codex-install" });
   const skills = preview.files.filter((file) => file.kind === "skill");
-  assert.equal(skills.length, 2);
+  assert.equal(skills.length, 5);
   assert.ok(skills.every((file) => file.install_path.startsWith(".agents/skills/")));
-  const typescript = skills.find((file) => file.install_path === ".agents/skills/typescript-project/SKILL.md");
-  assert.ok(typescript);
-  assert.match(typescript.content, /^name: typescript-project$/m);
-  assert.match(typescript.content, /Preserve progressive disclosure/);
-  assert.match(typescript.content, /Source body: \.ai\/skills\/project\/typescript-project\/SKILL\.md/);
+  assert.ok(preview.generated_artifacts.skills.every((skill) => skill.scope === "project"));
+  assert.ok(preview.generated_artifacts.skills.every((skill) => skill.load_body_by_default === false));
+
+  for (const skillId of ["typescript-project", "architecture-docs", "goal", "loop", "ulw"]) {
+    const artifact = skills.find((file) => file.install_path === `.agents/skills/${skillId}/SKILL.md`);
+    const canonical = readFileSync(join(root, `.ai/skills/project/${skillId}/SKILL.md`), "utf8")
+      .trim()
+      .replace(/^---\n[\s\S]*?\n---\n?/, "")
+      .trim();
+    assert.ok(artifact, `expected ${skillId} preview artifact`);
+    assert.match(artifact.content, new RegExp(`^name: ${skillId}$`, "m"));
+    assert.ok(artifact.content.endsWith(`${canonical}\n`), `${skillId} must preserve its canonical body`);
+    assert.doesNotMatch(artifact.content, /Source body:/);
+  }
+
+  const goal = skills.find((file) => file.install_path === ".agents/skills/goal/SKILL.md");
+  const loop = skills.find((file) => file.install_path === ".agents/skills/loop/SKILL.md");
+  const ulw = skills.find((file) => file.install_path === ".agents/skills/ulw/SKILL.md");
+  assert.match(goal.content, /approval state for every gated action/);
+  assert.match(loop.content, /Never reset iteration or retry accounting/);
+  assert.match(ulw.content, /ULW may be activated only by the primary Orchestrator/);
+  assert.match(ulw.content, /effective role is any specialist or subagent, stop without executing ULW/);
+  assert.match(ulw.content, /unsupported_runtime/);
+  assert.match(ulw.content, /never enables bypass/);
 });
 
 test("codex readiness proves Alfred invariants without provider calls", () => {
