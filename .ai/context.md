@@ -129,6 +129,26 @@ Release Please PR. Merging that PR publishes the stable GitHub Release and
 invokes the private tap publisher directly; manually published stable releases
 and manual tag dispatch remain supported recovery paths.
 
+### 9. Unified Tool Contracts
+
+Each Alfred tool capability has one harness-neutral invocation authority. A
+portable versioned manifest declares behavior; shared policy validates the
+principal, resolves one tenant through shared `InvocationContextV1`, authorizes,
+and isolates it; a capability handler implements functional semantics; and one
+common application service orders context → gate → handler → trace. Tenant
+selection uses common authenticated/configured precedence with no adapter
+fallback. Preauthentication traces use `auth_state: unverified` and null
+principal/tenant refs; HMAC refs begin only after shared verification and
+resolution. Strict HMAC-ref parity requires the same declared
+`trace_key_epoch`; cross-epoch suites must explicitly skip ref equality or
+re-emit fixtures under one common epoch while still comparing invariant fields.
+MCP, CLI, OpenAPI, and harness-native adapters only project schemas and map
+transport envelopes. The first planned slice is `memory.list/v1`, with
+exact version/hash activation, safe trace parity, and zero provider calls.
+Semantics are unified while transports may differ. Issue #193 records only the
+decision, specification, and follow-up plan; later approved issues own executable
+implementation and tests. See `docs/architecture/010-unified-tool-contracts.md`.
+
 
 ## Memory Hosting
 
@@ -228,3 +248,4 @@ packages/                 # Source code
 - Install Instructions: `.ai/instructions/install-management.md`
 - Install Component Manifest: `.ai/install/components.json`
 - Runtime Profile Manager: `packages/profile-manager`
+- Unified Tool Contracts: `docs/architecture/010-unified-tool-contracts.md`

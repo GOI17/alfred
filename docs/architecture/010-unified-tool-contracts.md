@@ -388,6 +388,7 @@ projections, and parity tests belong to later implementation issues.
 ## References
 
 - Issue: [#193](https://github.com/GOI17/alfred/issues/193)
+- SDD plan: `.ai/execution/unified-tool-contracts.md`
 - Hexagonal architecture: `docs/architecture/002-hexagonal-architecture.md`
 - Harness portability: `docs/architecture/009-harness-portability.md`
 - Security model: `docs/architecture/006-security-model.md`
