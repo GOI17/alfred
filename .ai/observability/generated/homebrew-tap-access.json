@@ -1,0 +1,108 @@
+{
+  "trace_id": "homebrew-access-investigation",
+  "timestamp": "2026-09-07T22:48:48.711753+00:00",
+  "actor": "orchestrator",
+  "provider_calls": 0,
+  "events": [
+    {
+      "event": "task_classified",
+      "data": {
+        "kind": "distribution-access-investigation",
+        "strategy": "local-only deterministic tools"
+      }
+    },
+    {
+      "event": "permission_allowed",
+      "data": {
+        "network": "GitHub API and Git read-only, official documentation",
+        "authorization": "user request",
+        "credentials": "existing gh helper; values never printed"
+      }
+    },
+    {
+      "event": "permission_denied",
+      "data": {
+        "paths": [
+          ".opencode/",
+          ".codex/",
+          ".agents/",
+          ".ai/harnesses/",
+          "packages/core/"
+        ],
+        "actions": [
+          "clone",
+          "package install",
+          "visibility change",
+          "release publication"
+        ],
+        "reason": "outside authorized scope"
+      }
+    },
+    {
+      "event": "skill_loaded",
+      "data": {
+        "skill": "orca-cli"
+      }
+    },
+    {
+      "event": "provider_request_avoided",
+      "data": {
+        "reason": "API and Git establish repository/publication facts"
+      }
+    },
+    {
+      "event": "finding",
+      "data": {
+        "canonical_tap": "GOI17/homebrew-alfred",
+        "private": true,
+        "anonymous_http": 404,
+        "authenticated_old_and_new_git": "same HEAD 49fcd91b02b8ba7a33395864591be7dce59ce0c7",
+        "release": "v0.7.2",
+        "revision": "28f64f4c1afe97390ae29639c15d170087e1a92e",
+        "publisher_run": 33956033385,
+        "publisher_result": "success",
+        "other_computer_status": "not observed"
+      }
+    },
+    {
+      "event": "delegation_decision",
+      "data": {
+        "agent": "developer",
+        "reason": "User explicitly requires specialist implementation; workflow and validator changes reduce publication drift risk.",
+        "model": "inherited from harness",
+        "strategy": "hybrid; deterministic investigation complete, scoped semantic implementation",
+        "estimated_input_tokens": 2600,
+        "estimated_output_tokens": 2500,
+        "cost": "harness-managed, no external provider API calls"
+      }
+    },
+    {
+      "event": "validation_completed",
+      "data": {
+        "baseline": "9/9 packaging tests; release automation passed",
+        "current": "9/9 packaging tests; release automation and documentation contracts passed",
+        "site": "21 HTML pages passed; positive/negative link fixtures passed",
+        "formula_syntax": "pass",
+        "formula_sha256": "76d19607f15b425c1256a6dad0196bacddeb1909d21dbd52be7883aeaa2bb4c3",
+        "installed_cli": "alfred 0.7.2",
+        "fresh_install": "not run",
+        "full_local_suites": "not run: protected paths outside authorized scope"
+      }
+    },
+    {
+      "event": "review_prepared",
+      "data": {
+        "tap_readme_pr": "https://github.com/GOI17/homebrew-alfred/pull/2",
+        "main_issue": "https://github.com/GOI17/alfred/issues/204",
+        "implementation_agent": "developer",
+        "model_assignment": "inherited from harness",
+        "visibility_changes": false,
+        "release_publication": false,
+        "clone_operations": 0,
+        "package_installations": 0
+      }
+    }
+  ],
+  "issue": 204,
+  "branch": "issue-204-homebrew-tap-access"
+}

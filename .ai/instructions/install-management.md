@@ -26,13 +26,40 @@ Provide deterministic, reproducible instructions for Alfred installation, update
 
 ### Mode 0: Human-First Suite Install
 
-Use for humans installing Alfred itself. For versioned Homebrew installation,
-authenticate Git for the private tap and run:
+Use for humans installing Alfred itself. The target computer needs Git,
+GitHub CLI (`gh`), and Homebrew. The account must have read access to both
+private repositories: `GOI17/homebrew-alfred` (tap) and `GOI17/alfred` (source).
+Configure HTTPS Git authentication and verify access:
 
 ```sh
-gh auth login
-gh auth setup-git
-brew install GOI17/tap/alfred
+gh auth login --hostname github.com --git-protocol https
+gh auth setup-git --hostname github.com
+gh api repos/GOI17/homebrew-alfred --jq .full_name
+gh api repos/GOI17/alfred --jq .full_name
+git ls-remote https://github.com/GOI17/homebrew-alfred.git HEAD
+git ls-remote https://github.com/GOI17/alfred.git HEAD
+```
+
+`gh auth setup-git` changes the Git credential helper for GitHub on that
+computer. Successful API checks alone do not establish Git access. A private
+repository's 404 can mean missing account access rather than a missing
+publication. After both API and Git checks pass, verify the formula exists:
+
+```sh
+gh api repos/GOI17/homebrew-alfred/contents/Formula/alfred.rb --jq .path
+```
+
+If repository access works but the formula is absent or stale, inspect the
+release/tag and publisher before retrying installation. Follow the detailed
+[Homebrew troubleshooting guide](https://alfred.alfredlabs.org/docs/install.html#homebrew-troubleshooting).
+Homebrew maps `GOI17/alfred` to `GOI17/homebrew-alfred`; the old
+`GOI17/homebrew-tap` currently redirects. Capitalization is not an authentication
+fix. Once checks succeed:
+
+```sh
+brew tap GOI17/alfred
+brew install GOI17/alfred/alfred
+alfred version
 alfred setup
 ```
 

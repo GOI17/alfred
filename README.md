@@ -6,16 +6,34 @@ Alfred is a model-readable, harness-agnostic agent operations system for creatin
 
 ## Human Installation
 
-Collaborators with access to the private repositories can install the versioned
-CLI and guided installer through Homebrew:
+Install Git, GitHub CLI (`gh`), and Homebrew on the target computer first.
+Your GitHub account needs read access to both private repositories:
+[`GOI17/homebrew-alfred`](https://github.com/GOI17/homebrew-alfred) (the tap) and
+[`GOI17/alfred`](https://github.com/GOI17/alfred) (the source). Authenticate over
+HTTPS, configure Git to use that account, and verify both before installing:
 
 ```sh
-gh auth login
-gh auth setup-git
-brew install GOI17/tap/alfred
+gh auth login --hostname github.com --git-protocol https
+gh auth setup-git --hostname github.com
+gh api repos/GOI17/homebrew-alfred --jq .full_name
+gh api repos/GOI17/alfred --jq .full_name
+git ls-remote https://github.com/GOI17/homebrew-alfred.git HEAD
+git ls-remote https://github.com/GOI17/alfred.git HEAD
+brew tap GOI17/alfred
+brew install GOI17/alfred/alfred
 alfred version
 alfred setup
 ```
+
+Run the install only after both API and Git checks succeed. A private repository
+can return `404` when your account lacks access; that does not prove publication
+failed. See [Homebrew access troubleshooting](https://alfred.alfredlabs.org/docs/install.html#homebrew-troubleshooting)
+for formula and publisher checks. `gh auth setup-git` configures the Git
+credential helper for GitHub on this computer.
+
+Homebrew maps `GOI17/alfred` to `GOI17/homebrew-alfred`. The old
+`GOI17/homebrew-tap` name currently redirects to it; changing capitalization
+does not fix authentication.
 
 Use the fully qualified formula name: plain `brew install alfred` resolves to
 the unrelated Alfred macOS application cask. The formula itself writes no live

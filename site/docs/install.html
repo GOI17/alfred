@@ -86,25 +86,35 @@
 
       <h2 id="homebrew">Install with Homebrew</h2>
       <p>
-        Alfred currently ships through a private tap. Authenticate the GitHub
-        CLI and its Git credential helper, then install the fully qualified
-        formula:
+        Install Git, GitHub CLI (<code>gh</code>), and Homebrew on the target
+        computer first. Your GitHub account needs read access to both private
+        repositories: <a href="https://github.com/GOI17/homebrew-alfred">GOI17/homebrew-alfred</a>
+        (the tap) and <a href="https://github.com/GOI17/alfred">GOI17/alfred</a>
+        (the source). Authenticate over HTTPS, configure Git to use that account,
+        and verify access before installing:
       </p>
       <div class="terminal" aria-label="Install Alfred with Homebrew">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">zsh &mdash; Homebrew</span>
         </div>
-<pre><span class="f">gh</span> auth login
-<span class="f">gh</span> auth setup-git
-<span class="f">brew</span> install GOI17/tap/alfred
+<pre><span class="f">gh</span> auth login --hostname github.com --git-protocol https
+<span class="f">gh</span> auth setup-git --hostname github.com
+<span class="f">gh</span> api repos/GOI17/homebrew-alfred --jq .full_name
+<span class="f">gh</span> api repos/GOI17/alfred --jq .full_name
+<span class="f">git</span> ls-remote https://github.com/GOI17/homebrew-alfred.git HEAD
+<span class="f">git</span> ls-remote https://github.com/GOI17/alfred.git HEAD
+
+<span class="c"># Continue only when both API and Git checks succeed</span>
+<span class="f">brew</span> tap GOI17/alfred
+<span class="f">brew</span> install GOI17/alfred/alfred
 <span class="f">alfred</span> version
 <span class="f">alfred</span> setup <span class="c"># guided, preview-first configuration</span>
 
 <span class="c"># lifecycle</span>
 <span class="f">brew</span> update
-<span class="f">brew</span> upgrade GOI17/tap/alfred
-<span class="f">brew</span> uninstall GOI17/tap/alfred
+<span class="f">brew</span> upgrade GOI17/alfred/alfred
+<span class="f">brew</span> uninstall GOI17/alfred/alfred
 </pre>
       </div>
       <div class="doc-callout warn">
@@ -114,6 +124,86 @@
         write live harness configuration; that remains gated by
         <code>alfred setup</code>.
       </div>
+
+      <h3 id="homebrew-troubleshooting">Homebrew access troubleshooting</h3>
+      <p>
+        Homebrew maps the tap <code>GOI17/alfred</code> to the repository
+        <code>GOI17/homebrew-alfred</code>. The old <code>GOI17/homebrew-tap</code>
+        name currently redirects to it. Use the canonical name for new installs;
+        changing capitalization does not fix authentication. The explicit
+        <code>brew tap GOI17/alfred</code> step registers the tap before installation.
+      </p>
+      <p>
+        <code>gh auth setup-git --hostname github.com</code> configures the Git
+        credential helper for GitHub on this computer. A working GitHub browser
+        session or API request does not guarantee that Homebrew's Git subprocess
+        can authenticate. Never paste tokens into commands, repository URLs, or
+        issue reports.
+      </p>
+      <table class="matrix">
+        <thead><tr><th>Result</th><th>Meaning and next step</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>A repository API check returns <code>404</code></td>
+            <td>A private repository can hide its existence from an account
+              without access. Verify the account selected by
+              <code>gh auth status --hostname github.com</code> and ask the owner
+              to confirm read access to both repositories. A 404 alone does not
+              establish a publication failure.</td>
+          </tr>
+          <tr>
+            <td>API checks pass but <code>git ls-remote</code> fails</td>
+            <td>Check the HTTPS Git credential helper and account permissions on
+              this computer. Re-run the hostname-scoped setup command above and
+              both Git checks. API metadata access alone is insufficient.</td>
+          </tr>
+          <tr>
+            <td>Tap access works, source Git access fails</td>
+            <td>The formula downloads private Git source from
+              <code>GOI17/alfred</code>. Obtain read access to that repository;
+              permission to read only the tap is insufficient.</td>
+          </tr>
+          <tr>
+            <td>Both repositories are accessible, but the formula is absent or stale</td>
+            <td>Inspect the published formula and the release/publisher checks
+              below. If the remote formula is current, run <code>brew update</code>
+              and inspect <code>brew info GOI17/alfred/alfred</code>. If the tap is
+              missing locally, run <code>brew tap GOI17/alfred</code> first.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>With authenticated repository access confirmed, check formula presence
+        and inspect its source tag and revision:</p>
+      <div class="terminal" aria-label="Read-only formula checks">
+<pre><span class="f">gh</span> api repos/GOI17/homebrew-alfred/contents/Formula/alfred.rb --jq .path
+<span class="f">gh</span> api -H 'Accept: application/vnd.github.raw+json' repos/GOI17/homebrew-alfred/contents/Formula/alfred.rb
+</pre>
+      </div>
+      <p>
+        For maintainers: compare the formula's <code>tag:</code> and
+        <code>revision:</code> with the matching stable release and source tag.
+        Replace <code>vX.Y.Z</code> below with the formula's tag. For an annotated
+        tag, compare the peeled <code>^{}</code> commit with the formula revision.
+        A missing file after confirmed repository access, a mismatched pin, or
+        a failed publisher job warrants a publication investigation.
+      </p>
+      <div class="terminal" aria-label="Read-only release and publisher checks">
+<pre><span class="f">gh</span> release view vX.Y.Z --repo GOI17/alfred --json tagName,isDraft,isPrerelease,url
+<span class="f">git</span> ls-remote https://github.com/GOI17/alfred.git 'refs/tags/vX.Y.Z' 'refs/tags/vX.Y.Z^{}'
+<span class="f">gh</span> run list --repo GOI17/alfred --workflow release-please.yml --limit 10
+<span class="f">gh</span> run list --repo GOI17/alfred --workflow release-homebrew-tap.yml --limit 10
+<span class="c"># Replace RUN_ID with the run for the matching release</span>
+<span class="f">gh</span> run view RUN_ID --repo GOI17/alfred --json status,conclusion,jobs,url
+</pre>
+      </div>
+      <p>
+        Automatic releases invoke the publisher within the Release Please run;
+        manually published releases and manual dispatch use the tap workflow.
+        Inspect the publisher job, not just the overall run status. If Actions
+        access is restricted, ask a maintainer to perform these checks. These
+        commands only inspect state; publishing or retrying a release is a
+        separate maintainer decision.
+      </p>
 
       <h2 id="profiles">Choose an edition</h2>
       <p>
@@ -268,7 +358,7 @@ Apply changes? <span class="p">[y/N]</span>
 <pre><span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/uninstall.sh <span class="p">|</span> sh
 
 <span class="c"># Homebrew package</span>
-<span class="f">brew</span> uninstall GOI17/tap/alfred
+<span class="f">brew</span> uninstall GOI17/alfred/alfred
 </pre>
       </div>
       <p>
@@ -287,6 +377,7 @@ Apply changes? <span class="p">[y/N]</span>
       <h6>On this page</h6>
       <a href="#requirements">Requirements</a>
       <a href="#homebrew">Homebrew</a>
+      <a href="#homebrew-troubleshooting">Homebrew troubleshooting</a>
       <a href="#profiles">Editions</a>
       <a href="#coding">Coding edition</a>
       <a href="#models">Model assignment</a>

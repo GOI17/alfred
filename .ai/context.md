@@ -116,8 +116,8 @@ Install scripts validate paths (reject root `/` and protected paths like `.ai/`,
 
 Starting with Alfred `0.7.0`, releases use a versioned Homebrew packaging
 boundary. Collaborators use
-the private `GOI17/homebrew-tap` and install the fully qualified formula with
-`brew install GOI17/tap/alfred`; the qualification avoids collision with the
+the private `GOI17/homebrew-alfred` and install the fully qualified formula with
+`brew install GOI17/alfred/alfred`; the qualification avoids collision with the
 unrelated Alfred macOS application cask. The formula installs `alfred` and
 the `alfred` command, declares Node explicitly, and pins private Git source by
 both tag and commit revision. Formula installation never writes live harness
@@ -128,6 +128,15 @@ Eligible Conventional Commits on `main` are accumulated in a reviewable
 Release Please PR. Merging that PR publishes the stable GitHub Release and
 invokes the private tap publisher directly; manually published stable releases
 and manual tag dispatch remain supported recovery paths.
+
+Both `GOI17/homebrew-alfred` and the source `GOI17/alfred` require collaborator
+read access and authenticated HTTPS Git on each computer. Homebrew maps the tap
+name `GOI17/alfred` to the repository `GOI17/homebrew-alfred`. The old
+`GOI17/homebrew-tap` name was verified to redirect on 2026-09-07; anonymous 404s
+and Git failures without credentials must be separated from publisher failures.
+At that check, the formula existed and matched the `v0.7.2` source tag/release,
+and the publisher job succeeded. See `.ai/execution/homebrew-tap-access.md` and
+the install guide's Homebrew troubleshooting section for evidence and checks.
 
 
 ## Memory Hosting

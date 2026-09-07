@@ -14,6 +14,7 @@ const releasePleaseWorkflow = readFileSync(
   resolve(root, ".github/workflows/release-please.yml"),
   "utf8"
 );
+const validationWorkflow = readFileSync(resolve(root, ".github/workflows/homebrew.yml"), "utf8");
 const releasePleaseConfig = JSON.parse(readFileSync(
   resolve(root, "release-please-config.json"),
   "utf8"
@@ -62,7 +63,13 @@ test("publishes the tap directly after an automatic GitHub release", () => {
 
 test("uses a deploy key scoped to the private tap instead of a PAT", () => {
   assert.match(workflow, /permissions:\s*\n\s+contents: read/);
-  assert.match(workflow, /repository: GOI17\/homebrew-tap/);
+  assert.match(workflow, /repository: GOI17\/homebrew-alfred/);
+  assert.doesNotMatch(workflow, /repository: GOI17\/homebrew-tap/);
+  for (const path of ["README.md", "site/docs/install.html", ".ai/context.md",
+    ".ai/instructions/install-management.md", ".ai/execution/homebrew-tap-access.md"]) {
+    assert.equal(validationWorkflow.split(`- "${path}"`).length - 1, 2,
+      `${path} must trigger Homebrew validation on push and pull_request`);
+  }
   assert.match(workflow, /ssh-key: \$\{\{ secrets\.HOMEBREW_TAP_DEPLOY_KEY \}\}/);
   assert.doesNotMatch(workflow, /PERSONAL_ACCESS_TOKEN|\bPAT\b|GH_TOKEN/);
 });

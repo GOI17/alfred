@@ -43,14 +43,15 @@ const htmlFiles = (await listFiles(outputDir)).filter((file) => file.endsWith(".
 const problems = [];
 for (const file of htmlFiles) {
   const text = await readFile(file, "utf8");
-  if (basePath === "/" && text.includes("/alfred/")) {
-    problems.push(`${relative(outputDir, file)} still contains /alfred/`);
-  }
-
   const references = text.matchAll(/\b(?:href|src)="([^"]+)"/g);
   for (const match of references) {
     const reference = match[1];
-    if (!reference.startsWith(basePath)) continue;
+    // Repository names and external GitHub URLs are valid documentation text.
+    // Only local navigation can retain the obsolete deployment base path.
+    if (basePath === "/" && reference.startsWith("/alfred/")) {
+      problems.push(`${relative(outputDir, file)} still links to obsolete ${reference}`);
+    }
+    if (reference.startsWith("//") || !reference.startsWith(basePath)) continue;
     const withoutFragment = reference.split(/[?#]/, 1)[0];
     const relativeReference = withoutFragment.slice(basePath.length);
     let target = resolve(outputDir, relativeReference);

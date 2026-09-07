@@ -9,6 +9,9 @@ import { renderFormula, writeFormulaAtomic } from "./generate-homebrew-formula.m
 
 const root = resolve(import.meta.dirname, "..");
 const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+const readme = readFileSync(join(root, "README.md"), "utf8");
+const context = readFileSync(join(root, ".ai/context.md"), "utf8");
+const accessSpecification = readFileSync(join(root, ".ai/execution/homebrew-tap-access.md"), "utf8");
 const installer = readFileSync(join(root, "install.sh"), "utf8");
 const installDocs = readFileSync(join(root, "site/docs/install.html"), "utf8");
 const installPolicy = readFileSync(join(root, ".ai/instructions/install-management.md"), "utf8");
@@ -19,11 +22,33 @@ const escapedVersion = version.replaceAll(".", "\\.");
 
 assert.match(version, /^\d+\.\d+\.\d+$/);
 assert.match(installer, new RegExp(`^VERSION="${escapedVersion}" # x-release-please-version$`, "m"));
+// Historical packaging requirements remain valid; current installation identity
+// is governed by the access specification and active operator documentation.
 for (const text of [installDocs, installPolicy, specification]) {
-  const searchableText = text.replace(/<[^>]+>/g, "");
-  assert.match(searchableText, /brew install GOI17\/tap\/alfred/);
-  assert.match(searchableText, /preview-first/i);
+  assert.match(text, /preview-first/i);
 }
+assert.match(accessSpecification, /GOI17\/homebrew-alfred/);
+assert.match(accessSpecification, /GOI17\/alfred\/alfred/);
+for (const text of [readme, context, installDocs, installPolicy]) {
+  const searchableText = text.replace(/<[^>]+>/g, "");
+  assert.match(searchableText, /brew install GOI17\/alfred\/alfred/);
+  assert.doesNotMatch(searchableText, /brew (?:install|upgrade|uninstall) GOI17\/tap\/alfred/);
+}
+for (const text of [readme, installDocs, installPolicy]) {
+  const searchableText = text.replace(/<[^>]+>/g, "");
+  assert.match(searchableText, /gh auth login --hostname github\.com --git-protocol https/);
+  assert.match(searchableText, /gh auth setup-git --hostname github\.com/);
+  assert.match(searchableText, /brew tap GOI17\/alfred/);
+  for (const repository of ["homebrew-alfred", "alfred"]) {
+    assert.ok(searchableText.includes(`gh api repos/GOI17/${repository} --jq .full_name`));
+    assert.ok(searchableText.includes(`git ls-remote https://github.com/GOI17/${repository}.git HEAD`));
+  }
+}
+assert.match(readme, /install\.html#homebrew-troubleshooting/);
+assert.match(installDocs, /id="homebrew-troubleshooting"/);
+assert.match(installDocs, /repos\/GOI17\/homebrew-alfred\/contents\/Formula\/alfred\.rb/);
+assert.match(installDocs, /--workflow release-please\.yml/);
+assert.match(installDocs, /--workflow release-homebrew-tap\.yml/);
 
 const cli = spawnSync(
   process.execPath,

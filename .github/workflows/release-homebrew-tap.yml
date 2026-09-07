@@ -76,7 +76,7 @@ jobs:
       - name: Checkout the private tap with its repository-scoped deploy key
         uses: actions/checkout@v6
         with:
-          repository: GOI17/homebrew-tap
+          repository: GOI17/homebrew-alfred
           ref: main
           ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
           persist-credentials: true

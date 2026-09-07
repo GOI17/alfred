@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
     paths:
+      - "README.md"
+      - "site/docs/install.html"
+      - ".ai/context.md"
+      - ".ai/instructions/install-management.md"
+      - ".ai/execution/homebrew-installation.md"
+      - ".ai/execution/homebrew-tap-access.md"
       - "install.sh"
       - "package.json"
       - "packaging/homebrew/**"
@@ -20,6 +26,12 @@ on:
       - "release-please-config.json"
   pull_request:
     paths:
+      - "README.md"
+      - "site/docs/install.html"
+      - ".ai/context.md"
+      - ".ai/instructions/install-management.md"
+      - ".ai/execution/homebrew-installation.md"
+      - ".ai/execution/homebrew-tap-access.md"
       - "install.sh"
       - "package.json"
       - "packaging/homebrew/**"
