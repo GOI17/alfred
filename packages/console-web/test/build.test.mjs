@@ -17,6 +17,21 @@ test("src/index.html exists and is non-empty", () => {
   assert.ok(text.length > 5000, "index.html should be substantial");
 });
 
+test("signup skips the agent-kind choice and creates a human-agent tenant", () => {
+  const text = readFileSync(srcIndex, "utf8");
+  assert.doesNotMatch(text, /name=["']signupKind["']/);
+  assert.doesNotMatch(text, /Human agent \(ChatGPT, Claude, Gemini\)/);
+  assert.doesNotMatch(text, /Hybrid \(human \+ coding agents\)/);
+
+  const sourceStart = text.indexOf("async function signup() {");
+  const sourceEnd = text.indexOf("async function requestRecovery() {");
+  assert.ok(sourceStart >= 0 && sourceEnd > sourceStart, "signup function should be extractable");
+
+  const signupSource = text.slice(sourceStart, sourceEnd);
+  assert.match(signupSource, /const kind = "human_agent";/);
+  assert.match(signupSource, /JSON\.stringify\(\{ display_name: name, kind,/);
+});
+
 test("src/index.html has the key UI elements and current-session behavior", async () => {
   const text = readFileSync(srcIndex, "utf8");
   for (const r of [

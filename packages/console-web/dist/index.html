@@ -110,12 +110,6 @@
       <div class="row" style="margin-bottom: 8px;">
         <input id="signupEmail" type="email" placeholder="email (optional, for key recovery)" style="flex: 1; background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace;" />
       </div>
-      <div class="row" style="margin-bottom: 8px;">
-        <label class="small"><input type="radio" name="signupKind" value="human_agent" checked /> Human agent (ChatGPT, Claude, Gemini)</label>
-      </div>
-      <div class="row" style="margin-bottom: 12px;">
-        <label class="small"><input type="radio" name="signupKind" value="hybrid_with_human" /> Hybrid (human + coding agents)</label>
-      </div>
       <div id="turnstileContainer" style="margin-bottom: 12px;"></div>
       <button onclick="signup()">Create my memory</button>
       <p class="small" style="margin-top: 8px;" id="signupHint">You'll get an API key immediately. Copy it; we don't store the secret.</p>
@@ -307,8 +301,7 @@ function renderTurnstile() {
 
 async function signup() {
   const name = document.getElementById("signupName").value.trim();
-  const kindRadio = document.querySelector('input[name="signupKind"]:checked');
-  const kind = kindRadio ? kindRadio.value : "human_agent";
+  const kind = "human_agent";
   const nameError = validateTenantName(name);
   if (nameError) { showErrorInline("signupHint", nameError); return; }
   const hint = document.getElementById("signupHint");
