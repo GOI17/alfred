@@ -1,0 +1,43 @@
+name: tests
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      verify_public_install:
+        description: "Run anonymous download/install only after reviewed public activation"
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+jobs:
+  formula-contract:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: ruby -c Formula/alfred.rb
+      - name: Validate reviewed release asset contract without downloading
+        run: |
+          ruby -e '
+            text = File.read("Formula/alfred.rb")
+            abort "Expected public runtime release asset" unless text.match?(%r{https://github.com/GOI17/homebrew-alfred/releases/download/v[0-9]+\.[0-9]+\.[0-9]+/alfred-[0-9]+\.[0-9]+\.[0-9]+-runtime\.tar\.gz})
+            abort "Expected SHA256" unless text.match?(/sha256 "[a-f0-9]{64}"/)
+            abort "Private source is forbidden" if text.include?("https://github.com/GOI17/alfred")
+          '
+  public-install:
+    if: github.event_name == 'workflow_dispatch' && inputs.verify_public_install
+    needs: formula-contract
+    runs-on: macos-latest
+    steps:
+      - name: Install as an anonymous Homebrew user
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          GIT_CONFIG_NOSYSTEM: "1"
+          GIT_CONFIG_GLOBAL: /dev/null
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          brew tap GOI17/alfred
+          brew install GOI17/alfred/alfred
+          alfred version
+          alfred setup --edition=coding --name=public-test --harness=none
+          brew test GOI17/alfred/alfred

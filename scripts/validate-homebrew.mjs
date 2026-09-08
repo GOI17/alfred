@@ -28,27 +28,26 @@ for (const text of [installDocs, installPolicy, specification]) {
   assert.match(text, /preview-first/i);
 }
 assert.match(accessSpecification, /GOI17\/homebrew-alfred/);
-assert.match(accessSpecification, /GOI17\/alfred\/alfred/);
 for (const text of [readme, context, installDocs, installPolicy]) {
   const searchableText = text.replace(/<[^>]+>/g, "");
   assert.match(searchableText, /brew install GOI17\/alfred\/alfred/);
+  assert.match(searchableText, /pending/i);
   assert.doesNotMatch(searchableText, /brew (?:install|upgrade|uninstall) GOI17\/tap\/alfred/);
 }
 for (const text of [readme, installDocs, installPolicy]) {
   const searchableText = text.replace(/<[^>]+>/g, "");
-  assert.match(searchableText, /gh auth login --hostname github\.com --git-protocol https/);
-  assert.match(searchableText, /gh auth setup-git --hostname github\.com/);
+  assert.doesNotMatch(searchableText, /gh auth|git ls-remote/);
   assert.match(searchableText, /brew tap GOI17\/alfred/);
-  for (const repository of ["homebrew-alfred", "alfred"]) {
-    assert.ok(searchableText.includes(`gh api repos/GOI17/${repository} --jq .full_name`));
-    assert.ok(searchableText.includes(`git ls-remote https://github.com/GOI17/${repository}.git HEAD`));
-  }
+  assert.match(searchableText, /readable/i);
+  assert.match(searchableText, /no GitHub account/i);
 }
 assert.match(readme, /install\.html#homebrew-troubleshooting/);
 assert.match(installDocs, /id="homebrew-troubleshooting"/);
-assert.match(installDocs, /repos\/GOI17\/homebrew-alfred\/contents\/Formula\/alfred\.rb/);
-assert.match(installDocs, /--workflow release-please\.yml/);
-assert.match(installDocs, /--workflow release-homebrew-tap\.yml/);
+assert.doesNotMatch(installDocs, /raw\.githubusercontent\.com|codeload\.github\.com/);
+if (process.argv.includes("--docs-only")) {
+  process.stdout.write(`${JSON.stringify({ status: "pass", validation: "documentation-only", public_activation: "pending", provider_calls: 0 })}\n`);
+  process.exit(0);
+}
 
 const cli = spawnSync(
   process.execPath,

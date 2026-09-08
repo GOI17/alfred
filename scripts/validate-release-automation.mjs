@@ -50,19 +50,25 @@ assert.match(releaseWorkflow, /needs\.prepare-or-release\.outputs\.prs_created =
 assert.match(releaseWorkflow, /startsWith\("release-please--branches--main"\)/);
 assert.match(releaseWorkflow, /Validate generated release candidate/);
 assert.match(releaseWorkflow, /npm run validate:release-automation/);
-assert.match(releaseWorkflow, /npm run homebrew:test/);
-assert.match(releaseWorkflow, /npm run validate:homebrew/);
+assert.match(releaseWorkflow, /npm run runtime:test/);
+assert.match(releaseWorkflow, /npm run validate:homebrew -- --docs-only/);
 assert.match(releaseWorkflow, /uses: \.\/\.github\/workflows\/release-homebrew-tap\.yml/);
 assert.match(releaseWorkflow, /if: \$\{\{ needs\.prepare-or-release\.outputs\.release_created == 'true' \}\}/);
 assert.match(releaseWorkflow, /tag: \$\{\{ needs\.prepare-or-release\.outputs\.tag_name \}\}/);
-assert.match(releaseWorkflow, /secrets: inherit/);
+assert.doesNotMatch(releaseWorkflow, /secrets: inherit/);
 
-assert.match(tapWorkflow, /release:\s*\n\s+types: \[published\]/);
+assert.doesNotMatch(tapWorkflow, /\n  release:/);
+assert.match(tapWorkflow, /github\.ref == 'refs\/heads\/main'/);
 assert.match(tapWorkflow, /workflow_dispatch:/);
 assert.match(tapWorkflow, /workflow_call:/);
-assert.match(tapWorkflow, /github\.event_name == 'workflow_call'/);
-assert.match(tapWorkflow, /HOMEBREW_TAP_DEPLOY_KEY/);
-assert.match(tapWorkflow, /git diff --quiet -- Formula\/alfred\.rb/);
+assert.match(tapWorkflow, /actions\/upload-artifact@v4/);
+assert.match(tapWorkflow, /build-runtime\.mjs/);
+assert.doesNotMatch(tapWorkflow, /git push|gh release|HOMEBREW_TAP_DEPLOY_KEY/);
+const publicWorkflow = read(".github/workflows/publish-homebrew-runtime.yml");
+assert.match(publicWorkflow, /ALFRED_APPROVED_RUNTIME_SHA256/);
+assert.match(publicWorkflow, /ALFRED_APPROVED_FORMULA_SHA256/);
+assert.match(publicWorkflow, /repositories: homebrew-alfred/);
+assert.match(publicWorkflow, /github\.ref == 'refs\/heads\/main'/);
 assert.doesNotMatch(`${releaseWorkflow}\n${tapWorkflow}`, /PERSONAL_ACCESS_TOKEN|RELEASE_PLEASE_TOKEN|\bPAT\b/);
 
 assert.match(validationWorkflow, /VERSION=\$\(node -p "require\('\.\/package\.json'\)\.version"\)/);
@@ -77,7 +83,8 @@ process.stdout.write(`${JSON.stringify({
   status: "pass",
   version,
   release_pr: "review-required",
-  tap_publish_paths: ["release-published", "workflow-dispatch", "workflow-call"],
-  cross_repository_write_credential: "HOMEBREW_TAP_DEPLOY_KEY",
+  private_prepare_paths: ["workflow-dispatch-main", "workflow-call-main"],
+  public_publish: "manual-with-independent-archive-and-formula-approval",
+  cross_repository_write_credential: "repository-scoped GitHub App",
   provider_calls: 0
 })}\n`);

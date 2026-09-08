@@ -58,13 +58,12 @@ jobs:
       - name: Validate generated release candidate
         run: |
           npm run validate:release-automation
-          npm run homebrew:test
-          npm run validate:homebrew
+          npm run runtime:test
+          npm run validate:homebrew -- --docs-only
 
-  publish-homebrew-tap:
+  prepare-homebrew-runtime:
     needs: prepare-or-release
     if: ${{ needs.prepare-or-release.outputs.release_created == 'true' }}
     uses: ./.github/workflows/release-homebrew-tap.yml
     with:
       tag: ${{ needs.prepare-or-release.outputs.tag_name }}
-    secrets: inherit

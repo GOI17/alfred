@@ -97,46 +97,32 @@ The installer is being moved from a Memory-centered flow to a suite component mo
 
 ### 7. Agent-Driven Install
 
-Installation, update, and uninstall of Alfred artifacts is agent-driven via shell scripts fetched from GitHub:
-
-```bash
-# Install
-curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh
-
-# Update
-curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/update.sh | sh
-
-# Uninstall
-curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/uninstall.sh | sh
-```
-
-Install scripts validate paths (reject root `/` and protected paths like `.ai/`, `.opencode/`, `harnesses/`).
+Alfred configuration remains preview-first, using `alfred setup` from the
+installed runtime. Source-development shell scripts are historical/internal
+mechanisms and are not an anonymous installation path while source is private.
 
 ### 8. Homebrew Distribution
 
-Starting with Alfred `0.7.0`, releases use a versioned Homebrew packaging
-boundary. Collaborators use
-the private `GOI17/homebrew-alfred` and install the fully qualified formula with
-`brew install GOI17/alfred/alfred`; the qualification avoids collision with the
-unrelated Alfred macOS application cask. The formula installs `alfred` and
-the `alfred` command, declares Node explicitly, and pins private Git source by
-both tag and commit revision. Formula installation never writes live harness
-config; `alfred setup` preserves the existing preview/apply approval flow and
-does not clone `main`. The former `alfred-install` executable was removed in
-0.6.0 so package installation and product configuration have distinct names.
-Eligible Conventional Commits on `main` are accumulated in a reviewable
-Release Please PR. Merging that PR publishes the stable GitHub Release and
-invokes the private tap publisher directly; manually published stable releases
-and manual tag dispatch remain supported recovery paths.
+The existing `GOI17/homebrew-alfred` tap and `GOI17/alfred` source are private.
+The published v0.7.2 formula pins private Git source; publication succeeded,
+but that boundary cannot serve third parties without source access.
 
-Both `GOI17/homebrew-alfred` and the source `GOI17/alfred` require collaborator
-read access and authenticated HTTPS Git on each computer. Homebrew maps the tap
-name `GOI17/alfred` to the repository `GOI17/homebrew-alfred`. The old
-`GOI17/homebrew-tap` name was verified to redirect on 2026-09-07; anonymous 404s
-and Git failures without credentials must be separated from publisher failures.
-At that check, the formula existed and matched the `v0.7.2` source tag/release,
-and the publisher job succeeded. See `.ai/execution/homebrew-tap-access.md` and
-the install guide's Homebrew troubleshooting section for evidence and checks.
+Issue #204 prepares a curated runtime release asset and a public formula
+`brew install GOI17/alfred/alfred`, pending explicit activation approval. The
+proposed public tap also hosts the runtime assets; source and source history
+remain private. Public installation must need no GitHub account. The package
+contains readable JS/shell/HTML/SQL, required agent/skill/policy metadata and
+locked production dependencies. It excludes checkout history, tests, internal
+execution specs, local configs and credentials. Optional OpenTUI downloads are
+replaced by the existing local Node TUI in packaged setup.
+
+Release Please may prepare private candidates. A separate manual public
+publisher requires independently approved archive/formula hashes, an exact
+public target, repository-scoped credentials and anonymous asset verification
+before formula activation. Public repositories, visibility and releases have
+not been authorized. Actual runtime preparation remains subject to explicit
+protected-source read and isolated dependency-install permissions.
+See `.ai/execution/homebrew-tap-access.md` and `packaging/runtime/README.md`.
 
 
 ## Memory Hosting

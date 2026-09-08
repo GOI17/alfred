@@ -246,6 +246,15 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+# A curated runtime is complete locally. Never fall through to source cloning
+# or optional private installer downloads, including direct install.sh use.
+if [ -n "$INSTALLER_DIR" ] && [ -f "$INSTALLER_DIR/runtime-manifest.json" ]; then
+  NO_CLONE=true
+  [ -n "$TARGET_PATH" ] || TARGET_PATH="$INSTALLER_DIR"
+  ALFRED_INSTALL_TUI_BACKEND=node
+  export ALFRED_INSTALL_TUI_BACKEND
+fi
+
 HARNESS_STATUS="$(detect_harness_status)"
 SOURCE_PROJECT_PATH="$(pwd -P 2>/dev/null || pwd)"
 SOURCE_WORKSPACE_ROOT="$SOURCE_PROJECT_PATH"
@@ -1265,6 +1274,12 @@ if [ "$APPLY" != true ] || [ "$TUI_USED" != true ]; then
 fi
 
 if [ "$APPLY" != true ]; then
+  if [ -n "$INSTALLER_DIR" ] && [ -f "$INSTALLER_DIR/runtime-manifest.json" ]; then
+    printf '\nNo files were written. Preview-only mode is the default.\n'
+    printf 'To configure this installed runtime, run: alfred setup\n'
+    printf 'Automation after reviewing the plan: alfred setup --edition=%s --name=%s --harness=%s --apply\n' "$EDITION" "$NAME" "$HARNESS"
+    exit 0
+  fi
   if [ "$TUI_USED" = true ]; then
     cat <<EOFNEXT
 

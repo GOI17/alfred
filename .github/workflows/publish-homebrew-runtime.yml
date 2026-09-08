@@ -1,0 +1,109 @@
+name: publish-reviewed-homebrew-runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Successful private preparation run containing the reviewed artifact"
+        required: true
+        type: string
+      sha256:
+        description: "Exact approved runtime archive SHA256"
+        required: true
+        type: string
+      formula_sha256:
+        description: "Exact approved formula SHA256"
+        required: true
+        type: string
+      destination:
+        description: "Approved existing public destination"
+        default: "GOI17/homebrew-alfred"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: publish-reviewed-homebrew-runtime
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require configured explicit approval before accessing the target
+        env:
+          REVIEWED_SHA256: ${{ inputs.sha256 }}
+          APPROVED_SHA256: ${{ vars.ALFRED_APPROVED_RUNTIME_SHA256 }}
+          REVIEWED_FORMULA_SHA256: ${{ inputs.formula_sha256 }}
+          APPROVED_FORMULA_SHA256: ${{ vars.ALFRED_APPROVED_FORMULA_SHA256 }}
+          DISTRIBUTION_REPOSITORY: ${{ inputs.destination }}
+          PREPARATION_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          node -e '
+            const e = process.env;
+            if (!/^[a-f0-9]{64}$/.test(e.REVIEWED_SHA256) || e.REVIEWED_SHA256 !== e.APPROVED_SHA256) throw new Error("Explicit configured checksum approval is missing or mismatched");
+            if (!/^[a-f0-9]{64}$/.test(e.REVIEWED_FORMULA_SHA256) || e.REVIEWED_FORMULA_SHA256 !== e.APPROVED_FORMULA_SHA256) throw new Error("Explicit formula checksum approval is missing or mismatched");
+            if (e.DISTRIBUTION_REPOSITORY !== "GOI17/homebrew-alfred") throw new Error("Unapproved destination");
+            if (!/^[0-9]+$/.test(e.PREPARATION_RUN_ID)) throw new Error("Invalid preparation run ID");
+          '
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Verify preparation run identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREPARATION_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          gh api "repos/GOI17/alfred/actions/runs/$PREPARATION_RUN_ID" > "$RUNNER_TEMP/preparation-run.json"
+          node -e '
+            const run = require(process.env.RUNNER_TEMP + "/preparation-run.json");
+            if (![".github/workflows/release-homebrew-tap.yml", ".github/workflows/release-please.yml"].includes(run.path) || run.conclusion !== "success" || run.head_branch !== "main" || run.event === "pull_request") throw new Error("Not a successful runtime preparation run");
+          '
+      - uses: actions/download-artifact@v4
+        with:
+          name: alfred-runtime-candidate
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: reviewed-runtime
+      - name: Resolve the reviewed candidate
+        env:
+          REVIEWED_SHA256: ${{ inputs.sha256 }}
+          REVIEWED_FORMULA_SHA256: ${{ inputs.formula_sha256 }}
+        run: |
+          node scripts/verify-runtime.mjs reviewed-runtime --archive-only
+          node -e '
+            const fs = require("node:fs");
+            const run = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + "/preparation-run.json", "utf8"));
+            const manifest = JSON.parse(fs.readFileSync("reviewed-runtime/runtime-manifest.json", "utf8"));
+            if (manifest.provenance.builder_revision !== run.head_sha) throw new Error("Candidate builder revision differs from preparation run HEAD");
+            const files = fs.readdirSync("reviewed-runtime").filter(f => /^alfred-[0-9]+\.[0-9]+\.[0-9]+-runtime\.tar\.gz$/.test(f));
+            if (files.length !== 1) throw new Error("Expected exactly one reviewed runtime archive");
+            fs.appendFileSync(process.env.GITHUB_ENV, `RUNTIME_ARCHIVE=reviewed-runtime/${files[0]}\nRUNTIME_MANIFEST=reviewed-runtime/runtime-manifest.json\nRUNTIME_FORMULA=reviewed-runtime/alfred.rb\n`);
+          '
+      - name: Create target repository scoped installation token
+        id: target-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.ALFRED_DISTRIBUTION_APP_ID }}
+          private-key: ${{ secrets.ALFRED_DISTRIBUTION_APP_PRIVATE_KEY }}
+          owner: GOI17
+          repositories: homebrew-alfred
+          permission-contents: write
+      - name: Publish reviewed bytes, verify anonymously, then activate formula
+        env:
+          SOURCE_READ_TOKEN: ${{ github.token }}
+          DISTRIBUTION_TOKEN: ${{ steps.target-token.outputs.token }}
+          DISTRIBUTION_REPOSITORY: ${{ inputs.destination }}
+          REVIEWED_SHA256: ${{ inputs.sha256 }}
+          APPROVED_SHA256: ${{ vars.ALFRED_APPROVED_RUNTIME_SHA256 }}
+          REVIEWED_FORMULA_SHA256: ${{ inputs.formula_sha256 }}
+          APPROVED_FORMULA_SHA256: ${{ vars.ALFRED_APPROVED_FORMULA_SHA256 }}
+        run: node scripts/publish-homebrew-runtime.mjs

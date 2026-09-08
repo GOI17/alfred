@@ -53,8 +53,8 @@
     <main class="docs-main">
       <h1>Install Alfred</h1>
       <p class="doc-lead">
-        Homebrew installs the versioned Alfred CLI and its app-like,
-        human-first installer. The curl bootstrap remains available. Use arrow
+        The planned public Homebrew package contains the Alfred CLI and its
+        guided installer. Public activation is pending review. Use arrow
         keys, checkbox-style toggles, text inputs, and mouse clicks where
         supported. Harness choices show installed/not-installed status and
         support selecting multiple targets before Alfred writes anything.
@@ -70,145 +70,86 @@
       <ul>
         <li>Homebrew for the versioned macOS/Linux package</li>
         <li>Node.js <strong>22+</strong> (<code>node -v</code>)</li>
-        <li>pnpm 10+ <em>(optional)</em> &mdash; only for monorepo development</li>
+        <li>No GitHub account or private source access for the planned public package</li>
         <li>One of: opencode, Pi, Codex, Claude, VSCode</li>
         <li>macOS, Linux, or WSL2</li>
       </ul>
 
       <div class="doc-callout">
-        <strong>OpenTUI with a safe fallback.</strong> The guided installer
-        prefers a checksum-verified OpenTUI executable, using the same native
-        terminal framework that powers OpenCode. Node 22+ remains supported:
-        when a compatible OpenTUI artifact or runtime is unavailable, Alfred
-        automatically uses its dependency-free Node terminal adapter with the
-        same decisions and approval gates.
+        <strong>Local guided setup.</strong> The public runtime uses Alfred's
+        dependency-free Node terminal adapter. Setup does not download private
+        OpenTUI releases or source snapshots. Model selection remains user-owned.
       </div>
 
       <h2 id="homebrew">Install with Homebrew</h2>
+      <div class="doc-callout warn">
+        <strong>Public installation is pending activation.</strong> The tap and
+        its existing formula currently depend on private repositories. The
+        commands below are the intended public flow after the reviewed runtime
+        and tap are activated; an anonymous GitHub install has not yet been verified.
+      </div>
       <p>
-        Install Git, GitHub CLI (<code>gh</code>), and Homebrew on the target
-        computer first. Your GitHub account needs read access to both private
-        repositories: <a href="https://github.com/GOI17/homebrew-alfred">GOI17/homebrew-alfred</a>
-        (the tap) and <a href="https://github.com/GOI17/alfred">GOI17/alfred</a>
-        (the source). Authenticate over HTTPS, configure Git to use that account,
-        and verify access before installing:
+        The public package will require Homebrew and no GitHub account, token,
+        or collaborator access. Homebrew provides Node and verifies the SHA256 of
+        the runtime release asset hosted by <code>GOI17/homebrew-alfred</code>.
+        The <code>GOI17/alfred</code> source repository and its history remain private.
       </p>
-      <div class="terminal" aria-label="Install Alfred with Homebrew">
+      <div class="terminal" aria-label="Public installation after activation">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">zsh &mdash; Homebrew</span>
+          <span class="title">zsh &mdash; after public activation</span>
         </div>
-<pre><span class="f">gh</span> auth login --hostname github.com --git-protocol https
-<span class="f">gh</span> auth setup-git --hostname github.com
-<span class="f">gh</span> api repos/GOI17/homebrew-alfred --jq .full_name
-<span class="f">gh</span> api repos/GOI17/alfred --jq .full_name
-<span class="f">git</span> ls-remote https://github.com/GOI17/homebrew-alfred.git HEAD
-<span class="f">git</span> ls-remote https://github.com/GOI17/alfred.git HEAD
-
-<span class="c"># Continue only when both API and Git checks succeed</span>
-<span class="f">brew</span> tap GOI17/alfred
+<pre><span class="f">brew</span> tap GOI17/alfred
 <span class="f">brew</span> install GOI17/alfred/alfred
 <span class="f">alfred</span> version
 <span class="f">alfred</span> setup <span class="c"># guided, preview-first configuration</span>
 
-<span class="c"># lifecycle</span>
+<span class="c"># lifecycle after installation</span>
 <span class="f">brew</span> update
 <span class="f">brew</span> upgrade GOI17/alfred/alfred
 <span class="f">brew</span> uninstall GOI17/alfred/alfred
 </pre>
       </div>
-      <div class="doc-callout warn">
+      <p>
+        The runtime contains readable JavaScript, shell, HTML, SQL, agent/skill
+        instructions and third-party production dependencies with licenses.
+        It is not an opaque native binary. Checkout history, tests, internal
+        execution documents and local credentials are excluded.
+      </p>
+      <div class="doc-callout">
         <strong>Use the full formula name.</strong> Plain
-        <code>brew install alfred</code> resolves to the unrelated Alfred macOS
-        application cask. Homebrew installs Alfred's commands but does not
-        write live harness configuration; that remains gated by
-        <code>alfred setup</code>.
+        <code>brew install alfred</code> resolves to the unrelated macOS application
+        cask. The formula does not write live harness configuration;
+        <code>alfred setup</code> preserves the preview/apply decision.
       </div>
-
-      <h3 id="homebrew-troubleshooting">Homebrew access troubleshooting</h3>
+      <h3 id="homebrew-troubleshooting">Installation status and troubleshooting</h3>
       <p>
-        Homebrew maps the tap <code>GOI17/alfred</code> to the repository
-        <code>GOI17/homebrew-alfred</code>. The old <code>GOI17/homebrew-tap</code>
-        name currently redirects to it. Use the canonical name for new installs;
-        changing capitalization does not fix authentication. The explicit
-        <code>brew tap GOI17/alfred</code> step registers the tap before installation.
+        The existing formula was published successfully but downloads private
+        Git source. Making only the tap public cannot make that installation
+        anonymous. The replacement formula must reference a reviewed public
+        runtime release asset and its actual SHA256. Changing capitalization
+        does not solve this distribution boundary.
       </p>
       <p>
-        <code>gh auth setup-git --hostname github.com</code> configures the Git
-        credential helper for GitHub on this computer. A working GitHub browser
-        session or API request does not guarantee that Homebrew's Git subprocess
-        can authenticate. Never paste tokens into commands, repository URLs, or
-        issue reports.
+        After activation, a missing tap can be checked with
+        <code>brew tap-info GOI17/alfred</code>; register it with
+        <code>brew tap GOI17/alfred</code>. Refresh stale metadata with
+        <code>brew update</code> and inspect <code>brew info GOI17/alfred/alfred</code>.
+        A missing release asset or checksum mismatch should be reported to the
+        maintainer. Private source access is not a prerequisite for the public package.
       </p>
-      <table class="matrix">
-        <thead><tr><th>Result</th><th>Meaning and next step</th></tr></thead>
-        <tbody>
-          <tr>
-            <td>A repository API check returns <code>404</code></td>
-            <td>A private repository can hide its existence from an account
-              without access. Verify the account selected by
-              <code>gh auth status --hostname github.com</code> and ask the owner
-              to confirm read access to both repositories. A 404 alone does not
-              establish a publication failure.</td>
-          </tr>
-          <tr>
-            <td>API checks pass but <code>git ls-remote</code> fails</td>
-            <td>Check the HTTPS Git credential helper and account permissions on
-              this computer. Re-run the hostname-scoped setup command above and
-              both Git checks. API metadata access alone is insufficient.</td>
-          </tr>
-          <tr>
-            <td>Tap access works, source Git access fails</td>
-            <td>The formula downloads private Git source from
-              <code>GOI17/alfred</code>. Obtain read access to that repository;
-              permission to read only the tap is insufficient.</td>
-          </tr>
-          <tr>
-            <td>Both repositories are accessible, but the formula is absent or stale</td>
-            <td>Inspect the published formula and the release/publisher checks
-              below. If the remote formula is current, run <code>brew update</code>
-              and inspect <code>brew info GOI17/alfred/alfred</code>. If the tap is
-              missing locally, run <code>brew tap GOI17/alfred</code> first.</td>
-          </tr>
-        </tbody>
-      </table>
-      <p>With authenticated repository access confirmed, check formula presence
-        and inspect its source tag and revision:</p>
-      <div class="terminal" aria-label="Read-only formula checks">
-<pre><span class="f">gh</span> api repos/GOI17/homebrew-alfred/contents/Formula/alfred.rb --jq .path
-<span class="f">gh</span> api -H 'Accept: application/vnd.github.raw+json' repos/GOI17/homebrew-alfred/contents/Formula/alfred.rb
-</pre>
-      </div>
       <p>
-        For maintainers: compare the formula's <code>tag:</code> and
-        <code>revision:</code> with the matching stable release and source tag.
-        Replace <code>vX.Y.Z</code> below with the formula's tag. For an annotated
-        tag, compare the peeled <code>^{}</code> commit with the formula revision.
-        A missing file after confirmed repository access, a mismatched pin, or
-        a failed publisher job warrants a publication investigation.
-      </p>
-      <div class="terminal" aria-label="Read-only release and publisher checks">
-<pre><span class="f">gh</span> release view vX.Y.Z --repo GOI17/alfred --json tagName,isDraft,isPrerelease,url
-<span class="f">git</span> ls-remote https://github.com/GOI17/alfred.git 'refs/tags/vX.Y.Z' 'refs/tags/vX.Y.Z^{}'
-<span class="f">gh</span> run list --repo GOI17/alfred --workflow release-please.yml --limit 10
-<span class="f">gh</span> run list --repo GOI17/alfred --workflow release-homebrew-tap.yml --limit 10
-<span class="c"># Replace RUN_ID with the run for the matching release</span>
-<span class="f">gh</span> run view RUN_ID --repo GOI17/alfred --json status,conclusion,jobs,url
-</pre>
-      </div>
-      <p>
-        Automatic releases invoke the publisher within the Release Please run;
-        manually published releases and manual dispatch use the tap workflow.
-        Inspect the publisher job, not just the overall run status. If Actions
-        access is restricted, ask a maintainer to perform these checks. These
-        commands only inspect state; publishing or retrying a release is a
-        separate maintainer decision.
+        Maintainers prepare candidates privately, review the full file inventory
+        and separate archive/formula checksums, and authorize publication explicitly.
+        The manual publisher requires an already-public destination, preserves
+        the private source repository, refuses conflicting existing assets,
+        and verifies anonymous asset bytes before activating the formula.
       </p>
 
       <h2 id="profiles">Choose an edition</h2>
       <p>
         For human installs, start with the guided flow:
-        <code>curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh</code>.
+        <code>alfred setup</code>.
         The installer still accepts flags for automation and CI.
       </p>
       <table class="matrix">
@@ -242,13 +183,13 @@
           <span class="title">zsh &mdash; install</span>
         </div>
 <pre><span class="c"># Guided human-first install; starts preview-first</span>
-<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh
+<span class="f">alfred</span> setup
 
 <span class="c"># Force the dependency-free compatibility backend for diagnostics</span>
-<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> ALFRED_INSTALL_TUI_BACKEND=node sh
+<span class="f">alfred</span> setup
 
 <span class="c"># Automation fallback when choices are already known</span>
-<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh -s -- --edition=coding --name=acme --harness=opencode,codex-cli --apply
+<span class="f">alfred</span> setup --edition=coding --name=acme --harness=opencode,codex-cli --apply
 
 <span class="c"># The TUI previews runtime profiles before activation</span>
 Profile strategy: runtime profiles / decide later
@@ -302,7 +243,7 @@ Provider calls   : <span class="k">0</span>
           <span class="title">zsh &mdash; install (web)</span>
         </div>
 <pre><span class="c"># Guided install: choose Memory or full in the TUI</span>
-<span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh <span class="p">|</span> sh
+<span class="f">alfred</span> setup
 </pre>
       </div>
 
@@ -355,9 +296,7 @@ Apply changes? <span class="p">[y/N]</span>
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">uninstall</span>
         </div>
-<pre><span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/uninstall.sh <span class="p">|</span> sh
-
-<span class="c"># Homebrew package</span>
+<pre><span class="c"># Remove the Homebrew package</span>
 <span class="f">brew</span> uninstall GOI17/alfred/alfred
 </pre>
       </div>

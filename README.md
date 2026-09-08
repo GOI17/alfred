@@ -6,44 +6,32 @@ Alfred is a model-readable, harness-agnostic agent operations system for creatin
 
 ## Human Installation
 
-Install Git, GitHub CLI (`gh`), and Homebrew on the target computer first.
-Your GitHub account needs read access to both private repositories:
-[`GOI17/homebrew-alfred`](https://github.com/GOI17/homebrew-alfred) (the tap) and
-[`GOI17/alfred`](https://github.com/GOI17/alfred) (the source). Authenticate over
-HTTPS, configure Git to use that account, and verify both before installing:
+**Public installation is pending activation.** The current tap and formula still
+require private repository access. The replacement distribution is being
+prepared for third parties who have no GitHub account or source access.
+
+After the reviewed public tap and runtime release are activated:
 
 ```sh
-gh auth login --hostname github.com --git-protocol https
-gh auth setup-git --hostname github.com
-gh api repos/GOI17/homebrew-alfred --jq .full_name
-gh api repos/GOI17/alfred --jq .full_name
-git ls-remote https://github.com/GOI17/homebrew-alfred.git HEAD
-git ls-remote https://github.com/GOI17/alfred.git HEAD
 brew tap GOI17/alfred
 brew install GOI17/alfred/alfred
 alfred version
 alfred setup
 ```
 
-Run the install only after both API and Git checks succeed. A private repository
-can return `404` when your account lacks access; that does not prove publication
-failed. See [Homebrew access troubleshooting](https://alfred.alfredlabs.org/docs/install.html#homebrew-troubleshooting)
-for formula and publisher checks. `gh auth setup-git` configures the Git
-credential helper for GitHub on this computer.
+Homebrew will download a versioned runtime release asset from
+`GOI17/homebrew-alfred`, verify its SHA256, and install Node explicitly. The
+source repository `GOI17/alfred` and its history remain private. The package
+contains readable JavaScript, shell, HTML, SQL, agent/skill instructions and
+production dependencies; it is not an opaque native binary.
 
-Homebrew maps `GOI17/alfred` to `GOI17/homebrew-alfred`. The old
-`GOI17/homebrew-tap` name currently redirects to it; changing capitalization
-does not fix authentication.
+Use the fully qualified formula name because `brew install alfred` resolves to
+the unrelated macOS application cask. `alfred setup` is guided and preview-first;
+live harness writes require approval and model selection remains user-owned.
+The packaged setup uses its local Node TUI without private source downloads.
 
-Use the fully qualified formula name: plain `brew install alfred` resolves to
-the unrelated Alfred macOS application cask. The formula itself writes no live
-harness configuration; `alfred setup` remains guided and preview-first. Setup
-does not ask for model assignments and never creates or changes
-`~/.alfred/models.json`; model selection remains user-owned runtime
-configuration outside setup.
-
-The existing `curl | sh` bootstrap remains available in the
-[install guide](https://alfred.alfredlabs.org/docs/install.html).
+See the [installation status and troubleshooting guide](https://alfred.alfredlabs.org/docs/install.html#homebrew-troubleshooting).
+Maintainers can review the [runtime packaging contract](packaging/runtime/README.md).
 
 ## Agent Entry Point
 

@@ -1,110 +1,145 @@
 ---
 id: execution/homebrew-tap-access
-description: Use the canonical private tap and separate install authentication failures from publisher failures.
+description: Prepare a curated Alfred runtime for anonymous third-party Homebrew installation while retaining private source.
 owner: developer
 phase: issue-204-homebrew-tap-access
 issue: 204
+status: preparation-in-progress
 ---
 
-# Homebrew tap access
+# Anonymous Homebrew distribution
 
-## Verified findings (2026-09-07)
+## Goal and authorization boundary
 
-The authenticated GitHub API resolves `GOI17/homebrew-tap` to
-`GOI17/homebrew-alfred` (repository ID 1354233238). Both the tap and source
-repository `GOI17/alfred` are private. Anonymous API reads return 404; Git
-without a credential helper fails. Authenticated Git reads of both tap names
-return `49fcd91b02b8ba7a33395864591be7dce59ce0c7`. The old name still redirects,
-so neither its spelling nor changing case establishes the reported cause.
+Third parties must install and run Alfred without a GitHub account, credentials,
+or collaborator access to GOI17/alfred. Source repository visibility and history
+remain private. The collaborator-only authentication instructions do not satisfy
+this goal and are superseded.
 
-`Formula/alfred.rb` exists and pins `v0.7.2` to
-`28f64f4c1afe97390ae29639c15d170087e1a92e`, matching the source tag and stable
-release. The publisher job in [run 33956033385](https://github.com/GOI17/alfred/actions/runs/33956033385)
-succeeded. Current evidence excludes missing publication; it reproduces an
-access failure without credentials. The other computer's exact state has not
-been observed, so authentication remains the supported explanation rather
-than a confirmed diagnosis of that machine.
+Authorized now: implement packaging and workflows, private review branches/PRs,
+local artifact preparation and authorized verification. NOT authorized: public
+repository creation, visibility changes, public commits or code/assets, releases,
+or changing publisher credentials/settings. Access to actual packages/core/ and
+.ai/harnesses/ and isolated production dependency installation has been requested
+separately and remains pending until explicitly granted. The other protected
+paths .opencode/, .codex/, .agents/ remain excluded.
 
-The existing local Homebrew tap also reports version `0.7.2`, and its formula
-SHA-256 equals the remotely retrieved formula:
-`76d19607f15b425c1256a6dad0196bacddeb1909d21dbd52be7883aeaa2bb4c3`.
-The installed CLI prints `alfred 0.7.2`. This verifies the existing installation,
-not a fresh installation on the other computer.
+## Confirmed current state
+
+GOI17/alfred and GOI17/homebrew-alfred are private. Anonymous API reads return 404.
+Formula/alfred.rb exists, but downloads private Git source pinned to v0.7.2 and
+28f64f4c1afe97390ae29639c15d170087e1a92e. The release has no runtime assets. Making
+only the tap public cannot resolve source-download access. The previous
+publisher succeeded; its distribution boundary was collaborator-only.
+
+## Proposed public destination (requires later approval)
+
+Use the existing GOI17/homebrew-alfred as the public tap and release-asset host,
+subject to explicit approval to expose that tap's current tree and Git history.
+Keep GOI17/alfred private. Publish a reviewed runtime asset named
+`alfred-X.Y.Z-runtime.tar.gz` and its content manifest/checksum on the tap's
+`vX.Y.Z` GitHub Release. The formula URL must be
+`https://github.com/GOI17/homebrew-alfred/releases/download/vX.Y.Z/alfred-X.Y.Z-runtime.tar.gz`
+with the actual archive SHA-256. No source-repository archive URL is acceptable.
 
 ## Requirements
 
-### R1: Canonical distribution identity
+### R1: Honest package boundary
 
-Use `GOI17/homebrew-alfred` in the publisher and `GOI17/alfred/alfred` in active
-install/upgrade/uninstall instructions. Explain Homebrew's `homebrew-` prefix
-mapping and the old redirect. Keep historical completed specs and release
-records as history; update the existing packaging validator to reference this
-current spec for the install command while retaining relevant old contracts.
+Preserve the existing alfred CLI commands, guided setup and coding adapter
+previews. Package only runtime JS/MJS, shell entrypoint, required SQL/schema/UI,
+agent/skill/policy runtime metadata and third-party production dependencies with
+licenses. Inventory every distributed file, size, mode and SHA-256. Clearly state
+that JS, shell, HTML and agent instructions remain readable; this is not code
+secrecy or a standalone native binary. Node is an explicit Homebrew dependency.
+Repository history, .github workflows, tests, local configs, secrets, internal
+execution specs, issue traces and historic releases are excluded. Historical
+internal evaluation runners are not part of the end-user CLI/setup contract.
 
-### R2: Actionable authentication and diagnostics
+### R2: Reproducible allowlist builder
 
-State that collaborators need access to both private repositories and GitHub
-CLI, Git, and Homebrew on the target computer. Show hostname-scoped HTTPS
-login and credential-helper setup. Provide read-only API checks for repository
-identity and formula presence, and Git `ls-remote` checks for both repositories.
-Separate API permissions from Git credential configuration, and metadata access
-from an absent/stale formula. Explain that a 404 by itself does not establish
-that a private repository is missing. Never request or print tokens, recommend
-casing as a fix, or change global configuration automatically during diagnosis.
-Document maintainer release/tag/publisher checks and preserve the fully qualified
-formula to avoid the macOS application cask collision.
+Use explicit reviewed include files/globs and sanitized package metadata, not a
+copy of the checkout or whole .ai directory. Reject missing requirements,
+unexpected paths, absolute/traversal paths, unsafe symlinks, local config/secrets,
+and output paths overlapping inputs. Build tar+gzip with normalized sorted paths,
+mtime, ownership and modes. Include a content manifest; produce a separate SHA256
+for the archive. External dependency input must be resolved from a production
+lock in an isolated authorized stage; never install implicitly in the builder.
+Support fixtures for tests without reading protected actual source paths.
 
-### R3: Minimal implementation
+### R3: Offline-complete runtime
 
-Update README, site install guide, active install instructions/context,
-publisher target, and relevant validator/test expectations. Keep the immutable
-formula source and deploy key unchanged. Extend existing contract checks to
-cover the current instructions and repository name. No new runtime subsystem
-or broad refactor is needed. The tap README also needs a reviewable update.
-The site checker must reject obsolete `/alfred/` prefixes on local navigation
-links, while permitting the canonical formula name and GitHub URLs in page
-text. Verify both valid text and an invalid local link with isolated fixtures.
+Avoid private Git, raw, API and installer release downloads in distributed setup.
+Use the existing dependency-free Node guided TUI; omit optional OpenTUI binaries
+and optional Transformers model downloads. Runtime profile configuration and
+harness writes retain preview/apply decisions. Vendor the required production
+runtime dependencies or otherwise prove their locked anonymous resolution at
+install time. A test that only runs `alfred version` is insufficient: validate
+SQLite lifecycle, server/MCP dependency loading, setup, and adapter previews.
 
-### R4: Verification and boundaries
+### R4: Public formula
 
-Compare the targeted packaging checks before and after the change, validate
-syntax and documentation/site checks that do not access protected paths.
-No clone, package installation, protected-path reads/writes, repository visibility
-change, release publishing, baseline update, or unrelated checkout changes.
-Do not run the full root test/check scripts because they access protected core.
-Record precisely which checks ran; never claim a fresh install on the other
-computer. Preserve the harness-selected model and trace operational decisions.
+Add a release-asset source mode to the generator. Its public installation path
+must require version + actual SHA256 and target the proposed public tap repository,
+never private source Git/archive endpoints. Preserve Node/wrapper and preview-first
+semantics. Public user instructions use Homebrew and Alfred only; never require
+sharing source access or running gh auth. Before publication, label commands as
+pending activation rather than claiming an anonymously accessible release exists.
 
-## Completion conditions
+### R5: Separate preparation and publication
 
-- [x] Active docs use the canonical formula and cover both private repositories.
-- [x] Publisher and relevant contract checks use the canonical repository.
-- [x] Published formula/release pins and Git access are verified without installing.
-- [x] Pertinent local checks pass and match or improve the pre-change baseline.
-- [x] Reviewable changes reference issue #204; no protected paths or unrelated changes are included.
+The automatic release chain may prepare PRIVATE workflow artifacts for review;
+it must not publish runtime code to the tap automatically. Replace the current
+private-Git tap publisher accordingly. Provide a separate manual publication
+workflow/tool that requires an explicitly approved artifact checksum and exact
+destination, verifies the source is still private and destination already public,
+and uploads precisely the reviewed bytes, manifest and formula. No visibility
+changes, repo creation, credential setup or broad PAT fallback in this workflow.
+Use a repository-scoped GitHub App for target release/contents writes if needed;
+its setup is a pending human operation, never configure it during preparation.
+Do not rely solely on an implicitly created GitHub environment as approval.
+Require explicit configured approval checksums matching both the selected runtime
+archive and the exact reviewed formula bytes. Bind source/builder revisions and
+allowlist/production-lock hashes to the prepared candidate; reject mismatches.
+Bind the builder revision to the successful preparation run HEAD before obtaining
+target credentials. Reject replacement of a published version with differing bytes and refuse to
+downgrade an already activated newer formula.
+Publish assets and verify anonymous download SHA256 before activating the formula.
+
+### R6: Review and verification
+
+Update issue #204 and BOTH existing PR titles/descriptions/specs to this final
+scope. Stage the concrete formula and target README/workflows for tap PR #2 while
+it remains private; no dummy SHA may be presented as a ready formula. Record the
+archive listing, disclosures, hash, destinations, tests and exact remaining
+operations in a review document. Verify without credentials using an isolated
+local HTTP download/extraction and runtime smoke checks; final live GitHub/brew
+installation checks remain pending publication approval. Never claim a public
+end-to-end install before it happens. Tests must cover deterministic archive
+contents, missing/unsafe paths, dependency closure, private URL rejection, approval
+mismatch and order of publication, including meaningful failure cases.
+
+### R7: Scope and traceability
+
+All implementation delegated to developer, model inherited from the harness.
+Use atomic writes and record decisions. Preserve unrelated work and protected
+paths; do not execute full-repo validators that cross the permission boundary.
+Do not update baselines. Keep the existing site-link validator fix where needed.
+
+## Completion gates
+
+- [x] Builder, public formula mode and private preparation/manual publisher are reviewable.
+- [ ] Actual runtime archive and full content inventory are prepared with authorized inputs.
+- [x] Relevant fixtures and credential-free local HTTP retrieval pass (23 runtime cases).
+- [ ] Actual runtime smoke checks pass with authorized real inputs.
+- [x] Both draft PRs describe anonymous distribution and disclose readable content.
+- [ ] Public destination/tree/history and exact pending operations are presented for approval.
+- [ ] Public activation and live anonymous installation (requires specific later approval).
 
 ## References
 
-- [Issue 204](https://github.com/GOI17/alfred/issues/204)
-- [Tap](https://github.com/GOI17/homebrew-alfred)
-- [Release](https://github.com/GOI17/alfred/releases/tag/v0.7.2)
-- [Homebrew tap naming](https://docs.brew.sh/Taps)
-- [GitHub CLI Git helper](https://cli.github.com/manual/gh_auth_setup-git)
-
-## Validation evidence
-
-- Before and after: generator/workflow tests **9/9 pass**; release automation
-  validator **pass**. No baseline files changed.
-- Current documentation assertions from `validate-homebrew.mjs`, stopped before
-  CLI/setup invocation: **pass**.
-- JavaScript syntax and `git diff --check`: **pass**.
-- Site build and checker: **pass**, 21 HTML pages. Isolated regression fixtures
-  accept the canonical formula/external URLs and reject obsolete local links.
-- Remote formula Ruby syntax: **pass**. Source tag/revision, stable release,
-  successful publisher, local Homebrew metadata, identical formula SHA-256,
-  and installed `alfred version` were verified.
-- Local full `homebrew:test`, `validate:homebrew`, root tests/check, and a fresh
-  install were not run: installer detection/full suites cross the protected-path
-  scope and package installation was not authorized. CI results are reported
-  separately in the PR; this evidence does not certify the other computer.
-- Companion tap README change: [homebrew-alfred PR #2](https://github.com/GOI17/homebrew-alfred/pull/2).
+- Issue: https://github.com/GOI17/alfred/issues/204
+- Main PR: https://github.com/GOI17/alfred/pull/206
+- Tap PR: https://github.com/GOI17/homebrew-alfred/pull/2
+- Homebrew: https://docs.brew.sh/Formula-Cookbook
+- Release assets: https://docs.github.com/en/rest/releases/assets

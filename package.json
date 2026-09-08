@@ -54,6 +54,7 @@
     "pages:build": "node scripts/build-pages-site.mjs",
     "pages:check": "node scripts/check-pages-site.mjs",
     "homebrew:test": "node --test scripts/generate-homebrew-formula.test.mjs scripts/homebrew-release-workflow.test.mjs scripts/alfred-setup.test.mjs",
-    "homebrew:formula": "node scripts/generate-homebrew-formula.mjs"
+    "homebrew:formula": "node scripts/generate-homebrew-formula.mjs",
+    "runtime:test": "node --test scripts/generate-homebrew-formula.test.mjs scripts/homebrew-release-workflow.test.mjs scripts/runtime-distribution.test.mjs"
   }
 }

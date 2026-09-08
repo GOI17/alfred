@@ -13,6 +13,14 @@ on:
       - "install.sh"
       - "package.json"
       - "packaging/homebrew/**"
+      - "packaging/runtime/**"
+      - "packages/memory-server/scripts/setup.mjs"
+      - "scripts/build-runtime.mjs"
+      - "scripts/runtime-archive.mjs"
+      - "scripts/publish-homebrew-runtime.mjs"
+      - "scripts/verify-runtime.mjs"
+      - "scripts/runtime-distribution.test.mjs"
+      - ".github/workflows/publish-homebrew-runtime.yml"
       - "packages/memory-server/scripts/alfred.mjs"
       - "scripts/generate-homebrew-formula.mjs"
       - "scripts/generate-homebrew-formula.test.mjs"
@@ -35,6 +43,14 @@ on:
       - "install.sh"
       - "package.json"
       - "packaging/homebrew/**"
+      - "packaging/runtime/**"
+      - "packages/memory-server/scripts/setup.mjs"
+      - "scripts/build-runtime.mjs"
+      - "scripts/runtime-archive.mjs"
+      - "scripts/publish-homebrew-runtime.mjs"
+      - "scripts/verify-runtime.mjs"
+      - "scripts/runtime-distribution.test.mjs"
+      - ".github/workflows/publish-homebrew-runtime.yml"
       - "packages/memory-server/scripts/alfred.mjs"
       - "scripts/generate-homebrew-formula.mjs"
       - "scripts/generate-homebrew-formula.test.mjs"
@@ -59,10 +75,10 @@ jobs:
         with:
           node-version: "24"
       - name: Test formula generator
-        run: npm run homebrew:test
+        run: npm run runtime:test
       - name: Validate Homebrew contract
         run: |
-          npm run validate:homebrew
+          npm run validate:homebrew -- --docs-only
           npm run validate:release-automation
       - name: Style generated formula
         run: |

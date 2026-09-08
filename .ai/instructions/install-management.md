@@ -26,35 +26,10 @@ Provide deterministic, reproducible instructions for Alfred installation, update
 
 ### Mode 0: Human-First Suite Install
 
-Use for humans installing Alfred itself. The target computer needs Git,
-GitHub CLI (`gh`), and Homebrew. The account must have read access to both
-private repositories: `GOI17/homebrew-alfred` (tap) and `GOI17/alfred` (source).
-Configure HTTPS Git authentication and verify access:
-
-```sh
-gh auth login --hostname github.com --git-protocol https
-gh auth setup-git --hostname github.com
-gh api repos/GOI17/homebrew-alfred --jq .full_name
-gh api repos/GOI17/alfred --jq .full_name
-git ls-remote https://github.com/GOI17/homebrew-alfred.git HEAD
-git ls-remote https://github.com/GOI17/alfred.git HEAD
-```
-
-`gh auth setup-git` changes the Git credential helper for GitHub on that
-computer. Successful API checks alone do not establish Git access. A private
-repository's 404 can mean missing account access rather than a missing
-publication. After both API and Git checks pass, verify the formula exists:
-
-```sh
-gh api repos/GOI17/homebrew-alfred/contents/Formula/alfred.rb --jq .path
-```
-
-If repository access works but the formula is absent or stale, inspect the
-release/tag and publisher before retrying installation. Follow the detailed
-[Homebrew troubleshooting guide](https://alfred.alfredlabs.org/docs/install.html#homebrew-troubleshooting).
-Homebrew maps `GOI17/alfred` to `GOI17/homebrew-alfred`; the old
-`GOI17/homebrew-tap` currently redirects. Capitalization is not an authentication
-fix. Once checks succeed:
+Public installation is pending activation. The existing private tap/Git formula
+cannot serve third parties without source access; collaborator authentication
+is not the intended solution. After explicit approval of the public tap and
+reviewed runtime release, humans use:
 
 ```sh
 brew tap GOI17/alfred
@@ -63,17 +38,25 @@ alfred version
 alfred setup
 ```
 
-Always use the fully qualified formula name because unqualified
-`brew install alfred` resolves to the unrelated Alfred macOS application cask.
-The formula installs packaged commands only; it does not write live harness
-configuration. `alfred setup` opens the same preview-first guided flow from
-the packaged, pinned source without cloning `main`.
+The public flow must require no GitHub account or private source access. The
+formula downloads a versioned release asset from `GOI17/homebrew-alfred` with
+its actual SHA256; `GOI17/alfred` remains private. Node is an explicit dependency.
+The runtime includes readable JS/shell/HTML/SQL and agent/skill instructions,
+not checkout history, execution specifications or credentials. The local Node
+TUI and packaged adapters retain the preview-first configuration contract.
+Always use the qualified formula name to avoid the unrelated macOS cask.
 
-The bootstrap alternative remains
-`curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh`.
-Run it without advanced flags so the TUI can explain edition, harness, runtime
-profiles, Memory setup, name, and preview/apply. Use `--edition`, `--name`,
-`--harness`, and `--apply` only for automation after decisions are known.
+Agents must not turn repository visibility, create releases, configure publisher
+credentials, or publish candidate bytes into implied installation steps.
+Review the exact artifact inventory and archive/formula checksums before asking
+for separate publication approval. The preparation workflow stores private
+artifacts only; the manual publisher requires independently configured approval
+checksums and an already-public target. See
+`.ai/execution/homebrew-tap-access.md` and `packaging/runtime/README.md`.
+
+After installation, use `alfred setup` for the guided flow. Use `--edition`,
+`--name`, `--harness`, and `--apply` only after decisions and preview are known.
+The private raw-source bootstrap is a developer mechanism, not a public fallback.
 
 ### Mode 1: Agent-Driven Harness Artifact Install
 

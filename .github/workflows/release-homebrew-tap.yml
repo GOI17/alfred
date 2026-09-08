@@ -1,118 +1,69 @@
-name: release-homebrew-tap
+name: prepare-homebrew-runtime
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing stable Alfred tag to publish (vX.Y.Z)"
+        description: "Exact source tag or commit to prepare privately (no publication)"
         required: true
         type: string
   workflow_call:
     inputs:
       tag:
-        description: "Stable Alfred tag created by the release workflow (vX.Y.Z)"
+        description: "Immutable Alfred source release tag"
         required: true
         type: string
 
 permissions:
   contents: read
 
-concurrency:
-  group: release-homebrew-tap
-  cancel-in-progress: false
-
 jobs:
-  publish:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event.release.prerelease == false
-    runs-on: macos-latest
-    timeout-minutes: 15
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout the immutable Alfred release
+      - name: Checkout the current trusted packaging implementation
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
-          fetch-depth: 0
+          ref: ${{ github.sha }}
+          path: builder
           persist-credentials: false
-
+      - name: Require authorized dependency preparation inputs
+        run: |
+          test -f builder/packaging/runtime/package-lock.json || { echo "Runtime preparation is pending an authorized isolated dependency lock" >&2; exit 1; }
+      - name: Checkout source separately from the builder
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag }}
+          path: source
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
-
-      - name: Validate release identity
-        id: release
+      - name: Verify private source and prepare isolated locked dependencies
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [[ ! "$RELEASE_TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "Release tag must match vX.Y.Z" >&2
-            exit 1
-          fi
-          VERSION="${RELEASE_TAG#v}"
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          if [ "$VERSION" != "$PACKAGE_VERSION" ]; then
-            echo "Release tag and package.json version do not match" >&2
-            exit 1
-          fi
-          REVISION=$(git rev-parse "${RELEASE_TAG}^{commit}")
-          if [[ ! "$REVISION" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Release revision is not a full commit SHA" >&2
-            exit 1
-          fi
-          if [ "$REVISION" != "$(git rev-parse HEAD)" ]; then
-            echo "Checked-out source does not match the release tag" >&2
-            exit 1
-          fi
-          printf 'version=%s\n' "$VERSION" >> "$GITHUB_OUTPUT"
-          printf 'revision=%s\n' "$REVISION" >> "$GITHUB_OUTPUT"
-
-      - name: Validate Alfred Homebrew packaging
+          test "$(gh api repos/GOI17/alfred --jq .private)" = true
+          mkdir "$RUNNER_TEMP/runtime-dependencies"
+          cp builder/packaging/runtime/package.json builder/packaging/runtime/package-lock.json "$RUNNER_TEMP/runtime-dependencies/"
+          npm ci --prefix "$RUNNER_TEMP/runtime-dependencies" --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Build and verify the exact runtime candidate
         run: |
-          npm run homebrew:test
-          npm run validate:homebrew
-
-      - name: Checkout the private tap with its repository-scoped deploy key
-        uses: actions/checkout@v6
+          set -euo pipefail
+          SOURCE_REVISION=$(git -C source rev-parse HEAD)
+          BUILDER_REVISION=$(git -C builder rev-parse HEAD)
+          node builder/scripts/build-runtime.mjs --root source \
+            --source-revision "$SOURCE_REVISION" \
+            --builder-revision "$BUILDER_REVISION" \
+            --dependencies "$RUNNER_TEMP/runtime-dependencies/node_modules" \
+            --output "$RUNNER_TEMP/runtime-candidate"
+          node builder/scripts/verify-runtime.mjs "$RUNNER_TEMP/runtime-candidate"
+      - name: Store the candidate privately for explicit byte review
+        uses: actions/upload-artifact@v4
         with:
-          repository: GOI17/homebrew-alfred
-          ref: main
-          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
-          persist-credentials: true
-          path: homebrew-tap
-
-      - name: Generate and validate the release formula
-        env:
-          VERSION: ${{ steps.release.outputs.version }}
-          REVISION: ${{ steps.release.outputs.revision }}
-        run: |
-          set -euo pipefail
-          node scripts/generate-homebrew-formula.mjs \
-            --version "$VERSION" \
-            --source git \
-            --revision "$REVISION" \
-            --output homebrew-tap/Formula/alfred.rb
-          ruby -c homebrew-tap/Formula/alfred.rb
-          brew style homebrew-tap/Formula/alfred.rb
-
-      - name: Publish the formula to the tap
-        env:
-          VERSION: ${{ steps.release.outputs.version }}
-        working-directory: homebrew-tap
-        run: |
-          set -euo pipefail
-          UNEXPECTED=$(git status --porcelain | awk '{print $2}' | grep -v '^Formula/alfred.rb$' || true)
-          if [ -n "$UNEXPECTED" ]; then
-            echo "Refusing to publish unexpected tap changes" >&2
-            exit 1
-          fi
-          if git diff --quiet -- Formula/alfred.rb; then
-            echo "Tap already publishes Alfred $VERSION"
-            exit 0
-          fi
-          git config user.name "alfred-release[bot]"
-          git config user.email "alfred-release[bot]@users.noreply.github.com"
-          git add -- Formula/alfred.rb
-          git commit -m "alfred $VERSION"
-          git push origin HEAD:main
+          name: alfred-runtime-candidate
+          path: ${{ runner.temp }}/runtime-candidate/
+          retention-days: 30
+          if-no-files-found: error
