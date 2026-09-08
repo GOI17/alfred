@@ -1,7 +1,8 @@
 # Reviewed public runtime distribution
 
-Public installation is not activated. Source and tap are currently private;
-there is no approved runtime asset or ready public formula checksum.
+Public installation is not activated. Source and tap are currently private.
+The final runtime and formula checksums are recorded for review; public
+activation still requires explicit approval.
 
 This directory prepares a complete end-user CLI and guided setup package,
 including coding adapter previews, without exposing the source repository or
@@ -17,10 +18,13 @@ an isolated production install with lifecycle scripts disabled. The dedicated
 vendoring retains their license notices and excludes development material.
 The builder never runs a package manager or downloads anything.
 
-The first real exploratory archive passed isolated CLI, SQLite, live server,
-MCP CRUD/search and all three coding adapter previews on Node 26. The private CI
-job will verify Node 24; its first run is pending. An exploratory build is not publishable: final
-review must use an archive built from exact committed source and builder bytes.
+The final retained candidate was built reproducibly from source and builder
+commit `303ad82c4ba9fdc4641feb0f30e2aef3cd3313c7` and passed independent QA and
+review. CLI, SQLite, live server, MCP CRUD/search and all three coding adapter
+previews passed locally; the [complete runtime CI on Node 24](https://github.com/GOI17/alfred/actions/runs/34180923580/job/101919705646) also passed.
+The [public distribution review](../../.ai/execution/public-distribution-review.md)
+records the exact retained artifact, formula hashes and pending activation
+operations. Exploratory builds remain ineligible for publication.
 
 Prepare dependencies in a separate temporary directory with the dedicated
 package manifest/lock and `npm ci --omit=dev --ignore-scripts --no-audit --no-fund`.

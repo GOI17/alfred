@@ -124,9 +124,13 @@ and existing credentials; future Actions automation uses a scoped GitHub App.
 Public repositories, visibility and releases have not been authorized.
 Protected runtime reads/copies and isolated dependency installation were
 explicitly authorized and completed: the dedicated lock contains 109 production
-packages. The real exploratory archive passed CLI, SQLite, live server, MCP
-CRUD/search and Codex/opencode/Pi previews; final publication review must bind
-retained bytes built from exact committed source and builder revisions.
+packages. The final retained candidate from source/builder commit
+`303ad82c4ba9fdc4641feb0f30e2aef3cd3313c7` was reproduced and passed independent
+QA/review, including CLI, SQLite, live server, MCP CRUD/search and
+Codex/opencode/Pi previews. The [complete runtime CI on Node 24](https://github.com/GOI17/alfred/actions/runs/34180923580/job/101919705646) passed.
+The [public distribution review](execution/public-distribution-review.md) binds
+the retained artifact and formula hashes to the pending approval; later
+documentation commits do not replace those bytes.
 See `.ai/execution/homebrew-tap-access.md` and `packaging/runtime/README.md`.
 
 

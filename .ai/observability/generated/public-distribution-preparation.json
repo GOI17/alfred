@@ -1,59 +1,57 @@
 {
   "schema": "alfred.task.trace/v1",
-  "timestamp": "2026-09-08T02:01:20.825504+00:00",
+  "timestamp": "2026-09-08T02:49:05.241470+00:00",
   "issue": 204,
   "task": "anonymous-homebrew-distribution",
-  "status": "private-review-prepared-real-runtime-pending-input-permissions",
-  "model_assignment": "inherited from user/harness; no override",
-  "classification": "packaging, release boundary and anonymous installation verification",
-  "provider_decision": {
-    "execution": "local deterministic tools; specialist reasoning delegated per AGENTS",
-    "application_provider_calls": 0
+  "status": "review-ready-awaiting-specific-public-activation-approval",
+  "model_assignment": "user/harness inherited; no overrides",
+  "application_provider_calls": 0,
+  "authorization": {
+    "runtime_read_copy": "explicit user approval received",
+    "isolated_production_install": "explicitly approved; scripts disabled",
+    "protected_source_edits": "not performed",
+    "other_protected_paths": "not read/edited",
+    "public_visibility_assets_releases": "not authorized; not performed",
+    "brew_install_clone": "not authorized; not performed"
   },
-  "delegations": [
-    {
-      "role": "developer",
-      "reason": "AGENTS application-code delegation; packaging and publisher implementation"
-    },
-    {
-      "role": "qa",
-      "reason": "independent adversarial packaging/publication tests"
-    },
-    {
-      "role": "reviewer",
-      "reason": "public-disclosure and provenance risk review"
-    }
-  ],
-  "permission_checks": {
-    "existing_credentials": "authorized; no secret values emitted",
-    "source_repository": "confirmed private before push",
-    "tap_repository": "confirmed private before push",
-    "protected_runtime_read_copy": "pending explicit approval",
-    "isolated_dependency_install": "pending explicit approval",
-    "public_visibility_releases_assets": "not authorized; no changes",
-    "clone_or_brew_install": "not authorized; not executed"
+  "source_revision": "303ad82c4ba9fdc4641feb0f30e2aef3cd3313c7",
+  "builder_revision": "303ad82c4ba9fdc4641feb0f30e2aef3cd3313c7",
+  "archive": {
+    "name": "alfred-0.7.2-runtime.tar.gz",
+    "size": 1999956,
+    "sha256": "49bcb601b25190afc7a9b56dd2a78e3ceabf6004fdf7b718b6072681b8f2aed7",
+    "entries": 1895
   },
+  "formula_sha256": "01c540507a64e1af8d019a9d8762897ffd6e27dbf1450714f3a825bcb705b3f9",
   "verification": {
-    "runtime_tests": 23,
-    "formula_workflow_tests": 9,
-    "runtime_node": "26.8.1",
-    "docs_validator": "pass",
-    "release_automation_validator": "pass",
-    "syntax_js_yaml_shell": "pass",
-    "diff_check": "pass",
-    "site_build": "pass",
-    "site_html_link_check": 21,
-    "review": "no outstanding high/medium findings in reviewed scope",
-    "anonymous_transport": "production downloader exercised via credential-free loopback HTTP",
-    "real_runtime_artifact": "not built",
-    "real_public_homebrew_install": "not verified"
+    "two_identical_builds": true,
+    "runtime_generator_workflow_tests": 34,
+    "sqlite_router_oauth_tests": 136,
+    "final_mac_node26_smoke": "pass with exact archive/formula checksums",
+    "external_network_attempts_in_smoke": 0,
+    "final_reviewer": "no outstanding findings",
+    "linux_node24_ci": "pass: complete-runtime job101919705646, run34180923580",
+    "live_anonymous_github_brew": "pending public activation approval"
   },
-  "public_disclosure": "planned readable JS/MJS, shell, HTML, SQL, runtime instructions and production dependencies; source repository history remains private",
-  "review": ".ai/execution/public-distribution-review.md",
-  "limitations": [
-    "allowlist provisional pending actual protected kernel closure",
-    "production package-lock absent pending authorized resolution",
-    "tap formula still private-source until actual archive SHA exists",
-    "public destination/asset remains inaccessible anonymously"
-  ]
+  "discovered_and_fixed": [
+    "missing tenant database parent in clean HOME",
+    "MCP search route interpreted as memory ID",
+    "missing minimal packaged architecture manifest",
+    "third-party development artifacts excluded"
+  ],
+  "dependencies": {
+    "registry": "https://registry.npmjs.org",
+    "locked_packages": 109,
+    "lifecycle_scripts": false,
+    "license_notices": "retained"
+  },
+  "disclosure": "119 first-party application files,29 runtime instruction/metadata files,1746 dependency files plus embedded manifest; code readable; private Git history excluded",
+  "network": {
+    "github_cli_transport": "intermittent TLS timeouts; did not disable TLS verification",
+    "github_connector": "404/no access; did not broaden permissions",
+    "recovery": "Private GitHub updates/readback succeeded through a reused verified TLS connection; no credential persistence or permission broadening"
+  },
+  "review_document": ".ai/execution/public-distribution-review.md",
+  "inventory": ".ai/execution/artifacts/alfred-0.7.2-runtime-manifest.json",
+  "tap_commit": "069913fb16a923cfcab1564ec481b561d561bbec"
 }

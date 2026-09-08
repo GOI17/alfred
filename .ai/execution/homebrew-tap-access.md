@@ -141,11 +141,11 @@ Do not update baselines. Keep the existing site-link validator fix where needed.
 ## Completion gates
 
 - [x] Builder, public formula mode and private preparation/manual publisher are reviewable.
-- [ ] Actual runtime archive and full content inventory are prepared with authorized inputs.
-- [x] Relevant fixtures and credential-free local HTTP retrieval pass (23 runtime cases).
-- [ ] Actual runtime smoke checks pass with authorized real inputs.
+- [x] Actual runtime archive and full content inventory are prepared with authorized inputs.
+- [x] Relevant fixtures and credential-free local HTTP retrieval pass (25 runtime cases).
+- [x] Actual runtime smoke checks pass with authorized real inputs on Node26 and the private Node24 CI build.
 - [x] Both draft PRs describe anonymous distribution and disclose readable content.
-- [ ] Public destination/tree/history and exact pending operations are presented for approval.
+- [x] Public destination/tree/history and exact pending operations are recorded in public-distribution-review.md.
 - [ ] Public activation and live anonymous installation (requires specific later approval).
 
 ## References
