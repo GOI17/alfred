@@ -16,6 +16,13 @@ import {
 import { loadArchitectureKernel } from "../../core/src/index.js";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
+const specialistRoleScopes = {
+  developer: "Developer implements authorized changes.",
+  architect: "Architect handles architecture, DDD, and pattern decisions.",
+  qa: "QA handles testing, regression coverage design, and bug verification.",
+  reviewer: "Reviewer handles code review and policy enforcement.",
+  librarian: "Librarian searches, reads, summarizes, and indexes knowledge without writing files."
+};
 
 function tmp(prefix) {
   return mkdtempSync(join(os.tmpdir(), prefix));
@@ -121,6 +128,119 @@ test("opencode install preview maps files to installable opencode agent artifact
     const content = readFileSync(join(root, ".ai/agents", file), "utf8");
     assert.doesNotMatch(content, /^model\s*:/m, `${file} must not hardcode a model`);
   }
+});
+
+test("opencode generation keeps Orchestrator routing out of every specialist", () => {
+  const preview = buildOpencodeInstallPreview({ root, outputDir: ".ai/generated/test-opencode-install" });
+  const orchestrator = agentFile(preview, "orchestrator");
+  const stopDirective = /if you are about to write, edit, refactor, or delete application code, stop and delegate to the `developer` agent/;
+
+  assert.match(orchestrator.content, /## Routing table \(execute before any action\)/);
+  assert.match(orchestrator.content, stopDirective);
+  assert.match(orchestrator.content, /Route implementation\/coding work to the `developer` agent/);
+
+  for (const [agentId, roleScope] of Object.entries(specialistRoleScopes)) {
+    const specialist = agentFile(preview, agentId);
+    const sourceSpec = readFileSync(join(root, `.ai/agents/${agentId}.md`), "utf8").trim();
+    const quotedSource = sourceSpec.split("\n").map((line) => `> ${line}`).join("\n");
+
+    assert.match(frontmatter(specialist.content), /^mode: subagent$/m);
+    assert.match(frontmatter(specialist.content), /^permission:\n  edit: ask\n  bash: ask$/m);
+    assert.match(specialist.content, /## Specialist role boundary/);
+    assert.ok(specialist.content.includes(roleScope));
+    assert.match(specialist.content, /There is no self-delegation or nested Task availability requirement/);
+    assert.doesNotMatch(specialist.content, stopDirective);
+    assert.doesNotMatch(specialist.content, /Route implementation\/coding work to the `developer` agent/);
+    assert.ok(specialist.content.includes(quotedSource), `${agentId} must preserve its quoted canonical specification`);
+    assert.match(specialist.content, /Preserve Alfred's local-first provider policy/);
+    assert.match(specialist.content, /Do not broaden permissions/);
+    assert.match(specialist.content, /Honor protected paths and all higher-priority security and approval requirements/);
+    assert.match(specialist.content, /Keep model assignment user-owned at runtime/);
+  }
+
+  const librarian = agentFile(preview, "librarian");
+  assert.match(librarian.content, /> - Read-only by default\./);
+  assert.match(librarian.content, /> - Do not edit files\./);
+});
+
+test("opencode preview delivers all canonical project skill bodies lazily", () => {
+  const preview = buildOpencodeInstallPreview({ root, outputDir: ".ai/generated/test-opencode-install" });
+  const skills = preview.files.filter((file) => file.kind === "skill");
+
+  assert.equal(skills.length, 5);
+  assert.ok(preview.generated_artifacts.skills.every((skill) => skill.scope === "project"));
+  assert.ok(preview.generated_artifacts.skills.every((skill) => skill.load_body_by_default === false));
+
+  for (const skillId of ["typescript-project", "architecture-docs", "goal", "loop", "ulw"]) {
+    const artifact = skills.find((file) => file.install_path === `.opencode/skills/${skillId}/SKILL.md`);
+    const canonical = readFileSync(join(root, `.ai/skills/project/${skillId}/SKILL.md`), "utf8")
+      .trim()
+      .replace(/^---\n[\s\S]*?\n---\n?/, "")
+      .trim();
+    assert.ok(artifact, `expected ${skillId} preview artifact`);
+    assert.match(artifact.content, new RegExp(`^name: ${skillId}$`, "m"));
+    assert.ok(artifact.content.endsWith(`${canonical}\n`), `${skillId} must preserve its canonical body`);
+    assert.doesNotMatch(artifact.content, /Source body:/);
+  }
+
+  assert.match(skills.find((file) => file.install_path.includes("/goal/")).content, /observable acceptance criteria/);
+  assert.match(skills.find((file) => file.install_path.includes("/loop/")).content, /no-progress exhaustion/);
+  const ulw = skills.find((file) => file.install_path.includes("/ulw/"));
+  assert.match(ulw.content, /ULW may be activated only by the primary Orchestrator/);
+  assert.match(ulw.content, /effective role is any specialist or subagent, stop without executing ULW/);
+  assert.match(ulw.content, /authoritative current-session/);
+});
+
+test("project skill registry preserves existing contracts and keeps GOAL, LOOP, and ULW constrained", () => {
+  const registry = JSON.parse(readFileSync(join(root, ".ai/skills/registry.json"), "utf8"));
+  const expectedExistingEntries = {
+    "typescript-project": {
+      id: "typescript-project",
+      name: "typescript-project",
+      description: "Use only when TypeScript project files, package scripts, or ts/js source changes require TypeScript-specific guidance.",
+      triggers: ["typescript", "tsconfig", "package.json", ".ts", ".tsx"],
+      projectSignals: ["package.json", "tsconfig.json", "pnpm-workspace.yaml"],
+      source: "project",
+      scope: "project",
+      bodyPath: ".ai/skills/project/typescript-project/SKILL.md",
+      allowedAgents: ["orchestrator", "developer", "qa", "reviewer"],
+      loadsBodyByDefault: false
+    },
+    "architecture-docs": {
+      id: "architecture-docs",
+      name: "architecture-docs",
+      description: "Use only when architecture documents, DDD language, phase handoffs, or model-readable project policy files are edited.",
+      triggers: ["architecture", "ddd", "phase", "policy", "manifest", ".ai/"],
+      projectSignals: ["AGENTS.md", "docs/architecture", ".ai/manifest.json"],
+      source: "project",
+      scope: "project",
+      bodyPath: ".ai/skills/project/architecture-docs/SKILL.md",
+      allowedAgents: ["orchestrator", "architect", "librarian", "reviewer"],
+      loadsBodyByDefault: false
+    }
+  };
+  const expectedBodyPaths = {
+    goal: ".ai/skills/project/goal/SKILL.md",
+    loop: ".ai/skills/project/loop/SKILL.md",
+    ulw: ".ai/skills/project/ulw/SKILL.md"
+  };
+
+  for (const [existingId, expectedEntry] of Object.entries(expectedExistingEntries)) {
+    const matches = registry.skills.filter((skill) => skill.id === existingId);
+    assert.equal(matches.length, 1, `existing registry entry ${existingId} must be preserved exactly once`);
+    assert.deepEqual(matches[0], expectedEntry, `existing registry entry ${existingId} must preserve its complete contract`);
+  }
+
+  for (const [skillId, bodyPath] of Object.entries(expectedBodyPaths)) {
+    const matches = registry.skills.filter((skill) => skill.id === skillId);
+    assert.equal(matches.length, 1, `${skillId} must have exactly one registry entry`);
+    assert.equal(matches[0].scope, "project");
+    assert.equal(matches[0].loadsBodyByDefault, false);
+    assert.equal(matches[0].bodyPath, bodyPath);
+  }
+
+  const ulw = registry.skills.find((skill) => skill.id === "ulw");
+  assert.deepEqual(ulw.allowedAgents, ["orchestrator"]);
 });
 
 test("opencode config preview omits custom and parallel agent model bindings", () => {

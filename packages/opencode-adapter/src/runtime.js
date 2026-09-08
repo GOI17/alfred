@@ -39,12 +39,74 @@ function readSourceText(root, relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8").trim();
 }
 
+function readSourceMarkdownBody(root, relativePath) {
+  return readSourceText(root, relativePath)
+    .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
+    .trim();
+}
+
 
 function quoteMarkdownSource(sourceSpec) {
   return sourceSpec
     .split("\n")
     .map((line) => `> ${line}`)
     .join("\n");
+}
+
+const SPECIALIST_ROLE_SCOPES = {
+  developer: "Developer implements authorized changes.",
+  architect: "Architect handles architecture, DDD, and pattern decisions.",
+  qa: "QA handles testing, regression coverage design, and bug verification.",
+  reviewer: "Reviewer handles code review and policy enforcement.",
+  librarian: "Librarian searches, reads, summarizes, and indexes knowledge without writing files."
+};
+
+function buildRoleInstructions(agent) {
+  if (agent.id === "orchestrator") {
+    return `## Routing table (execute before any action)
+
+- **STOP-and-delegate rule**: if you are about to write, edit, refactor, or delete application code, stop and delegate to the \`developer\` agent. You must not modify code yourself.
+- Route implementation/coding work to the \`developer\` agent.
+- Route architecture/DDD/pattern decisions to the \`architect\` agent.
+- Route testing design, regression coverage, and bug verification to the \`qa\` agent.
+- Route code review and policy enforcement to the \`reviewer\` agent.
+- Route documentation and skill loading to the \`librarian\` agent.
+- Emit trace events for classification, delegation, skill loading, permission checks, and provider request decisions.`;
+  }
+
+  const roleScope = SPECIALIST_ROLE_SCOPES[agent.id];
+  if (!roleScope) throw new Error(`Missing specialist role scope for ${agent.id}`);
+
+  return `## Specialist role boundary
+
+- Retain your assigned specialist role from the canonical specification below: ${roleScope}
+- Orchestrator routing and its STOP-and-delegate rule are scoped to the primary Orchestrator, not delegated specialists.
+- Perform only delegated tasks allowed by your own role and existing approvals.
+- Return out-of-scope work to your parent with the requested next role.
+- There is no self-delegation or nested Task availability requirement. Do not simulate unavailable tasks or escalate permissions.
+- This role boundary does not override security, shared or inherited permission constraints, approval requirements, or higher-priority restrictions.`;
+}
+
+function buildGeneratedAgentRules(agent) {
+  const sharedRules = `- Preserve Alfred's local-first provider policy.
+- Do not broaden permissions.
+- Do not write harness config without explicit human approval.
+- Honor protected paths and all higher-priority security and approval requirements.
+- Keep model assignment user-owned at runtime.`;
+
+  if (agent.id !== "orchestrator") {
+    return `${sharedRules}
+- Emit trace events for classification, skill loading, permission checks, and provider request decisions.`;
+  }
+
+  return `${sharedRules}
+- **STOP-and-delegate rule**: if you are about to write, edit, refactor, or delete application code, stop and delegate to the \`developer\` agent. You must not modify code yourself.
+- Route implementation/coding work to the \`developer\` agent.
+- Route architecture/DDD/pattern decisions to the \`architect\` agent.
+- Route testing design, regression coverage, and bug verification to the \`qa\` agent.
+- Route code review and policy enforcement to the \`reviewer\` agent.
+- Route documentation and skill loading to the \`librarian\` agent.
+- Emit trace events for classification, delegation, skill loading, permission checks, and provider request decisions.`;
 }
 
 
@@ -64,15 +126,7 @@ You are Alfred's ${toTitle(agent.id)} agent.
 Load project instructions from AGENTS.md and Alfred source-of-truth files under .ai/.
 
 
-## Routing table (execute before any action)
-
-- **STOP-and-delegate rule**: if you are about to write, edit, refactor, or delete application code, stop and delegate to the \`developer\` agent. You must not modify code yourself.
-- Route implementation/coding work to the \`developer\` agent.
-- Route architecture/DDD/pattern decisions to the \`architect\` agent.
-- Route testing design, regression coverage, and bug verification to the \`qa\` agent.
-- Route code review and policy enforcement to the \`reviewer\` agent.
-- Route documentation and skill loading to the \`librarian\` agent.
-- Emit trace events for classification, delegation, skill loading, permission checks, and provider request decisions.
+${buildRoleInstructions(agent)}
 
 
 Alfred source agent spec (${agent.spec}), quoted to avoid nested frontmatter parsing:
@@ -81,38 +135,20 @@ ${quoteMarkdownSource(sourceSpec)}
 
 
 Rules:
-- Preserve Alfred's local-first provider policy.
-- Do not broaden permissions.
-- Do not write harness config without explicit human approval.
-- Keep model assignment user-owned at runtime.
-- **STOP-and-delegate rule**: if you are about to write, edit, refactor, or delete application code, stop and delegate to the \`developer\` agent. You must not modify code yourself.
-- Route implementation/coding work to the \`developer\` agent.
-- Route architecture/DDD/pattern decisions to the \`architect\` agent.
-- Route testing design, regression coverage, and bug verification to the \`qa\` agent.
-- Route code review and policy enforcement to the \`reviewer\` agent.
-- Route documentation and skill loading to the \`librarian\` agent.
-- Emit trace events for classification, delegation, skill loading, permission checks, and provider request decisions.
+${buildGeneratedAgentRules(agent)}
 `;
 }
 
-function buildSkillFileContent(skill) {
+function buildSkillFileContent({ root, skill }) {
   const name = skill.id;
   const description = skill.description ?? `Use when Alfred needs ${name} project context.`;
+  const body = readSourceMarkdownBody(root, skill.bodyPath);
   return `---
 name: ${name}
 description: ${description}
 ---
 
-# ${toTitle(name)}
-
-This opencode skill is generated from Alfred metadata.
-
-Source body: ${skill.bodyPath}
-
-Rules:
-- Load only when the task matches the skill triggers.
-- Do not override Alfred security or provider request policy.
-- Keep provider calls local-first and observable.
+${body}
 `;
 }
 
@@ -405,7 +441,7 @@ export function buildOpencodeInstallPreview({
         path: `${relativeOutputDir}/.opencode/skills/${skill.id}/SKILL.md`,
         install_path: `.opencode/skills/${skill.id}/SKILL.md`,
         kind: "skill",
-        content: buildSkillFileContent(skill)
+        content: buildSkillFileContent({ root: projectRoot, skill })
       }))
     ],
     generated_artifacts: integration.generated_artifacts
