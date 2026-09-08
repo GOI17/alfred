@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -93,4 +93,15 @@ test("SQLite + Postgres stores share the same schema (create throws on unknown t
   // Sanity: pg store importable.
   const pg = createPostgresMemoryStore({ query: () => { throw new Error("not real pg"); } });
   assert.ok(pg);
+});
+
+
+test("first tenant database creates its missing parent directory", async () => {
+  const root = mkdtempSync(join(tmpdir(), "alfred-new-home-"));
+  const dbPath = join(root, ".alfred", "tenants", "first.sqlite");
+  assert.equal(existsSync(join(root, ".alfred")), false);
+  const service = createMemoryService({ store: openSqliteMemoryStore(dbPath) });
+  const memory = await service.createMemory("tenant-first", { type: "fact", content: "A fresh install can persist memories.", source: "test" });
+  assert.equal(existsSync(dbPath), true);
+  assert.equal((await service.getMemory("tenant-first", memory.id)).content, memory.content);
 });

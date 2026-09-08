@@ -10,21 +10,22 @@ instructions remain readable. This is not an opaque native binary.
 
 ## Preparation status
 
-`allowlist.json` is a provisional explicit runtime inventory. The final core
-and kernel metadata closure still requires separately approved reads of
-`packages/core/` and `.ai/harnesses/`; those inputs have not been read or copied
-for this task. The isolated production install and dedicated
-`package-lock.json` are also pending permission. The preparation workflow fails
-closed when that lock is absent. Fixture success does not establish that the
-actual Alfred archive is complete.
+`allowlist.json` records the inspected end-user runtime closure. Explicit human
+authorization covered reading/copying `packages/core/` and `.ai/harnesses/`, plus
+an isolated production install with lifecycle scripts disabled. The dedicated
+`package-lock.json` locks 109 production packages from the public npm registry;
+vendoring retains their license notices and excludes development material.
+The builder never runs a package manager or downloads anything.
 
-The declared dependencies are exact versions already selected from the source
-lock: pg, MCP SDK, Zod and Nodemailer. A dedicated production lock and isolated
-`node_modules` must be prepared under explicit installation authorization;
-the archive builder never runs a package manager or downloads anything.
+The first real exploratory archive passed isolated CLI, SQLite, live server,
+MCP CRUD/search and all three coding adapter previews on Node 26. The private CI
+job will verify Node 24; its first run is pending. An exploratory build is not publishable: final
+review must use an archive built from exact committed source and builder bytes.
 
-After input permissions and dependency preparation, build from exact reviewed
-source and builder commits into an output directory outside both inputs:
+Prepare dependencies in a separate temporary directory with the dedicated
+package manifest/lock and `npm ci --omit=dev --ignore-scripts --no-audit --no-fund`.
+Build from exact reviewed source and builder commits into an output directory
+outside both inputs:
 
 ```sh
 node scripts/build-runtime.mjs \
@@ -56,29 +57,47 @@ optional private OpenTUI/model downloads are not part of installation.
 builder is pinned to that run's commit and checked against the candidate manifest;
 its checkout is separate from the source tag/commit, so selecting an older source
 tag cannot remove the new packaging tooling. There is no independent release-event
-publisher: prepare recovery candidates through a main-branch manual dispatch. PR validation runs fixture tests and
-static documentation contracts; it does not install dependencies or build the
-actual protected runtime.
+publisher: prepare recovery candidates through a main-branch manual dispatch.
+PR validation runs fixture tests and static documentation contracts. A separate
+job, restricted to the private repository and its own PR branches, installs the
+locked production dependencies with scripts disabled and verifies the actual
+runtime on Node 24. Its candidate stays in private Actions artifact storage.
 
 Proposed destination, requiring separate explicit human approval:
 `GOI17/homebrew-alfred`, with its already-reviewed tree/history made public.
 The private `GOI17/alfred` source repository must remain private. No workflow
 creates a repository or changes visibility/settings.
 
-The manual publisher accepts one successful trusted main-branch preparation run,
-the exact destination, and BOTH approved archive and formula SHA256 values.
-The independent repository variables `ALFRED_APPROVED_RUNTIME_SHA256` and
-`ALFRED_APPROVED_FORMULA_SHA256` must match those inputs. An environment name
-alone does not authorize publication. Configuring these values and the scoped
-GitHub App is a separate human operation, not performed by this implementation.
+There are two activation entry points, both requiring separate explicit public
+approval:
 
-The target App token is restricted to `homebrew-alfred` contents writes. The
-publisher verifies private source and public target, source/package provenance,
-trusted builder input hashes, current formula version, existing release metadata
-and all existing assets before public writes. It refuses downgrades, unexpected
-assets and replacement of same-version bytes. It uploads the reviewed archive,
-manifest and checksum, verifies the anonymous download, and only then writes the
-exact approved formula bytes. A failed anonymous check leaves formula activation
+- **Initial local candidate:** retain the exact reviewed archive, manifest and
+  formula from the committed PR revision. The existing
+  `scripts/publish-homebrew-runtime.mjs` CLI accepts those files and both hashes;
+  the review records the exact destination and independently approved values.
+  After approval, existing authorized GitHub credentials can be supplied only
+  in memory for the private-source reads and target writes. Never print or
+  persist tokens. No new GitHub App is required for this local activation.
+- **Future Actions candidates:** the manual workflow accepts one successful
+  trusted main-branch preparation run, the exact destination, and both approved
+  SHA256 values. Independent repository variables
+  `ALFRED_APPROVED_RUNTIME_SHA256` and `ALFRED_APPROVED_FORMULA_SHA256` must match.
+  This automation uses a GitHub App token restricted to `homebrew-alfred` contents
+  writes; configuring its credentials and approval controls is a separate
+  authorized operation. An environment name alone does not authorize publishing.
+
+A later main-branch build records a different builder revision and may produce
+different bytes. It requires its own review and hashes; rebuilding after merge
+does not preserve approval of the original local candidate. The CLI must receive
+the retained files, never a replacement archive rebuilt under an approved hash.
+
+Both entry points verify private source and public target, source/package
+provenance, trusted builder input hashes, current formula version, existing
+release metadata and all existing assets before public writes. They refuse
+exploratory candidates, downgrades, unexpected assets and replacement of
+same-version bytes. The publisher uploads the reviewed archive, manifest and
+checksum, verifies the anonymous download, and only then writes the exact
+approved formula bytes. A failed anonymous check leaves formula activation
 blocked; same-byte reruns can recover without overwriting assets.
 
 The public formula URL is exclusively:

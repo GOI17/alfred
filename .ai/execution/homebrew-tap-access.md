@@ -19,9 +19,10 @@ this goal and are superseded.
 Authorized now: implement packaging and workflows, private review branches/PRs,
 local artifact preparation and authorized verification. NOT authorized: public
 repository creation, visibility changes, public commits or code/assets, releases,
-or changing publisher credentials/settings. Access to actual packages/core/ and
-.ai/harnesses/ and isolated production dependency installation has been requested
-separately and remains pending until explicitly granted. The other protected
+or changing publisher credentials/settings. The user explicitly authorized reading/copying actual packages/core/ and
+.ai/harnesses/ into the local review artifact and isolated production dependency
+installation with lifecycle scripts disabled. This does not authorize editing
+those protected paths or public activation. The other protected
 paths .opencode/, .codex/, .agents/ remain excluded.
 
 ## Confirmed current state
@@ -76,6 +77,9 @@ harness writes retain preview/apply decisions. Vendor the required production
 runtime dependencies or otherwise prove their locked anonymous resolution at
 install time. A test that only runs `alfred version` is insufficient: validate
 SQLite lifecycle, server/MCP dependency loading, setup, and adapter previews.
+Fresh-HOME verification must create missing SQLite tenant directories and
+exercise MCP keyword search through GET /memories/search, including CRUD.
+Run the same actual-runtime verifier on Node24 in isolated private PR CI.
 
 ### R4: Public formula
 
@@ -105,6 +109,14 @@ Bind the builder revision to the successful preparation run HEAD before obtainin
 target credentials. Reject replacement of a published version with differing bytes and refuse to
 downgrade an already activated newer formula.
 Publish assets and verify anonymous download SHA256 before activating the formula.
+The initial locally reviewed candidate may use the existing publisher CLI with
+its exact approved bytes and the existing authorized gh session credential after
+separate publication approval. Keep that credential only in process memory,
+never print/persist it, and restrict operations to the fixed publisher API paths.
+Future automated publication retains a repository-scoped App with no broad-token
+fallback. The workflow run-ID/HEAD binding applies to Actions-built
+candidates; rebuilding from a later merge commit changes the embedded provenance
+and requires a new hash review. Never substitute a rebuilt archive silently.
 
 ### R6: Review and verification
 

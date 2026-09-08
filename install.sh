@@ -1001,6 +1001,14 @@ edition_components() {
 }
 
 COMPONENT_PLAN="$(edition_components)"
+INSTALL_DOCS_PATH="$TARGET_PATH/site/docs/install.html"
+if [ -n "$INSTALLER_DIR" ] && [ -f "$INSTALLER_DIR/runtime-manifest.json" ]; then
+  case ",$COMPONENTS," in
+    *,evals,*) err "Historical internal eval runners are not included in the runtime package." ;;
+  esac
+  COMPONENT_PLAN="$(printf '%s' "$COMPONENT_PLAN" | sed 's/,evals//g')"
+  INSTALL_DOCS_PATH="$INSTALLER_DIR/.ai/instructions/install-management.md"
+fi
 
 DISPLAY_PROFILE_STRATEGY="$PROFILE_STRATEGY"
 DISPLAY_MEMORY_SETUP="$MEMORY_SETUP"
@@ -1061,7 +1069,7 @@ Where files go and why:
   - Alfred suite install path: $TARGET_PATH
   - Runtime profiles path:    $HOME/.alfred/runtime-profiles
   - Trace path:               $HOME/.alfred/observability/install-trace.json
-  - Install docs:             $TARGET_PATH/site/docs/install.html
+  - Install docs:             $INSTALL_DOCS_PATH
 
 Why outside the project by default:
   Alfred is preview-first. It keeps generated suite and harness artifacts under
@@ -1096,7 +1104,7 @@ write_handoff_summary() {
     printf 'Alfred suite install:  %s\n' "$TARGET_PATH"
     printf 'Runtime profiles:      %s\n' "$HOME/.alfred/runtime-profiles"
     printf 'Trace:                 %s\n' "$HOME/.alfred/observability/install-trace.json"
-    printf 'Install docs:          %s\n\n' "$TARGET_PATH/site/docs/install.html"
+    printf 'Install docs:          %s\n\n' "$INSTALL_DOCS_PATH"
     printf 'Why outside the project by default:\n'
     printf 'Alfred is preview-first. It keeps generated suite and harness artifacts under ~/.alfred so the installer does not unexpectedly mutate your project or write live opencode/Codex/Pi config.\n\n'
     printf 'Generated preview locations:\n'
@@ -1430,7 +1438,7 @@ Next steps:
   - Audit generated harness previews before copying anything live.
   - If you want project-local harness files now, choose the apply option below.
   - Runtime profile commands live in: $TARGET_PATH/packages/profile-manager
-  - Install docs: $TARGET_PATH/site/docs/install.html
+  - Install docs: $INSTALL_DOCS_PATH
 EOFDONE
 fi
 

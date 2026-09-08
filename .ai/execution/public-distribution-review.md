@@ -15,9 +15,10 @@ publish. GOI17/alfred remains private throughout preparation and publication.
 
 - Allowed: private review branches/PRs, packaging and publication code, local
   artifact preparation using authorized inputs, fixtures and announced reads.
-- Pending preparation permission: read/copy packages/core/ and .ai/harnesses/
-  into the local review artifact; isolated production dependency resolution and
-  installation with lifecycle scripts disabled.
+- Preparation permission granted explicitly: read/copy packages/core/ and
+  .ai/harnesses/ into the local review artifact; isolated production dependency
+  resolution and installation with lifecycle scripts disabled. Protected source
+  edits remain unauthorized.
 - Not authorized: public source/assets, repository visibility changes, public
   repository creation, releases, credential/settings changes, merging PRs, or
   local Homebrew installation/cloning.
@@ -70,8 +71,7 @@ CLI/setup contract.
 
 ## Exact artifact record
 
-Not yet available: actual protected runtime inputs and production dependency
-installation are awaiting the separately requested preparation permissions.
+In progress under the explicitly granted local preparation authorization.
 Fixture artifacts verify the machinery but will never be presented as the
 actual Alfred distribution. The final record must include version, source
 revision, builder revision, archive name/size/SHA256, exact formula bytes/SHA256, inventory and validation.

@@ -53,7 +53,7 @@ test("runtime builder rejects missing input, traversal, output overlap and crede
   assert.throws(f.build, /Unsafe runtime path/);
   f.put(f.allowlist, { schema: "alfred.runtime.allowlist/v1", includes: ["app.mjs"] });
   assert.throws(() => f.build() && buildRuntime({ ...f.options, output: join(f.root, "dist") }), /overlap/);
-  f.put(join(f.root, "app.mjs"), "-----BEGIN PRIVATE KEY-----\nfixture");
+  f.put(join(f.root, "app.mjs"), "-----BEGIN PRIVATE KEY-----\n" + "A".repeat(64) + "\n-----END PRIVATE KEY-----");
   assert.throws(f.build, /Possible credential/);
 });
 
@@ -88,8 +88,10 @@ test("archive reader rejects tampering and manifest omissions", (t) => {
   assert.throws(() => inspectRuntime(gzipSync(createTar(files)), manifestBytes), /inventory every file/);
 });
 
-function publicationFixture(t) {
-  const candidate = fixture(t).candidate(), calls = [];
+function publicationFixture(t, { exploratory = false } = {}) {
+  const source = fixture(t);
+  source.options.exploratory = exploratory;
+  const candidate = source.candidate(), calls = [];
   let existingRelease = null, anonymous = candidate.archive, sourcePrivate = true, targetPrivate = false;
   const api = async (method, path, body, options) => {
     calls.push({ method, path, body });
@@ -332,4 +334,18 @@ test("publisher stops before activation when an asset upload fails", async (t) =
   } }), /simulated upload failure/);
   assert.ok(f.calls.some((call) => call.method === "POST"));
   assert.ok(!f.calls.some((call) => ["PATCH", "ANONYMOUS", "PUT"].includes(call.method)));
+});
+
+
+test("publisher refuses exploratory working-tree archives even with matching approval hashes", async (t) => {
+  const f = publicationFixture(t, { exploratory: true });
+  await assert.rejects(publishRuntime(f.options), /Exploratory working-tree archives/);
+  assert.equal(f.calls.length, 0);
+});
+
+test("runtime permits public PEM parser delimiters without permitting private-key bodies", (t) => {
+  const f = fixture(t);
+  f.put(join(f.root, "app.mjs"), "export const delimiter = '-----BEGIN PRIVATE KEY-----';\n");
+  const { archive, manifestBytes } = f.candidate();
+  assert.ok(inspectRuntime(archive, manifestBytes).files.has("app.mjs"));
 });

@@ -118,10 +118,15 @@ replaced by the existing local Node TUI in packaged setup.
 
 Release Please may prepare private candidates. A separate manual public
 publisher requires independently approved archive/formula hashes, an exact
-public target, repository-scoped credentials and anonymous asset verification
-before formula activation. Public repositories, visibility and releases have
-not been authorized. Actual runtime preparation remains subject to explicit
-protected-source read and isolated dependency-install permissions.
+public target, authorized credentials and anonymous asset verification before
+formula activation. Initial activation can use the retained local candidate
+and existing credentials; future Actions automation uses a scoped GitHub App.
+Public repositories, visibility and releases have not been authorized.
+Protected runtime reads/copies and isolated dependency installation were
+explicitly authorized and completed: the dedicated lock contains 109 production
+packages. The real exploratory archive passed CLI, SQLite, live server, MCP
+CRUD/search and Codex/opencode/Pi previews; final publication review must bind
+retained bytes built from exact committed source and builder revisions.
 See `.ai/execution/homebrew-tap-access.md` and `packaging/runtime/README.md`.
 
 

@@ -15,6 +15,9 @@ on:
       - "packaging/homebrew/**"
       - "packaging/runtime/**"
       - "packages/memory-server/scripts/setup.mjs"
+      - "packages/memory/src/sqlite-memory-store.js"
+      - "packages/memory/test/sqlite-memory-store.test.js"
+      - "packages/memory-server/src/openapi-router.js"
       - "scripts/build-runtime.mjs"
       - "scripts/runtime-archive.mjs"
       - "scripts/publish-homebrew-runtime.mjs"
@@ -45,6 +48,9 @@ on:
       - "packaging/homebrew/**"
       - "packaging/runtime/**"
       - "packages/memory-server/scripts/setup.mjs"
+      - "packages/memory/src/sqlite-memory-store.js"
+      - "packages/memory/test/sqlite-memory-store.test.js"
+      - "packages/memory-server/src/openapi-router.js"
       - "scripts/build-runtime.mjs"
       - "scripts/runtime-archive.mjs"
       - "scripts/publish-homebrew-runtime.mjs"
@@ -90,3 +96,40 @@ jobs:
             --revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
             --output "$(brew --repository alfred/preflight)/Formula/alfred.rb"
           brew style alfred/preflight/alfred
+
+  verify-private-runtime:
+    if: github.event.repository.private == true && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Confirm private source repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: test "$(gh api repos/GOI17/alfred --jq .private)" = true
+      - name: Install isolated locked runtime dependencies with scripts disabled
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/runtime-dependencies"
+          cp packaging/runtime/package.json packaging/runtime/package-lock.json "$RUNNER_TEMP/runtime-dependencies/"
+          npm ci --prefix "$RUNNER_TEMP/runtime-dependencies" --omit=dev --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org
+      - name: Verify complete runtime on Node 24
+        run: |
+          set -euo pipefail
+          REVISION=$(git rev-parse HEAD)
+          node scripts/build-runtime.mjs --root "$GITHUB_WORKSPACE" \
+            --source-revision "$REVISION" --builder-revision "$REVISION" \
+            --dependencies "$RUNNER_TEMP/runtime-dependencies/node_modules" \
+            --output "$RUNNER_TEMP/runtime-candidate"
+          node scripts/verify-runtime.mjs "$RUNNER_TEMP/runtime-candidate"
+      - name: Retain verification candidate privately
+        uses: actions/upload-artifact@v4
+        with:
+          name: alfred-runtime-node24-verification
+          path: ${{ runner.temp }}/runtime-candidate/
+          retention-days: 14
+          if-no-files-found: error

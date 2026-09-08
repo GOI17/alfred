@@ -9,7 +9,7 @@
 // because most agents issue reads. Writes are serialized by SQLite.
 
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -172,6 +172,9 @@ export function openSqliteMemoryStore(dbPath, { fromMigrations = true } = {}) {
   if (!dbPath || typeof dbPath !== "string") {
     throw new TypeError("openSqliteMemoryStore requires a string dbPath.");
   }
+  // Fresh installs have no per-tenant directory yet. Creating the configured
+  // database also creates its parent, without treating :memory: as a file.
+  if (dbPath !== ":memory:") mkdirSync(dirname(resolve(dbPath)), { recursive: true });
   const db = new DatabaseSync(dbPath);
   // Apply migrations 001 and 002 (the namespace migration).
   if (fromMigrations) {

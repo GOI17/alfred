@@ -349,6 +349,18 @@ export function createOpenapiRouter({
             return json(res, 200, list);
           }
 
+          // The shared Memory client (including MCP stdio) uses this keyword
+          // search endpoint. Match it before the generic /memories/:id route.
+          if (segs.length === 2 && segs[1] === "search" && req.method === "GET") {
+            const opts = {};
+            for (const k of ["limit", "offset", "type", "namespace", "tag", "q"]) {
+              if (url.searchParams.has(k)) opts[k] = url.searchParams.get(k);
+            }
+            const list = await memoryService.searchMemories(tenantId, opts);
+            if (rl.record) await rl.record("success");
+            return json(res, 200, list);
+          }
+
           if (segs.length === 1 && req.method === "POST") {
             const body = await readJsonBody(req);
             if (body.__invalid) {

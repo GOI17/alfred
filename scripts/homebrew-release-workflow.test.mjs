@@ -69,11 +69,17 @@ test("manual publication requires independent archive and formula approvals on m
   assert.ok(publicWorkflow.indexOf("Require configured explicit approval") < publicWorkflow.indexOf("Create target repository scoped installation token"));
 });
 
-test("Homebrew CI validates runtime fixtures and active documentation without building real artifacts", () => {
+test("Homebrew CI separates fixture contracts from authorized private runtime verification", () => {
   for (const path of ["README.md", "site/docs/install.html", ".ai/context.md", ".ai/instructions/install-management.md", ".ai/execution/homebrew-tap-access.md", "packaging/runtime/**", "scripts/runtime-distribution.test.mjs"]) {
     assert.equal(validationWorkflow.split(`- "${path}"`).length - 1, 2, `${path} must trigger validation on push and pull_request`);
   }
   assert.match(validationWorkflow, /npm run runtime:test/);
   assert.match(validationWorkflow, /npm run validate:homebrew -- --docs-only/);
-  assert.doesNotMatch(validationWorkflow, /npm ci|build-runtime\.mjs --root/);
+  const fixtureJob = validationWorkflow.split("  verify-private-runtime:")[0];
+  assert.doesNotMatch(fixtureJob, /npm ci|build-runtime\.mjs --root/);
+  assert.match(validationWorkflow, /github\.event\.repository\.private == true/);
+  assert.match(validationWorkflow, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
+  assert.match(validationWorkflow, /npm ci .*--omit=dev --ignore-scripts/);
+  assert.match(validationWorkflow, /node scripts\/verify-runtime\.mjs/);
+  assert.doesNotMatch(validationWorkflow, /publish-homebrew-runtime\.mjs\n|gh release|git push/);
 });

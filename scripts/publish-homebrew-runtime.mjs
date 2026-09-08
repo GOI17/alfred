@@ -18,6 +18,7 @@ export async function publishRuntime({ archive, manifestBytes, formula, expected
   assert.equal(approvedFormulaSha256, expectedFormulaSha256, "Configured formula approval checksum does not match");
   assert.equal(sha256(formula), expectedFormulaSha256, "Formula bytes differ from the approved formula");
   const { manifest } = inspectRuntime(archive, manifestBytes);
+  assert.equal(manifest.provenance?.exploratory, false, "Exploratory working-tree archives cannot be published");
   assert.deepEqual(formula, Buffer.from(renderFormula({ source: "release", version: manifest.version, sha256: expectedSha256 })), "Reviewed formula does not match the approved runtime URL/version/hash contract");
   const source = await sourceApi("GET", `/repos/${SOURCE}`);
   assert.equal(source.full_name, SOURCE); assert.equal(source.private, true, "Source repository must remain private");

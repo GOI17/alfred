@@ -66,7 +66,7 @@ function filesMatching(root, pattern) {
 }
 function assertNoSecrets(path, bytes) {
   const text = bytes.toString("utf8");
-  if (/-----BEGIN (?:[A-Z ]*PRIVATE KEY)-----|\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[A-Z0-9]{16})\b/.test(text)) {
+  if (/-----BEGIN (?:[A-Z ]*PRIVATE KEY)-----\s+[A-Za-z0-9+/=]{32,}|\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[A-Z0-9]{16})\b/.test(text)) {
     throw new Error(`Possible credential in runtime input: ${path}`);
   }
 }
@@ -93,7 +93,7 @@ export function createTar(files) {
   chunks.push(Buffer.alloc(1024));
   return Buffer.concat(chunks);
 }
-export function buildRuntime({ root, dependencies, output, sourceRevision, builderRevision, allowlist = join(repositoryRoot, "packaging/runtime/allowlist.json") }) {
+export function buildRuntime({ root, dependencies, output, sourceRevision, builderRevision, exploratory = false, allowlist = join(repositoryRoot, "packaging/runtime/allowlist.json") }) {
   root = realpathSync(resolve(root)); dependencies = realpathSync(resolve(dependencies)); output = resolve(output);
   const existingOutputParent = (() => { let p = output; while (!existsSync(p)) p = dirname(p); return realpathSync(p); })();
   if (inside(root, output) || inside(output, root) || inside(dependencies, output) || inside(output, dependencies) || inside(root, existingOutputParent) || inside(dependencies, existingOutputParent)) throw new Error("Runtime output must not overlap source or dependencies");
@@ -120,6 +120,18 @@ export function buildRuntime({ root, dependencies, output, sourceRevision, build
     assertSafePath(packageName);
     const path = `packages/${packageName}/package.json`;
     add(path, jsonBytes(cleanMetadata(JSON.parse(readFileSync(checkedInput(root, path), "utf8")))));
+  }
+  if (policy.generatedRuntimeMetadata) {
+    add(".ai/manifest.json", jsonBytes({ name: "alfred", version, phase: "runtime-distribution", status: "complete", source_of_truth: {
+      agent_system: ".ai", routing_policy: ".ai/agents/routing-policy.json", skill_registry: ".ai/skills/registry.json",
+      model_assignment_policy: ".ai/policies/model-assignment.md", harness_compatibility: ".ai/harnesses/compatibility-matrix.json",
+      install_components: ".ai/install/components.json", instructions_install_management: ".ai/instructions/install-management.md"
+    } }));
+    add(".ai/instructions/install-management.md", Buffer.from(`# Alfred runtime configuration\n\nRun \`alfred setup\` from the installed runtime. Choose edition, harness and runtime profile strategy; inspect the preview before approving writes. Use \`--edition=coding --name=example --harness=none\` for a read-only CLI preview. Use \`--apply\` only after reviewing the plan and explicitly approving configuration. Harness artifacts are generated first; copying them into live harness directories requires a separate choice. Never clone the private source or download its raw installer. Model assignments remain user-owned runtime configuration; setup does not write a models file. Human operators install/update/remove the package through the fully qualified Homebrew formula \`GOI17/alfred/alfred\`. This package includes runtime agent/skill/policy metadata; internal historical evaluation runners and their release/execution records are excluded.\n`));
+    const components = JSON.parse(files.get(".ai/install/components.json").bytes);
+    components.components = components.components.filter((entry) => entry.id !== "evals");
+    for (const edition of components.editions) edition.components = edition.components.filter((id) => id !== "evals");
+    files.set(".ai/install/components.json", { bytes: jsonBytes(components), mode: 0o644 });
   }
   // Require the exact isolated production closure, not arbitrary node_modules.
   const lockPath = join(dirname(dependencies), "package-lock.json");
@@ -151,7 +163,7 @@ export function buildRuntime({ root, dependencies, output, sourceRevision, build
     for (const entry of readdirSync(directory).sort()) {
       if (entry === ".bin" || entry === ".package-lock.json") continue;
       const path = join(directory, entry), name = `${prefix}/${entry}`;
-      if (/(?:^|\/)(?:test|tests|__tests__|fixtures|coverage|docs|examples)(?:\/|$)/i.test(name) || /\.(?:map|ts)$/.test(name)) continue;
+      if (/(?:^|\/)(?:\.github|spec|test|tests|__tests__|fixtures|coverage|docs|examples)(?:\/|$)/i.test(name) || /(?:\.d\.[cm]ts|\.(?:map|ts))$/.test(name) || /(?:^|\/)(?:\.travis\.yml|\.eslintrc[^/]*|Makefile)$/.test(name)) continue;
       assertSafePath(name);
       const stat = lstatSync(path);
       if (stat.isSymbolicLink()) throw new Error(`Dependency symlink is not allowed: ${name}`);
@@ -178,8 +190,8 @@ export function buildRuntime({ root, dependencies, output, sourceRevision, build
   }
   add("RUNTIME-DISCLOSURE.txt", Buffer.from("Alfred runtime includes readable JavaScript, shell, HTML, SQL, agent and skill instructions, and third-party production dependencies with their licenses. It is not an opaque native binary. Source checkout history, workflows, tests, execution specifications and local credentials are excluded. Node is required. Optional OpenTUI and Transformers are not bundled; Node TUI and keyword search remain available.\n"));
   const manifest = { schema: "alfred.runtime.manifest/v1", version,
-    provenance: { source_revision: sourceRevision, builder_revision: builderRevision, generator_sha256: sha256(readFileSync(join(repositoryRoot, "scripts/generate-homebrew-formula.mjs"))), builder_sha256: sha256(readFileSync(fileURLToPath(import.meta.url))), allowlist_sha256: sha256(allowlistBytes), dependencies_lock_sha256: sha256(lockBytes), source_repository: "GOI17/alfred" },
-    transformations: ["root and package metadata reduced to runtime fields", "console HTML relocated to runtime dist path", "workspace module copies materialized inside node_modules", "mtime/ownership/modes normalized", "development files omitted from production dependencies"],
+    provenance: { source_revision: sourceRevision, builder_revision: builderRevision, exploratory, generator_sha256: sha256(readFileSync(join(repositoryRoot, "scripts/generate-homebrew-formula.mjs"))), builder_sha256: sha256(readFileSync(fileURLToPath(import.meta.url))), allowlist_sha256: sha256(allowlistBytes), dependencies_lock_sha256: sha256(lockBytes), source_repository: "GOI17/alfred" },
+    transformations: ["root and package metadata reduced to runtime fields", "console HTML relocated to runtime dist path", "workspace module copies materialized inside node_modules", "mtime/ownership/modes normalized", "development files omitted from production dependencies", ...(policy.generatedRuntimeMetadata ? ["minimal runtime kernel manifest and install instructions generated", "historical eval runner removed from runtime component metadata"] : [])],
     files: [...files].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([path, file]) => ({ path, size: file.bytes.length, mode: file.mode.toString(8), sha256: sha256(file.bytes) })) };
   const manifestBytes = jsonBytes(manifest);
   add("runtime-manifest.json", manifestBytes);
@@ -199,6 +211,7 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
     const options = {};
     for (let i = 2; i < process.argv.length; i += 2) {
       const flag = process.argv[i];
+      if (flag === "--exploratory") { options.exploratory = true; i -= 1; continue; }
       if (!["--root", "--dependencies", "--output", "--allowlist", "--source-revision", "--builder-revision"].includes(flag) || !process.argv[i + 1]) throw new Error(`Invalid runtime build argument: ${flag}`);
       options[flag === "--source-revision" ? "sourceRevision" : flag === "--builder-revision" ? "builderRevision" : flag.slice(2)] = process.argv[i + 1];
     }
