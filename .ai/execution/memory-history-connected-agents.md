@@ -4,7 +4,7 @@ description: Show saved-memory history and honest server-observed client activit
 owner: memory
 phase: issue-208-memory-history-connected-agents
 issue: 208
-status: validated
+status: reviewable
 ---
 
 # Memory history and connected agents
@@ -168,8 +168,8 @@ provider calls remained zero. Final PR publication is tracked below.
 - [x] Actual request observation and UI meet requirements 3–9.
 - [x] Allowed tests/build/checks pass against the recorded baseline.
 - [x] QA and reviewer findings are resolved or clearly documented as limitations.
-- [ ] Traces and visible worktree checkpoints record the final outcome.
-- [ ] Reviewable PR links `Closes #208` and reports validation and limitations.
+- [x] Traces and visible worktree checkpoints record the final outcome.
+- [x] Reviewable [PR #211](https://github.com/GOI17/alfred/pull/211) links `Closes #208` and reports validation and limitations.
 
 ## References
 
