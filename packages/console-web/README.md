@@ -170,3 +170,29 @@ After deploying, set a CNAME in your DNS to point at the host:
   record Cloudflare provides
 
 Then set `ALFREED_API_BASE` to `https://alfred.example.com` and re-build.
+
+## History and connected agents
+
+After unlocking, Memory history shows 25 saved memories per page with content,
+creation/update times, source, tags, namespace and project ID. Filter by exact
+namespace, project ID or memory type; applying different filters resets navigation.
+Current saved records are shown, not an edit/deletion audit. The scrollable history
+region is keyboard-focusable so activity remains reachable below it.
+
+Connected agents shows server-observed requests, not registered credentials.
+Connected means a request is open (maximum 5-minute observation lease); completed
+requests are recently active for 60 seconds, then inactive. Interrupted requests
+are disconnected and revoked credentials are labeled separately. Rows represent
+credential/transport observations, potentially shared by several agents, from this
+server process only; workspace membership is unknown. Restart, bounded capacity
+and 24-hour retention can remove observations, so absence does not prove global
+inactivity. API Keys shows credential validity independently.
+
+Activity refreshes every 15 seconds while the page is visible, skipping pending
+requests. Both views offer manual retry, mark snapshots with their observation or
+refresh time, use no-store requests and a 10-second request timeout, and clear data
+on failure or logout. Credential changes abort outstanding view requests and reject
+late responses. Memory and client fields are rendered as escaped text.
+
+Behavior checks: `node --test packages/console-web/test/*.mjs` from the repository
+root; build with `node packages/console-web/scripts/build.mjs`.

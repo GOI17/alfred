@@ -13,6 +13,7 @@
 //
 // Auth in self-hosted mode: Authorization: Bearer alk_...
 
+import { observeAgentRequest, agentIdentity } from "./agent-activity.js";
 import http from "node:http";
 import https from "node:https";
 import { readFileSync, existsSync, mkdirSync } from "node:fs";
@@ -106,6 +107,7 @@ export function createApp({
   openapiRouter,        // optional: created via createOpenapiRouter (v0.4.1)
   oauthRouter,          // optional: OAuth 2.0 authorization/token endpoints
   mcpRouter,            // optional: remote Streamable HTTP MCP + discovery
+  agentActivity = null,
   registry = null       // v0.3.1: pass-through for /console/api/bootstrap
 }) {
   return async function app(req, res) {
@@ -198,20 +200,27 @@ export function createApp({
       if (!auth.apiKey) return json(res, 401, { error: { code: "unauthorized" } });
 
       let tenantId = "loopback-anonymous";
+      let resolved = null;
       if (config?.requireAuth) {
-        const resolved = await userService.resolveApiKey(auth.apiKey);
+        resolved = await userService.resolveApiKey(auth.apiKey);
         if (!resolved) return json(res, 401, { error: { code: "unauthorized", message: "Invalid API key." } });
         tenantId = resolved.tenant_id;
       }
 
+      const finishActivity = resolved ? observeAgentRequest(agentActivity, agentIdentity(resolved, "http"), req, res) : () => {};
       let memoryService;
       try {
         memoryService = await getMemoryService(tenantId);
       } catch (err) {
+        finishActivity("failed");
         return json(res, 404, { error: { code: "tenant_not_found", message: err.message } });
       }
 
-      return handleMemoriesRoute(memoryService, tenantId, req, res, url);
+      try {
+        return await handleMemoriesRoute(memoryService, tenantId, req, res, url);
+      } finally {
+        finishActivity(res.statusCode >= 400 ? "failed" : "completed");
+      }
     }
 
     return json(res, 404, { error: { code: "not_found", message: "Route not found." } });

@@ -1,0 +1,155 @@
+{
+  "role": "qa",
+  "status": "permitted_validation_complete",
+  "timestamp": "2026-09-09T03:16:49.236004+00:00",
+  "runtime": "Node v26.8.1",
+  "provider_calls": 0,
+  "permissions": {
+    "protected_paths_read": false,
+    "dependencies_installed": false,
+    "root_evals_run": false
+  },
+  "events": [
+    {
+      "event": "qa.baseline_passed",
+      "command": "node --test packages/memory-server/test/console.test.mjs packages/memory-server/test/server.test.mjs packages/memory-server/test/cross-tenant-isolation.test.mjs packages/console-web/test/build.test.mjs",
+      "passed": 147,
+      "failed": 0
+    },
+    {
+      "event": "qa.baseline_dependency_blocked",
+      "command": "node --test packages/memory/test/*.test.js packages/memory-mcp/test/memory-mcp.test.js packages/memory-server/test/mcp-router.test.mjs",
+      "passed": 99,
+      "failed": 1,
+      "reason": "MCP integration test import fails: missing @modelcontextprotocol/sdk; no dependency installation approved."
+    },
+    {
+      "event": "qa.baseline_dependency_resolved",
+      "timestamp": "2026-09-09T03:03:22.882161+00:00",
+      "command": "node --test packages/memory-server/test/mcp-router.test.mjs",
+      "passed": 10,
+      "failed": 0,
+      "reason": "Parent reused already installed dependencies through worktree-local links; no install."
+    },
+    {
+      "event": "qa.observer_regression_passed",
+      "timestamp": "2026-09-09T03:06:37.465218+00:00",
+      "command": "TMPDIR=\"$PWD/.alfred/qa/tmp\" node --test packages/memory-server/test/agent-activity.test.mjs",
+      "passed": 14,
+      "failed": 0
+    },
+    {
+      "event": "qa.observer_lifecycle_regression_passed",
+      "timestamp": "2026-09-09T03:08:53.703753+00:00",
+      "command": "TMPDIR=\"$PWD/.alfred/qa/tmp\" node --test packages/memory-server/test/agent-activity.test.mjs",
+      "passed": 23,
+      "failed": 0
+    },
+    {
+      "event": "qa.ui_fixture_ready",
+      "url": "http://127.0.0.1:64860/console",
+      "scope": "synthetic loopback only",
+      "memories": 27,
+      "tenants": 2,
+      "statuses": [
+        "connected",
+        "recently_active",
+        "inactive",
+        "disconnected"
+      ],
+      "private_credentials_used": false
+    },
+    {
+      "event": "qa.full_permitted_backend_suite_passed",
+      "timestamp": "2026-09-09T03:13:54.098807+00:00",
+      "command": "env -u ALFRED_TEST_POSTGRES_URL -u ALFRED_SAAS_DATABASE_URL -u ALFRED_SMTP_HOST TMPDIR=\"$PWD/.alfred/qa/tmp\" node --test packages/memory-server/test/*.mjs packages/memory/test/*.test.js packages/memory-mcp/test/*.test.js",
+      "passed": 377,
+      "failed": 0,
+      "skipped": 2,
+      "skip_reason": "Opt-in real PostgreSQL integration; no live database configured or accessed."
+    },
+    {
+      "event": "qa.package_checks_passed",
+      "packages": [
+        "memory-server",
+        "memory",
+        "console-web"
+      ],
+      "failed": 0
+    },
+    {
+      "event": "qa.browser_checks_parent_reported",
+      "checks": [
+        "27 records navigate 25+2",
+        "alpha project filters to14 records without beta",
+        "missing namespace empty state",
+        "hostile memory HTML rendered inert",
+        "errors clear views and explain retry/unknown presence",
+        "logout clears storage and private views",
+        "credential switch only shows other tenant data"
+      ]
+    },
+    {
+      "event": "qa.frontend_suite_passed",
+      "timestamp": "2026-09-09T03:14:57.903825+00:00",
+      "command": "TMPDIR=\"$PWD/.alfred/qa/tmp\" node --test packages/console-web/test/*.mjs",
+      "passed": 18,
+      "failed": 0,
+      "build": "Generated dist atomically from final source;37493 bytes",
+      "diff_check": "git diff --check passed"
+    },
+    {
+      "event": "qa.latest_package_checks_passed",
+      "packages": [
+        "memory-server",
+        "console-web"
+      ],
+      "failed": 0
+    },
+    {
+      "event": "qa.final_browser_checks_parent_reported",
+      "checks": [
+        "Both memory history and activity empty states verified",
+        "Editing filter before Next resets to first page1\u201314",
+        "Final layout bounded to512px history region"
+      ],
+      "visual_qa": "Initial screenshot inspected; final capture timed out twice because embedded tab visibility. Final DOM/layout and functional checks passed."
+    },
+    {
+      "event": "qa.fixture_stopped",
+      "signal": "SIGINT",
+      "pid": 891,
+      "session_id": 62230,
+      "reason": "Parent browser validation completed; only QA-owned synthetic loopback fixture stopped."
+    }
+  ],
+  "coverage_plan": [
+    "History is tenant-scoped and stably newest-first with ID tiebreak, useful metadata, type/project filtering and bounded pagination.",
+    "Presence is based on authenticated observed requests; in-flight, recent, inactive, revoked and no-activity identities are distinct; console polling never creates presence.",
+    "Cross-tenant IDs and workspace/project filters cannot broaden tenant authorization; empty and error states clear prior data.",
+    "Untrusted content/labels rendered safely; logout and tenant/filter changes invalidate pending responses.",
+    "Observer bounded retention and credential redaction; integration wired through ordinary memory and MCP ingress."
+  ],
+  "limitations": [
+    "Root evals and checks require access to protected packages/core and are not run.",
+    "Optional @xenova/transformers absent; existing semantic test falls back to keyword."
+  ],
+  "summary": {
+    "passed": 395,
+    "failed": 0,
+    "skipped": 2,
+    "baseline_existing_passed": 256,
+    "new_feature_regression_tests": 36,
+    "new_feature_breakdown": {
+      "observer_lifecycle": 23,
+      "backend_integration": 6,
+      "frontend_behavior": 7
+    },
+    "regressions_found": 0,
+    "root_evals": "Not run: protected core/harness paths require explicit approval.",
+    "postgres_integration": "Skipped: optional real database tests; no live DB configured or accessed."
+  },
+  "trace_id": "qa-issue-208-fc1ba40ce069469b90a11097e381e52b",
+  "event": "qa.validation_completed",
+  "actor": "qa"
+}

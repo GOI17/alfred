@@ -185,6 +185,8 @@ function notInstalledResponse(res, searchedPaths) {
 export function createConsoleRouter({
   userService,
   tenantService,
+  getMemoryService = null,
+  agentActivity = null,
   config,
   consoleDirOverride = null,
   consoleUrl = null,
@@ -493,6 +495,46 @@ export function createConsoleRouter({
         });
       } catch (err) {
         return json(res, 500, { error: { code: "internal_error", message: errorMessage(err) } });
+      }
+    }
+
+    // Read-only dashboard. Console authentication/polling never records agent activity.
+    const dashboardMatch = url.pathname.match(/^\/console\/api\/tenants\/([^/]+)\/(memories|agents)$/);
+    if (dashboardMatch) {
+      res.setHeader("cache-control", "no-store");
+      let auth;
+      try { auth = await authenticate(req, userService); }
+      catch { return json(res, 503, { error: { code: "dashboard_unavailable", message: "This view is temporarily unavailable. Try again later." } }); }
+      if (auth.error) return json(res, 401, { error: auth.error });
+      let tenantId;
+      try { tenantId = decodeURIComponent(dashboardMatch[1]); }
+      catch { return json(res, 400, { error: { code: "validation_error", message: "Invalid tenant identifier." } }); }
+      if (tenantId !== auth.tenant_id) return json(res, 404, { error: { code: "not_found", message: "Tenant was not found." } });
+      if (req.method !== "GET") return json(res, 405, { error: { code: "method_not_allowed" } });
+      try {
+        if (dashboardMatch[2] === "agents") {
+          if (!agentActivity) return json(res, 503, { error: { code: "activity_unavailable", message: "Agent activity is unavailable. Try again later." } });
+          const observed = agentActivity.list(auth.tenant_id);
+          const keys = await userService.listApiKeys(auth.tenant_id, { includeRevoked: true });
+          const items = observed.items.map((item) => {
+            const key = item.credential_kind === "api_key" ? keys.find((key) => key.id === item.credential_id) : null;
+            return { ...item, label: key?.label || (item.credential_kind === "api_key" ? "API key client" : "OAuth client"),
+              status: item.credential_kind === "api_key" && (!key || key.revoked_at) ? "revoked" : item.status };
+          });
+          return json(res, 200, { ...observed, items, tenant_id: auth.tenant_id, workspace_id: null });
+        }
+        if (!getMemoryService) return json(res, 503, { error: { code: "history_unavailable", message: "Memory history is unavailable. Try again later." } });
+        const options = { limit: 25 };
+        for (const key of ["limit", "offset", "namespace", "projectId", "type", "tag"]) {
+          if (url.searchParams.has(key)) options[key] = url.searchParams.get(key);
+        }
+        const service = await getMemoryService(auth.tenant_id);
+        const history = await service.listMemories(auth.tenant_id, options);
+        return json(res, 200, { ...history, tenant_id: auth.tenant_id });
+      } catch (error) {
+        const invalid = error?.code === "validation_error";
+        return json(res, invalid ? 400 : 503, { error: { code: invalid ? "validation_error" : "dashboard_unavailable",
+          message: invalid ? "Invalid history filters or pagination." : "This view is temporarily unavailable. Try again later." } });
       }
     }
 

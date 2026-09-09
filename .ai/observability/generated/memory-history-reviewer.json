@@ -1,0 +1,96 @@
+{
+  "issue": 208,
+  "agent": "reviewer",
+  "provider_calls": 0,
+  "events": [
+    {
+      "timestamp": "2026-09-09T03:06:12.767340+00:00",
+      "event": "review_started",
+      "scope": [
+        ".ai/execution/memory-history-connected-agents.md",
+        "packages/memory-server",
+        "packages/console-web",
+        "packages/memory"
+      ],
+      "decision": "Read-only security and architecture review; no application edits or protected path access."
+    },
+    {
+      "timestamp": "2026-09-09T03:06:12.767447+00:00",
+      "event": "review_risks_identified",
+      "risks": [
+        "Bound pending lifecycle state, not just identity rows",
+        "Group credential identity across transport without duplicate connected agent claims",
+        "Attach lifecycle observation before await; cover finish, close, abort, error, timeout",
+        "Keep tenant authorization authoritative and invalidate stale browser contexts"
+      ],
+      "status": "pending_implementation_checkpoint"
+    },
+    {
+      "timestamp": "2026-09-09T03:11:38.345513+00:00",
+      "event": "review_backend_completed",
+      "resolved_findings": [
+        {
+          "severity": "P2",
+          "path": "packages/memory-server/src/console-router.js",
+          "finding": "Authentication failures on new dashboard routes escaped generic catch and exposed internal errors via server wrapper.",
+          "resolution": "Developer added generic503 auth catch."
+        },
+        {
+          "severity": "P2",
+          "path": "packages/memory-server/src/mcp-router.js",
+          "finding": "Authenticated pending tenant resolution was not observed.",
+          "resolution": "Developer moved observer lifecycle before getMemoryService in MCP and ordinary HTTP."
+        }
+      ],
+      "remaining_findings": [
+        {
+          "severity": "P2",
+          "path": "packages/console-web/src/index.html",
+          "finding": "Automatic15s poll supersedes still-pending activity requests, starving results when latency exceeds poll interval."
+        },
+        {
+          "severity": "P2",
+          "path": "packages/console-web/src/index.html",
+          "finding": "Filter edits followed by Next reuse old offset; empty later pages display reversed numeric ranges."
+        }
+      ]
+    },
+    {
+      "timestamp": "2026-09-09T03:15:33.089059+00:00",
+      "event": "review_completed",
+      "decision": "approved",
+      "resolved_findings": [
+        "Dashboard authentication exceptions now generic503 and no-store; regression verified.",
+        "MCP and fallback HTTP lifecycle starts before tenant factory awaits.",
+        "Observer caps both identity entries and pending requests; lifecycle releases finish/close/abort/error and deadline.",
+        "Edited history filters reset pagination; empty later pages offer Previous without reversed numeric range.",
+        "Automatic polls skip in-flight request; timeout/manual replacement/logout abort with response generation guards."
+      ],
+      "validation_reported_by_parent": {
+        "passed": 395,
+        "failed": 0,
+        "skipped": 2,
+        "skips": "Opt-in Postgres integration tests; no database credentials accessed.",
+        "frontend_passed": 18,
+        "package_checks": "memory-server, memory, console-web passed",
+        "browser": "Real local fixture verified history/filter/pages, hostile text rendering, error/logout and tenant context switch."
+      },
+      "review_limitations": [
+        "Root checks/evals traversing protected packages/core or harness paths not run without authorization.",
+        "No production database, live credentials, provider requests, or external deployment reviewed."
+      ],
+      "documented_product_limits": [
+        "History presents current saved records, not revision or deletion audit.",
+        "Presence is process-local bounded observed request evidence, with max request lease, recent TTL and no replica aggregation.",
+        "Identity rows group verified credentials by transport; shared credentials do not uniquely identify runtime agents.",
+        "Workspace membership is unknown; tenant isolation remains authoritative."
+      ]
+    }
+  ],
+  "trace_id": "memory-history-reviewer-issue-208",
+  "timestamp": "2026-09-09T03:15:33.089059+00:00",
+  "event": "review_completed",
+  "actor": "reviewer",
+  "decision": "approved",
+  "blocking_findings": []
+}
