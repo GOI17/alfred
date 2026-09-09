@@ -35,6 +35,14 @@ function toTitle(value) {
     .join(" ");
 }
 
+function resolveSourceRoot(root) {
+  // A task worktree owns its checked-out canonical instructions. Retain the
+  // shared project fallback for installation views that contain no .ai source.
+  return fs.existsSync(path.join(root, ".ai/manifest.json"))
+    ? root
+    : resolveProjectIdentity(root).project_root;
+}
+
 function readSourceText(root, relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8").trim();
 }
@@ -49,7 +57,7 @@ function readSourceMarkdownBody(root, relativePath) {
 function quoteMarkdownSource(sourceSpec) {
   return sourceSpec
     .split("\n")
-    .map((line) => `> ${line}`)
+    .map((line) => line ? `> ${line}` : ">")
     .join("\n");
 }
 
@@ -65,6 +73,7 @@ function buildRoleInstructions(agent) {
   if (agent.id === "orchestrator") {
     return `## Routing table (execute before any action)
 
+- Before delegating a repository-writing task, apply the canonical repository write isolation policy below and pass the verified task worktree context.
 - **STOP-and-delegate rule**: if you are about to write, edit, refactor, or delete application code, stop and delegate to the \`developer\` agent. You must not modify code yourself.
 - Route implementation/coding work to the \`developer\` agent.
 - Route architecture/DDD/pattern decisions to the \`architect\` agent.
@@ -407,7 +416,7 @@ export function buildOpencodeIntegrationPreview({ root }) {
 export function buildOpencodeInstallPreview({
   root,
   outputDir = ".ai/generated/opencode-install",
-  projectRoot = resolveProjectIdentity(root).project_root,
+  projectRoot = resolveSourceRoot(root),
   modelAssignments = []
 }) {
   const kernel = loadArchitectureKernel(projectRoot);
@@ -451,7 +460,7 @@ export function buildOpencodeInstallPreview({
 export function writeOpencodeInstallPreview({
   root,
   outputDir = ".ai/generated/opencode-install",
-  projectRoot = resolveProjectIdentity(root).project_root,
+  projectRoot = resolveSourceRoot(root),
   modelAssignments = []
 }) {
   const preview = buildOpencodeInstallPreview({ root, outputDir, projectRoot, modelAssignments });
