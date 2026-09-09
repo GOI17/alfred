@@ -238,3 +238,44 @@ modes (the API is decoupled from the static SPA).
 - Real `alfred migrate` SQLite ↔ Postgres data migration.
 - Postgres-backed `createPostgresTenantStore` (currently a stub).
 - WSGI-style multi-process listen via `cluster` module.
+
+## Memory history and observed agent activity
+
+The authenticated console exposes read-only tenant views:
+
+- `GET /console/api/tenants/:tenantId/memories`: existing `listMemories` results,
+  newest `createdAt` first and descending ID for ties. Default 25 records;
+  `limit` (1–100), `offset` (0–100000), `namespace`, `projectId`, `type` and `tag`
+  preserve the existing Memory service filters. History shows current saved
+  records, not revisions or deleted memories. Pages can change during concurrent
+  writes; they are not a snapshot.
+- `GET /console/api/tenants/:tenantId/agents`: observed clients grouped by verified
+  credential and transport, with last observed timestamp and status. Tenant path
+  must equal the authenticated API key's tenant; a mismatch returns 404. Both
+  views use `Cache-Control: no-store`, and failures return generic errors.
+
+`alfred serve` shares one bounded `createAgentActivity` observer between the
+console, authenticated OpenAPI memory/search routes and remote HTTP MCP. The
+fallback `createApp` Memory route also accepts the same observer. Console reads,
+registration, manifests, health checks and API key `last_used_at` do not count
+as agent activity. Standalone routers must receive the shared observer explicitly;
+an unwired activity view returns 503 rather than an invented empty success.
+
+| Status | Evidence |
+| --- | --- |
+| `connected` | At least one authenticated request is still open within its 5-minute observation lease. |
+| `recently_active` | An observed request completed within the previous 60 seconds (including failed requests). |
+| `inactive` | No recent activity, or the maximum request lease expired. |
+| `disconnected` | The latest tracked request aborted or its transport closed before completion; other concurrent open requests still take precedence. |
+| `revoked` | The observed API key is revoked or no longer available in this tenant. |
+
+Activity is server-process-local: restart clears it, replicas are not aggregated,
+old records expire after 24 hours, and no persistent client connection or
+background heartbeat is inferred. At most 1000 credential/transport entries and
+100 concurrent requests per entry are tracked. Old inactive entries are evicted
+first; additional observations are ignored when all capacity is active. An absent
+row is not proof that an agent is offline everywhere. Shared credentials may
+represent multiple runtimes; OAuth clients group by the verified client ID across
+token refreshes. Tokens, key secrets and hashes are never exposed by this view.
+Filesystem workspace membership is unknown; namespace/project filters narrow
+history inside the authenticated tenant but do not create workspace authorization.

@@ -52,14 +52,14 @@ test("src/index.html has the key UI elements and current-session behavior", asyn
     assert.ok(text.includes(r), "missing: " + r);
   }
 
-  const sourceStart = text.indexOf("function showUnlockedState() {");
+  const sourceStart = text.indexOf("function clearMemoryViews() {");
   const sourceEnd = text.indexOf("function setKey() {");
   assert.ok(sourceStart >= 0 && sourceEnd > sourceStart, "session functions should be extractable");
 
   const elementIds = [
     "sessionApiKey", "toggleSessionApiKey", "sessionStatus", "apiStatus",
     "locked", "unlocked", "apiKey", "newKeyBody", "tenantsBody",
-    "keysBody", "keyTenant", "keyLabel", "showRevoked"
+    "keysBody", "keyTenant", "keyLabel", "showRevoked", "historyBody", "agentsBody", "historyPage", "historyStatus", "agentStatus", "historyNamespace", "historyProject", "historyType", "historyPrevious", "historyNext"
   ];
   const elements = Object.fromEntries(elementIds.map((id) => [id, {
     id,
@@ -81,6 +81,8 @@ test("src/index.html has the key UI elements and current-session behavior", asyn
     let API_KEY = "alk_active_secret";
     let CURRENT_TENANT = "usr_t_active";
     let SESSION_VERSION = 0;
+    let HISTORY_REQUEST = 0, ACTIVITY_REQUEST = 0, HISTORY_OFFSET = 0;
+    let HISTORY_FILTERS = "", HISTORY_CONTROLLER = null, ACTIVITY_CONTROLLER = null;
     ${text.slice(sourceStart, sourceEnd)}
     return {
       showUnlockedState,

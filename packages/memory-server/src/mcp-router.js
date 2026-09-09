@@ -3,6 +3,8 @@
 // are included in production-only installs.
 import { createMemoryMcpServer } from "../../memory-mcp/src/index.js";
 
+import { observeAgentRequest, agentIdentity } from "./agent-activity.js";
+
 const JSON_TYPE = "application/json; charset=utf-8";
 const MCP_SCOPES = Object.freeze(["memory:read", "memory:write"]);
 
@@ -13,6 +15,7 @@ export function createMcpRouter({
   challengeToken = null,
   serverFactory = createMemoryMcpServer,
   transportFactory = defaultTransportFactory,
+  agentActivity = null,
   trace = null
 } = {}) {
   if (typeof getMemoryService !== "function") {
@@ -64,10 +67,12 @@ export function createMcpRouter({
       return unauthorized(res, metadataUrl, "invalid_token", "A valid Alfred OAuth access token is required.");
     }
 
+    const finishActivity = observeAgentRequest(agentActivity, agentIdentity(resolved, "mcp"), req, res);
     let memoryService;
     try {
       memoryService = await getMemoryService(resolved.tenant_id);
     } catch {
+      finishActivity("failed");
       await emitTrace(trace, {
         tenant_id: resolved.tenant_id,
         event: "mcp.request_failed",
@@ -107,6 +112,7 @@ export function createMcpRouter({
         payload: { provider_calls: 0 }
       });
     } catch {
+      finishActivity("failed");
       await emitTrace(trace, {
         tenant_id: resolved.tenant_id,
         event: "mcp.request_failed",
@@ -118,7 +124,10 @@ export function createMcpRouter({
         });
       }
     } finally {
-      if (res.writableEnded || typeof res.on !== "function") await close();
+      if (res.writableEnded || typeof res.on !== "function") {
+        finishActivity(res.statusCode >= 400 ? "failed" : "completed");
+        await close();
+      }
     }
   };
 }

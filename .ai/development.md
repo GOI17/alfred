@@ -19,7 +19,28 @@ Before writing any code, create a GitHub issue that describes:
 - **Tasks**: Specific implementation steps (checklist format)
 - **ACs**: Acceptance criteria that define when the feature is complete
 
-### 2. Create a Branch
+### 2. Establish the Task Worktree Before Any Repository Write
+
+Apply `.ai/agents/orchestrator.md` repository write isolation before writing
+code, docs, configuration, specs, generated artifacts, traces or deletions.
+Read-only tasks do not require a worktree. Each independent writing task needs
+an isolated branch and native Git worktree:
+
+```bash
+git worktree add -b <task-branch> <task-path> <base>
+```
+
+Use the requested base or resolve the repository default through Git. Verify
+repository identity, cwd, branch and `git worktree list --porcelain` before any
+write. Reuse a verified dedicated worktree already created for the same task
+across its edits and delegated agents; do not create worktrees recursively.
+Preserve dirty checkouts and other people's changes. If creation or verification
+fails, report the blocker without writing in the main checkout. Emit traces via
+a non-repository channel until isolation is established. Protected-path and
+installation approvals remain in force.
+
+The entire lifecycle uses native Git; clones, copies, harness APIs and Orca
+worktree creation are prohibited. Orca may display the session.
 
 Branch names follow the pattern: `issue-{number}-{short-title}`
 

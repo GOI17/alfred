@@ -142,7 +142,7 @@ test("opencode generation keeps Orchestrator routing out of every specialist", (
   for (const [agentId, roleScope] of Object.entries(specialistRoleScopes)) {
     const specialist = agentFile(preview, agentId);
     const sourceSpec = readFileSync(join(root, `.ai/agents/${agentId}.md`), "utf8").trim();
-    const quotedSource = sourceSpec.split("\n").map((line) => `> ${line}`).join("\n");
+    const quotedSource = sourceSpec.split("\n").map((line) => line ? `> ${line}` : ">").join("\n");
 
     assert.match(frontmatter(specialist.content), /^mode: subagent$/m);
     assert.match(frontmatter(specialist.content), /^permission:\n  edit: ask\n  bash: ask$/m);
@@ -376,7 +376,7 @@ test("opencode runtime compaction hook emits trace above threshold and keeps pro
   assert.ok(result.summary_messages.length < messages.length);
 });
 
-test("buildOpencodeInstallPreview in worktree reads .ai/ source from project root", () => {
+test("opencode worktree previews prefer local source and preserve the shared fallback", () => {
   const main = tmp("alfred-opencode-worktree-main-");
   const worktree = tmp("alfred-opencode-worktree-view-");
   try {
@@ -386,12 +386,34 @@ test("buildOpencodeInstallPreview in worktree reads .ai/ source from project roo
     git(["commit", "-m", "init"], main);
     git(["worktree", "add", worktree], main);
 
+    const specPath = ".ai/agents/orchestrator.md";
+    const mainSpec = "# Orchestrator\nDirty main instructions must stay untouched.\n";
+    const worktreeSpec = "# Orchestrator\nTask worktree instructions must win.\n";
+    writeFileSync(join(main, specPath), mainSpec);
+    writeFileSync(join(worktree, specPath), worktreeSpec);
+    const mainStatus = git(["status", "--porcelain"], main);
+    const options = { root: worktree, outputDir: ".ai/generated/worktree-install" };
+    const localPreview = buildOpencodeInstallPreview(options);
+    assert.match(agentFile(localPreview, "orchestrator").content, /Task worktree instructions must win/);
+    assert.doesNotMatch(agentFile(localPreview, "orchestrator").content, /Dirty main instructions/);
+    const written = writeOpencodeInstallPreview(options);
+    const primary = agentFile(written, "orchestrator");
+    assert.equal(readFileSync(join(worktree, primary.path), "utf8"), primary.content);
+    assert.match(primary.content, /Task worktree instructions must win/);
+    assert.equal(existsSync(join(main, options.outputDir)), false);
+    const overridden = buildOpencodeInstallPreview({ ...options, projectRoot: main });
+    assert.match(agentFile(overridden, "orchestrator").content, /Dirty main instructions/);
+    assert.equal(readFileSync(join(main, specPath), "utf8"), mainSpec);
+    assert.equal(git(["status", "--porcelain"], main), mainStatus);
+
     // Remove .ai/ from the worktree view so we can prove preview reads from project root.
     rmSync(join(worktree, ".ai"), { recursive: true, force: true });
 
     const preview = buildOpencodeInstallPreview({ root: worktree, outputDir: ".ai/generated/worktree-install" });
 
     assert.equal(preview.harness, "opencode");
+    assert.match(agentFile(preview, "orchestrator").content, /Dirty main instructions/);
+    assert.equal(git(["status", "--porcelain"], main), mainStatus);
     assert.equal(preview.files.filter((file) => file.kind === "agent").length, 1);
     assert.ok(preview.files.some((file) => file.install_path === ".opencode/agents/orchestrator.md"));
   } finally {

@@ -1,0 +1,20 @@
+{
+  "trace_id": "issue-208-librarian-specification",
+  "timestamp": "2026-09-09T03:03:36.757787+00:00",
+  "actor": "librarian",
+  "event": "task_specified",
+  "decision": "document-existing-capabilities-and-observation-contract",
+  "target": ".ai/execution/memory-history-connected-agents.md",
+  "reason": "User explicitly requested an SDD specification; delegated documentation is limited to the authorized worktree and excludes application code.",
+  "data": {
+    "issue": 208,
+    "application_provider_calls": 0,
+    "protected_paths_accessed": false,
+    "findings": [
+      "Saved-memory history has no durable revision audit.",
+      "Stateless request lifecycle provides bounded connection evidence.",
+      "Credential registration and console authentication are not agent presence.",
+      "Presence is tenant-scoped; trusted workspace identity is unavailable."
+    ]
+  }
+}

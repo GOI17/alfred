@@ -344,6 +344,7 @@ export function createOAuthService({ config, registry, userService, now = () => 
       tenant_id: row.tenant_id,
       scopes: row.scope.split(/\s+/).filter(Boolean),
       token_id: row.id,
+      client_id: row.client_id,
       resource: row.resource ?? null
     };
   }

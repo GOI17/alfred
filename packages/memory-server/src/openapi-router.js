@@ -26,6 +26,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { createActionRateLimiter } from "./bootstrap/action-rate-limiter.js";
+import { observeAgentRequest, agentIdentity } from "./agent-activity.js";
 import { renderPrivacyPolicyPage } from "./privacy-policy-page.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -156,6 +157,7 @@ export function createOpenapiRouter({
   projectRoot,           // repo root for manifest loaders
   registry = null,       // optional; if provided, rate limiter is enabled
   oauthService = null,   // optional; resolves scoped alo_ access tokens
+  agentActivity = null,
   requireAuth = true,
   allowedOrigins = []
 } = {}) {
@@ -298,6 +300,9 @@ export function createOpenapiRouter({
         return json(res, rl.status, rl.body);
       }
 
+      const observedRoute = url.pathname === "/search" || url.pathname === "/memories" || url.pathname.startsWith("/memories/");
+      const finishActivity = observedRoute ? observeAgentRequest(agentActivity, agentIdentity(resolved, "http"), req, res) : () => {};
+      try {
       // --- /search ---
       if (url.pathname === "/search" && req.method === "POST") {
         const body = await readJsonBody(req);
@@ -412,6 +417,9 @@ export function createOpenapiRouter({
           if (rl.record) await rl.record("internal_error", err.code);
           return json(res, err.status || 500, { error: { code: err.code || "internal_error", message: url.pathname === "/memories/capture" && !err.status ? "Memory capture failed." : err.message } });
         }
+      }
+      } finally {
+        finishActivity(res.statusCode >= 400 ? "failed" : "completed");
       }
     }
 

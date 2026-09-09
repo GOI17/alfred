@@ -10,6 +10,7 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { createMemoryService, createInMemoryStore, createSqliteMemoryStore, createMemoryHttpHandler } from "../../memory/src/index.js";
 import { createMemoryClient } from "../../memory-client/src/index.js";
+import { createAgentActivity } from "../src/agent-activity.js";
 import { createApp } from "../src/server.js";
 import { createOpenapiRouter } from "../src/openapi-router.js";
 
@@ -23,7 +24,7 @@ function capture(content = spanish, candidate = {}, context = {}) {
 }
 const userService = {
   async resolveApiKey(key) {
-    return { "alice-key": { tenant_id: "alice" }, "bob-key": { tenant_id: "bob" } }[key] ?? null;
+    return { "alice-key": { tenant_id: "alice", key_id: "alice-credential" }, "bob-key": { tenant_id: "bob", key_id: "bob-credential" } }[key] ?? null;
   }
 };
 async function host(t, handler) {
@@ -38,19 +39,20 @@ async function host(t, handler) {
 }
 async function fixture(t, { store = createInMemoryStore(), surface = "server" } = {}) {
   const traces = [];
+  const agentActivity = createAgentActivity({ trace: (event) => traces.push(event) });
   const service = createMemoryService({ store, trace: (event) => traces.push(event) });
   const getMemoryService = async () => service;
   const handler = surface === "domain"
     ? createMemoryHttpHandler({ service, apiKeys: { "alice-key": "alice", "bob-key": "bob" } })
     : surface === "action"
-      ? createOpenapiRouter({ projectRoot: fileURLToPath(new URL("../../../", import.meta.url)), userService, getMemoryService, oauthService: {
+      ? createOpenapiRouter({ agentActivity, projectRoot: fileURLToPath(new URL("../../../", import.meta.url)), userService, getMemoryService, oauthService: {
         async resolveAccessToken(token) {
           if (token === "alo_read") return { tenant_id: "alice", scopes: ["memory:read"] };
           if (token === "alo_write") return { tenant_id: "alice", scopes: ["memory:read", "memory:write"] };
           return null;
         }
       } })
-      : createApp({ userService, getMemoryService, config: { mode: "local", requireAuth: true } });
+      : createApp({ agentActivity, userService, getMemoryService, config: { mode: "local", requireAuth: true } });
   const baseUrl = await host(t, handler);
   const alice = createMemoryClient({ baseUrl, apiKey: "alice-key" });
   const bob = createMemoryClient({ baseUrl, apiKey: "bob-key" });
@@ -61,7 +63,7 @@ async function fixture(t, { store = createInMemoryStore(), surface = "server" } 
     });
     return { status: res.status, body: await res.json() };
   }
-  return { service, store, traces, baseUrl, alice, bob, wire };
+  return { service, store, traces, agentActivity, baseUrl, alice, bob, wire };
 }
 
 for (const surface of ["domain", "server", "action"]) {
@@ -123,9 +125,9 @@ test("proactive acceptance: source exclusions, uncertainty, sensitive and tempor
   for (const raw of [spanish, english, "dummy-secret-for-test", "prueba-no-real", "4111 1111", "diabetes"]) {
     assert.equal(serialized.includes(raw), false, "trace excludes rejected content and context");
   }
-  assert.ok(f.traces.length > 0, "capture emits auditable outcomes");
-  for (const event of f.traces) {
-    assert.equal(event.event, "memory.capture");
+  const captureTraces = f.traces.filter((event) => event.event === "memory.capture");
+  assert.equal(captureTraces.length, denied.length, "every denied capture emits an auditable outcome");
+  for (const event of captureTraces) {
     assert.equal(event.payload.provider_calls, 0);
     assert.equal(event.payload.outcome, "skipped");
   }
@@ -310,3 +312,31 @@ test("proactive acceptance: unconfirmed store writes and duplicate lookup failur
     });
   }
 });
+
+
+for (const surface of ["server", "action"]) {
+  test(`capture/activity integration: ${surface} tracks completed and failed captures without leaking content`, async (t) => {
+    const f = await fixture(t, { surface });
+    for (const [input, expected] of [[capture(), "created"], [capture(), "duplicate"], [capture(english, {}, { persistenceDisabled: true }), "skipped"]]) {
+      const result = await f.wire(input);
+      assert.equal(result.body.status, expected);
+      const activity = f.agentActivity.list("alice").items;
+      assert.equal(activity.length, 1);
+      assert.equal(activity[0].active_requests, 0);
+      assert.equal(activity[0].status, "recently_active");
+      assert.equal(activity[0].last_outcome, "completed");
+      assert.equal(f.agentActivity.list("bob").items.length, 0);
+    }
+    assert.equal((await f.service.listMemories("alice")).pagination.total, 1);
+    assert.ok(f.traces.some((event) => event.event === "memory.capture" && event.payload.outcome === "created"));
+    assert.ok(f.traces.some((event) => event.event === "agent.activity" && event.payload.outcome === "completed"));
+    assert.ok(!JSON.stringify(f.traces).includes(spanish));
+    const failed = await fixture(t, { surface, store: { ...createInMemoryStore(), async create() { throw new Error("Private store detail"); } } });
+    assert.equal((await failed.wire(capture())).status, 500);
+    const activity = failed.agentActivity.list("alice").items;
+    assert.equal(activity[0].active_requests, 0);
+    assert.equal(activity[0].last_outcome, "failed");
+    assert.ok(failed.traces.some((event) => event.event === "memory.capture" && event.payload.outcome === "failed"));
+    assert.ok(!JSON.stringify(failed.traces).includes("Private store detail"));
+  });
+}

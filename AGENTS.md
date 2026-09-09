@@ -118,10 +118,23 @@ The orchestrator must not delegate small or simple tasks. Delegate only when spe
 
 ## 8. Feature Development Process
 
+Before any repository-file write (code, docs, configuration, specs, artifacts,
+traces or deletions), the Orchestrator MUST apply the repository write isolation
+policy in `.ai/agents/orchestrator.md`. Read-only tasks need no worktree. Each
+independent writing task needs an isolated branch and native Git worktree;
+verify and reuse a dedicated worktree already created for that same task across
+all edits and agents. Preserve dirty checkouts and verify cwd/branch through Git.
+Use native Git for the entire lifecycle, never clones, copies, harness APIs or
+Orca worktree creation. If Git cannot establish isolation, report the blocker
+without writing in the main checkout. Protected-path permissions still apply.
+
 Every change follows SDD (Spec-Driven Development):
 
 1. Create a GitHub issue describing goal, context, tasks, and acceptance criteria.
-2. Create a branch: `issue-{number}-{short-title}`.
+2. Before any repository write, create the task branch and worktree with
+   `git worktree add -b issue-{number}-{short-title} <task-path> <base>`, or
+   verify and reuse the dedicated worktree already created for this task. Use
+   the requested base or resolve the repository default through Git.
 3. Read existing specs in `.ai/`, then create or update the spec in `.ai/execution/` or the relevant directory.
 4. Implement following the spec, keeping provider calls at zero for deterministic operations.
 5. Use atomic file operations (temp + rename).

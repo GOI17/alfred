@@ -42,6 +42,16 @@
     }
     h2 { margin: 0 0 12px 0; font-size: 16px; font-weight: 600; }
     .hint { color: var(--muted); margin: 0 0 16px 0; font-size: 13px; }
+    .history-filters { align-items: end; }
+    .history-filters label { display: grid; gap: 4px; }
+    .history-filters input, .history-filters select, .history-filters button {
+      background: #0d0f13; color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 10px; font: inherit; max-width: 100%;
+    }
+    .history-filters button { cursor: pointer; border-color: var(--accent); }
+    #historyBody { max-height: 32rem; overflow: auto; }
+    #agentsBody { overflow-x: auto; }
+    button:disabled { opacity: .5; cursor: default; }
     .empty { color: var(--muted); padding: 12px 0; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
@@ -159,6 +169,33 @@
     </div>
 
     <div class="panel">
+      <h2>Memory history</h2>
+      <p class="hint">Saved memories, newest created first. These are current records; earlier edits and deleted memories are not retained here.</p>
+      <form class="row history-filters" onsubmit="event.preventDefault(); loadHistory(0)">
+        <label class="small">Type <select id="historyType"><option value="">All types</option><option>preference</option><option>fact</option><option>decision</option><option>workflow</option><option>project</option><option>correction</option><option>source</option></select></label>
+        <label class="small">Namespace <input id="historyNamespace" placeholder="e.g. project:alfred" /></label>
+        <label class="small">Project ID <input id="historyProject" placeholder="Exact project ID" /></label>
+        <button type="submit">Apply filters / Refresh</button>
+      </form>
+      <p id="historyStatus" class="small" role="status" aria-live="polite">Select a tenant to view history.</p>
+      <div id="historyBody" role="region" aria-label="Saved memory history" tabindex="0"></div>
+      <div class="row">
+        <button id="historyPrevious" class="btn secondary" type="button" disabled onclick="loadHistory(HISTORY_OFFSET - 25)">Previous</button>
+        <span id="historyPage" class="small"></span>
+        <button id="historyNext" class="btn secondary" type="button" disabled onclick="loadHistory(HISTORY_OFFSET + 25)">Next</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Connected agents</h2>
+      <p class="hint">Connected means an authenticated request is open. Recently active means a request completed in the last 60 seconds; an idle client has no persistent connection. Open requests have a maximum 5-minute observation lease; after that, status is inactive until new activity.</p>
+      <p class="hint">Rows identify observed clients per credential and transport. Shared credentials may represent several agents. Activity is tenant-wide; workspace membership is unknown. This server process only, resets on restart, no replica aggregation; observations are bounded and retained for up to 24 hours.</p>
+      <button class="btn secondary" type="button" onclick="loadAgentActivity()">Refresh activity</button>
+      <p id="agentStatus" class="small" role="status" aria-live="polite">Select a tenant to view activity.</p>
+      <div id="agentsBody"></div>
+    </div>
+
+    <div class="panel">
       <h2>API Keys</h2>
       <p class="hint">API keys are credentials for any agent. They are shown once when issued — copy and store safely.</p>
       <div class="row" style="margin-bottom: 12px;">
@@ -251,7 +288,7 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
     <div class="panel">
       <h2>What is this?</h2>
       <p class="hint">Alfred Memory is a multi-tenant memory store. The console manages which agents can talk to it and with which credentials.</p>
-      <p class="hint">Memory is never written here — it lives in each tenant's database (Postgres or SQLite). This page only shows the keys and connections.</p>
+      <p class="hint">Memory is never written here — it lives in each tenant's database (Postgres or SQLite). This page shows saved-memory history, observed client activity, and credentials.</p>
     </div>
 
   </div>
@@ -261,6 +298,12 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
 let API_KEY = "";
 let CURRENT_TENANT = "";
 let SESSION_VERSION = 0;
+let HISTORY_REQUEST = 0;
+let ACTIVITY_REQUEST = 0;
+let HISTORY_OFFSET = 0;
+let HISTORY_FILTERS = "";
+let HISTORY_CONTROLLER = null;
+let ACTIVITY_CONTROLLER = null;
 const TENANT_NAME_RE = /^[A-Za-z0-9 _-]{1,64}$/;
 
 function validateTenantName(name) {
@@ -329,7 +372,7 @@ async function signup() {
     document.getElementById("newKeyBody").innerHTML =
       '<div class="panel" style="background: #1a2a1a; border-color: var(--good);">' +
       '<strong class="ok">Welcome! Your new API key for tenant ' + res.tenant.id + '</strong><br>' +
-      '<div class="key-display">' + res.api_key + '</div>' +
+      '<div class="key-display">' + escapeHtml(res.api_key) + '</div>' +
       '<div class="small">Copy this key now. It will not be shown again. Schema: <code>' + tenantSchema(res.tenant) + '</code></div>' +
       '</div>';
     hint.textContent = "Memory created successfully. Copy your API key now.";
@@ -367,8 +410,27 @@ function showErrorInline(elementId, message) {
   el.style.color = "var(--bad)";
 }
 
+function clearMemoryViews() {
+  HISTORY_CONTROLLER?.abort();
+  ACTIVITY_CONTROLLER?.abort();
+  HISTORY_CONTROLLER = null;
+  ACTIVITY_CONTROLLER = null;
+  HISTORY_FILTERS = "";
+  HISTORY_REQUEST += 1;
+  ACTIVITY_REQUEST += 1;
+  HISTORY_OFFSET = 0;
+  for (const id of ["historyBody", "agentsBody", "historyPage", "historyStatus", "agentStatus"]) {
+    document.getElementById(id).textContent = "";
+  }
+  for (const id of ["historyNamespace", "historyProject", "historyType"]) document.getElementById(id).value = "";
+  document.getElementById("historyPrevious").disabled = true;
+  document.getElementById("historyNext").disabled = true;
+}
+
 function showUnlockedState() {
   SESSION_VERSION += 1;
+  CURRENT_TENANT = "";
+  clearMemoryViews();
   const sessionApiKey = document.getElementById("sessionApiKey");
   const toggleButton = document.getElementById("toggleSessionApiKey");
   sessionApiKey.value = API_KEY;
@@ -415,6 +477,7 @@ function logout() {
   SESSION_VERSION += 1;
   API_KEY = "";
   CURRENT_TENANT = "";
+  clearMemoryViews();
   localStorage.removeItem("alfred_api_key");
 
   const sessionApiKey = document.getElementById("sessionApiKey");
@@ -510,12 +573,107 @@ class ApiError extends Error {
 
 function pill(kind) {
   const labels = { human_agent: "human", coding_agent_only: "coding", hybrid_with_human: "hybrid", server_managed: "server", archived: "archived" };
-  return '<span class="pill ' + (labels[kind] || "coding") + '">' + kind + '</span>';
+  return '<span class="pill ' + (labels[kind] || "coding") + '">' + escapeHtml(kind) + '</span>';
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+}
+
+async function loadHistory(offset = 0) {
+  if (!API_KEY || !CURRENT_TENANT) return;
+  const sessionVersion = SESSION_VERSION;
+  const tenant = CURRENT_TENANT;
+  const request = ++HISTORY_REQUEST;
+  HISTORY_CONTROLLER?.abort();
+  const controller = new AbortController();
+  HISTORY_CONTROLLER = controller;
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  const body = document.getElementById("historyBody");
+  const status = document.getElementById("historyStatus");
+  body.textContent = "";
+  status.textContent = "Loading memory history…";
+  document.getElementById("historyPrevious").disabled = true;
+  document.getElementById("historyNext").disabled = true;
+  document.getElementById("historyPage").textContent = "";
+  const query = new URLSearchParams();
+  for (const [key, id] of [["type", "historyType"], ["namespace", "historyNamespace"], ["projectId", "historyProject"]]) {
+    const value = document.getElementById(id).value.trim();
+    if (value) query.set(key, value);
+  }
+  const filters = query.toString();
+  if (filters !== HISTORY_FILTERS) offset = 0;
+  HISTORY_FILTERS = filters;
+  query.set("limit", "25");
+  query.set("offset", String(Math.max(0, offset)));
+  const current = () => request === HISTORY_REQUEST && sessionVersion === SESSION_VERSION && tenant === CURRENT_TENANT && API_KEY;
+  try {
+    const result = await api("/console/api/tenants/" + encodeURIComponent(tenant) + "/memories?" + query, { cache: "no-store", signal: controller.signal });
+    if (!current()) return;
+    if (!Array.isArray(result.items) || !result.pagination) throw new Error("Invalid history response");
+    HISTORY_OFFSET = result.pagination.offset;
+    body.innerHTML = result.items.map((memory) => '<article style="border-top:1px solid var(--border); padding:12px 0">' +
+      '<div class="small">' + escapeHtml(memory.type) + ' · ' + escapeHtml(memory.namespace) + ' · Project: ' + escapeHtml(memory.projectId || "—") + '</div>' +
+      '<p style="white-space:pre-wrap; overflow-wrap:anywhere">' + escapeHtml(memory.content) + '</p>' +
+      '<div class="small">Created: ' + escapeHtml(memory.createdAt) + ' · Updated: ' + escapeHtml(memory.updatedAt || memory.createdAt) + '</div>' +
+      '<div class="small" style="overflow-wrap:anywhere">Source: ' + escapeHtml(memory.source || "Unknown") + ' · Tags: ' + escapeHtml((memory.tags || []).join(", ")) + ' · ID: ' + escapeHtml(memory.id) + '</div></article>').join("");
+    if (!result.items.length) body.textContent = "No saved memories match these filters.";
+    const { total, limit } = result.pagination;
+    document.getElementById("historyPage").textContent = result.items.length ? (HISTORY_OFFSET + 1) + "–" + (HISTORY_OFFSET + result.items.length) + " of " + total : (total ? "No memories on this page · " + total + " total. Use Previous or refresh." : "0 memories");
+    document.getElementById("historyPrevious").disabled = HISTORY_OFFSET === 0;
+    document.getElementById("historyNext").disabled = HISTORY_OFFSET + limit >= total;
+    status.textContent = "Updated " + new Date().toLocaleTimeString() + " · Newest created first";
+  } catch {
+    if (!current()) return;
+    body.textContent = "";
+    status.textContent = "Could not load history. Use Apply filters / Refresh to retry.";
+  } finally {
+    clearTimeout(timeout);
+    if (request === HISTORY_REQUEST) HISTORY_CONTROLLER = null;
+  }
+}
+
+async function loadAgentActivity(manual = true) {
+  if (!API_KEY || !CURRENT_TENANT || (!manual && ACTIVITY_CONTROLLER)) return;
+  const sessionVersion = SESSION_VERSION;
+  const tenant = CURRENT_TENANT;
+  const request = ++ACTIVITY_REQUEST;
+  ACTIVITY_CONTROLLER?.abort();
+  const controller = new AbortController();
+  ACTIVITY_CONTROLLER = controller;
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  const body = document.getElementById("agentsBody");
+  const status = document.getElementById("agentStatus");
+  body.textContent = "";
+  status.textContent = "Checking observed agent activity…";
+  const current = () => request === ACTIVITY_REQUEST && sessionVersion === SESSION_VERSION && tenant === CURRENT_TENANT && API_KEY;
+  try {
+    const result = await api("/console/api/tenants/" + encodeURIComponent(tenant) + "/agents", { cache: "no-store", signal: controller.signal });
+    if (!current()) return;
+    if (!Array.isArray(result.items) || !result.observed_at) throw new Error("Invalid activity response");
+    const labels = { connected: "Connected — request open", recently_active: "Recently active", inactive: "Inactive — no recent activity", disconnected: "Disconnected — request aborted", revoked: "Revoked credential" };
+    body.innerHTML = result.items.length ? '<table><thead><tr><th>Client</th><th>Transport</th><th>Status</th><th>Last observed (UTC)</th></tr></thead><tbody>' +
+      result.items.map((item) => '<tr><td style="overflow-wrap:anywhere">' + escapeHtml(item.label) + '<div class="small">' + escapeHtml(item.credential_kind) + ': ' + escapeHtml(item.credential_id) + '</div></td><td>' + escapeHtml(item.transport) + '</td><td>' + escapeHtml(labels[item.status] || "Unknown") + '</td><td>' + escapeHtml(item.last_seen_at) + '</td></tr>').join("") + '</tbody></table>' : "";
+    if (!result.items.length) body.textContent = "No agent activity observed on this server. Registered API keys alone do not indicate a connection.";
+    status.textContent = "Observed " + result.observed_at + " · Refreshes every 15 seconds while visible. Status is a snapshot; an open request may have ended since this check.";
+  } catch {
+    if (!current()) return;
+    body.textContent = "";
+    status.textContent = "Activity unavailable — connection status is unknown. Use Refresh activity to retry.";
+  } finally {
+    clearTimeout(timeout);
+    if (request === ACTIVITY_REQUEST) ACTIVITY_CONTROLLER = null;
+  }
+}
+
+setInterval(() => {
+  if (API_KEY && CURRENT_TENANT && !document.hidden) loadAgentActivity(false);
+}, 15000);
+
 async function loadAll() {
+  const sessionVersion = SESSION_VERSION;
   try { await loadTenants(); }
-  catch (err) { showError(err); }
+  catch (err) { if (sessionVersion === SESSION_VERSION && API_KEY) showError(err); }
 }
 
 async function loadTenants() {
@@ -532,12 +690,12 @@ async function loadTenants() {
   let rows = "";
   for (const t of tenants) {
     rows += "<tr>" +
-      "<td class='mono'>" + t.id + "</td>" +
-      "<td>" + (t.display_name || "—") + "</td>" +
+      "<td class='mono'>" + escapeHtml(t.id) + "</td>" +
+      "<td>" + escapeHtml(t.display_name || "—") + "</td>" +
       "<td>" + pill(t.kind) + "</td>" +
-      "<td>" + t.storage_backend + "</td>" +
-      "<td class='small'>" + tenantSchema(t) + "</td>" +
-      "<td class='small'>" + (t.created_at || "").slice(0, 10) + "</td>" +
+      "<td>" + escapeHtml(t.storage_backend) + "</td>" +
+      "<td class='small'>" + escapeHtml(tenantSchema(t)) + "</td>" +
+      "<td class='small'>" + escapeHtml((t.created_at || "").slice(0, 10)) + "</td>" +
       "</tr>";
   }
   document.getElementById("tenantsBody").innerHTML = '<table><thead><tr><th>ID</th><th>Name</th><th>Kind</th><th>Backend</th><th>Schema</th><th>Created</th></tr></thead><tbody>' + rows + "</tbody></table>";
@@ -547,7 +705,9 @@ async function loadTenants() {
     sel.appendChild(opt);
   }
   CURRENT_TENANT = tenants[0].id;
-  loadKeys();
+  loadKeys().catch((err) => { if (sessionVersion === SESSION_VERSION && API_KEY) showError(err); });
+  loadHistory(0);
+  loadAgentActivity();
 }
 
 async function loadKeys() {
@@ -565,15 +725,16 @@ async function loadKeys() {
   for (const k of keys) {
     const isRevoked = !!k.revoked_at;
     rows += "<tr>" +
-      "<td class='mono'>" + k.key_prefix + "...</td>" +
-      "<td>" + (k.label || "—") + "</td>" +
-      "<td class='small'>" + (k.created_at || "").slice(0, 16).replace("T", " ") + "</td>" +
-      "<td class='small'>" + (k.last_used_at ? k.last_used_at.slice(0, 16).replace("T", " ") : "—") + "</td>" +
-      "<td>" + (isRevoked ? "<span class='pill archived'>revoked</span>" : "<span class='pill coding'>active</span>") + "</td>" +
-      "<td>" + (isRevoked ? "" : "<button class='btn danger' onclick='revokeKey(\"" + k.id + "\")'>Revoke</button>") + "</td>" +
+      "<td class='mono'>" + escapeHtml(k.key_prefix) + "...</td>" +
+      "<td>" + escapeHtml(k.label || "—") + "</td>" +
+      "<td class='small'>" + escapeHtml((k.created_at || "").slice(0, 16).replace("T", " ")) + "</td>" +
+      "<td class='small'>" + escapeHtml(k.last_used_at ? k.last_used_at.slice(0, 16).replace("T", " ") : "—") + "</td>" +
+      "<td>" + (isRevoked ? "<span class='pill archived'>revoked</span>" : "<span class='pill coding'>valid credential</span>") + "</td>" +
+      "<td>" + (isRevoked ? "" : "<button class='btn danger' data-revoke-key='" + escapeHtml(k.id) + "'>Revoke</button>") + "</td>" +
       "</tr>";
   }
   document.getElementById("keysBody").innerHTML = '<table><thead><tr><th>Prefix</th><th>Label</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr></thead><tbody>' + rows + "</tbody></table>";
+  document.querySelectorAll("[data-revoke-key]").forEach((button) => { button.onclick = () => revokeKey(button.dataset.revokeKey); });
 }
 
 async function issueKey() {
@@ -589,12 +750,12 @@ async function issueKey() {
     if (sessionVersion !== SESSION_VERSION || !API_KEY) return;
     document.getElementById("newKeyBody").innerHTML =
       '<div class="panel" style="background: #1a2a1a; border-color: var(--good);">' +
-      '<strong class="ok">New API key for tenant ' + tenantId + '</strong><br>' +
-      '<div class="key-display">' + res.api_key + '</div>' +
-      '<div class="small">Copy this key now. It will not be shown again. The key is <code>' + res.key.key_prefix + '...</code></div>' +
+      '<strong class="ok">New API key for tenant ' + escapeHtml(tenantId) + '</strong><br>' +
+      '<div class="key-display">' + escapeHtml(res.api_key) + '</div>' +
+      '<div class="small">Copy this key now. It will not be shown again. The key is <code>' + escapeHtml(res.key.key_prefix) + '...</code></div>' +
       '</div>';
     loadKeys();
-  } catch (err) { showError(err); }
+  } catch (err) { if (sessionVersion === SESSION_VERSION && API_KEY) showError(err); }
 }
 
 async function revokeKey(keyId) {
@@ -604,7 +765,7 @@ async function revokeKey(keyId) {
     await api("/console/api/keys/" + keyId, { method: "DELETE" });
     if (sessionVersion !== SESSION_VERSION || !API_KEY) return;
     loadKeys();
-  } catch (err) { showError(err); }
+  } catch (err) { if (sessionVersion === SESSION_VERSION && API_KEY) showError(err); }
 }
 
 function showError(err) {

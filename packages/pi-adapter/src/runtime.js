@@ -481,7 +481,15 @@ export function buildPiIntegrationPreview({ root }) {
 
 // --- Install Management Functions ---
 
-function buildPiAgentFileContent(agent) {
+function readPiOrchestratorBody(root, kernel) {
+  const primary = kernel.agents.agents.find((agent) => agent.id === "orchestrator");
+  if (!primary) throw new Error("Pi requires the Alfred Orchestrator source agent");
+  return fs.readFileSync(path.join(root, primary.spec), "utf8")
+    .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
+    .trim();
+}
+
+function buildPiAgentFileContent(agent, orchestratorBody) {
   const name = agent.id.split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
   const mode = agent.id === "orchestrator" ? "primary" : "subagent";
   return `---
@@ -490,6 +498,8 @@ mode: ${mode}
 ---
 
 You are Alfred's ${name} agent.
+
+${agent.id === "orchestrator" ? orchestratorBody : "Keep your assigned specialist role; the project's main-session Orchestrator instructions do not apply to delegated agents. Reuse the parent-verified task worktree and cwd."}
 
 Load project instructions from AGENTS.md and Alfred source-of-truth files under .ai/.
 
@@ -535,14 +545,17 @@ function buildPiSkillsRegistry(kernel) {
   };
 }
 
-function buildPiAgentsMd(kernel) {
+function buildPiAgentsMd(orchestratorBody) {
   return `---
 description: Alfred orchestrator agent
 ---
 
 # Alfred Orchestrator
 
-You are Alfred's Orchestrator agent.
+The main Pi session acts as Alfred Orchestrator.
+Delegated subagents keep their assigned specialist roles; the Orchestrator role below does not apply to them.
+
+${orchestratorBody}
 
 Load project instructions from AGENTS.md and Alfred source-of-truth files under .ai/.
 
@@ -551,8 +564,6 @@ Rules:
 - Do not broaden permissions.
 - Do not write harness config without explicit human approval.
 - Keep model assignment user-owned at runtime.
-
-You are powered by the model named minimax-m2.7. The exact model ID is ollama-cloud/minimax-m2.7
 `;
 }
 
@@ -599,6 +610,7 @@ curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/uninstall.sh | sh
  */
 export function buildPiInstallPreview({ root, targetPath = ".", outputDir = ".ai/generated/pi-install" }) {
   const kernel = loadArchitectureKernel(root);
+  const orchestratorBody = readPiOrchestratorBody(root, kernel);
 
   return {
     harness: "pi",
@@ -614,7 +626,7 @@ export function buildPiInstallPreview({ root, targetPath = ".", outputDir = ".ai
         path: `${outputDir}/AGENTS.md`,
         install_path: `${targetPath}/AGENTS.md`,
         kind: "agents",
-        content: buildPiAgentsMd(kernel)
+        content: buildPiAgentsMd(orchestratorBody)
       },
       {
         path: `${outputDir}/.alfred/config.json`,
@@ -626,7 +638,7 @@ export function buildPiInstallPreview({ root, targetPath = ".", outputDir = ".ai
         path: `${outputDir}/.alfred/agents/${agent.id}.md`,
         install_path: `${targetPath}/.alfred/agents/${agent.id}.md`,
         kind: "agent",
-        content: buildPiAgentFileContent(agent)
+        content: buildPiAgentFileContent(agent, orchestratorBody)
       })),
       {
         path: `${outputDir}/.alfred/skills/registry.json`,
