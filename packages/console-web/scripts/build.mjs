@@ -8,7 +8,7 @@
 //   npm run build                      # default API base
 //   ALFRED_API_BASE=https://alfred.example.com npm run build
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -50,7 +50,9 @@ function build() {
     html = html.replace("</head>", inject + "</head>");
   }
 
-  writeFileSync(DIST_HTML, html);
+  const temporary = DIST_HTML + ".tmp";
+  writeFileSync(temporary, html);
+  renameSync(temporary, DIST_HTML);
   process.stdout.write("Wrote " + DIST_HTML + " (" + html.length + " bytes)\n");
   process.stdout.write("API_BASE: " + API_BASE + "\n");
   process.stdout.write("BUILD_VERSION: " + BUILD_VERSION + "\n");

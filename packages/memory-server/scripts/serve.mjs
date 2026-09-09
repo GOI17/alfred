@@ -26,6 +26,7 @@ import {
 } from "../../memory/src/index.js";
 import { openRegistry, defaultRegistryPath } from "../src/registry/store-factory.js";
 import { openSqliteMemoryStore } from "../../memory/src/sqlite-memory-store.js";
+import { createAgentActivity } from "../src/agent-activity.js";
 import { readFileSync } from "node:fs";
 
 const POSTGRES_SCHEMA_RE = /^[a-z_][a-z0-9_]{0,62}$/;
@@ -209,6 +210,7 @@ export async function run(argv = [], env = process.env) {
     : null;
   const oauthRouter = createOAuthRouter({ oauthService });
   const memoryFactory = createTenantMemoryStoreFactory(registry);
+  const agentActivity = createAgentActivity({ trace: (event) => registry.oauth.recordTrace(event) });
   // The web console may be deployed elsewhere (Vercel, Netlify, GH Pages) or
   // alongside the server. Three resolution modes:
   //   1. ALFRED_CONSOLE_URL set → cross-origin upstream (e.g. https://console.alfred.example.com)
@@ -219,6 +221,7 @@ export async function run(argv = [], env = process.env) {
   if (env.ALFRED_CONSOLE_DIR) consoleOpts.consoleDirOverride = env.ALFRED_CONSOLE_DIR;
   const consoleRouter = createConsoleRouter({
     userService, tenantService, config,
+    getMemoryService: memoryFactory, agentActivity,
     ...consoleOpts,
     registry,
     oauthService,
@@ -227,6 +230,7 @@ export async function run(argv = [], env = process.env) {
   const openapiRouter = createOpenapiRouter({
     userService,
     getMemoryService: memoryFactory,
+    agentActivity,
     searchServiceFactory: null,  // v0.4.1: keyword fallback only; semantic+hybrid in v0.4.0 wired separately
     projectRoot: process.cwd(),
     registry,
@@ -237,6 +241,7 @@ export async function run(argv = [], env = process.env) {
   const mcpRouter = createMcpRouter({
     oauthService,
     getMemoryService: memoryFactory,
+    agentActivity,
     publicUrl: oauthConfig.enabled ? oauthConfig.publicUrl : (merged.ALFRED_PUBLIC_URL ?? "http://localhost"),
     challengeToken: merged.ALFRED_OPENAI_APPS_CHALLENGE ?? null,
     trace: (event) => registry.oauth.recordTrace(event)
@@ -247,6 +252,7 @@ export async function run(argv = [], env = process.env) {
     userService,
     config,
     consoleRouter,
+    agentActivity,
     openapiRouter,
     oauthRouter,
     mcpRouter,
