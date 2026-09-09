@@ -29,6 +29,27 @@ export interface CreateMemoryInput {
   expiresAt?: string;
 }
 
+export interface CaptureMemoryInput {
+  candidate: {
+    content: string;
+    source: string;
+    type?: MemoryType;
+    namespace?: MemoryNamespace;
+    projectId?: string;
+    tags?: string[];
+    confidence?: number;
+  };
+  context: {
+    evidence: string;
+    origin: "user" | "verified";
+    persistenceDisabled?: boolean;
+  };
+}
+
+export type CaptureMemoryResult =
+  | { status: "created" | "duplicate"; memory: MemoryRecord; reason: string }
+  | { status: "skipped"; reason: string };
+
 export interface UpdateMemoryInput {
   type?: MemoryType;
   content?: string;
@@ -72,6 +93,7 @@ export interface MemoryStore {
 }
 
 export interface MemoryService {
+  captureMemory(userId: string, input: CaptureMemoryInput): Promise<CaptureMemoryResult>;
   createMemory(userId: string, input: CreateMemoryInput): Promise<MemoryRecord>;
   listMemories(userId: string, options?: MemoryListOptions): Promise<MemoryPage>;
   searchMemories(userId: string, options: MemorySearchOptions): Promise<MemoryPage>;
@@ -91,6 +113,7 @@ export interface MemoryClientOptions {
 }
 
 export interface MemoryClient {
+  captureMemory(input: CaptureMemoryInput): Promise<CaptureMemoryResult>;
   createMemory(input: CreateMemoryInput): Promise<MemoryRecord>;
   listMemories(options?: MemoryListOptions): Promise<MemoryPage>;
   searchMemories(options: MemorySearchOptions): Promise<MemoryPage>;
@@ -117,12 +140,15 @@ export class MemoryApiError extends Error {
 
 export function createInMemoryStore(initialMemories?: MemoryRecord[]): MemoryStore;
 export function createPostgresMemoryStore(client: PgStyleClient, options?: { schema?: string }): MemoryStore;
-export function createMemoryService(options: { store: MemoryStore; now?: () => Date; idGenerator?: () => string }): MemoryService;
+export function createMemoryService(options: { store: MemoryStore; now?: () => Date; idGenerator?: () => string; trace?: (event: { event: string; payload: Record<string, unknown> }) => void | Promise<void> }): MemoryService;
 export function createMemoryHttpHandler(options?: { service?: MemoryService; apiKeys?: Record<string, string> | Map<string, string> | ((apiKey: string) => string | undefined | Promise<string | undefined>) }): (req: any, res: any) => Promise<void>;
 export function createMemoryHttpServer(options?: Parameters<typeof createMemoryHttpHandler>[0]): any;
 export function createMemoryClient(options: MemoryClientOptions): MemoryClient;
 
 export interface MemoryPolicyContext {
+  evidence?: string;
+  origin?: "user" | "verified";
+  persistenceDisabled?: boolean;
   query?: string;
   task?: string;
   prompt?: string;

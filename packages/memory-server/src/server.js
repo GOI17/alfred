@@ -235,6 +235,14 @@ async function handleMemoriesRoute(service, tenantId, req, res, url) {
     }
   }
 
+  if (segs.length === 2 && segs[1] === "capture") {
+    if (req.method !== "POST") return json(res, 405, { error: { code: "method_not_allowed" } });
+    const body = await readJson();
+    if (body === undefined) return;
+    try { return json(res, 200, await service.captureMemory(tenantId, body)); }
+    catch (err) { return json(res, err.status || 500, { error: { code: err.code || "internal_error", message: err.status === 400 ? err.message : "Memory capture failed." } }); }
+  }
+
   if (segs.length === 1) {
     if (req.method === "POST") {
       const body = await readJson();

@@ -308,7 +308,7 @@ test("real MCP SDK initializes, lists annotated tools, and calls a tenant-scoped
     await client.connect(transport);
     const listed = await client.listTools();
     assert.deepEqual(listed.tools.map((tool) => tool.name), [
-      "memory_search", "memory_create", "memory_update", "memory_delete", "memory_list"
+      "memory_search", "memory_capture", "memory_create", "memory_update", "memory_delete", "memory_list"
     ]);
     const search = listed.tools.find((tool) => tool.name === "memory_search");
     const deletion = listed.tools.find((tool) => tool.name === "memory_delete");

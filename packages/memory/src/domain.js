@@ -268,10 +268,15 @@ function removeUndefined(value) {
   return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined));
 }
 
-export function createMemoryService({ store, now = () => new Date(), idGenerator = randomUUID } = {}) {
+export function createMemoryService({ store, now = () => new Date(), idGenerator = randomUUID, trace } = {}) {
   if (!store) throw new TypeError("createMemoryService requires a store.");
 
   return {
+    async captureMemory(userId, input) {
+      const { captureMemory } = await import("./capture.js");
+      return captureMemory({ store, userId, input, now, idGenerator, trace });
+    },
+
     async createMemory(userId, input) {
       const memory = normalizeCreateMemoryInput(input, { userId, now: now(), id: idGenerator() });
       return store.create(memory);

@@ -1,0 +1,93 @@
+{
+  "id": "issue-210-proactive-memory",
+  "events": [
+    {
+      "trace_id": "issue-210-proactive-memory",
+      "timestamp": "2026-09-09T03:12:28.557425+00:00",
+      "event": "task_classified",
+      "actor": "orchestrator",
+      "decision": "feature",
+      "reason": "Proactive durable memory capture without an explicit user save request."
+    },
+    {
+      "trace_id": "issue-210-proactive-memory",
+      "timestamp": "2026-09-09T03:12:28.557524+00:00",
+      "event": "permission_allowed",
+      "actor": "orchestrator",
+      "decision": "isolated-worktree",
+      "reason": "User explicitly requested a git worktree; no live harness or protected code changes."
+    },
+    {
+      "trace_id": "issue-210-proactive-memory",
+      "timestamp": "2026-09-09T03:12:28.557526+00:00",
+      "event": "skill_loaded",
+      "actor": "orchestrator",
+      "decision": "typescript-project, architecture-docs, orca-cli",
+      "reason": "Scoped implementation, model-readable policy and isolated checkout workflow."
+    },
+    {
+      "trace_id": "issue-210-proactive-memory",
+      "timestamp": "2026-09-09T03:12:28.557527+00:00",
+      "event": "architecture_decision",
+      "actor": "orchestrator",
+      "decision": "distinct-capture-operation",
+      "reason": "MemoryService policy enforcement shared across transports; legacy CRUD preserved."
+    },
+    {
+      "trace_id": "issue-210-proactive-memory",
+      "timestamp": "2026-09-09T03:12:28.557528+00:00",
+      "event": "delegation_decision",
+      "actor": "orchestrator",
+      "decision": "architect, developer, qa",
+      "reason": "Architecture contract, mandatory code delegation and independent persistence regression coverage."
+    },
+    {
+      "trace_id": "issue-210-proactive-memory",
+      "timestamp": "2026-09-09T03:12:28.557529+00:00",
+      "event": "provider_request_reduced",
+      "actor": "orchestrator",
+      "decision": "hybrid",
+      "reason": "Local source preprocessing; specialist implementation and QA use runtime-assigned models. No application provider requests."
+    },
+    {
+      "trace_id": "issue-210-proactive-memory",
+      "timestamp": "2026-09-09T03:16:15.966404+00:00",
+      "event": "review_findings",
+      "actor": "orchestrator",
+      "decision": "fix_required",
+      "reason": "Independent review reproduced secret-in-sentence, natural-language opt-out and log capture false positives; developer and QA notified."
+    },
+    {
+      "trace_id": "issue-210-proactive-memory",
+      "timestamp": "2026-09-09T03:16:15.966534+00:00",
+      "event": "validation_completed",
+      "actor": "orchestrator",
+      "decision": "existing-evals-pass",
+      "reason": "Existing eval comparison: 19 baselines, 17 current results, zero regressions and zero application provider calls; policy and release-automation validators passed."
+    },
+    {
+      "trace_id": "issue-210-proactive-memory",
+      "timestamp": "2026-09-09T03:22:31.419957+00:00",
+      "event": "review_completed",
+      "actor": "orchestrator",
+      "decision": "pass",
+      "reason": "Independent reviewer confirms prior findings fixed and no outstanding findings in scoped implementation."
+    },
+    {
+      "trace_id": "issue-210-proactive-memory",
+      "timestamp": "2026-09-09T03:22:31.420075+00:00",
+      "event": "validation_completed",
+      "actor": "orchestrator",
+      "decision": "pass",
+      "reason": "QA 14/14 acceptance; final contracts48/48; pnpm check; release19/19 gates; eval19baselines17results zero regressions and application provider calls."
+    },
+    {
+      "trace_id": "issue-210-proactive-memory",
+      "timestamp": "2026-09-09T03:22:31.420078+00:00",
+      "event": "test_manifest_reconciled",
+      "actor": "orchestrator",
+      "decision": "exact-counts-updated",
+      "reason": "GPT adds a source instruction contract test; unchanged console and opencode suites already had 11 and12 tests. Updated exact counts only; baseline files untouched."
+    }
+  ]
+}

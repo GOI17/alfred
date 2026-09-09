@@ -5,7 +5,7 @@ const MAX_QUERY_LENGTH = 240;
 
 const SEARCH_SIGNALS = [
   { pattern: /\b(recall|remember|retrieve|look up|look for|what did we|how did we|previous|prior|last time|past)\b/i, reason: "recall or prior-context request" },
-  { pattern: /\b(preferences?|prefers|preferred|likes|dislikes|always|never)\b/i, reason: "preference signal" },
+  { pattern: /\b(preferences?|prefer|prefers|preferred|likes|dislikes|always|never|prefiero|prefiere|preferimos|preferencias?|siempre|nunca)\b/i, reason: "preference signal" },
   { pattern: /\b(architecture|architectural|product decision|decision|adr|rfc|chose|chosen|decided)\b/i, reason: "decision history signal" },
   { pattern: /\b(project history|history|milestone|release|roadmap)\b/i, reason: "project history signal" },
   { pattern: /\b(workflow|process|convention|standard|playbook|runbook|recurrent|recurring|again)\b/i, reason: "recurrent workflow signal" },
@@ -18,16 +18,24 @@ const MECHANICAL_SIGNALS = [
 ];
 
 const PERSIST_SIGNALS = [
-  { type: "preference", pattern: /\b(preferences?|prefers|preferred|likes|dislikes|always|never)\b/i, reason: "stable preference" },
-  { type: "decision", pattern: /\b(decision|decided|chose|chosen|approved|architecture|architectural|adr|rfc|product decision)\b/i, reason: "durable decision" },
-  { type: "workflow", pattern: /\b(workflow|process|convention|standard|playbook|runbook|steps|procedure)\b/i, reason: "reusable workflow" },
-  { type: "correction", pattern: /\b(correction|corrected|was wrong|mistake|instead use|do not use)\b/i, reason: "future correction" },
-  { type: "project", pattern: /\b(project|repository|repo|package|module|service|architecture|uses|depends on|adapter)\b/i, reason: "stable project fact" },
-  { type: "source", pattern: /\b(source|reference|documentation|docs|url|https?:\/\/)\b/i, reason: "useful source" },
-  { type: "fact", pattern: /\b(is|are|uses|supports|requires|contains|owns|belongs to)\b/i, reason: "stable fact" }
+  { type: "preference", pattern: /\b(preferences?|prefer|prefers|preferred|likes|dislikes|always|never|prefiero|prefiere|preferimos|preferencias?|siempre|nunca)\b/i, reason: "stable preference" },
+  { type: "decision", pattern: /\b(decision|decided|chose|chosen|approved|architecture|architectural|adr|rfc|product decision|decidimos|decidido|decidí|decision|decisión|elegimos|acordamos)\b/i, reason: "durable decision" },
+  { type: "workflow", pattern: /\b(workflow|process|convention|standard|playbook|runbook|steps|procedure|flujo de trabajo|procedimiento|convención|proceso habitual)\b/i, reason: "reusable workflow" },
+  { type: "correction", pattern: /\b(correction|corrected|was wrong|mistake|instead use|do not use|corrección|corregido|estaba equivocado|en adelante usa)\b/i, reason: "future correction" },
+  { type: "project", pattern: /\b(project|repository|repo|package|module|service|architecture|uses|depends on|adapter|proyecto|repositorio|paquete|módulo|servicio|utiliza|usa|depende de|arquitectura)\b/i, reason: "stable project fact" },
+  { type: "source", pattern: /\b(source|reference|documentation|docs|url|fuente|referencia|documentación|https?:\/\/)\b/i, reason: "useful source" },
+  { type: "fact", pattern: /\b(is|are|uses|supports|requires|contains|owns|belongs to|es|son|requiere|contiene|pertenece)\b/i, reason: "stable fact" }
 ];
 
 const REJECTION_SIGNALS = [
+  { pattern: /(?:^|\s)(?:\[(?:INFO|WARN|ERROR|DEBUG|TRACE)\]|(?:INFO|WARN|ERROR|DEBUG|TRACE)\b)\s|\b(?:gh[pousr]_[A-Za-z0-9_]{16,}|github_pat_[A-Za-z0-9_]{16,}|AKIA[A-Z0-9]{16})\b/, reason: "candidate appears to contain logs or credentials" },
+  { pattern: /\b(do not|don't|never)\s+(save|store|remember|persist)|\b(no (?:lo |la |los |las )?(?:guardes|recuerdes|almacenes)|no quiero que (?:lo )?(?:guardes|recuerdes)|no almacenar|no guardemos|sin guardar)\b/i, reason: "user excluded this information from persistence" },
+  { pattern: /[?¿]|\b(maybe|perhaps|possibly|probably|might|hypothetical|suppose|imagine|if we|not sure|quizás|quiz[aá](?=\W|$)|tal vez|posiblemente|probablemente|podríamos|supongamos|imagina|si usamos)(?=\W|$)/i, reason: "candidate is uncertain or hypothetical" },
+  { pattern: /\b(password|passwd|api[_ -]?key|secret|token|credential|private key|client secret|access key|contraseña|clave privada|credencial|secreto|token de acceso)\b/i, reason: "candidate may contain secrets or credentials" },
+  { pattern: /\b(diagnóstico|historial médico|pasaporte|seguro social|tarjeta de crédito|número de cuenta|bank account|credit card|medical|health condition)\b/i, reason: "candidate may contain sensitive personal data" },
+  { pattern: /\b(today|tonight|right now|for now|this time|for this task|this session|this conversation|just this once|tomorrow|hoy|mañana|ahora|esta vez|esta tarea|esta sesión|esta conversación|por ahora|temporal|puerto|proceso actual|salida de pruebas|registro de ejecución|solo para esta tarea)\b/i, reason: "candidate is transient execution state or temporary data" },
+  { pattern: /\b(usuario|asistente|sistema)\s*:\s*.+\b(usuario|asistente|sistema)\s*:/is, reason: "candidate looks like a raw chat or transcript" },
+  { pattern: /\b(razonamiento interno|razonamiento oculto|cadena de pensamiento)\b/i, reason: "candidate appears to contain internal reasoning" },
   {
     pattern: /\b(password|passwd|api[_-]?key|secret|token|credential|private key|client secret|access key)\b\s*[:=]/i,
     reason: "candidate appears to contain secrets or credentials"
@@ -69,7 +77,7 @@ function textFromContext(context = {}) {
 }
 
 function textFromCandidate(candidate = {}) {
-  return normalizeText(candidate.content, candidate.summary, candidate.title, candidate.type, candidate.tags, candidate.source);
+  return normalizeText(candidate.content, candidate.summary, candidate.title, candidate.type, candidate.tags, candidate.source, candidate.projectId, candidate.namespace);
 }
 
 function buildQuery(context, text) {
@@ -89,27 +97,6 @@ function hasExplicitBooleanSignal(context, names) {
 
 function isAllowedType(type) {
   return typeof type === "string" && allowedTypeSet.has(type);
-}
-
-function typeReason(type) {
-  switch (type) {
-    case "preference":
-      return "candidate expresses a stable preference";
-    case "decision":
-      return "candidate records a durable decision";
-    case "workflow":
-      return "candidate records a reusable workflow";
-    case "correction":
-      return "candidate records a future correction";
-    case "project":
-      return "candidate records a stable project fact";
-    case "source":
-      return "candidate records a useful source";
-    case "fact":
-      return "candidate records a stable fact";
-    default:
-      return "candidate type is not recognized";
-  }
 }
 
 export class MemoryPolicy {
@@ -146,9 +133,13 @@ export class MemoryPolicy {
   }
 
   shouldPersist(candidate = {}, context = {}) {
-    const candidateText = textFromCandidate(candidate);
+    const candidateText = normalizeText(candidate.content);
     const contextText = textFromContext(context);
-    const text = normalizeText(candidateText, contextText);
+    const text = normalizeText(candidateText, textFromCandidate(candidate), contextText, context.evidence);
+
+    if (context.persistenceDisabled === true) {
+      return { allow: false, reason: "Persistence denied because automatic memory is disabled." };
+    }
 
     if (!candidateText) {
       return { allow: false, reason: "Persistence denied because candidate content is empty or missing." };
@@ -159,17 +150,16 @@ export class MemoryPolicy {
       return { allow: false, reason: `Persistence denied because ${rejection.reason}.` };
     }
 
-    const classified = this.classify(candidate, context);
-    if (isAllowedType(candidate.type) && candidate.type !== "fact") {
-      return { allow: true, reason: `Persistence allowed because ${typeReason(candidate.type)}.` };
+    if (context.evidence !== undefined && !normalizeText(context.evidence).normalize("NFKC").toLowerCase().includes(candidateText.normalize("NFKC").toLowerCase())) {
+      return { allow: false, reason: "Persistence denied because candidate is not a source statement in the supplied evidence." };
     }
 
-    const durableSignal = firstMatch(text, PERSIST_SIGNALS);
+    const durableSignal = firstMatch(candidateText, PERSIST_SIGNALS);
     if (durableSignal && durableSignal.type !== "fact") {
       return { allow: true, reason: `Persistence allowed because candidate contains a ${durableSignal.reason} signal.` };
     }
 
-    if (classified.type === "fact" && /\b(stable|durable|canonical|source of truth|fact)\b/i.test(text)) {
+    if (/\b(stable fact|durable fact|canonical|source of truth|hecho estable|hecho duradero|fuente de verdad)\b/i.test(candidateText)) {
       return { allow: true, reason: "Persistence allowed because candidate is marked as a stable fact." };
     }
 
@@ -181,7 +171,7 @@ export class MemoryPolicy {
       return { type: candidate.type, reason: "Existing allowed memory type was provided." };
     }
 
-    const text = normalizeText(textFromCandidate(candidate), textFromContext(context));
+    const text = normalizeText(candidate.content);
     for (const signal of PERSIST_SIGNALS) {
       if (signal.pattern.test(text)) {
         return { type: signal.type, reason: `Classified as ${signal.type} because candidate contains a ${signal.reason} signal.` };

@@ -29,6 +29,7 @@ It intentionally does **not** contain:
 | POST | `/search` | `searchMemories` | no | Keyword/semantic/hybrid search |
 | GET | `/memories` | `listMemories` | no | List/filter memories |
 | GET | `/memories/{id}` | `getMemory` | no | Read one memory |
+| POST | `/memories/capture` | `captureMemory` | **yes** | Proactively capture a grounded durable statement |
 | POST | `/memories` | `createMemory` | **yes** | Create a memory |
 | PATCH | `/memories/{id}` | `updateMemory` | **yes** | Update a memory |
 | DELETE | `/memories/{id}` | `deleteMemory` | **yes** | Delete a memory |
@@ -68,15 +69,18 @@ You have access to Alfred Memory, an external memory store for durable user cont
 When to use each Action:
 - searchMemories: when the user asks about previous preferences, decisions, workflows, architecture, corrections, or historical context.
 - listMemories: when the user wants a summary of what is known for a namespace such as "project:alfred".
-- createMemory: only for durable, reusable information (preferences, decisions, stable facts, workflows, corrections, useful sources).
+- captureMemory: proactively capture a narrow durable preference, decision, fact, workflow, correction, or source directly stated by the user, without waiting for a save request. Pass {candidate, context}; candidate.content preserves an exact excerpt of minimal context.evidence, and context.origin is user or verified. Keep content under 1,000 and evidence under 2,000 characters.
+- createMemory: for explicit user-requested memory creation; never use it to bypass a rejected capture.
 - updateMemory: only when correcting or extending an existing memory. Confirm with the user first.
 - deleteMemory: only when the user explicitly asks to remove a memory. Confirm with the user first.
 - healthCheck: optional, to verify connectivity.
 
 Rules:
-- Default namespace is "project:alfred" unless the user specifies another.
+- Use the relevant project namespace for project-specific facts; otherwise use personal unless the user specifies another.
 - Do not store secrets, credentials, API keys, private keys, raw transcripts, chain-of-thought, temporary logs, or sensitive personal data.
+- Respect active-conversation opt-outs and "no guardes esto" / "do not remember this". Suppress capture or pass context.persistenceDisabled: true.
 - If you are unsure whether something should be remembered, do not store it.
+- Acknowledge a new save only after captureMemory returns created. Do not claim a new save for duplicate or skipped; report failures honestly. Existing host tool approval remains in force.
 - Ask for confirmation before updateMemory and deleteMemory because they are consequential.
 ```
 
@@ -88,7 +92,7 @@ Rules:
 4. Add a ChatGPT Action and point it to `openapi.yaml`.
 5. Set **OAuth** authentication and choose **Sign in**.
 6. Test `healthCheck` if exposed.
-7. Ask the GPT to remember a durable preference → `createMemory`.
+7. State “Prefiero respuestas breves” without a save request → `captureMemory` returns `created`; repeat it → `duplicate`.
 8. Ask about that preference → `searchMemories`.
 9. List the `project:alfred` namespace → `listMemories` with a low limit.
 10. Update the memory → confirm → `updateMemory`.

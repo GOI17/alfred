@@ -74,7 +74,7 @@ describe("MemoryPolicy", () => {
     assert.equal(transient.allow, false);
     assert.match(transient.reason, /transient|temporary|log/i);
     assert.equal(unsure.allow, false);
-    assert.match(unsure.reason, /not clearly durable|conservative/i);
+    assert.match(unsure.reason, /not clearly durable|conservative|uncertain/i);
   });
 
   test("rejects unsafe persistence candidates", () => {

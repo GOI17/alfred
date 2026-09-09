@@ -49,6 +49,8 @@ export interface RegisterMemoryToolsOptions {
 export interface MemoryMcpSchemaAdapter {
   searchInput: unknown;
   createInput: unknown;
+  captureInput: unknown;
+  captureOutput: unknown;
   updateInput: unknown;
   deleteInput: unknown;
   listInput: unknown;

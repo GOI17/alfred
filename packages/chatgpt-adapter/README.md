@@ -53,6 +53,19 @@ tokens to ChatGPT. The API key itself never leaves Alfred.
 The canonical schema lives at
 `packages/memory-openapi/openapi.yaml`; `/openapi.yaml` serves it directly.
 
+## Proactive memory
+
+The canonical GPT prompt in `.ai/gpt/alfred-memory-gpt.json` directs Alfred to use
+`captureMemory` for useful durable statements even without “remember this”. The
+Action calls `POST /memories/capture` and returns `created`, `duplicate`, or
+`skipped`. Alfred acknowledges confirmed new memories briefly, respects
+conversation opt-outs, and never bypasses rejected capture through `createMemory`.
+
+Operators must deploy the updated server/schema and apply the canonical prompt
+to their GPT for this behavior to be available there. Changing repository files
+does not update an already published GPT. Existing OAuth and host confirmation
+requirements still apply.
+
 ## Security properties
 
 - Authorization Code flow with mandatory `state`.

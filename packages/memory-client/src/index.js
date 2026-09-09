@@ -8,6 +8,10 @@ export function createMemoryClient(options = {}) {
   const config = normalizeOptions(options);
 
   return {
+    captureMemory(input) {
+      return request(config, "/memories/capture", { method: "POST", body: input });
+    },
+
     createMemory(input) {
       assertPlainObject(input, "input", "createMemory input is required.");
       return request(config, "/memories", {
