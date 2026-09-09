@@ -7,6 +7,7 @@ const unavailable = async () => {
 const server = await createMemoryMcpServer({
   memoryClient: {
     searchMemories: unavailable,
+    captureMemory: unavailable,
     createMemory: unavailable,
     updateMemory: unavailable,
     deleteMemory: unavailable,

@@ -67,6 +67,8 @@ jobs:
           done
       - name: Test Memory server
         run: pnpm --filter @alfred-labs/memory-server test
+      - name: Check production MCP dependencies
+        run: node scripts/check-memory-mcp-production.mjs
       - name: Validate policies
         run: node scripts/validate-policies.mjs
       - name: Validate release regression gates
