@@ -3,6 +3,8 @@
 The Alfred Memory Server is the **self-hosted** deployment shape of Alfred Memory. It exposes:
 
 - `/memories` — CRUD for the durable memory store.
+- `POST /memories/capture` — policy-governed proactive capture with `created`,
+  `duplicate`, or `skipped` results; requires existing write authorization.
 - `/search` — keyword/semantic/hybrid search.
 - `/oauth/authorize` and `/oauth/token` — direct ChatGPT OAuth flow.
 - `/openapi.yaml` — canonical ChatGPT Actions schema.

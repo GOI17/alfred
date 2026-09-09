@@ -6,11 +6,11 @@ export const MEMORY_MCP_SERVER_INFO = Object.freeze({
 });
 
 export const MEMORY_MCP_SERVER_OPTIONS = Object.freeze({
-  instructions: "Use search or list before creating duplicate memories. Treat memory IDs as opaque. Ask for confirmation before deleting a memory. Alfred Memory data is private to the connected tenant."
+  instructions: "During ordinary work, proactively call memory_capture for useful durable information directly stated by the user or verified in an authoritative source, without waiting for an explicit request to remember it. Use a minimal exact source statement as candidate content and minimal evidence with origin user or verified. Honor active opt-out via persistenceDisabled; never capture uncertain, temporary, sensitive information or full conversations. Never retry a skipped capture through memory_create. Only announce a new saved memory when status is created; duplicates and skipped candidates do not interrupt the task. Report failures honestly. Use search or list before explicitly creating duplicate memories. Treat memory IDs as opaque. Ask for confirmation before deleting a memory. Alfred Memory data is private to the connected tenant."
 });
 
 const MEMORY_TYPES = ["preference", "fact", "decision", "workflow", "project", "correction", "source"];
-const TOOL_NAMES = ["memory_search", "memory_create", "memory_update", "memory_delete", "memory_list"];
+const TOOL_NAMES = ["memory_search", "memory_capture", "memory_create", "memory_update", "memory_delete", "memory_list"];
 
 export async function createMemoryMcpServer(options = {}) {
   const memoryClient = requiredMemoryClient(options.memoryClient);
@@ -36,6 +36,19 @@ export function registerMemoryTools(server, options = {}) {
     outputSchema: schema.listOutput,
     ...toolSecurity("memory:read", { readOnlyHint: true })
   }, async (input) => withSafeErrors(() => memoryClient.searchMemories(normalizeSearchInput(input))));
+
+  registerTool("memory_capture", {
+    title: "Capture durable memory",
+    description: "Proactively capture a grounded durable preference, decision, workflow, correction, project detail, source or stable fact without an explicit save request. Pass a minimal exact source statement and evidence; respect opt-out. Policy may return skipped or duplicate. Only created confirms a new save; never bypass skipped via memory_create.",
+    inputSchema: schema.captureInput,
+    outputSchema: schema.captureOutput,
+    ...toolSecurity("memory:write")
+  }, async (input) => withSafeErrors(() => {
+    assertPlainObject(input, "input", "memory_capture input is required.");
+    assertPlainObject(input.candidate, "candidate", "candidate is required.");
+    assertPlainObject(input.context, "context", "context is required.");
+    return memoryClient.captureMemory(input);
+  }));
 
   registerTool("memory_create", {
     title: "Create memory",
@@ -89,6 +102,27 @@ export function createPlainSchemaAdapter() {
       q: { type: "string", required: true },
       ...listSchemaFields()
     },
+    captureInput: {
+      candidate: { type: "object", required: true, fields: {
+        content: { type: "string", required: true, maxLength: 1000 },
+        source: { type: "string", required: true, maxLength: 240 },
+        type: { enum: MEMORY_TYPES, optional: true },
+        namespace: { type: "string", optional: true },
+        projectId: { type: "string", optional: true },
+        tags: { type: "string[]", optional: true },
+        confidence: { type: "number", optional: true }
+      }, additionalProperties: false },
+      context: { type: "object", required: true, fields: {
+        evidence: { type: "string", required: true, maxLength: 2000 },
+        origin: { enum: ["user", "verified"], required: true },
+        persistenceDisabled: { type: "boolean", optional: true }
+      }, additionalProperties: false }
+    },
+    captureOutput: { type: "object", required: ["status", "reason"], fields: {
+      status: { enum: ["created", "duplicate", "skipped"], required: true },
+      reason: { type: "string", required: true },
+      memory: { type: "object", optional: true }
+    } },
     createInput: {
       namespace: { type: "string", optional: true },
       type: { enum: MEMORY_TYPES, required: true },
@@ -147,6 +181,27 @@ export function createZodSchemaAdapter(zod) {
     searchInput: z.object({
       q: z.string().min(1),
       ...zodListSchemaFields(z, memoryType)
+    }),
+    captureInput: z.object({
+      candidate: z.object({
+        content: z.string().min(1).max(1000),
+        source: z.string().min(1).max(240),
+        type: memoryType.optional(),
+        namespace: z.string().min(1).optional(),
+        projectId: z.string().min(1).optional(),
+        tags: z.array(z.string().min(1).max(80)).max(10).optional(),
+        confidence: z.number().min(0).max(1).optional()
+      }).strict(),
+      context: z.object({
+        evidence: z.string().min(1).max(2000),
+        origin: z.enum(["user", "verified"]),
+        persistenceDisabled: z.boolean().optional()
+      }).strict()
+    }).strict(),
+    captureOutput: z.object({
+      status: z.enum(["created", "duplicate", "skipped"]),
+      reason: z.string(),
+      memory: memoryOutput.optional()
     }),
     createInput: z.object({
       namespace: z.string().min(1).optional(),
@@ -319,7 +374,7 @@ function requiredMemoryClient(memoryClient) {
     throw new TypeError("memoryClient is required.");
   }
 
-  for (const method of ["searchMemories", "createMemory", "updateMemory", "deleteMemory", "listMemories"]) {
+  for (const method of ["searchMemories", "captureMemory", "createMemory", "updateMemory", "deleteMemory", "listMemories"]) {
     if (typeof memoryClient[method] !== "function") {
       throw new TypeError(`memoryClient.${method} must be a function.`);
     }

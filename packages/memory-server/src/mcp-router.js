@@ -152,6 +152,10 @@ export function memoryClientForTenant(memoryService, tenantId, scopes = [], chal
       requireScope("memory:read");
       return memoryService.searchMemories(tenantId, input);
     },
+    captureMemory(input) {
+      requireScope("memory:write");
+      return memoryService.captureMemory(tenantId, input);
+    },
     createMemory(input) {
       requireScope("memory:write");
       return memoryService.createMemory(tenantId, input);

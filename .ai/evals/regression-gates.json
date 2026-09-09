@@ -110,7 +110,7 @@
         "packages/chatgpt-adapter/test/contract.test.mjs"
       ],
       "command": "node --test packages/chatgpt-adapter/test/contract.test.mjs",
-      "expected_test_count": 11,
+      "expected_test_count": 12,
       "blocked_on_failure": true
     },
     {
@@ -154,7 +154,7 @@
         "packages/console-web/public/.nojekyll"
       ],
       "command": "node --test packages/console-web/test/build.test.mjs",
-      "expected_test_count": 10,
+      "expected_test_count": 11,
       "blocked_on_failure": true
     },
     {
@@ -198,7 +198,7 @@
         "packages/opencode-adapter/src/runtime.js"
       ],
       "command": "node --test packages/opencode-adapter/test/runtime.test.mjs",
-      "expected_test_count": 9,
+      "expected_test_count": 12,
       "blocked_on_failure": true
     },
     {

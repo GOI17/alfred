@@ -125,6 +125,11 @@ export function createMemoryHttpHandler({ service, apiKeys } = {}) {
         return methodNotAllowed(res);
       }
 
+      if (url.pathname === "/memories/capture") {
+        if (req.method !== "POST") return methodNotAllowed(res);
+        return json(res, 200, await memoryService.captureMemory(userId, await readJsonBody(req)));
+      }
+
       if (url.pathname === "/memories/search") {
         if (req.method !== "GET") return methodNotAllowed(res);
         const result = await memoryService.searchMemories(userId, {

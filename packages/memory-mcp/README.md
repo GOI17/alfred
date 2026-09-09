@@ -31,6 +31,7 @@ Environment variables are read only by `src/cli.js`:
 
 | Tool | Memory client call |
 | --- | --- |
+| `memory_capture` | `memoryClient.captureMemory(input)` |
 | `memory_search` | `memoryClient.searchMemories(input)` |
 | `memory_create` | `memoryClient.createMemory(input)` |
 | `memory_update` | `memoryClient.updateMemory(id, patch)` |
@@ -56,10 +57,28 @@ Operational `MemoryClientError` failures return safe MCP error results:
 
 Unexpected errors map to `unexpected_error`. Error responses do not include stack traces or API keys.
 
+## Proactive capture
+
+The server instructions direct the connected agent to call `memory_capture` for
+narrow, grounded durable statements without waiting for a user save request.
+The request is `{ candidate, context }`; context supplies minimal `evidence`, an
+`origin` of `user` or `verified`, and optional `persistenceDisabled`. Candidate
+content must preserve an exact normalized excerpt of the evidence. Never send
+whole conversations, secrets, speculative facts, or opted-out content.
+
+The Memory API applies policy and scoped exact deduplication. `created` confirms a
+new write; `duplicate` confirms an existing memory; `skipped` means no write. The
+agent briefly acknowledges only a confirmed new write and reports failures
+honestly. It must not retry a rejected capture through `memory_create`.
+
+This behavior requires the connected host to load the updated server/tool
+instructions and have write authorization. MCP does not observe conversations on
+its own, and host permission prompts remain in force.
+
 ## Scope boundaries
 
 - No direct imports from `packages/memory` internals.
-- No `MemoryPolicy`.
+- No adapter-owned `MemoryPolicy`; proactive policy runs in the shared Memory service.
 - No cache.
 - No retries.
 - No embeddings, RAG, UI, billing, or external integrations.
@@ -251,7 +270,7 @@ Run `memory_search` again for the same query. The deleted memory should no longe
 
 - [ ] Memory API starts and responds to `/health`.
 - [ ] MCP server starts with `ALFRED_MEMORY_BASE_URL` and `ALFRED_MEMORY_API_KEY`.
-- [ ] MCP client can list the five tools.
+- [ ] MCP client can list the six tools.
 - [ ] `memory_create` creates a memory through the MCP server.
 - [ ] `memory_search` finds the created memory.
 - [ ] `memory_list` returns the created memory with pagination.

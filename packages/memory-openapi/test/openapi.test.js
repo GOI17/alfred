@@ -19,6 +19,7 @@ const expectedRoutes = new Set([
   "POST /policies/check",
   "POST /search",
   "POST /memories",
+  "POST /memories/capture",
   "GET /memories",
   "GET /memories/{id}",
   "PATCH /memories/{id}",
@@ -78,6 +79,7 @@ describe("memory-openapi schema", () => {
       "listMemories",
       "getMemory",
       "createMemory",
+      "captureMemory",
       "updateMemory",
       "deleteMemory"
     ]);
@@ -89,7 +91,7 @@ describe("memory-openapi schema", () => {
   });
 
   it("marks mutators as consequential", () => {
-    const mutators = ["createMemory", "updateMemory", "deleteMemory"];
+    const mutators = ["createMemory", "captureMemory", "updateMemory", "deleteMemory"];
     for (const opId of mutators) {
       const op = findOperation(spec, opId);
       assert.equal(
@@ -136,6 +138,7 @@ describe("memory-openapi schema", () => {
       "/policies/check",
       "/search",
       "/memories",
+      "/memories/capture",
       "/memories/{id}"
     ]);
     const paths = Object.keys(spec.paths ?? {});
@@ -170,7 +173,7 @@ describe("memory-openapi schema", () => {
     for (const opId of ["searchMemories", "listMemories", "getMemory"]) {
       assert.deepEqual(findOperation(spec, opId).security, [{ oauth2: ["memory:read"] }]);
     }
-    for (const opId of ["createMemory", "updateMemory", "deleteMemory"]) {
+    for (const opId of ["createMemory", "captureMemory", "updateMemory", "deleteMemory"]) {
       assert.deepEqual(findOperation(spec, opId).security, [{ oauth2: ["memory:write"] }]);
     }
     for (const opId of ["healthCheck", "listAgents", "listSkills", "checkPolicy"]) {
@@ -431,3 +434,18 @@ function stripQuotes(value) {
   }
   return value;
 }
+
+
+it("capture contract requires bounded grounding evidence and no arbitrary metadata", () => {
+  const operation = findOperation(spec, "captureMemory");
+  assert.deepEqual(operation.security, [{ oauth2: ["memory:write"] }]);
+  assert.ok(operation.responses["200"]);
+  const input = spec.components.schemas.CaptureMemoryInput;
+  assert.deepEqual(input.required, ["candidate", "context"]);
+  assert.equal(input.additionalProperties, false);
+  assert.equal(input.properties.candidate.properties.content.maxLength, 1000);
+  assert.equal(input.properties.candidate.properties.metadata, undefined);
+  assert.deepEqual(input.properties.context.required, ["evidence", "origin"]);
+  assert.equal(input.properties.context.properties.evidence.maxLength, 2000);
+  assert.deepEqual(spec.components.schemas.CaptureMemoryResult.properties.status.enum, ["created", "duplicate", "skipped"]);
+});

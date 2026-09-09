@@ -138,7 +138,7 @@ export function createTenantMemoryStoreFactory(registry, {
 
     if (tenant.storage_backend === "sqlite") {
       if (!tenant.db_path) throw new Error("Tenant has no db_path.");
-      return createMemoryService({ store: openSqliteMemoryStore(tenant.db_path) });
+      return createMemoryService({ store: openSqliteMemoryStore(tenant.db_path), trace: (event) => registry.oauth?.recordTrace({ ...event, tenant_id: tenantId }) });
     }
 
     if (tenant.storage_backend === "postgres") {
@@ -163,7 +163,7 @@ export function createTenantMemoryStoreFactory(registry, {
         throw err;
       }
       if (typeof pool.end === "function") closeables.add(pool);
-      return createMemoryService({ store: createPostgresMemoryStore(pool, { schema }) });
+      return createMemoryService({ store: createPostgresMemoryStore(pool, { schema }), trace: (event) => registry.oauth?.recordTrace({ ...event, tenant_id: tenantId }) });
     }
 
     throw new Error("Unsupported tenant storage_backend=" + tenant.storage_backend);

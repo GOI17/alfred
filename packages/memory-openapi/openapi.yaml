@@ -149,6 +149,84 @@ components:
         expiresAt:
           type: string
           format: date-time
+    CaptureMemoryInput:
+      type: object
+      additionalProperties: false
+      required:
+        - candidate
+        - context
+      properties:
+        candidate:
+          type: object
+          additionalProperties: false
+          required:
+            - content
+            - source
+          properties:
+            content:
+              type: string
+              minLength: 1
+              maxLength: 1000
+              description: A minimal exact durable statement from the supplied evidence.
+            source:
+              type: string
+              minLength: 1
+              maxLength: 240
+            type:
+              $ref: '#/components/schemas/MemoryType'
+            namespace:
+              type: string
+            projectId:
+              type: string
+            tags:
+              type: array
+              maxItems: 10
+              items:
+                type: string
+                minLength: 1
+                maxLength: 80
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+        context:
+          type: object
+          additionalProperties: false
+          required:
+            - evidence
+            - origin
+          properties:
+            evidence:
+              type: string
+              minLength: 1
+              maxLength: 2000
+              description: Minimal relevant source statement, including any exclusion. Never the full conversation. Not stored.
+            origin:
+              type: string
+              enum:
+                - user
+                - verified
+              description: User statement or observed authoritative source; this label is not independent proof.
+            persistenceDisabled:
+              type: boolean
+              description: True when the user has opted out of automatic memory in this conversation.
+    CaptureMemoryResult:
+      type: object
+      required:
+        - status
+        - reason
+      properties:
+        status:
+          type: string
+          enum:
+            - created
+            - duplicate
+            - skipped
+        reason:
+          type: string
+        memory:
+          $ref: '#/components/schemas/MemoryRecord'
+      description: Created and duplicate include memory. Skipped never includes candidate content or context.
     UpdateMemoryInput:
       type: object
       description: Partial update. The namespace field is immutable for memory records.
@@ -453,6 +531,52 @@ paths:
                 $ref: '#/components/schemas/Error'
         '401':
           description: Missing, invalid, or expired OAuth access token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /memories/capture:
+    post:
+      security:
+        - oauth2:
+            - memory:write
+      operationId: captureMemory
+      summary: Proactively capture durable memory
+      description: Apply deterministic policy to a grounded durable statement without an explicit save request. Honor opt-out. Never retry skipped through createMemory. Only created confirms a new save.
+      x-openai-isConsequential: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptureMemoryInput'
+      responses:
+        '200':
+          description: Capture created, found an exact duplicate, or skipped the candidate.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptureMemoryResult'
+        '400':
+          description: Invalid capture input.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Missing memory:write scope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Capture failed; no successful write may be claimed.
           content:
             application/json:
               schema:

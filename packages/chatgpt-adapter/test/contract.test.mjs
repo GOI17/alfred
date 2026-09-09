@@ -37,10 +37,10 @@ test("schema has no placeholder server and identifies the current contract", () 
   assert.doesNotMatch(schema, /memory\.example\.com|alfred-memory\.example\.com/);
 });
 
-test("schema exposes the ten approved ChatGPT operation identifiers", () => {
+test("schema exposes the eleven approved ChatGPT operation identifiers", () => {
   for (const operationId of [
     "healthCheck", "listAgents", "listSkills", "checkPolicy", "searchMemories",
-    "listMemories", "getMemory", "createMemory", "updateMemory", "deleteMemory"
+    "listMemories", "getMemory", "captureMemory", "createMemory", "updateMemory", "deleteMemory"
   ]) {
     assert.match(schema, new RegExp(`operationId: ${operationId}(?:\\s|$)`));
   }
@@ -48,7 +48,7 @@ test("schema exposes the ten approved ChatGPT operation identifiers", () => {
 });
 
 test("all memory mutations remain consequential", () => {
-  for (const operationId of ["createMemory", "updateMemory", "deleteMemory"]) {
+  for (const operationId of ["createMemory", "captureMemory", "updateMemory", "deleteMemory"]) {
     const start = schema.indexOf(`operationId: ${operationId}`);
     assert.ok(start >= 0, `${operationId} must exist`);
     const window = schema.slice(start, start + 500);
@@ -89,4 +89,20 @@ test("deployment guide documents exact current ChatGPT callback variants", () =>
   assert.match(guide, /https:\/\/chat\.openai\.com\/aip\/g-YOUR-GPT-ID\/oauth\/callback/);
   assert.match(guide, /exact URLs/);
   assert.doesNotMatch(guide, /wildcard redirect URLs? (?:are )?allowed/i);
+});
+
+
+test("GPT and Orchestrator source instructions trigger grounded capture without a save request", () => {
+  const gpt = JSON.parse(readFileSync(resolve(root, ".ai/gpt/alfred-memory-gpt.json"), "utf8")).system_prompt;
+  const orchestrator = readFileSync(resolve(root, ".ai/agents/orchestrator.md"), "utf8");
+  for (const instructions of [gpt, orchestrator]) {
+    assert.match(instructions, /captureMemory|memory_capture/);
+    assert.match(instructions, /without waiting|do not wait/i);
+    assert.match(instructions, /context\.evidence/);
+    assert.match(instructions, /persistenceDisabled/);
+    assert.match(instructions, /created/);
+    assert.match(instructions, /duplicate/);
+    assert.match(instructions, /skipped/);
+    assert.match(instructions, /never bypass|do not bypass/i);
+  }
 });

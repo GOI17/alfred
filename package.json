@@ -12,8 +12,8 @@
     "server:check": "cd packages/memory-server && npm run check && node --check src/migrate/sqlite-migrator.js",
     "chatgpt:test": "cd packages/chatgpt-adapter && npm test && cd ../memory-openapi && npm test",
     "chatgpt:check": "cd packages/chatgpt-adapter && npm run check && cd ../memory-openapi && npm run check",
-    "test": "node --test scripts/native-git-worktrees.test.mjs && npm run core:test && npm run profile-manager:test && npm run memory:test && npm run server:test && npm run chatgpt:test && npm run opencode:test && npm run codex:test && npm run installer-tui:test && npm run homebrew:test && node scripts/validate-policies.mjs && npm run validate:suite-installer && node scripts/validate-release-0.4.1.mjs && npm run validate:release-automation",
-    "check": "node --check scripts/native-git-worktrees.test.mjs && npm run core:check && npm run profile-manager:check && npm run memory:check && npm run server:check && npm run chatgpt:check && npm run opencode:check && npm run codex:check && npm run installer-tui:check && node --check scripts/generate-homebrew-formula.mjs && node --check scripts/validate-release-automation.mjs",
+    "test": "node --test scripts/native-git-worktrees.test.mjs && npm run core:test && npm run profile-manager:test && npm run memory:test && npm run memory-client:test && npm run memory-mcp:test && npm run server:test && npm run chatgpt:test && npm run opencode:test && npm run codex:test && npm run installer-tui:test && npm run homebrew:test && node scripts/validate-policies.mjs && npm run validate:suite-installer && node scripts/validate-release-0.4.1.mjs && npm run validate:release-automation",
+    "check": "node --check scripts/native-git-worktrees.test.mjs && npm run core:check && npm run profile-manager:check && npm run memory:check && npm run memory-client:check && npm run memory-mcp:check && npm run server:check && npm run chatgpt:check && npm run opencode:check && npm run codex:check && npm run installer-tui:check && node --check scripts/generate-homebrew-formula.mjs && node --check scripts/validate-release-automation.mjs",
     "validate:phase1": "node scripts/validate-history.mjs phase1",
     "validate:phase2": "node scripts/validate-history.mjs phase2",
     "validate:phase3": "node scripts/validate-history.mjs phase3",
@@ -54,6 +54,10 @@
     "pages:build": "node scripts/build-pages-site.mjs",
     "pages:check": "node scripts/check-pages-site.mjs",
     "homebrew:test": "node --test scripts/generate-homebrew-formula.test.mjs scripts/homebrew-release-workflow.test.mjs scripts/alfred-setup.test.mjs",
-    "homebrew:formula": "node scripts/generate-homebrew-formula.mjs"
+    "homebrew:formula": "node scripts/generate-homebrew-formula.mjs",
+    "memory-client:test": "cd packages/memory-client && npm test",
+    "memory-client:check": "cd packages/memory-client && npm run check",
+    "memory-mcp:test": "cd packages/memory-mcp && npm test",
+    "memory-mcp:check": "cd packages/memory-mcp && npm run check"
   }
 }

@@ -207,3 +207,25 @@ test("client does not import or expose MemoryPolicy", async () => {
   assert.equal(source.includes("MemoryPolicy"), false);
   assert.equal(source.includes("createMemoryPolicy"), false);
 });
+
+
+test("captureMemory preserves created/duplicate/skipped outcomes through the authenticated endpoint", async () => {
+  for (const status of ["created", "duplicate", "skipped"]) {
+    const result = { status, reason: "policy result", ...(status === "skipped" ? {} : { memory: { id: "capture-id" } }) };
+    const fetch = fakeFetch(() => jsonResponse(result));
+    const client = createMemoryClient({ baseUrl: "https://memory.test", apiKey: "test-key", fetch });
+    const input = { candidate: { content: "I prefer concise answers", source: "user" }, context: { evidence: "I prefer concise answers", origin: "user" } };
+    assert.deepEqual(await client.captureMemory(input), result);
+    assert.equal(fetch.calls[0].url, "https://memory.test/memories/capture");
+    assert.equal(fetch.calls[0].init.method, "POST");
+    assert.equal(fetch.calls[0].init.headers["x-api-key"], "test-key");
+    assert.deepEqual(JSON.parse(fetch.calls[0].init.body), input);
+  }
+});
+
+test("captureMemory propagates storage and transport errors", async () => {
+  for (const fetch of [async () => { throw new Error("offline"); }, fakeFetch(() => jsonResponse({ error: { code: "internal_error", message: "Capture failed" } }, { status: 500 }))]) {
+    const client = createMemoryClient({ baseUrl: "https://memory.test", apiKey: "test-key", fetch });
+    await assert.rejects(client.captureMemory({}), MemoryClientError);
+  }
+});

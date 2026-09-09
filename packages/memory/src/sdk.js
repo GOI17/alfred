@@ -60,6 +60,10 @@ export function createMemoryClient({ baseUrl, apiKey, fetch: fetchImplementation
   }
 
   return {
+    captureMemory(input) {
+      return request("/memories/capture", { method: "POST", body: input });
+    },
+
     createMemory(input) {
       return request("/memories", { method: "POST", body: input });
     },

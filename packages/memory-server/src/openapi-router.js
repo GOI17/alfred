@@ -344,6 +344,15 @@ export function createOpenapiRouter({
           const memoryService = await getMemoryService(tenantId);
           const segs = url.pathname.split("/").filter(Boolean);
 
+          if (segs.length === 2 && segs[1] === "capture") {
+            if (req.method !== "POST") return json(res, 405, { error: { code: "method_not_allowed" } });
+            const body = await readJsonBody(req);
+            if (body?.__invalid) return json(res, 400, { error: { code: "validation_error", message: "Invalid JSON body." } });
+            const result = await memoryService.captureMemory(tenantId, body);
+            if (rl.record) await rl.record("success");
+            return json(res, 200, result);
+          }
+
           if (segs.length === 1 && req.method === "GET") {
             const opts = {};
             for (const k of ["limit", "offset", "type", "namespace", "tag", "q"]) {
@@ -406,7 +415,7 @@ export function createOpenapiRouter({
           return json(res, 404, { error: { code: "not_found", message: "Route not found." } });
         } catch (err) {
           if (rl.record) await rl.record("internal_error", err.code);
-          return json(res, err.status || 500, { error: { code: err.code || "internal_error", message: err.message } });
+          return json(res, err.status || 500, { error: { code: err.code || "internal_error", message: url.pathname === "/memories/capture" && !err.status ? "Memory capture failed." : err.message } });
         }
       }
       } finally {

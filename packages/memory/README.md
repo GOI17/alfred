@@ -77,6 +77,33 @@ const memory = await memoryService.createMemory(tenant.id, {
 });
 ```
 
+## Proactive capture
+
+Connected Alfred agents can capture durable statements during ordinary work without
+waiting for a save request. The agent selects a short grounded excerpt; the shared
+`MemoryService.captureMemory(userId, { candidate, context })` applies deterministic
+policy before writing. This operation makes no provider requests.
+
+Candidate content preserves a narrow excerpt of `context.evidence`; `context.origin`
+is `user` or `verified`. Evidence is limited to 2,000 characters and content to 1,000.
+For example, “Prefiero respuestas breves” or “I prefer concise answers” can become
+preferences. Spanish and English exclusions, uncertainty, temporary state and
+sensitive-data patterns prevent proactive capture. A type label alone does not
+establish durability. The guard uses patterns and source excerpts; it does not
+prove semantic truth or detect every possible secret.
+
+The result is `created` with the stored memory, `duplicate` with the existing
+memory, or `skipped` with a reason. Storage failures remain errors. Completed
+repeated captures deduplicate normalized identical content within one tenant and
+namespace; this is not semantic merging or a distributed concurrency guarantee.
+Context is used transiently and is never stored with the memory.
+
+The agent respects active-conversation opt-outs such as “no guardes esto”, can
+pass `context.persistenceDisabled: true`, and acknowledges only confirmed new
+writes. It must never bypass a rejected capture through ordinary create. Existing
+explicit CRUD operations retain their contracts. Persistent account-level opt-out
+settings are outside this feature.
+
 ## API surface
 
 | Module | Public exports |

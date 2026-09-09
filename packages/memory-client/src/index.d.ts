@@ -38,6 +38,27 @@ export interface CreateMemoryInput {
   expiresAt?: string;
 }
 
+export interface CaptureMemoryInput {
+  candidate: {
+    content: string;
+    source: string;
+    type?: MemoryType;
+    namespace?: MemoryNamespace;
+    projectId?: string;
+    tags?: string[];
+    confidence?: number;
+  };
+  context: {
+    evidence: string;
+    origin: "user" | "verified";
+    persistenceDisabled?: boolean;
+  };
+}
+
+export type CaptureMemoryResult =
+  | { status: "created" | "duplicate"; memory: MemoryRecord; reason: string }
+  | { status: "skipped"; reason: string };
+
 export interface UpdateMemoryInput {
   type?: MemoryType;
   content?: string;
@@ -69,6 +90,7 @@ export interface MemoryClientOptions {
 }
 
 export interface MemoryClient {
+  captureMemory(input: CaptureMemoryInput): Promise<CaptureMemoryResult>;
   createMemory(input: CreateMemoryInput): Promise<MemoryRecord>;
   getMemory(id: string): Promise<MemoryRecord>;
   listMemories(options?: MemoryListOptions): Promise<MemoryPage>;

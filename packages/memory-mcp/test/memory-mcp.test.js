@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 import { readMemoryMcpConfigFromEnv } from "../src/cli.js";
-import { createZodSchemaAdapter, memoryToolNames, registerMemoryTools } from "../src/index.js";
+import { MEMORY_MCP_SERVER_OPTIONS, createZodSchemaAdapter, memoryToolNames, registerMemoryTools } from "../src/index.js";
 
 function createFakeServer() {
   return {
@@ -22,6 +22,10 @@ function createFakeMemoryClient(overrides = {}) {
     async searchMemories(input) {
       calls.push({ method: "searchMemories", input });
       return { items: [{ id: "mem_search", content: input.q }], pagination: { limit: 1, offset: 0, total: 1 } };
+    },
+    async captureMemory(input) {
+      calls.push({ method: "captureMemory", input });
+      return { status: "created", memory: { id: "mem_capture", ...input.candidate }, reason: "Durable source statement." };
     },
     async createMemory(input) {
       calls.push({ method: "createMemory", input });
@@ -55,12 +59,12 @@ function tool(server, name) {
   return server.tools.find((entry) => entry.name === name);
 }
 
-test("registers exactly five tools", () => {
+test("registers exactly six tools", () => {
   const { server } = register();
 
   assert.deepEqual(
     server.tools.map((entry) => entry.name),
-    ["memory_search", "memory_create", "memory_update", "memory_delete", "memory_list"]
+    ["memory_search", "memory_capture", "memory_create", "memory_update", "memory_delete", "memory_list"]
   );
   assert.deepEqual(memoryToolNames(), server.tools.map((entry) => entry.name));
 });
@@ -70,6 +74,7 @@ test("zod schema adapter returns Standard Schema objects instead of raw shapes",
     return {
       kind: "object",
       shape,
+      optional() { return { kind: "optional-object" }; },
       strict() {
         return this;
       },
@@ -89,6 +94,7 @@ test("zod schema adapter returns Standard Schema objects instead of raw shapes",
     string() {
       const schema = {
         kind: "string",
+        max() { return schema; },
         min() {
           return schema;
         },
@@ -110,6 +116,7 @@ test("zod schema adapter returns Standard Schema objects instead of raw shapes",
         positive() {
           return schema;
         },
+        max() { return schema; },
         min() {
           return schema;
         },
@@ -123,10 +130,10 @@ test("zod schema adapter returns Standard Schema objects instead of raw shapes",
       return schema;
     },
     boolean() {
-      return { kind: "boolean" };
+      return { kind: "boolean", optional: () => ({ kind: "optional-boolean" }) };
     },
     array(item) {
-      return { kind: "array", item, optional: () => ({ kind: "optional-array", item }) };
+      return { kind: "array", item, max() { return this; }, optional: () => ({ kind: "optional-array", item }) };
     },
     record() {
       return { kind: "record", optional: () => ({ kind: "optional-record" }), nullable: () => ({ kind: "nullable-record", optional: () => ({ kind: "optional-nullable-record" }) }) };
@@ -371,3 +378,35 @@ async function readSourceFiles() {
     files.map(async (file) => [file, await readFile(new URL(file, import.meta.url), "utf8")])
   );
 }
+
+
+test("memory_capture carries grounded evidence, write scope and honest outcome metadata", async () => {
+  const { server, memoryClient } = register();
+  const capture = tool(server, "memory_capture");
+  const input = { candidate: { content: "Prefiero respuestas breves", source: "user" }, context: { evidence: "Prefiero respuestas breves", origin: "user" } };
+  const result = await capture.handler(input);
+  assert.deepEqual(memoryClient.calls, [{ method: "captureMemory", input }]);
+  assert.equal(result.structuredContent.status, "created");
+  assert.deepEqual(capture.config.securitySchemes, [{ type: "oauth2", scopes: ["memory:write"] }]);
+  assert.equal(capture.config.annotations.readOnlyHint, false);
+  assert.match(capture.config.description, /without an explicit save request/);
+});
+
+test("memory_capture never represents a failed request as a saved memory", async () => {
+  const { server } = register({ async captureMemory() { throw new Error("Private storage detail"); } });
+  const result = await tool(server, "memory_capture").handler({ candidate: {}, context: {} });
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent.status, undefined);
+  assert.ok(!JSON.stringify(result).includes("Private storage detail"));
+});
+
+
+test("MCP initialization instructions drive proactive capture and retain opt-out and honest results", () => {
+  const instructions = MEMORY_MCP_SERVER_OPTIONS.instructions;
+  assert.match(instructions, /proactively call memory_capture/);
+  assert.match(instructions, /without waiting for an explicit request/);
+  assert.match(instructions, /minimal exact source statement/);
+  assert.match(instructions, /persistenceDisabled/);
+  assert.match(instructions, /Only announce.*status is created/);
+  assert.match(instructions, /Never retry a skipped capture through memory_create/);
+});
