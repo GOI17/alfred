@@ -1,0 +1,209 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os/exec"
+	"path/filepath"
+	"sync"
+	"syscall"
+	"time"
+)
+
+const schema = "alfred.setup/v1"
+const maxMessage = 1024 * 1024
+
+type selection struct {
+	Edition   string   `json:"edition"`
+	Harnesses []string `json:"harnesses"`
+	Memory    string   `json:"memory"`
+	Name      string   `json:"name"`
+	Path      string   `json:"path"`
+	Profiles  bool     `json:"profiles"`
+}
+type discovery struct {
+	Version      string    `json:"version"`
+	Defaults     selection `json:"defaults"`
+	Capabilities struct {
+		Platform  string            `json:"platform"`
+		Arch      string            `json:"arch"`
+		Node      string            `json:"node"`
+		Harnesses map[string]string `json:"harnesses"`
+	} `json:"capabilities"`
+	Packaged bool `json:"packaged"`
+}
+type request struct {
+	Schema       string     `json:"schema"`
+	ID           string     `json:"id"`
+	Operation    string     `json:"operation"`
+	Selection    *selection `json:"selection,omitempty"`
+	PreviewToken string     `json:"previewToken,omitempty"`
+	Confirmed    bool       `json:"confirmed,omitempty"`
+}
+type response struct {
+	Schema string          `json:"schema"`
+	ID     string          `json:"id"`
+	OK     *bool           `json:"ok"`
+	Data   json.RawMessage `json:"data,omitempty"`
+	Error  *struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+}
+type result struct {
+	Discover discovery
+	Text     string
+	Token    string
+}
+type backend interface {
+	Call(string, *selection, string) (result, error)
+}
+type processBridge struct {
+	mu       sync.Mutex
+	cmd      *exec.Cmd
+	cancel   context.CancelFunc
+	input    io.WriteCloser
+	output   *bufio.Scanner
+	sequence uint64
+}
+
+func startBridge(ctx context.Context, node, script string) (*processBridge, error) {
+	if !filepath.IsAbs(node) || !filepath.IsAbs(script) {
+		return nil, errors.New("setup requires absolute executable paths")
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	cmd := exec.CommandContext(ctx, node, script)
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.WaitDelay = 3 * time.Second
+	// Child diagnostics are intentionally not forwarded into the terminal.
+	cmd.Stderr = io.Discard
+	in, err := cmd.StdinPipe()
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		in.Close()
+		cancel()
+		return nil, err
+	}
+	if err = cmd.Start(); err != nil {
+		in.Close()
+		cancel()
+		return nil, errors.New("could not start setup; check the Alfred installation")
+	}
+	scanner := bufio.NewScanner(out)
+	scanner.Buffer(make([]byte, 4096), maxMessage)
+	return &processBridge{cmd: cmd, cancel: cancel, input: in, output: scanner}, nil
+}
+func (b *processBridge) Close() { b.input.Close(); b.cancel(); _ = b.cmd.Wait() }
+func decodeStrict(data []byte, value any) error {
+	d := json.NewDecoder(bytes.NewReader(data))
+	d.DisallowUnknownFields()
+	if err := d.Decode(value); err != nil {
+		return err
+	}
+	var extra any
+	if d.Decode(&extra) != io.EOF {
+		return errors.New("unexpected trailing data")
+	}
+	return nil
+}
+func (b *processBridge) Call(op string, s *selection, token string) (result, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var r result
+	b.sequence++
+	req := request{Schema: schema, ID: fmt.Sprint(b.sequence), Operation: op, Selection: s, PreviewToken: token, Confirmed: op == "apply"}
+	data, err := json.Marshal(req)
+	if err != nil || len(data) >= maxMessage {
+		return r, errors.New("setup choices are too large")
+	}
+	if _, err = b.input.Write(append(data, '\n')); err != nil {
+		return r, errors.New("setup stopped unexpectedly; restart Alfred setup")
+	}
+	if !b.output.Scan() {
+		return r, errors.New("setup stopped unexpectedly; restart Alfred setup")
+	}
+	var resp response
+	if decodeStrict(b.output.Bytes(), &resp) != nil || resp.Schema != schema || resp.ID != req.ID || resp.OK == nil {
+		return r, errors.New("invalid setup response; update or reinstall Alfred")
+	}
+	if !*resp.OK {
+		if resp.Error == nil || len(resp.Data) > 0 {
+			return r, errors.New("invalid setup error response")
+		}
+		return r, errors.New(safeText(resp.Error.Message))
+	}
+	if resp.Error != nil || len(resp.Data) == 0 {
+		return r, errors.New("incomplete setup response")
+	}
+	switch op {
+	case "discover":
+		err = decodeStrict(resp.Data, &r.Discover)
+		if err == nil {
+			err = validateDiscovery(r.Discover)
+		}
+	case "preview":
+		var d struct {
+			Text  string `json:"text"`
+			Token string `json:"previewToken"`
+		}
+		err = decodeStrict(resp.Data, &d)
+		r.Text, r.Token = d.Text, d.Token
+		if d.Token == "" || d.Text == "" {
+			err = errors.New("missing preview")
+		}
+	case "apply":
+		var d struct {
+			Text string `json:"text"`
+		}
+		err = decodeStrict(resp.Data, &d)
+		r.Text = d.Text
+	default:
+		err = errors.New("unknown operation")
+	}
+	if err != nil {
+		return result{}, errors.New("invalid setup response; update or reinstall Alfred")
+	}
+	return r, nil
+}
+func validateDiscovery(d discovery) error {
+	s := d.Defaults
+	if s.Edition != "coding" && s.Edition != "memory" && s.Edition != "full" {
+		return errors.New("invalid edition")
+	}
+	if s.Memory != "decide-later" && s.Memory != "existing-tenant" && s.Memory != "local-sqlite" && s.Memory != "postgres" {
+		return errors.New("invalid memory")
+	}
+	if s.Name == "" || s.Path == "" || s.Harnesses == nil {
+		return errors.New("incomplete defaults")
+	}
+	seen := map[string]bool{}
+	for _, h := range s.Harnesses {
+		if !knownHarness(h) || seen[h] {
+			return errors.New("invalid harness")
+		}
+		seen[h] = true
+	}
+	for h, status := range d.Capabilities.Harnesses {
+		if !knownHarness(h) || (status != "installed" && status != "not-installed") {
+			return errors.New("invalid capabilities")
+		}
+	}
+	return nil
+}
+func knownHarness(s string) bool {
+	for _, h := range harnessIDs {
+		if s == h {
+			return true
+		}
+	}
+	return false
+}

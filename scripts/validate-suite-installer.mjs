@@ -557,7 +557,7 @@ try {
   assert.match(preview.stdout, /No files were written/);
   assert.match(preview.stdout, /Where files go and why:/);
   assert.match(preview.stdout, /Project you launched from:/);
-  assert.match(preview.stdout, /Why outside the project by default:/);
+  assert.match(preview.stdout, /Why previews are separate from live configuration:/);
   assert.match(preview.stdout, /Expected generated preview locations after apply:/);
   assert.match(preview.stdout, /Project modified: no\./);
   assert.doesNotMatch(preview.stdout, /Installing Alfred Pi Agent/);

@@ -33,10 +33,11 @@ const cli = spawnSync(
 assert.equal(cli.status, 0, cli.stderr);
 assert.equal(cli.stdout.trim(), `alfred ${version}`);
 
+const temporaryDirectory = mkdtempSync(join(tmpdir(), "alfred-homebrew-validation-"));
 const preview = spawnSync(
   process.execPath,
   [join(root, "packages/memory-server/scripts/alfred.mjs"), "setup", "--edition=coding", "--name=brew-validation", "--harness=none"],
-  { encoding: "utf8", cwd: root, env: { ...process.env, ALFRED_DISTRIBUTION: "homebrew" } }
+  { encoding: "utf8", cwd: temporaryDirectory, env: { ...process.env, HOME: temporaryDirectory, ALFRED_DISTRIBUTION: "homebrew" } }
 );
 assert.equal(preview.status, 0, preview.stderr);
 assert.match(preview.stdout, /ALFRED SUITE INSTALL PREVIEW/);
@@ -44,7 +45,6 @@ assert.match(preview.stdout, new RegExp(`Version:\\s+${escapedVersion}`));
 assert.match(preview.stdout, new RegExp(`Target path:\\s+${root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
 assert.match(preview.stdout, /Provider calls: 0/);
 
-const temporaryDirectory = mkdtempSync(join(tmpdir(), "alfred-homebrew-validation-"));
 try {
   const formulaPath = join(temporaryDirectory, "Formula", "alfred.rb");
   const formula = renderFormula({

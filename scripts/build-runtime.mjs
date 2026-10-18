@@ -98,6 +98,13 @@ export function createTar(files) {
   chunks.push(Buffer.alloc(1024));
   return Buffer.concat(chunks);
 }
+export function assertSetupBinary(bytes, target) {
+  const [platform, arch] = target.split("-");
+  const valid = platform === "darwin"
+    ? bytes.length >= 32 && bytes.readUInt32LE(0) === 0xfeedfacf && bytes.readUInt32LE(4) === (arch === "arm64" ? 0x100000c : 0x1000007)
+    : bytes.length >= 64 && bytes.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46])) && bytes[4] === 2 && bytes[5] === 1 && bytes.readUInt16LE(18) === (arch === "arm64" ? 183 : 62);
+  if (!valid) throw new Error(`Invalid setup TUI native executable: ${target}`);
+}
 export function buildRuntime({ root, dependencies, output, sourceRevision, builderRevision, exploratory = false, allowlist = join(repositoryRoot, "packaging/runtime/allowlist.json") }) {
   root = realpathSync(resolve(root)); dependencies = realpathSync(resolve(dependencies)); output = resolve(output);
   const existingOutputParent = (() => { let p = output; while (!existsSync(p)) p = dirname(p); return realpathSync(p); })();
@@ -119,6 +126,24 @@ export function buildRuntime({ root, dependencies, output, sourceRevision, build
     const matches = filesMatching(root, pattern);
     if (!matches.length) throw new Error(`Missing required runtime input: ${pattern}`);
     for (const name of matches) add(name, readFileSync(checkedInput(root, name)), name === "install.sh" ? 0o755 : 0o644);
+  }
+  // Exact target names are required: a missing host binary must fail packaging.
+  if (policy.setupTui) {
+    const expected = ["darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64"];
+    if (JSON.stringify(policy.setupTui.targets) !== JSON.stringify(expected) || policy.setupTui.directory !== "packages/setup-tui/dist") throw new Error("Invalid setup TUI target policy");
+    const manifestPath = `${policy.setupTui.directory}/manifest.json`;
+    const manifestBytes = readFileSync(checkedInput(root, manifestPath));
+    const binaryManifest = JSON.parse(manifestBytes);
+    if (binaryManifest.schema !== "alfred.setup.binaries/v1" || JSON.stringify(Object.keys(binaryManifest.binaries ?? {}).sort()) !== JSON.stringify(expected)) throw new Error("Invalid setup TUI binary manifest");
+    add(manifestPath, manifestBytes);
+    for (const target of expected) {
+      const name = `${policy.setupTui.directory}/alfred-setup-${target}`;
+      const bytes = readFileSync(checkedInput(root, name));
+      const record = binaryManifest.binaries[target];
+      if (record.file !== `alfred-setup-${target}` || record.sha256 !== sha256(bytes)) throw new Error(`Setup TUI binary checksum mismatch: ${name}`);
+      assertSetupBinary(bytes, target);
+      add(name, bytes, 0o755);
+    }
   }
   add("package.json", jsonBytes({ name: "alfred", version, private: true, description: "Readable Alfred runtime; source repository history is not included." }));
   for (const packageName of policy.packageMetadata ?? []) {
@@ -196,7 +221,7 @@ export function buildRuntime({ root, dependencies, output, sourceRevision, build
     files.delete("packages/console-web/src/index.html");
     add("packages/console-web/dist/index.html", consoleSource.bytes);
   }
-  add("RUNTIME-DISCLOSURE.txt", Buffer.from("Alfred runtime includes readable JavaScript, shell, HTML, SQL, agent and skill instructions, and third-party production dependencies with their licenses. It is not an opaque native binary. Source checkout history, workflows, tests, execution specifications and local credentials are excluded. Node is required. Optional OpenTUI and Transformers are not bundled; Node TUI and keyword search remain available.\n"));
+  add("RUNTIME-DISCLOSURE.txt", Buffer.from("Alfred runtime includes readable JavaScript, shell, HTML, SQL, agent and skill instructions, and third-party production dependencies with their licenses. It is not an opaque native binary. Source checkout history, workflows, tests, execution specifications and local credentials are excluded. Node is required. Optional OpenTUI and Transformers are not bundled. The bundled Go setup TUI supports Darwin/Linux amd64/arm64; explicit Node automation and keyword search remain available. Go dependency licenses and module checksums are included.\n"));
   const manifest = { schema: "alfred.runtime.manifest/v1", version,
     provenance: { source_revision: sourceRevision, builder_revision: builderRevision, exploratory, generator_sha256: sha256(readFileSync(join(repositoryRoot, "scripts/generate-homebrew-formula.mjs"))), builder_sha256: sha256(readFileSync(fileURLToPath(import.meta.url))), allowlist_sha256: sha256(allowlistBytes), dependencies_lock_sha256: sha256(lockBytes), source_repository: "GOI17/alfred" },
     transformations: ["root and package metadata reduced to runtime fields", "console HTML relocated to runtime dist path", "workspace module copies materialized inside node_modules", "mtime/ownership/modes normalized", "development files omitted from production dependencies", ...(policy.generatedRuntimeMetadata ? ["minimal runtime kernel manifest and install instructions generated", "historical eval runner removed from runtime component metadata"] : [])],

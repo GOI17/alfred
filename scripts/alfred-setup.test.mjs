@@ -19,7 +19,7 @@ function runSetup(extraEnv = {}) {
     "--name=setup-test",
     "--harness=none"
   ], {
-    cwd: root,
+    cwd: home,
     encoding: "utf8",
     env: { ...process.env, HOME: home, ...extraEnv }
   });

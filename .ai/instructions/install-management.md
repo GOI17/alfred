@@ -26,13 +26,9 @@ Provide deterministic, reproducible instructions for Alfred installation, update
 
 ### Mode 0: Human-First Suite Install
 
-Use for humans installing Alfred itself. Issue #219 prepares a public, versioned
-runtime package with the canonical command below. It is **not active yet**:
-Alfred source is public, `GOI17/homebrew-alfred` is still private, and current
-release `v0.7.2` does not contain the new runtime assets. Do not claim that an
-anonymous installation has passed until publication and verification complete.
-
-After a new runtime release and public tap activation:
+Use for humans installing Alfred itself. The canonical tap is public and
+release0.7.3 includes the verified runtime assets. Public installation passed;
+new setup UI changes in #222 await their own release.
 
 ```sh
 brew install GOI17/alfred/alfred
@@ -46,7 +42,13 @@ archive, pinned by its actual SHA-256, and declares Node. Locked production
 dependencies are already in the archive; installation does not require a GitHub
 login, source clone or a package-manager install in the project.
 
-`alfred setup` uses the installed runtime and bundled Node TUI with `--no-clone`.
+The next release's interactive `alfred setup` uses the installed runtime and
+bundled Go Bubble Tea/Lip Gloss TUI with `--no-clone`;0.7.3 retains its old UI.
+Explicit flags/non-TTY previews and `--legacy-ui` remain available. The UI sends
+structured JSONL requests to the Node backend; only a reviewed, unchanged plan
+and explicit Apply confirmation authorize the safe setup operation.
+Approved generated previews live in the invoking project's `.alfred/setup/previews`,
+never the shared Homebrew installation. Live harness activation is still separate.
 It remains preview-first: no profile, project or live harness activation without
 review and explicit approval. Package installation is not that approval.
 

@@ -1,0 +1,37 @@
+{
+  "issue": 222,
+  "event": "setup_tui_design",
+  "base": "3257f808d5add0b297aaba6965d867701297931c",
+  "worktree": "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred-worktrees/issue-222-wave-setup-tui",
+  "skills": [
+    "architecture-docs",
+    "typescript-project"
+  ],
+  "stack": [
+    "Go",
+    "BubbleTea0.25.0",
+    "LipGloss0.9.1"
+  ],
+  "protected_permissions": "read core/harnesses only in222; no writes",
+  "provider_calls": 0,
+  "dependency_download": "explicitly approved pinned Go/npm runtime lock staging only; temporary caches",
+  "global_installation": "Alfred0.7.3 unchanged; no global setup/config changes",
+  "validation": {
+    "npm_test": {
+      "exit": 0,
+      "passed": 699,
+      "skipped": 2,
+      "failed": 0
+    },
+    "release_gates": 19,
+    "backend_setup_tests": 15,
+    "review": "integrated source and final confirmation no findings",
+    "go_tests": 20,
+    "go_race": "pass",
+    "go_vet": "pass",
+    "native_reproducibility": "4/4 identical",
+    "final_confirmation_pty": "80x24 and40x12 pass",
+    "packaged_smoke": "pass",
+    "archive_sha256": "fc46c3c16ae0e9e8f267e8465ac394a963699189fcf0bd174bab907ce5070824"
+  }
+}

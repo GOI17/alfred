@@ -79,12 +79,25 @@ jobs:
           npm run homebrew:test
           npm run validate:homebrew
 
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.2"
+          cache-dependency-path: packages/setup-tui/go.sum
+      - name: Stage pinned Go modules and build native setup targets
+        env:
+          GOTOOLCHAIN: local
+          CGO_ENABLED: "0"
+          GOENV: "off"
+        run: |
+          (cd packages/setup-tui && go mod download && go mod verify && go test ./...)
+          node scripts/build-setup-tui.mjs
+          node --test scripts/build-setup-tui.test.mjs
       - name: Prepare locked production dependencies outside the source tree
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/alfred-runtime-deps"
           cp packaging/runtime/package{,-lock}.json "$RUNNER_TEMP/alfred-runtime-deps/"
-          npm ci --prefix "$RUNNER_TEMP/alfred-runtime-deps" --omit=dev --ignore-scripts --no-audit --no-fund
+          (cd "$RUNNER_TEMP/alfred-runtime-deps" && npm ci --prefix "$RUNNER_TEMP/alfred-runtime-deps" --omit=dev --ignore-scripts --no-audit --no-fund --workspaces=false)
 
       - name: Build and verify the exact runtime release
         env:

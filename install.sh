@@ -27,6 +27,7 @@ esac
 EDITION="coding"
 NAME="default"
 TARGET_PATH=""
+PREVIEW_ROOT=""
 HARNESS="auto"
 HARNESS_STATUS=""
 SELECTED_HARNESSES=""
@@ -59,6 +60,8 @@ Flags:
   --apply                         Apply safe suite install steps. Without this, preview only.
   --dry-run                       Alias for preview-only mode.
   --no-clone                      With --apply, reuse an existing repo at --path.
+  --skip-profile-manager          Leave runtime profiles unchanged.
+  --preview-output=<dir>          Use this project's .alfred/setup/previews directory.
   --help                          Show help.
 
 Examples:
@@ -236,6 +239,8 @@ while [ "$#" -gt 0 ]; do
     --apply) APPLY=true; shift ;;
     --dry-run) APPLY=false; shift ;;
     --no-clone) NO_CLONE=true; shift ;;
+    --skip-profile-manager) SKIP_PROFILE_MANAGER=true; PROFILE_STRATEGY="decide-later"; shift ;;
+    --preview-output=*) PREVIEW_ROOT="${1#*=}"; shift ;;
     --profile|--profile=*) err "--profile is legacy and no longer selects the Alfred suite install shape. Use --edition=coding, --edition=memory, or --edition=full." ;;
     --start-server|--registry|--registry=*|--cwd|--cwd=*|--db-connection|--db-connection=*)
       err "$1 belongs to the old Memory-only installer flow. Use --edition=memory after the suite installer lands, or run the memory CLI from an installed Alfred repo."
@@ -965,6 +970,38 @@ case "$TARGET_PATH" in
     ;;
 esac
 
+# Bundled setup writes review artifacts to the invoking project, never the Cellar.
+if [ -n "$PREVIEW_ROOT" ] || [ "${ALFRED_DISTRIBUTION:-}" = "homebrew" ]; then
+  if [ -z "$PREVIEW_ROOT" ]; then PREVIEW_ROOT="$SOURCE_PROJECT_PATH/.alfred/setup/previews"; fi
+  node --input-type=module - "$PREVIEW_ROOT" "$SOURCE_PROJECT_PATH" "$TARGET_PATH" "${ALFRED_DISTRIBUTION:-}" <<'NODEPREVIEWROOT' || err "Unsafe project preview output path"
+import { existsSync, lstatSync, realpathSync, readdirSync } from "node:fs";
+import { resolve, join, parse, sep } from "node:path";
+const [selected, project, runtime, distribution] = process.argv.slice(2);
+const output = resolve(selected), expected = join(realpathSync(project), ".alfred/setup/previews");
+if (selected !== output || output !== expected) process.exit(1);
+if (distribution === "homebrew" && (output === resolve(runtime) || output.startsWith(resolve(runtime) + sep))) process.exit(1);
+let cursor = parse(output).root;
+for (const part of output.slice(cursor.length).split(sep)) {
+  cursor = join(cursor, part);
+  const stat = lstatSync(cursor, { throwIfNoEntry: false });
+  if (stat && (stat.isSymbolicLink() || !stat.isDirectory())) process.exit(1);
+}
+function checkTree(directory) {
+  if (!existsSync(directory)) return;
+  for (const name of readdirSync(directory)) {
+    const file = join(directory, name), stat = lstatSync(file);
+    if (stat.isSymbolicLink()) process.exit(1);
+    if (stat.isDirectory()) checkTree(file);
+  }
+}
+checkTree(output);
+NODEPREVIEWROOT
+  RELATIVE_PREVIEW_ROOT="$(node -e 'process.stdout.write(require("node:path").relative(process.argv[1], process.argv[2]))' "$TARGET_PATH" "$PREVIEW_ROOT")" || err "Unable to resolve preview output"
+else
+  PREVIEW_ROOT="$TARGET_PATH/.ai/generated"
+  RELATIVE_PREVIEW_ROOT=".ai/generated"
+fi
+
 node_status="missing"
 node_major=""
 if command -v node >/dev/null 2>&1; then
@@ -1027,16 +1064,16 @@ print_expected_preview_locations() {
     return 0
   fi
   if contains_harness opencode; then
-    printf '  - opencode preview: %s/.ai/generated/opencode-install\n' "$TARGET_PATH"
+    printf '  - opencode preview: %s/opencode-install\n' "$PREVIEW_ROOT"
   fi
   if contains_harness codex-cli || contains_harness codex-app; then
-    printf '  - shared Codex preview: %s/.ai/generated/codex-install\n' "$TARGET_PATH"
+    printf '  - shared Codex preview: %s/codex-install\n' "$PREVIEW_ROOT"
   fi
   if contains_harness codex-cli; then
-    printf '  - Codex CLI preview: %s/.ai/generated/codex-cli-install\n' "$TARGET_PATH"
+    printf '  - Codex CLI preview: %s/codex-cli-install\n' "$PREVIEW_ROOT"
   fi
   if contains_harness codex-app; then
-    printf '  - Codex App preview: %s/.ai/generated/codex-app-install\n' "$TARGET_PATH"
+    printf '  - Codex App preview: %s/codex-app-install\n' "$PREVIEW_ROOT"
   fi
   if contains_harness pi; then
     printf '  - Pi: no live Pi files are written by this installer\n'
@@ -1054,11 +1091,10 @@ Where files go and why:
   - Trace path:               $HOME/.alfred/observability/install-trace.json
   - Install docs:             $TARGET_PATH/site/docs/install.html
 
-Why outside the project by default:
-  Alfred is preview-first. It keeps generated suite and harness artifacts under
-  ~/.alfred so the installer does not unexpectedly mutate your project or write
-  live opencode/Codex/Pi config. You audit generated previews first, then decide
-  what should be copied into the project or into a live harness location.
+Why previews are separate from live configuration:
+  Alfred writes the reviewed artifacts only under $PREVIEW_ROOT after approval.
+  It does not write live opencode/Codex/Pi configuration. Audit those previews
+  before deciding whether to copy anything into a live harness location.
 
 Expected generated preview locations after apply:
 $(print_expected_preview_locations)
@@ -1077,7 +1113,7 @@ pretty_path() {
 }
 
 write_handoff_summary() {
-  HANDOFF_SUMMARY_FILE="$TARGET_PATH/.ai/generated/install-handoff.txt"
+  HANDOFF_SUMMARY_FILE="$PREVIEW_ROOT/install-handoff.txt"
   mkdir -p "$(dirname "$HANDOFF_SUMMARY_FILE")"
   {
     printf 'Alfred install handoff\n'
@@ -1108,7 +1144,7 @@ apply_generated_directory() {
 }
 
 apply_opencode_preview_to_project() {
-  preview_dir="$TARGET_PATH/.ai/generated/opencode-install"
+  preview_dir="$PREVIEW_ROOT/opencode-install"
   [ -d "$preview_dir" ] || return 0
   apply_generated_directory "$preview_dir" ".opencode"
   if [ -f "$preview_dir/opencode.json.preview" ]; then
@@ -1122,8 +1158,8 @@ apply_opencode_preview_to_project() {
 apply_codex_preview_to_project() {
   preview_dir=""
   for candidate in codex-cli-install codex-app-install codex-install; do
-    if [ -d "$TARGET_PATH/.ai/generated/$candidate" ]; then
-      preview_dir="$TARGET_PATH/.ai/generated/$candidate"
+    if [ -d "$PREVIEW_ROOT/$candidate" ]; then
+      preview_dir="$PREVIEW_ROOT/$candidate"
       break
     fi
   done
@@ -1140,7 +1176,7 @@ apply_codex_preview_to_project() {
 }
 
 apply_selected_harness_files_to_project() {
-  source_dir="$TARGET_PATH/.ai/generated"
+  source_dir="$PREVIEW_ROOT"
   APPLIED_PROJECT_PATHS=""
   APPLIED_ANY=false
   if [ ! -d "$source_dir" ]; then
@@ -1187,7 +1223,7 @@ Why nothing moved into the project yet:
   opencode/Codex/Pi files.
 
 Final handoff choices:
-  1) Keep everything in ~/.alfred for now. Safe default.
+  1) Keep the generated previews for review. Safe default.
   2) Apply selected harness files into this project now.
   3) Exit without copying anything else.
 EOFHANDOFF
@@ -1200,7 +1236,7 @@ run_final_handoff() {
     print_compact_final_handoff
     handoff_ask 'Final handoff [1=keep, 2=apply files into project, 3=exit, default 1]: ' '1'
     case "$HANDOFF_ANSWER" in
-      1|keep|"") printf '\nKeeping generated artifacts in ~/.alfred. No project files were copied.\n' ;;
+      1|keep|"") printf '\nKeeping generated previews. No live harness files were copied.\n' ;;
       2|copy|apply|apply-files) apply_selected_harness_files_to_project ;;
       3|exit|cancel) printf '\nExiting after install. No project files were copied.\n' ;;
       *) err "Unknown final handoff choice: $HANDOFF_ANSWER" ;;
@@ -1210,7 +1246,7 @@ run_final_handoff() {
     cat <<EOFCHOICES
 
 Final handoff choices:
-  1) Keep everything in ~/.alfred for now (recommended until you audit).
+  1) Keep generated previews for now (recommended until you audit).
   2) Apply selected harness files into this project now.
   3) Exit/cancel here. Nothing else will be copied.
 EOFCHOICES
@@ -1219,7 +1255,7 @@ EOFCHOICES
 Non-interactive install: no project files were copied.
 To apply selected harness files into the project, rerun guided apply mode
 or copy from the generated previews:
-  $TARGET_PATH/.ai/generated
+  $PREVIEW_ROOT
 EOFNONINTERACTIVE
   fi
 }
@@ -1232,6 +1268,7 @@ Version:        $VERSION
 Edition:        $EDITION
 Name:           $NAME
 Target path:    $TARGET_PATH
+Preview output: $PREVIEW_ROOT
 Harnesses:      $SELECTED_HARNESSES
 Detected:       $(display_harness_status)
 Profile:        $DISPLAY_PROFILE_STRATEGY
@@ -1347,8 +1384,8 @@ esac
 
 if contains_harness opencode; then
   if [ -f "$TARGET_PATH/packages/opencode-adapter/src/cli.js" ]; then
-    log "Generating opencode preview under $TARGET_PATH/.ai/generated/opencode-install"
-    (cd "$TARGET_PATH" && node packages/opencode-adapter/src/cli.js --output .ai/generated/opencode-install >/dev/null)
+    log "Generating opencode preview under $PREVIEW_ROOT/opencode-install"
+    (cd "$TARGET_PATH" && node packages/opencode-adapter/src/cli.js --output "$RELATIVE_PREVIEW_ROOT/opencode-install" >/dev/null)
   else
     log "opencode adapter preview skipped; package not found in installed repo."
   fi
@@ -1356,15 +1393,15 @@ fi
 
 if contains_harness codex-cli || contains_harness codex-app; then
   if [ -f "$TARGET_PATH/packages/codex-adapter/src/cli.js" ]; then
-    log "Generating shared Codex preview under $TARGET_PATH/.ai/generated/codex-install"
-    (cd "$TARGET_PATH" && node packages/codex-adapter/src/cli.js --output .ai/generated/codex-install >/dev/null)
+    log "Generating shared Codex preview under $PREVIEW_ROOT/codex-install"
+    (cd "$TARGET_PATH" && node packages/codex-adapter/src/cli.js --output "$RELATIVE_PREVIEW_ROOT/codex-install" >/dev/null)
     if contains_harness codex-cli; then
-      log "Generating Codex CLI preview under $TARGET_PATH/.ai/generated/codex-cli-install"
-      (cd "$TARGET_PATH" && node packages/codex-adapter/src/cli.js --output .ai/generated/codex-cli-install >/dev/null)
+      log "Generating Codex CLI preview under $PREVIEW_ROOT/codex-cli-install"
+      (cd "$TARGET_PATH" && node packages/codex-adapter/src/cli.js --output "$RELATIVE_PREVIEW_ROOT/codex-cli-install" >/dev/null)
     fi
     if contains_harness codex-app; then
-      log "Generating Codex App preview under $TARGET_PATH/.ai/generated/codex-app-install"
-      (cd "$TARGET_PATH" && node packages/codex-adapter/src/cli.js --output .ai/generated/codex-app-install >/dev/null)
+      log "Generating Codex App preview under $PREVIEW_ROOT/codex-app-install"
+      (cd "$TARGET_PATH" && node packages/codex-adapter/src/cli.js --output "$RELATIVE_PREVIEW_ROOT/codex-app-install" >/dev/null)
     fi
   else
     log "Codex adapter preview skipped; package not found in installed repo."
