@@ -1,3 +1,4 @@
+export { resolveRuntimeRequest, runRuntimeRequest, runtimeGrant, matchesRuntimeGrant } from "./runtime-authority.js";
 import fs from "node:fs";
 import path from "node:path";
 
