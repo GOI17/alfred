@@ -62,9 +62,12 @@ jobs:
           npm run validate:homebrew
 
   publish-homebrew-tap:
+    permissions:
+      contents: write
     needs: prepare-or-release
     if: ${{ needs.prepare-or-release.outputs.release_created == 'true' }}
     uses: ./.github/workflows/release-homebrew-tap.yml
     with:
       tag: ${{ needs.prepare-or-release.outputs.tag_name }}
-    secrets: inherit
+    secrets:
+      HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}

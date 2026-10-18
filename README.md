@@ -6,26 +6,46 @@ Alfred is a model-readable, harness-agnostic agent operations system for creatin
 
 ## Human Installation
 
-Collaborators with access to the private repositories can install the versioned
-CLI and guided installer through Homebrew:
+The public Homebrew distribution is being prepared in issue #219. Alfred's
+source repository is public, but the canonical `GOI17/homebrew-alfred` tap is
+still private and the current `v0.7.2` release does not contain the new runtime
+assets. The commands below describe the intended public flow after activation;
+they are not a claim that this package is already publicly installable.
+
+Once the tap and a new runtime release are published:
 
 ```sh
-gh auth login
-gh auth setup-git
-brew install GOI17/tap/alfred
+brew install GOI17/alfred/alfred
 alfred version
 alfred setup
 ```
 
-Use the fully qualified formula name: plain `brew install alfred` resolves to
-the unrelated Alfred macOS application cask. The formula itself writes no live
-harness configuration; `alfred setup` remains guided and preview-first. Setup
-does not ask for model assignments and never creates or changes
-`~/.alfred/models.json`; model selection remains user-owned runtime
-configuration outside setup.
+Use the fully qualified formula name to distinguish Alfred from the unrelated
+Alfred macOS application cask. The formula downloads a versioned runtime archive
+with a pinned SHA-256, including locked production dependencies; Node is a
+Homebrew dependency. It installs shared commands without activating a harness.
+No GitHub login is required for the intended public download.
 
-The existing `curl | sh` bootstrap remains available in the
-[install guide](https://alfred.alfredlabs.org/docs/install.html).
+Install the runtime once. Review `alfred setup` previews before approving any
+project or live harness configuration. Packaged setup uses its bundled Node
+TUI and installed runtime, without cloning `main` or fetching another installer.
+Model assignment remains user-owned; setup does not change `~/.alfred/models.json`.
+For each project, initialize managed execution separately:
+
+```sh
+alfred runtime init --instructions /absolute/path/to/shared/instructions.json
+alfred runtime status
+```
+
+Run those commands in each project's directory. Runtime initialization is
+separate from Memory `alfred init`; project state and exact-scope approvals stay
+under that project's `.alfred/runtime/`, outside the shared installation.
+See the [packaging and release guide](packaging/homebrew/README.md) for artifacts,
+verification, current availability and the automatic publishing pipeline.
+
+The existing `curl | sh` source bootstrap remains documented in the
+[install guide](https://alfred.alfredlabs.org/docs/install.html); it is separate
+from the prepared versioned runtime package.
 
 ## Managed runtime (issue #217)
 

@@ -86,6 +86,9 @@ test("reuses the packaged root for Homebrew setup", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, new RegExp(`Target path:\\s+${root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     assert.match(result.stdout, /No files were written/);
+    assert.match(result.stdout, /alfred setup --edition=/);
+    assert.match(result.stdout, /alfred runtime init --instructions/);
+    assert.doesNotMatch(result.stdout, /raw\.githubusercontent\.com|curl -/);
     assert.deepEqual(readdirSync(home), []);
   } finally {
     rmSync(home, { recursive: true, force: true });

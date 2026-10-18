@@ -86,25 +86,24 @@
 
       <h2 id="homebrew">Install with Homebrew</h2>
       <p>
-        Alfred currently ships through a private tap. Authenticate the GitHub
-        CLI and its Git credential helper, then install the fully qualified
-        formula:
+        Alfred source is public. The dedicated tap is currently private and the
+        public runtime assets await a new release and publication approval.
+        After activation, install the fully qualified formula without GitHub credentials:
       </p>
       <div class="terminal" aria-label="Install Alfred with Homebrew">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">zsh &mdash; Homebrew</span>
         </div>
-<pre><span class="f">gh</span> auth login
-<span class="f">gh</span> auth setup-git
-<span class="f">brew</span> install GOI17/tap/alfred
+<pre><span class="c"># After public activation (pending)</span>
+<span class="f">brew</span> install GOI17/alfred/alfred
 <span class="f">alfred</span> version
 <span class="f">alfred</span> setup <span class="c"># guided, preview-first configuration</span>
 
 <span class="c"># lifecycle</span>
 <span class="f">brew</span> update
-<span class="f">brew</span> upgrade GOI17/tap/alfred
-<span class="f">brew</span> uninstall GOI17/tap/alfred
+<span class="f">brew</span> upgrade GOI17/alfred/alfred
+<span class="f">brew</span> uninstall GOI17/alfred/alfred
 </pre>
       </div>
       <div class="doc-callout warn">
@@ -268,7 +267,7 @@ Apply changes? <span class="p">[y/N]</span>
 <pre><span class="f">curl</span> -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/uninstall.sh <span class="p">|</span> sh
 
 <span class="c"># Homebrew package</span>
-<span class="f">brew</span> uninstall GOI17/tap/alfred
+<span class="f">brew</span> uninstall GOI17/alfred/alfred
 </pre>
       </div>
       <p>

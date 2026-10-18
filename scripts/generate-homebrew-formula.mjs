@@ -55,8 +55,8 @@ export function parseFormulaArgs(argv) {
   if (!/^\d+\.\d+\.\d+$/.test(options.version ?? "")) {
     fail("--version must be semantic version X.Y.Z");
   }
-  if (!['git', 'archive'].includes(options.source)) {
-    fail("--source must be git or archive");
+  if (!['git', 'archive', 'release'].includes(options.source)) {
+    fail("--source must be git, archive or release");
   }
   if (!options.output || basename(options.output) !== "alfred.rb") {
     fail("--output must end with the Homebrew formula filename alfred.rb");
@@ -80,6 +80,10 @@ function sourceStanza({ source, version, revision, sha256 }) {
     return `  url "https://github.com/${REPOSITORY}.git",\n` +
       `      tag:      "v${version}",\n` +
       `      revision: "${revision}"`;
+  }
+  if (source === "release") {
+    return `  url "https://github.com/${REPOSITORY}/releases/download/v${version}/alfred-${version}-runtime.tar.gz"\n` +
+      `  sha256 "${sha256}"`;
   }
   return `  url "https://github.com/${REPOSITORY}/archive/refs/tags/v${version}.tar.gz"\n` +
     `  sha256 "${sha256}"`;
@@ -152,10 +156,12 @@ function usage() {
   return [
     "Generate Alfred's Homebrew formula.",
     "",
-    "Private Git source:",
+    "Git source:",
     "  node scripts/generate-homebrew-formula.mjs --version X.Y.Z --source git --revision <40-hex> --output Formula/alfred.rb",
     "",
-    "Public archive source:",
+    "Public runtime release asset:\n  node scripts/generate-homebrew-formula.mjs --version X.Y.Z --source release --sha256 <64-hex> --output Formula/alfred.rb",
+    "",
+    "Public source archive:",
     "  node scripts/generate-homebrew-formula.mjs --version X.Y.Z --source archive --sha256 <64-hex> --output Formula/alfred.rb"
   ].join("\n");
 }

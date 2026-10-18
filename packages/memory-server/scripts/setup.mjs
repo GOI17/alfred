@@ -15,6 +15,8 @@ export function run(args, env = process.env) {
   }
 
   const childEnv = { ...env };
+  // The installed runtime includes the Node TUI; setup must not fetch another version.
+  if (packagedByHomebrew) childEnv.ALFRED_INSTALL_TUI_BACKEND = "node";
   if (args.length === 0) childEnv.ALFRED_INSTALL_FORCE_TUI = "1";
 
   const result = spawnSync("sh", [installerPath, ...installerArgs], {

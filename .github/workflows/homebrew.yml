@@ -7,6 +7,13 @@ on:
       - "install.sh"
       - "package.json"
       - "packaging/homebrew/**"
+      - "packaging/runtime/**"
+      - "scripts/build-runtime.mjs"
+      - "scripts/runtime-archive.mjs"
+      - "scripts/verify-runtime.mjs"
+      - "scripts/publish-runtime-assets.mjs"
+      - "scripts/runtime-distribution.test.mjs"
+      - "packages/memory-server/scripts/setup.mjs"
       - "packages/memory-server/scripts/alfred.mjs"
       - "scripts/generate-homebrew-formula.mjs"
       - "scripts/generate-homebrew-formula.test.mjs"
@@ -23,6 +30,13 @@ on:
       - "install.sh"
       - "package.json"
       - "packaging/homebrew/**"
+      - "packaging/runtime/**"
+      - "scripts/build-runtime.mjs"
+      - "scripts/runtime-archive.mjs"
+      - "scripts/verify-runtime.mjs"
+      - "scripts/publish-runtime-assets.mjs"
+      - "scripts/runtime-distribution.test.mjs"
+      - "packages/memory-server/scripts/setup.mjs"
       - "packages/memory-server/scripts/alfred.mjs"
       - "scripts/generate-homebrew-formula.mjs"
       - "scripts/generate-homebrew-formula.test.mjs"
@@ -62,3 +76,27 @@ jobs:
             --revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
             --output "$(brew --repository alfred/preflight)/Formula/alfred.rb"
           brew style alfred/preflight/alfred
+
+  verify-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Prepare isolated locked production dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/alfred-runtime-deps"
+          cp packaging/runtime/package{,-lock}.json "$RUNNER_TEMP/alfred-runtime-deps/"
+          npm ci --prefix "$RUNNER_TEMP/alfred-runtime-deps" --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Verify selected runtime with no checkout dependencies
+        run: |
+          REVISION=$(git rev-parse HEAD)
+          node scripts/build-runtime.mjs --root "$GITHUB_WORKSPACE" \
+            --source-revision "$REVISION" --builder-revision "$REVISION" \
+            --dependencies "$RUNNER_TEMP/alfred-runtime-deps/node_modules" \
+            --output "$RUNNER_TEMP/alfred-runtime-candidate" --exploratory
+          node scripts/verify-runtime.mjs "$RUNNER_TEMP/alfred-runtime-candidate"

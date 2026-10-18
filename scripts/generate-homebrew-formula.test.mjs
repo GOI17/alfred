@@ -79,3 +79,10 @@ test("writes the generated formula atomically", () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("renders a versioned public runtime release asset with its supplied digest", () => {
+  const formula = renderFormula({ source: "release", version: "0.8.0", sha256 });
+  assert.match(formula, /releases\/download\/v0\.8\.0\/alfred-0\.8\.0-runtime\.tar\.gz/);
+  assert.match(formula, new RegExp(`sha256 "${sha256}"`));
+  assert.doesNotMatch(formula, /revision:/);
+});
