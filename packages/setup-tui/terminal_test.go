@@ -69,6 +69,11 @@ import os, pty, select, signal, sys, time
 pid, fd = pty.fork()
 if pid == 0:
     env = dict(os.environ)
+    # This fixture models an interactive terminal, not CI output. termenv0.15.2
+    # isTTY deliberately returns false for any nonempty CI, even with a real
+    # PTY; CLICOLOR_FORCE would then select ANSI instead of truecolor. Isolate
+    # that runner flag while keeping both explicit NO_COLOR cases unchanged.
+    env.pop("CI", None)
     env.update(TERM="xterm-256color", COLORTERM="truecolor", CLICOLOR_FORCE="1",
                NO_COLOR=sys.argv[2], ALFRED_TEST_TERMINAL_STARTUP="1")
     os.execve(sys.argv[1], [sys.argv[1], "-test.run=^TestTerminalStartupWithoutQueries$"], env)
