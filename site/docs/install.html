@@ -86,16 +86,15 @@
 
       <h2 id="homebrew">Install with Homebrew</h2>
       <p>
-        Alfred source is public. The dedicated tap is currently private and the
-        public runtime assets await a new release and publication approval.
-        After activation, install the fully qualified formula without GitHub credentials:
+        Alfred source and its dedicated tap are public. Version 0.7.3 includes the
+        verified runtime package. Install the fully qualified formula without GitHub credentials:
       </p>
       <div class="terminal" aria-label="Install Alfred with Homebrew">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">zsh &mdash; Homebrew</span>
         </div>
-<pre><span class="c"># After public activation (pending)</span>
+<pre><span class="c"># Public runtime package</span>
 <span class="f">brew</span> install GOI17/alfred/alfred
 <span class="f">alfred</span> version
 <span class="f">alfred</span> setup <span class="c"># guided, preview-first configuration</span>
@@ -114,10 +113,16 @@
         <code>alfred setup</code>.
       </div>
 
+      <p>
+        The next release replaces interactive setup with a bundled Go TUI using
+        Wave's Bubble Tea and Lip Gloss framework. Version 0.7.3 still has the old UI.
+        Review the plan before explicitly approving it; cancel makes no setup changes.
+        Explicit flags and <code>alfred setup --legacy-ui</code> preserve automation.
+      </p>
       <h2 id="profiles">Choose an edition</h2>
       <p>
-        For human installs, start with the guided flow:
-        <code>curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh</code>.
+        After installing the runtime, start with the guided flow:
+        <code>alfred setup</code>.
         The installer still accepts flags for automation and CI.
       </p>
       <table class="matrix">

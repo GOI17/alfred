@@ -2,18 +2,13 @@
 
 ## Availability
 
-Issue #219 prepares the public distribution; it does not activate it. Alfred's
-source repository `GOI17/alfred` is public. The canonical tap
-`GOI17/homebrew-alfred` remains private, and the current `v0.7.2` release has no
-new runtime assets. Its existing Git-source formula is not this runtime package.
-Do not overwrite that release with a candidate built from newer code. Public tap
-activation, a new approved version and anonymous installation verification are
-still required. The proposed [tap README](tap-README.md) is reviewable material
-for that future publication, not evidence of a completed installation.
+The public canonical tap `GOI17/homebrew-alfred` and runtime release `v0.7.3`
+are published. Anonymous asset/checksum verification and a real macOS Homebrew
+installation passed during #219. Never replace historical release assets with
+newer code. The Go setup UI in #222 requires a future release; it is not already
+part of the installed0.7.3 package.
 
-## Intended public installation
-
-After activation:
+## Public installation
 
 ```sh
 brew install GOI17/alfred/alfred
@@ -27,11 +22,23 @@ Homebrew supplies Node; the archive supplies the selected runtime and its locked
 production npm dependencies. Users do not run npm install in the installed tree.
 
 Homebrew installs a shared runtime, not project state or live harness config.
-`alfred setup` reuses the installed package with `--no-clone`, selects its bundled
-Node TUI, and keeps preview/apply approval gates. It does not clone `main`, fetch
-an unrelated OpenTUI binary, change model assignments or silently activate a
-profile. Optional OpenTUI and Transformers are not bundled; Node TUI and keyword
-search remain available.
+The next release's interactive `alfred setup` uses bundled Go/Bubble Tea0.25.0
+and Lip Gloss0.9.1 executables, matching Wave's terminal framework. A Node JSONL
+backend preserves validation and preview/apply gates; Go owns presentation only.
+Source and packaged setup reuse an existing installation with `--no-clone`.
+No runtime compiler/download is used. Missing or mismatched native executables
+fail clearly; explicit flags and `--legacy-ui` retain deterministic compatibility.
+Homebrew requires Node but does not require Go. Optional Transformers remain
+unbundled; keyword search stays available. Model assignments remain user-owned.
+
+Build all four Darwin/Linux amd64/arm64 binaries with `npm run build:setup-tui`
+before `build-runtime.mjs`. The build requires previously approved staging of the
+pinned `packages/setup-tui/go.mod` and `go.sum` dependencies; use isolated GOPATH,
+GOMODCACHE and GOCACHE directories. The build itself runs offline, disables CGO,
+normalizes build metadata, and emits `dist/manifest.json` with exact hashes.
+Do not commit generated binaries. Runtime packaging verifies all native headers,
+executable modes and manifest hashes. CI exercises real PTY cancellation on both
+macOS and Linux; local cross-compilation alone is not Linux execution evidence.
 
 Initialize managed execution independently in each project:
 

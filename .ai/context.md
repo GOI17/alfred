@@ -114,12 +114,12 @@ Install scripts validate paths (reject root `/` and protected paths like `.ai/`,
 
 ### 8. Homebrew Distribution
 
-Issue #219 prepares a public runtime distribution using the canonical
-`GOI17/homebrew-alfred` tap and `brew install GOI17/alfred/alfred`. Current
-availability is distinct from that target: `GOI17/alfred` source is public, the
-canonical tap remains private, and release `v0.7.2` does not contain the new
-runtime assets. Its existing Git-source formula is not the candidate package.
-Public activation and anonymous Homebrew verification have not been completed.
+Issue #219 shipped public runtime release0.7.3 and canonical
+`GOI17/homebrew-alfred`; anonymous asset/formula verification and macOS Homebrew
+installation passed. #222 replaces the next release's interactive setup with
+Wave's Go Bubble Tea0.25.0/Lip Gloss0.9.1 TUI, with a separate Node JSONL backend.
+The installed0.7.3 UI is unchanged until a new release. Native executables are
+bundled for Darwin/Linux amd64/arm64; Go is a build-time dependency only.
 
 The selected deterministic runtime archive includes reviewed production npm
 dependencies and licenses, with a versioned tar.gz, `runtime-manifest.json`,
@@ -137,8 +137,11 @@ different existing bytes fail without replacement. Manual copy is recovery only.
 Preparing the workflow does not itself publish assets, change tap visibility or
 modify the remote formula.
 
-Homebrew installs the shared runtime once. `alfred setup` uses its bundled Node
-TUI and installed files without cloning `main`, retaining preview/approval gates.
+Homebrew installs the shared runtime once. Interactive `alfred setup` in the
+next release uses its bundled Go TUI and installed files without cloning `main`,
+retaining preview/approval gates. Node compatibility remains explicit. The backend
+binds one-use confirmation to the exact reviewed choices and project context.
+Approved harness previews stay project-local under `.alfred/setup/previews`.
 Managed runtime initialization and exact-scope consent remain per project under
 `.alfred/runtime/`; they do not modify the shared installation or replace Memory
 `alfred init`. Model selection remains user-owned and outside setup. See

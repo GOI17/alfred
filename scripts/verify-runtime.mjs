@@ -39,7 +39,7 @@ if (process.argv.includes("--archive-only")) {
   const runtime = join(temporary, "runtime with spaces"), home = join(temporary, "home with spaces"), workspace = join(temporary, "workspace with spaces");
   const deniedNetwork = join(temporary, "denied-network.log"), blockedBin = join(temporary, "blocked-bin");
   mkdirSync(runtime); mkdirSync(home); mkdirSync(workspace); mkdirSync(blockedBin);
-  for (const command of ["curl", "wget", "gh", "npm", "npx", "brew"]) {
+  for (const command of ["curl", "wget", "gh", "npm", "npx", "brew", "go"]) {
     atomic(join(blockedBin, command), '#!/bin/sh\nprintf "blocked shell network/package command\\n" >> "$ALFRED_SMOKE_DENIED_NETWORK"\nexit 97\n', 0o755);
   }
   atomic(join(blockedBin, "git"), '#!/bin/sh\nif [ "$1" = "-C" ]; then shift 2; fi\nif [ "$1" = "rev-parse" ]; then exit 1; fi\nprintf "blocked git mutation/network command\\n" >> "$ALFRED_SMOKE_DENIED_NETWORK"\nexit 97\n', 0o755);
@@ -88,6 +88,64 @@ if (process.argv.includes("--archive-only")) {
     const preview = run([cli, "setup", "--edition=coding", "--name=runtime-smoke", "--harness=none"]);
     assert.match(preview, /ALFRED SUITE INSTALL PREVIEW/);
     assert.doesNotMatch(preview, /raw\.githubusercontent\.com|codeload\.github\.com/);
+    const nativeTarget = `${process.platform}-${process.arch === "x64" ? "amd64" : process.arch}`;
+    const nativePath = `packages/setup-tui/dist/alfred-setup-${nativeTarget}`;
+    assert.equal(checked.manifest.files.find((file) => file.path === nativePath)?.mode, "755", "Native setup executable missing from inventory");
+    const nativeVersion = spawnSync(join(runtime, nativePath), ["--version"], { env, encoding: "utf8", timeout: 5000 });
+    assert.equal(nativeVersion.status, 0, "Native setup executable cannot run on host");
+    assert.match(nativeVersion.stdout, /Bubble Tea.*0\.25\.0/);
+    assert.match(nativeVersion.stdout, /Lip Gloss.*0\.9\.1/);
+    const nativeEnv = { ...env, TERM: "xterm-256color" };
+    delete nativeEnv.ALFRED_INSTALL_TUI_BACKEND;
+    const nativeSmoke = spawnSync("python3", ["-c", String.raw`
+import errno, fcntl, os, pty, select, signal, struct, sys, termios, time
+pid, fd = pty.fork()
+if pid == 0:
+    os.execv(sys.argv[1], [sys.argv[1], sys.argv[2], "setup"])
+fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+original_terminal = termios.tcgetattr(fd)
+output = bytearray()
+sent = False
+status = None
+try:
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        if select.select([fd], [], [], 0.1)[0]:
+            try:
+                chunk = os.read(fd, 65536)
+            except OSError as error:
+                if error.errno != errno.EIO: raise
+                chunk = b""
+            output.extend(chunk)
+        if not sent and b"Alfred setup" in output and b"Coding" in output:
+            os.write(fd, b"\x03")
+            sent = True
+        done, result = os.waitpid(pid, os.WNOHANG)
+        if done:
+            status = result
+            # Drain terminal cleanup bytes written immediately before process exit.
+            while select.select([fd], [], [], 0.1)[0]:
+                try: chunk = os.read(fd, 65536)
+                except OSError as error:
+                    if error.errno != errno.EIO: raise
+                    break
+                if not chunk: break
+                output.extend(chunk)
+            break
+    assert status is not None, "Native setup PTY timed out"
+    assert sent, "Native setup did not render its actual menu"
+    assert termios.tcgetattr(fd) == original_terminal, "Native setup did not restore terminal attributes"
+    assert os.waitstatus_to_exitcode(status) == 0, "Native setup cancellation failed"
+    assert b"\x1b[?1049h" in output and b"\x1b[?1049l" in output, "Native setup did not restore alternate screen"
+finally:
+    if status is None:
+        try: os.killpg(pid, signal.SIGKILL)
+        except ProcessLookupError: pass
+        os.waitpid(pid, 0)
+    os.close(fd)
+`, process.execPath, cli], { cwd: workspace, env: nativeEnv, encoding: "utf8", timeout: 20000 });
+    assert.equal(nativeSmoke.status, 0, `Native setup PTY smoke failed: ${nativeSmoke.stderr}`);
+    assert.deepEqual(readdirSync(workspace), [], "Cancelled native setup wrote workspace files");
     const guided = run([cli, "setup"], workspace, { ALFRED_INSTALL_APP_TUI_EVENTS: "set:edition=coding,set:harnesses=none,set:profiles=false,set:name=guided-smoke,set:apply=false,submit" });
     assert.match(guided, /ALFRED SUITE INSTALL PREVIEW/);
     assert.ok(!existsSync(join(workspace, ".alfred")), "Setup preview wrote workspace configuration");
@@ -189,7 +247,7 @@ if (process.argv.includes("--archive-only")) {
     const stopped = await Promise.race([serviceClosed, delay(5000).then(() => null)]);
     assert.equal(stopped?.code, 0, "Packaged HTTP server did not shut down cleanly");
     service = null;
-    process.stdout.write(`${JSON.stringify({ status: "pass", verification: "anonymous-local-http,archive-integrity,relocated-wrapper,CLI,managed-runtime-project-isolation,guided-setup-preview,SQLite,MCP-stdio-CRUD,live-HTTP,dependencies,coding-previews", version: checked.manifest.version, sha256: sha256(archive), public_github_install: "pending-publication-approval", external_network_attempts: 0, provider_calls: 0 })}\n`);
+    process.stdout.write(`${JSON.stringify({ status: "pass", verification: "anonymous-local-http,archive-integrity,relocated-wrapper,CLI,managed-runtime-project-isolation,native-Go-setup-PTY-cancel,guided-setup-preview,SQLite,MCP-stdio-CRUD,live-HTTP,dependencies,coding-previews", version: checked.manifest.version, sha256: sha256(archive), public_github_install: "pending-publication-approval", external_network_attempts: 0, provider_calls: 0 })}\n`);
   } finally {
     if (service) { service.kill("SIGKILL"); await serviceClosed; }
     await new Promise((done) => server.close(done));

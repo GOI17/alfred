@@ -6,13 +6,8 @@ Alfred is a model-readable, harness-agnostic agent operations system for creatin
 
 ## Human Installation
 
-The public Homebrew distribution is being prepared in issue #219. Alfred's
-source repository is public, but the canonical `GOI17/homebrew-alfred` tap is
-still private and the current `v0.7.2` release does not contain the new runtime
-assets. The commands below describe the intended public flow after activation;
-they are not a claim that this package is already publicly installable.
-
-Once the tap and a new runtime release are published:
+Alfred is available from the public `GOI17/homebrew-alfred` tap. Release
+`v0.7.3` ships the verified runtime archive and locked production dependencies.
 
 ```sh
 brew install GOI17/alfred/alfred
@@ -24,11 +19,17 @@ Use the fully qualified formula name to distinguish Alfred from the unrelated
 Alfred macOS application cask. The formula downloads a versioned runtime archive
 with a pinned SHA-256, including locked production dependencies; Node is a
 Homebrew dependency. It installs shared commands without activating a harness.
-No GitHub login is required for the intended public download.
+No GitHub login is required for the public download.
 
 Install the runtime once. Review `alfred setup` previews before approving any
-project or live harness configuration. Packaged setup uses its bundled Node
-TUI and installed runtime, without cloning `main` or fetching another installer.
+project or live harness configuration. This branch replaces the default interactive
+setup with a bundled Go TUI using Wave's Bubble Tea/Lip Gloss framework and Darcula
+palette. The published0.7.3 installer still uses the older UI until the next release.
+The new UI reviews the actual plan before asking for explicit confirmation; canceling
+makes no setup changes. Approved harness previews go under the invoking project's
+`.alfred/setup/previews`, outside the shared installation. Explicit setup flags,
+non-TTY previews and `alfred setup --legacy-ui` retain the automation interface.
+No setup downloads code, compiles Go, or installs dependencies at runtime.
 Model assignment remains user-owned; setup does not change `~/.alfred/models.json`.
 For each project, initialize managed execution separately:
 

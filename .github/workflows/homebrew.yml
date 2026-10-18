@@ -9,6 +9,9 @@ on:
       - "packaging/homebrew/**"
       - "packaging/runtime/**"
       - "scripts/build-runtime.mjs"
+      - "scripts/build-setup-tui*"
+      - "scripts/setup/**"
+      - "packages/setup-tui/**"
       - "scripts/runtime-archive.mjs"
       - "scripts/verify-runtime.mjs"
       - "scripts/publish-runtime-assets.mjs"
@@ -32,6 +35,9 @@ on:
       - "packaging/homebrew/**"
       - "packaging/runtime/**"
       - "scripts/build-runtime.mjs"
+      - "scripts/build-setup-tui*"
+      - "scripts/setup/**"
+      - "packages/setup-tui/**"
       - "scripts/runtime-archive.mjs"
       - "scripts/verify-runtime.mjs"
       - "scripts/publish-runtime-assets.mjs"
@@ -78,7 +84,10 @@ jobs:
           brew style alfred/preflight/alfred
 
   verify-runtime:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -87,11 +96,24 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.2"
+          cache-dependency-path: packages/setup-tui/go.sum
+      - name: Stage pinned Go modules and build native setup targets
+        env:
+          GOTOOLCHAIN: local
+          CGO_ENABLED: "0"
+          GOENV: "off"
+        run: |
+          (cd packages/setup-tui && go mod download && go mod verify && go test ./...)
+          node scripts/build-setup-tui.mjs
+          node --test scripts/build-setup-tui.test.mjs
       - name: Prepare isolated locked production dependencies
         run: |
           mkdir -p "$RUNNER_TEMP/alfred-runtime-deps"
           cp packaging/runtime/package{,-lock}.json "$RUNNER_TEMP/alfred-runtime-deps/"
-          npm ci --prefix "$RUNNER_TEMP/alfred-runtime-deps" --omit=dev --ignore-scripts --no-audit --no-fund
+          (cd "$RUNNER_TEMP/alfred-runtime-deps" && npm ci --prefix "$RUNNER_TEMP/alfred-runtime-deps" --omit=dev --ignore-scripts --no-audit --no-fund --workspaces=false)
       - name: Verify selected runtime with no checkout dependencies
         run: |
           REVISION=$(git rev-parse HEAD)

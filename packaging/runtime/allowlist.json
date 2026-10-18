@@ -7,6 +7,11 @@
     "scripts/tui/install-app.mjs",
     "scripts/tui/install-discovery.mjs",
     "scripts/tui/install-pathfinder.mjs",
+    "scripts/setup/bridge.mjs",
+    "packages/setup-tui/go.mod",
+    "packages/setup-tui/go.sum",
+    "packages/setup-tui/THIRD-PARTY-LICENSES.txt",
+    "packages/setup-tui/NOTICE",
     "packages/core/src/**/*.js",
     "packages/profile-manager/src/**/*.js",
     "packages/codex-adapter/src/**/*.js",
@@ -62,5 +67,14 @@
     "@alfred-labs/memory-client": "packages/memory-client",
     "@alfred-labs/memory-mcp": "packages/memory-mcp"
   },
-  "generatedRuntimeMetadata": true
+  "generatedRuntimeMetadata": true,
+  "setupTui": {
+    "targets": [
+      "darwin-amd64",
+      "darwin-arm64",
+      "linux-amd64",
+      "linux-arm64"
+    ],
+    "directory": "packages/setup-tui/dist"
+  }
 }
