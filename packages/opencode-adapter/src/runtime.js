@@ -73,7 +73,7 @@ function buildRoleInstructions(agent) {
   if (agent.id === "orchestrator") {
     return `## Routing table (execute before any action)
 
-- Before delegating a repository-writing task, apply the canonical repository write isolation policy below and pass the verified task worktree context.
+- Before delegating a substantive task, apply the canonical task isolation policy below and pass the verified task worktree context.
 - **STOP-and-delegate rule**: if you are about to write, edit, refactor, or delete application code, stop and delegate to the \`developer\` agent. You must not modify code yourself.
 - Route implementation/coding work to the \`developer\` agent.
 - Route architecture/DDD/pattern decisions to the \`architect\` agent.

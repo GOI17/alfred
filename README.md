@@ -27,6 +27,14 @@ configuration outside setup.
 The existing `curl | sh` bootstrap remains available in the
 [install guide](https://alfred.alfredlabs.org/docs/install.html).
 
+## Managed runtime (issue #217)
+
+The [runtime authority guide](docs/runtime-authority.md) describes install-once,
+per-project initialization and consent for the first managed CLI slice. Its
+initial execution contract reads approved text; native host interception and
+general tool execution are outside that slice. See the guide for availability
+and implementation limits.
+
 ## Agent Entry Point
 
 You are an AI agent working in an Alfred workspace. Start here to find your next step.

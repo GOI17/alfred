@@ -330,8 +330,9 @@ function summarizeDelegationTrace(trace) {
   return {
     result: "pass",
     cases: decisions.length,
+    // Legacy baseline key: only the quick-answer exception is exempt from delegation.
     small_task_delegations: decisions.filter(
-      (decision) => decision.task_classification.complexity === "small" && decision.delegation === true
+      (decision) => decision.task_classification.complexity === "quick-answer" && decision.delegation === true
     ).length,
     specialist_delegations: decisions.filter((decision) => decision.delegation === true).length,
     temporary_agent_proposals: decisions.filter((decision) => decision.temporary_agent_proposal).length,

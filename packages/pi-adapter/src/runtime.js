@@ -86,8 +86,12 @@ export function runPiAgentSystemSpike({ root, traceOutputPath }) {
   const orchestrator = loadAgent(kernel, "orchestrator");
   const scenarios = [
     {
-      id: "small-task-no-delegation",
-      input: "Fix a typo in one file"
+      id: "quick-question-no-delegation",
+      input: "What is this project's name?",
+      requestFacts: {
+        question_count: 1, answer_known: true, requires_analysis: false,
+        requires_code: false, requires_actions: false, requires_external_state: false, requires_tools: false
+      }
     },
     {
       id: "qa-specialist-delegation",
@@ -102,7 +106,7 @@ export function runPiAgentSystemSpike({ root, traceOutputPath }) {
   const decisions = scenarios.map((scenario) => ({
     scenario_id: scenario.id,
     input: scenario.input,
-    ...orchestrateTask({ kernel, input: scenario.input })
+    ...orchestrateTask({ kernel, input: scenario.input, requestFacts: scenario.requestFacts })
   }));
 
   const trace = createTraceEvent({
@@ -207,8 +211,9 @@ function summarizePhase3(decisions) {
   return {
     result: "pass",
     cases: decisions.length,
+    // Legacy metric name retained: it now counts delegation of the narrow quick-answer exception.
     small_task_delegations: decisions.filter(
-      (decision) => decision.task_classification.complexity === "small" && decision.delegation === true
+      (decision) => decision.task_classification.complexity === "quick-answer" && decision.delegation === true
     ).length,
     specialist_delegations: decisions.filter((decision) => decision.delegation === true).length,
     temporary_agent_proposals: decisions.filter((decision) => decision.temporary_agent_proposal).length,

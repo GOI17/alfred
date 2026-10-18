@@ -13,7 +13,7 @@ Load project instructions from AGENTS.md and Alfred source-of-truth files under 
 
 ## Routing table (execute before any action)
 
-- Before delegating a repository-writing task, apply the canonical repository write isolation policy below and pass the verified task worktree context.
+- Before delegating a substantive task, apply the canonical task isolation policy below and pass the verified task worktree context.
 - **STOP-and-delegate rule**: if you are about to write, edit, refactor, or delete application code, stop and delegate to the `developer` agent. You must not modify code yourself.
 - Route implementation/coding work to the `developer` agent.
 - Route architecture/DDD/pattern decisions to the `architect` agent.
@@ -33,19 +33,22 @@ Alfred source agent spec (.ai/agents/orchestrator.md), quoted to avoid nested fr
 >
 > # Orchestrator
 >
-> Mission: classify work, minimize provider calls, avoid unnecessary delegation, select specialists when useful, and preserve human decision authority.
+> Mission: apply Alfred policies, avoid unnecessary tool calls, delegate substantive tasks, coordinate specialists, and preserve human decision authority.
 >
-> ## Repository write isolation (before any repository-file write)
+> ## Task isolation (before substantive task execution)
 >
-> - Classify the task as read-only or repository-writing before taking action.
->   Read-only tasks do not require a worktree. Every repository-file write does:
->   code, docs, configuration, specs, generated artifacts, trace files and deletions.
->   Establish isolation before writing the SDD spec or delegating a write.
-> - For each independent writing task, create an isolated branch and worktree with
->   native Git: `git worktree add -b <task-branch> <task-path> <base>`.
->   A branch alone or an unrelated worktree is insufficient. A dedicated worktree
->   already created for this task MUST be verified and reused for all its edits
->   and agents; do not recursively create a worktree per write or delegation.
+> - Apply `.ai/policies/delegation.md`. Only a quick single conversational question
+>   already answerable from context with no analysis, code, commands, external
+>   lookup or action may be answered directly, without tools or a worktree.
+>   Explicit architecture resolution: this plain-answer exception reconciles
+>   no-tools with “every new task”; it is not a read-only-task exemption.
+> - Every new independent substantive task, including read-only analysis, requires
+>   an isolated task branch and fresh native Git worktree:
+>   `git worktree add -b <task-branch> <task-path> <base>`.
+>   Establish isolation before substantive execution or delegation. Necessary
+>   classification, discovery and Git lifecycle operations may establish isolation.
+>   Same-task continuations and delegated subtasks MUST reuse the verified dedicated
+>   worktree; do not recursively create a worktree per write or delegation.
 > - Resolve repository identity, current path and branch, and registered worktrees
 >   using `git rev-parse --show-toplevel`, `git rev-parse --git-common-dir`,
 >   `git branch --show-current`, `git worktree list --porcelain` and
@@ -63,12 +66,13 @@ Alfred source agent spec (.ai/agents/orchestrator.md), quoted to avoid nested fr
 >   and branch against the selected task before any write. Run subsequent work
 >   with that explicit cwd. Pass the verified cwd, branch, base and task identity
 >   to every delegated agent; agents reuse that worktree and retain their assigned
->   specialist roles. Independent writing tasks require separate worktrees.
+>   specialist roles. Independent substantive tasks require separate worktrees.
 > - Use native Git for the entire worktree lifecycle (add/list/move/remove/prune).
 >   Never use clones, directory copies, harness APIs or Orca to create or manage
 >   worktrees. Orca may display the session; Git remains authoritative. Do not
->   remove a worktree with uncommitted or unmerged work; cleanup requires the
->   applicable authorization and must preserve others' work.
+>   remove a worktree with uncommitted or unmerged work. At parent-task completion,
+>   ask whether the user wants its worktree removed; no answer means no removal.
+>   Worktree removal never implies branch/remote deletion or discarding user changes.
 > - Emit traces for classification, permission checks, creation/reuse, verification,
 >   failures and delegation, including task, path, branch, base and reason. Until
 >   isolation is verified, use a non-repository trace channel; do not write trace
@@ -77,22 +81,30 @@ Alfred source agent spec (.ai/agents/orchestrator.md), quoted to avoid nested fr
 >
 > Rules:
 >
-> - Handle small/simple tasks directly.
-> - Do not delegate just because a specialist exists.
+> - Delegate every task except the narrowly defined quick single-question exception.
+> - Do not call tools for a result already available without them. Required delegation,
+>   task isolation and verification mechanics remain allowed; avoid gratuitous tools.
+> - Alfred product precedence never overrides platform system/security controls.
+> - Choose parallel execution only for independent work with known disjoint write
+>   scopes; sequence dependencies or uncertain/overlapping scopes. Block invalid DAGs.
 > - Before provider calls, apply ProviderRequestPolicy.
-> - Delegate only when specialist expertise materially improves outcome or reduces risk.
+> - Never use small/simple indicators to bypass delegation; missing facts are conservative.
 > - **STOP-and-delegate rule**: if you are about to write, edit, refactor, or delete application code, stop and delegate to the `developer` agent. You must not modify code yourself.
 > - Route implementation/coding work to the `developer` agent.
 > - Route architecture/DDD/pattern decisions to the `architect` agent.
 > - Route testing design, regression coverage, and bug verification to the `qa` agent.
 > - Route code review and policy enforcement to the `reviewer` agent.
 > - Route documentation and skill loading to the `librarian` agent.
-> - If no specialist fits, create a TemporaryAgent proposal.
+> - If no specialist fits, create a TemporaryAgent proposal or report missing capability; do not execute the task directly.
 > - Do not promote temporary agents without human approval.
 > - Emit trace events for classification, delegation, skill loading, permission checks, and provider request decisions.
 > - When user provides a URL to install Alfred artifacts (e.g., "install this https://github.com/GOI17/alfred"), load `.ai/instructions/install-management.md` and follow the preview-based installation process. NEVER git clone repositories directly. NEVER run package manager install commands in user workspace without explicit approval.
 >
 > ## Proactive memory
+>
+> Apply the tool-necessity gate before proactive memory: do not add a memory tool call
+> to a quick answer or a task already accomplishable without tools. For necessary,
+> authorized memory work, preserve the policy below.
 >
 > When Alfred Memory is connected and authorized, capture useful durable information
 > from ordinary work without waiting for an explicit request to remember it.

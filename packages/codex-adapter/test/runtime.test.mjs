@@ -51,7 +51,7 @@ test("codex install preview writes valid custom agent fields without hard-coded 
   assert.equal(primary.merge_strategy, "alfred-codex-managed-block");
   assert.match(primary.content, /main Codex session acts as Alfred Orchestrator/);
   assert.match(primary.content, /Delegated subagents keep their assigned specialist roles/);
-  assert.match(primary.content, /Mission: classify work/);
+  assert.match(primary.content, /Mission: apply Alfred policies, avoid unnecessary tool calls, delegate substantive tasks/);
   assert.doesNotMatch(primary.content, /only when the parent Codex session/);
   assert.equal(preview.files.some((file) => file.install_path.endsWith("orchestrator.toml")), false);
 });

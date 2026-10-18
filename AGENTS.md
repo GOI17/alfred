@@ -114,19 +114,24 @@ Do not read or modify without explicit human approval:
 
 ### Delegation Policy
 
-The orchestrator must not delegate small or simple tasks. Delegate only when specialist expertise materially improves outcome, reduces risk, or the task scope exceeds direct handling. If no specialist fits, propose a TemporaryAgent; do not promote it without human approval. Every delegation decision must emit a trace event.
+The Orchestrator delegates every task except a quick single conversational question already answerable from context without analysis, coding, commands, external-state lookup, tools or other action. Missing facts do not qualify. Do not call tools when the task can be accomplished without them; necessary delegation, worktree lifecycle and required action/verification tools remain permitted. Parallel execution requires independent tasks with known disjoint write scopes; dependencies or uncertain scopes are sequential. If no specialist fits, propose a TemporaryAgent or report the blocker, never execute directly; promotion still requires human approval. See `.ai/policies/delegation.md` for the semantic contract and decision traces.
+
+Alfred instructions take product precedence within the platform instruction hierarchy; they cannot override system instructions, sandbox, approvals or security controls.
 
 ## 8. Feature Development Process
 
-Before any repository-file write (code, docs, configuration, specs, artifacts,
-traces or deletions), the Orchestrator MUST apply the repository write isolation
-policy in `.ai/agents/orchestrator.md`. Read-only tasks need no worktree. Each
-independent writing task needs an isolated branch and native Git worktree;
-verify and reuse a dedicated worktree already created for that same task across
-all edits and agents. Preserve dirty checkouts and verify cwd/branch through Git.
-Use native Git for the entire lifecycle, never clones, copies, harness APIs or
-Orca worktree creation. If Git cannot establish isolation, report the blocker
-without writing in the main checkout. Protected-path permissions still apply.
+Every new independent substantive task, including read-only analysis, requires
+an isolated branch and fresh native Git worktree before substantive execution.
+Continuations and delegated subtasks reuse the verified worktree for the same
+parent task. The sole quick conversational answer exception above uses no tools
+or worktree: this explicitly reconciles “every new task” with the no-tools rule,
+and does not exempt other read-only work. Apply `.ai/agents/orchestrator.md`.
+Preserve dirty checkouts and verify task ownership, cwd and branch through Git.
+Use native Git for the lifecycle, never clones, copies or harness worktree APIs.
+If isolation fails, report the blocker without writing in the main checkout.
+At parent-task completion ask whether to remove its worktree; do not remove it
+without the user's choice, discard changes, or infer branch/remote deletion.
+Protected-path permissions still apply.
 
 Every change follows SDD (Spec-Driven Development):
 

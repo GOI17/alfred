@@ -1,3 +1,6 @@
+import { isQuickAnswer, evaluateOrchestrationPolicy } from "./orchestration-policy.js";
+export { isQuickAnswer, decideToolNecessity, planTaskWorktree, planTaskExecution, evaluateOrchestrationPolicy } from "./orchestration-policy.js";
+export { resolveRuntimeRequest, runRuntimeRequest, runtimeGrant, matchesRuntimeGrant } from "./runtime-authority.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -416,25 +419,14 @@ export function evaluateHarnessPortability({ matrix }) {
   };
 }
 
-export function classifyTask({ routingPolicy, input }) {
-  const normalized = input.toLowerCase();
-  const simpleMatch = routingPolicy.simple_task_indicators.find((indicator) => normalized.includes(indicator));
-  if (simpleMatch) {
-    return {
-      complexity: "small",
-      reason: `Matched simple task indicator: ${simpleMatch}`
-    };
+export function classifyTask({ routingPolicy, input, requestFacts, workItems }) {
+  if (isQuickAnswer(requestFacts, workItems)) {
+    return { complexity: "quick-answer", reason: "One question with a known answer and explicit absence of analysis, code, actions, external-state and tool requirements" };
   }
-
-  const specialistMatch = routingPolicy.specialists
-    .flatMap((specialist) => specialist.triggers.map((trigger) => ({ specialist, trigger })))
-    .find(({ trigger }) => normalized.includes(trigger));
-
+  const specialist = selectSpecialist({ routingPolicy, input });
   return {
-    complexity: specialistMatch ? "specialized" : "unknown-specialized",
-    reason: specialistMatch
-      ? `Matched specialist trigger: ${specialistMatch.trigger}`
-      : "No existing specialist trigger matched the task"
+    complexity: specialist ? "specialized" : "unknown-specialized",
+    reason: specialist ? `Task requires delegation to ${specialist.id}` : "No existing specialist trigger matched; direct handling is not permitted"
   };
 }
 
@@ -458,40 +450,36 @@ export function proposeTemporaryAgent({ routingPolicy, input, reason }) {
   };
 }
 
-export function orchestrateTask({ kernel, input }) {
-  const classification = classifyTask({ routingPolicy: kernel.routingPolicy, input });
-  if (classification.complexity === "small") {
-    return {
-      task_classification: classification,
-      delegation: false,
-      target_agent: "orchestrator",
-      temporary_agent_proposal: null,
-      reason: "Small/simple tasks stay with the Orchestrator"
-    };
-  }
-
-  const specialist = selectSpecialist({ routingPolicy: kernel.routingPolicy, input });
-  if (specialist) {
-    return {
-      task_classification: classification,
-      delegation: true,
-      target_agent: specialist.id,
-      temporary_agent_proposal: null,
-      reason: `Specialist ${specialist.id} matched task triggers`
-    };
-  }
-
-  return {
+export function orchestrateTask({ kernel, input, requestFacts, taskContext, workItems }) {
+  const policy = evaluateOrchestrationPolicy({ requestFacts, taskContext, workItems });
+  const classification = classifyTask({ routingPolicy: kernel.routingPolicy, input, requestFacts, workItems });
+  const specialist = policy.quick_answer ? null : selectSpecialist({ routingPolicy: kernel.routingPolicy, input });
+  const blockedPlan = policy.execution_plan.mode === "blocked";
+  const decision = {
+    ...policy,
     task_classification: classification,
-    delegation: false,
-    target_agent: "orchestrator",
-    temporary_agent_proposal: proposeTemporaryAgent({
-      routingPolicy: kernel.routingPolicy,
-      input,
-      reason: classification.reason
-    }),
-    reason: "No existing specialist fits; human approval is required before creating a temporary specialist"
+    delegation: !policy.quick_answer && Boolean(specialist) && !blockedPlan,
+    target_agent: policy.quick_answer ? "orchestrator" : blockedPlan ? null : specialist?.id ?? null,
+    temporary_agent_proposal: !policy.quick_answer && !specialist ? proposeTemporaryAgent({
+      routingPolicy: kernel.routingPolicy, input, reason: classification.reason
+    }) : null,
+    status: blockedPlan || (!policy.quick_answer && !specialist) ? "blocked" :
+      policy.quick_answer ? "direct_answer" : "delegation_required",
+    reason: blockedPlan ? policy.execution_plan.reason : policy.quick_answer ? "Quick plain answer requires no delegation or tools" :
+      specialist ? `Delegate to ${specialist.id}; satisfy worktree obligations before task execution` :
+        "No specialist fits; propose a temporary specialist and block execution pending approval"
   };
+  decision.trace_events = [
+    { event: "task_classified", actor: "orchestrator", data: { classification: classification.complexity } },
+    { event: "delegation_decision", actor: "orchestrator", data: {
+      delegation_required: decision.delegation_required, target_agent: decision.target_agent, status: decision.status
+    } },
+    { event: "tool_necessity_decided", actor: "orchestrator", data: decision.tool_decision },
+    { event: "worktree_obligation_decided", actor: "orchestrator", data: decision.worktree },
+    { event: "execution_plan_decided", actor: "orchestrator", data: decision.execution_plan },
+    { event: "cleanup_choice_required", actor: "orchestrator", data: decision.cleanup }
+  ];
+  return decision;
 }
 
 export function loadAgent(kernel, agentId) {
