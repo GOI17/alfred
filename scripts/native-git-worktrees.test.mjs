@@ -8,21 +8,21 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const read = (relative) => readFileSync(join(root, relative), "utf8");
 const canonical = read(".ai/agents/orchestrator.md").trim();
 const body = canonical.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "").trim();
-const policy = body.split("## Repository write isolation")[1].split("\nRules:")[0];
+const policy = body.split("## Task isolation (before substantive task execution)")[1].split("\nRules:")[0];
 const normalizedPolicy = policy.replace(/\s+/g, " ");
 
 // Instruction contracts: these checks verify what agents receive, not runtime
 // enforcement of Git commands by an LLM or a new worktree execution service.
-test("canonical policy gates every repository write and exempts read-only work", () => {
+test("canonical policy isolates substantive tasks and only exempts quick plain answers", () => {
   for (const requirement of [
-    "Read-only tasks do not require a worktree",
-    "code, docs, configuration, specs, generated artifacts, trace files and deletions",
-    "before writing the SDD spec or delegating a write",
+    "Every new independent substantive task, including read-only analysis",
+    "without tools or a worktree",
+    "Establish isolation before substantive execution or delegation",
     "git worktree add -b <task-branch> <task-path> <base>",
-    "A branch alone or an unrelated worktree is insufficient",
-    "already created for this task MUST be verified and reused",
+    "Confirm task ownership before reusing an existing worktree",
+    "Same-task continuations and delegated subtasks MUST reuse the verified dedicated worktree",
     "do not recursively create a worktree per write or delegation",
-    "Independent writing tasks require separate worktrees"
+    "Independent substantive tasks require separate worktrees"
   ]) assert.ok(normalizedPolicy.includes(requirement), requirement);
 });
 
@@ -39,7 +39,9 @@ test("canonical policy preserves dirty checkouts and fails closed before writes"
     "native Git for the entire worktree lifecycle",
     "Never use clones, directory copies, harness APIs or Orca",
     "use a non-repository trace channel",
-    "grants no additional protected-path permissions"
+    "grants no additional protected-path permissions",
+    "ask whether the user wants its worktree removed; no answer means no removal",
+    "Worktree removal never implies branch/remote deletion or discarding user changes"
   ]) assert.ok(normalizedPolicy.includes(requirement), requirement);
 });
 
@@ -61,7 +63,9 @@ test("entry and SDD instructions establish isolation before creating a spec", ()
     const content = read(file);
     assert.ok(content.indexOf("git worktree add -b") < content.indexOf("Create spec file") ||
       (file === "AGENTS.md" && content.indexOf("git worktree add -b") < content.indexOf("3. Read existing specs")));
-    assert.match(content, /Read-only tasks (?:need no|do not require a) worktree/);
+    assert.match(content, /including read-only analysis/);
+    assert.match(content, /quick single conversational question|quick conversational answer exception/);
+    assert.doesNotMatch(content, /Read-only tasks (?:need no|do not require a) worktree/);
     assert.match(content, /\.ai\/agents\/orchestrator\.md/);
   }
 });
@@ -98,7 +102,7 @@ test("all executable primary surfaces carry the complete canonical policy", asyn
     assert.ok(unquoted.includes(body), `${file.path} must preserve the canonical Orchestrator body`);
   }
   const opencodePrimary = primary(opencode, ".opencode/agents/orchestrator.md").content;
-  const isolation = opencodePrimary.indexOf("Before delegating a repository-writing task");
+  const isolation = opencodePrimary.indexOf("Before delegating a substantive task");
   assert.ok(isolation >= 0 && isolation < opencodePrimary.indexOf("STOP-and-delegate rule"));
   for (const preview of [pi, codex, opencode]) assert.equal(preview.provider_calls, 0);
   assert.doesNotMatch(primary(pi, "./AGENTS.md").content, /minimax|ollama-cloud/);
@@ -111,7 +115,7 @@ test("specialists never inherit the primary worktree creation or routing role", 
       !candidate.install_path.endsWith("/orchestrator.md"));
     assert.equal(specialists.length, 5);
     for (const file of specialists) {
-      assert.doesNotMatch(file.content, /## Repository write isolation|if you are about to write, edit, refactor, or delete application code, stop and delegate/);
+      assert.doesNotMatch(file.content, /## (?:Repository write isolation|Task isolation)|if you are about to write, edit, refactor, or delete application code, stop and delegate/);
       assert.match(file.content, /specialist role|Specialist role boundary/);
     }
   }

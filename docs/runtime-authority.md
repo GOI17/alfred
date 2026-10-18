@@ -119,3 +119,11 @@ See [ADR 010](architecture/010-runtime-authority.md) and the [implementation con
 Validated against the worktree CLI: actual `runtime --help`, initialization and status, the global playbook example with interactive `Permitir`, noninteractive rejection without consent, exact content including BOM, and absence of a persisted Once grant. Fixtures used temporary projects and a temporary home. These checks do not establish completion of the full issue or replace the regression suite.
 
 Final validation after rebase onto main: `npm test` and `npm run check` pass, including the actual installer PTY, all 19 release gates and release automation. The existing eval baseline comparison passes with zero regressions and no baseline updates. A real-terminal Always flow also verified persistence in project A, isolation from project B, and precedence of a later Alfred deny over a stored grant. The reviewer reported no remaining findings. Native host bridges and generic skill invocation remain outside this slice; the broader #217 objective is not complete.
+
+## Task policy refinement (core decisions verified)
+
+Alfred policy now requires delegation for every substantive task, including read-only analysis. Only a quick single question already answerable without analysis, code, commands, tools or other action may be answered directly. No unnecessary tool calls are permitted; required orchestration and action/verification tools remain allowed.
+
+Each new independent substantive task gets a native Git worktree. Continuations and specialists reuse that task's verified worktree, with independent disjoint work parallelized and dependencies sequenced. The quick plain-answer exception uses no worktree: this explicitly reconciles the every-task and no-tools rules, rather than exempting all read-only tasks. At task completion Alfred asks whether to remove the worktree and does not delete it without your choice or discard changes or branches.
+
+The R7 core policy decisions pass full tests/checks/evals and 24 independent policy tests. The existing read-text CLI does not itself demonstrate native host interception, automatic delegation or a completed Git worktree lifecycle. Native lifecycle integration and the full issue remain pending.

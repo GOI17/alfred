@@ -19,11 +19,11 @@ Before writing any code, create a GitHub issue that describes:
 - **Tasks**: Specific implementation steps (checklist format)
 - **ACs**: Acceptance criteria that define when the feature is complete
 
-### 2. Establish the Task Worktree Before Any Repository Write
+### 2. Establish the Task Worktree Before Substantive Execution
 
-Apply `.ai/agents/orchestrator.md` repository write isolation before writing
+Apply `.ai/agents/orchestrator.md` task isolation before substantive execution or writing
 code, docs, configuration, specs, generated artifacts, traces or deletions.
-Read-only tasks do not require a worktree. Each independent writing task needs
+Every independent substantive task, including read-only analysis, needs
 an isolated branch and native Git worktree:
 
 ```bash
@@ -38,6 +38,14 @@ Preserve dirty checkouts and other people's changes. If creation or verification
 fails, report the blocker without writing in the main checkout. Emit traces via
 a non-repository channel until isolation is established. Protected-path and
 installation approvals remain in force.
+
+The sole exception is a quick single conversational question already answerable
+from context without analysis, coding, commands, tools or other action. It needs
+no delegation or worktree, explicitly reconciling the no-tools and every-task
+rules. All other tasks are delegated; same-task subagents share the verified
+worktree with disjoint write ownership when parallel. At parent-task completion
+ask whether to remove the worktree. Do not remove it absent the user's choice or
+discard changes; removal does not authorize branch or remote deletion.
 
 The entire lifecycle uses native Git; clones, copies, harness APIs and Orca
 worktree creation are prohibited. Orca may display the session.

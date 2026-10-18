@@ -1,5 +1,18 @@
+# Legacy dataset filename; tiny actions are delegated, only plain known questions are exempt.
 items:
+  - id: quick-known-question
+    text: "What is this project's name?"
+    requestFacts:
+      question_count: 1
+      answer_known: true
+      requires_analysis: false
+      requires_code: false
+      requires_actions: false
+      requires_external_state: false
+      requires_tools: false
+    expected_complexity: quick-answer
+    expected_delegation: false
   - id: typo-fix
     text: "Fix a typo in one file"
-    expected_complexity: small
-    expected_delegation: false
+    expected_complexity: specialized
+    expected_delegation: true

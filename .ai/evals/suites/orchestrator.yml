@@ -1,7 +1,15 @@
 cases:
-  - id: orchestrator-simple-task-no-delegation
+  - id: orchestrator-quick-question-no-delegation
     target: orchestrator
-    input: "Fix a typo in one file"
+    input: "What is this project's name?"
+    requestFacts:
+      question_count: 1
+      answer_known: true
+      requires_analysis: false
+      requires_code: false
+      requires_actions: false
+      requires_external_state: false
+      requires_tools: false
     expected:
       delegation: false
       temporary_agent_created: false

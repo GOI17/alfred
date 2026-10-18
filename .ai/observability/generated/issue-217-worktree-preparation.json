@@ -197,6 +197,91 @@
       "decision": "Opening URLs is an example, not a mandatory runtime contract or TODO. Concrete actions belong to future Alfred skills; issue217 covers generic resolution, authorization and invocation.",
       "application_code_changed": false,
       "delegation_decision": "small bounded documentation correction handled directly"
+    },
+    {
+      "type": "architecture_decision",
+      "timestamp": "2026-10-18T04:52:16.773479+00:00",
+      "decision_id": "issue-217-policy-refinement-v1",
+      "issue": 217,
+      "actor": "architect",
+      "source": "explicit user policy correction",
+      "decisions": [
+        "Alfred product precedence remains subject to platform system/security controls",
+        "Delegate every substantive task, including read-only analysis; sole direct exception is one known conversational question requiring no analysis/code/commands/actions/tools",
+        "No unnecessary tools; necessary delegation, Git isolation and action/verification mechanics remain allowed",
+        "Every independent substantive task gets fresh native Git worktree; same-task continuation and specialists reuse verified parent worktree",
+        "Quick plain-answer no-worktree exception explicitly reconciles every-task isolation with no-tools; not a read-only exemption",
+        "Parallel only independent disjoint known write scopes; sequence dependencies and block invalid graphs",
+        "Ask cleanup at parent-task completion; no automatic removal, change discard or inferred branch/remote deletion"
+      ],
+      "supersedes": "prior small/simple direct-handling policy; historical direct-handling events are preserved, not current policy",
+      "delegation": {
+        "architect": "policy/SDD/ADR/guide and issue/PR descriptions",
+        "developer": "routing policy and application source/tests",
+        "qa": "independent adversarial and full gates",
+        "reviewer": "policy/source consistency",
+        "rationale": "explicit user mandate; disjoint owned edits parallel, final validation after source readiness"
+      },
+      "worktree": {
+        "decision": "reuse_same_task",
+        "task_id": "issue-217",
+        "path": "/Users/josegilbertoolivasibarra/.codex/worktrees/3289/alfred",
+        "branch": "issue-217-alfred-runtime-authority",
+        "base": "2ebe950a295880ffa09383da7b2c3272f9c03888"
+      },
+      "scope": "core decisions and policy contracts; actual native-host Git/delegation lifecycle automation not installed",
+      "cleanup": {
+        "owner": "main Orchestrator",
+        "ask_after": "final integration and push for current task",
+        "automatic_removal": false,
+        "user_choice": "pending"
+      },
+      "verification": {
+        "documentation": "local structure/stale-rule checks and diff check passed",
+        "new_full_gates": "pending QA; prior final_validation covers previous slice only"
+      },
+      "application_provider_calls": 0,
+      "baselines_modified": false,
+      "commits_or_push_by_architect": false
+    },
+    {
+      "type": "policy_validation_completed",
+      "timestamp": "2026-10-18T04:54:35.876102+00:00",
+      "decision_id": "issue-217-policy-refinement-v1",
+      "actor": "architect",
+      "evidence_source": "QA final report and /tmp/alfred-217-policy-summary.json",
+      "npm_test": {
+        "exit": 0,
+        "total": 660,
+        "passed": 658,
+        "skipped": 2,
+        "failed": 0,
+        "skipped_scope": "opt-in PostgreSQL"
+      },
+      "release_gates": "19/19 pass",
+      "npm_check": "pass",
+      "eval_runner": {
+        "status": "pass",
+        "baselines": 19,
+        "results": 17,
+        "comparisons": 4,
+        "regressions": 0
+      },
+      "independent_policy_tests": "24/24 pass",
+      "baselines_modified": false,
+      "temporary_root_dependency_link_removed": true,
+      "existing_package_dependency_link_preserved": true,
+      "console_generated_output": "restored and verified",
+      "logs": [
+        "/tmp/alfred-217-policy-summary.json",
+        "/tmp/alfred-217-policy-test-complete.log",
+        "/tmp/alfred-217-policy-check-final.log",
+        "/tmp/alfred-217-policy-eval-final.log"
+      ],
+      "verified_scope": "core policy decision-level only",
+      "pending_scope": "native host Git/delegation lifecycle integration and full issue217 objective",
+      "integration_owner": "main; developer integrator waits main GO",
+      "cleanup": "main offers user choice after final push; no automatic removal"
     }
   ]
 }

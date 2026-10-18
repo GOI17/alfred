@@ -3,7 +3,7 @@ id: alfred-runtime-authority
 issue: 217
 description: Managed Alfred-first runtime resolution, project consent and executable CLI boundary
 phase: issue-217-first-vertical-slice
-status: first-slice-verified
+status: first-slice-and-core-policy-verified
 owner: architect
 ---
 
@@ -85,6 +85,27 @@ Tests must prove actual managed execution, not only routing output:
 - Trace request, resolution, discovery, consent, permission, revalidation and actual execution outcome with correlated IDs; do not log secrets or full sensitive inputs.
 - Local deterministic tests and existing relevant regression gates pass with zero added provider requests. Never update baselines without separate human approval.
 
+### R7: Delegation, tool necessity and task lifecycle refinement
+
+This user-requested refinement continues #217 in its existing dedicated worktree. It supersedes former small/simple direct-handling rules. See `.ai/policies/delegation.md`, `.ai/agents/orchestrator.md`, `AGENTS.md` and `.ai/development.md`.
+
+- Direct response is allowed only for one quick conversational question with an answer already available and no analysis, code, commands, external lookup, tool or other action required. Unknown facts cannot establish this exception. Small edits and read-only analysis remain delegated.
+- No tools when the requested result can be produced without them. Necessary delegation, native Git worktree lifecycle and required action/verification tools are allowed to fulfill explicit obligations; optional business tools and proactive side effects are not justified by their availability.
+- Explicit architecture resolution: the quick plain-answer exception requires no repository action or worktree, reconciling the universal new-task worktree wording with no tools. Every other independent task, including read-only work, gets a fresh native Git worktree. Same-task continuations/subagents reuse the verified parent worktree. This is not a broad read-only exemption.
+- The Orchestrator delegates all nonquick tasks and chooses scheduling. Parallel execution requires explicit independence and known disjoint write scopes; dependencies or uncertain scopes require sequencing; invalid dependency graphs block scheduling. Specialist assignments do not require recursive delegation.
+- At parent-task completion ask whether to remove its worktree. No answer authorizes nothing; preserve changes, branches and remotes. Removal is never automatic and cannot discard uncommitted/unmerged work.
+- Alfred product precedence remains bounded by platform system/security controls. Missing specialist capability leads to a proposal/blocker, never direct task execution.
+
+Developer API: extend `orchestrateTask` with optional `requestFacts`, `taskContext` and `workItems`. Quick facts require `question_count === 1`, `answer_known === true`, and exact false for `requires_analysis`, `requires_code`, `requires_actions`, `requires_external_state`, `requires_tools`. Missing/unknown facts are conservative. Any nonempty or malformed `workItems` disqualifies claimed quick facts; the quick exception requires no declared work items. Validate work items before accepting a quick bypass. Task context carries `task_id`, optional `continuation_of`, expected `repository_root`, `worktree_path`, `branch`, and observed `worktree: {task_id, verified, repository_root, path, branch}`. `reuse_verified` requires same-task ownership, `verified === true`, and exact agreement between expected and observed repository, path and branch. Same-task missing or mismatched evidence returns `reuse_requires_verification`; unknown or unrelated task ownership returns `create_required`. Bare `verified: true` is insufficient. These are core decisions based on adapter evidence; actual native lifecycle execution remains pending. Work items carry `id`, `depends_on`, `write_scopes`, `independent`; parallelism must account for path overlap and dependency relationships. Unknown scope means sequential, not an empty implicit scope. The core returns lifecycle and scheduling decisions; adapters perform necessary Git/delegation mechanics and report actual outcomes.
+
+Validation must cover removal of typo/one-file/rename/formatting direct shortcuts, exact quick facts, unknown conservative behavior, necessary versus unnecessary tools, independent read-only task isolation, same-task ownership reuse, disjoint parallel scheduling, sequential dependencies, invalid graphs and cleanup choice without automatic deletion. Do not convert illustrative user actions into built-in contracts.
+
+Refinement completion (core decision-level verified; native lifecycle pending):
+
+- [x] Source and routing policy implement R7 without small-task bypasses at the core decision level.
+- [x] Adversarial QA and full tests/checks/evals pass for R7 without baseline changes.
+- [ ] Host lifecycle integration verifies actual creation/reuse and asks cleanup at completion; planning metadata alone is not execution evidence.
+
 ## Completion conditions
 
 - [x] Runtime init/run/status implemented with actual read-text-v1 execution.
@@ -108,10 +129,18 @@ Tests must prove actual managed execution, not only routing output:
 
 Actual CLI help and the guide init/status/global run example were checked with temporary project/home fixtures. Interactive Once returned exact BOM-preserving content and persisted no grant; noninteractive missing consent rejected execution. The main session additionally verified a real PTY Always flow: project A persists its grant, project B is denied, and a new Alfred deny overrides the stored grant without reading a malformed external catalog.
 
-Final post-rebase verification reported by the main session: branch implementation `60778d2` is based directly on main `2ebe950`. `npm test` exits 0, including the actual installer PTY, all 19 release gates and release automation. `npm run check` exits 0. The existing eval-runner baseline comparison passes with zero regressions and no baseline updates. These successful results supersede the initial-base validation; the earlier installer timeout is not a current failure.
+Previous first-slice verification, before R7 (not evidence that the new refinement passes): branch implementation `60778d2` is based directly on main `2ebe950`. `npm test` exits 0, including the actual installer PTY, all 19 release gates and release automation. `npm run check` exits 0. The existing eval-runner baseline comparison passes with zero regressions and no baseline updates. These successful results supersede the initial-base validation; the earlier installer timeout is not a current failure.
 
 Focused evidence includes QA 117/117, CLI 13/13 and runtime 43/43 (overlapping suites, not additive counts). Reviewer final assessment has no findings. The CLI executable mode remains 100755; main's package scripts are preserved with runtime registrations added. Native host bridges, generic skill invocation and the full #217 objective remain pending.
 
 ## Architecture trace
 
 Decision `issue-217-runtime-authority-v1`: core owns authority; CLI is the first enforced boundary; canonical workspace and content bind consent; host-native interception is staged. This inline trace records the documentation decision without writing unrelated observability files.
+
+Architecture decision trace `issue-217-policy-refinement-v1`: actor architect; source explicit user correction; task continuation #217; worktree verified at 09f008c on issue-217-alfred-runtime-authority, base main 2ebe950. Decision: replace small-task shortcuts, preserve the single no-analysis/no-action conversational exception, require isolation for all substantive tasks and user-chosen cleanup. Tool calls used for necessary policy edits, coordination and validation; no provider request initiated by tools. Quick-answer traces use the response/session channel without an additional logging call.
+
+## R7 final verification
+
+QA summary `/tmp/alfred-217-policy-summary.json`: npm test exits 0 with 660 cases (658 passed, 2 opt-in PostgreSQL tests skipped, 0 failed); all 19 release gates pass. npm check passes. Eval runner passes with 19 baselines, 17 results, 4 comparisons and 0 regressions. Independent policy tests pass 24/24. Baselines are unchanged. The temporary root dependency symlink was removed, the existing package dependency link preserved, and generated console output restored and verified. Logs: `/tmp/alfred-217-policy-test-complete.log`, `/tmp/alfred-217-policy-check-final.log`, `/tmp/alfred-217-policy-eval-final.log`.
+
+This verifies core policy decisions, not installed native host worktree/delegation lifecycle automation. That integration and the full #217 goal remain pending. Main owns integration/commit/push and offers the cleanup choice for the current task; no worktree removal is automatic.

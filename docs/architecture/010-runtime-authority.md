@@ -35,3 +35,9 @@ See [runtime authority SDD](../../.ai/execution/alfred-runtime-authority.md) for
 ## Architecture trace
 
 `issue-217-runtime-authority-v1`: architect selected core-owned decisions, a managed CLI execution boundary, workspace-local grants and staged host integration. Analysis and documentation used local tools; no provider calls were initiated by tools.
+
+## Delegation and lifecycle refinement (R7 core verified; native lifecycle pending)
+
+User policy supersedes small/simple-task direct execution. The Orchestrator delegates all substantive tasks, including read-only analysis, and assigns each independent task a fresh native Git worktree; continuations and specialists share the verified parent-task worktree. Parallel work requires independence and disjoint write scopes; dependencies are sequential. At completion the user chooses whether the worktree is removed; branches, remotes and changes are preserved.
+
+The sole quick single-question exception is a plain answer already available without analysis or actions. Explicitly treating this as no tools/no delegation/no worktree resolves the otherwise conflicting universal worktree and no-tool rules. This does not exempt read-only analysis. Necessary orchestration mechanics remain allowed; optional business tools do not. Product precedence never overrides host controls. See SDD R7 for the implemented decision API and final passing tests/checks/evals. Native host lifecycle integration remains pending; core planning results do not prove host execution.
