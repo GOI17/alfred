@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.4](https://github.com/GOI17/alfred/compare/v0.7.3...v0.7.4) (2026-10-18)
+
+
+### Features
+
+* **setup:** adopt Wave's Go terminal interface ([#223](https://github.com/GOI17/alfred/issues/223)) ([e28a262](https://github.com/GOI17/alfred/commit/e28a26219b324ff2f8da81556ace250303ba74f1))
+
 ## [0.7.3](https://github.com/GOI17/alfred/compare/v0.7.2...v0.7.3) (2026-10-18)
 
 
