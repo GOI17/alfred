@@ -6,7 +6,7 @@ info:
     create, update and delete durable memories for a user through this schema.
     This is not a native ChatGPT Memory integration: Alfred Memory remains an
     external service invoked by the Custom GPT at runtime.
-  version: 0.7.2
+  version: 0.7.3
   contact:
     name: Alfred Labs
 servers:
@@ -200,16 +200,22 @@ components:
               type: string
               minLength: 1
               maxLength: 2000
-              description: Minimal relevant source statement, including any exclusion. Never the full conversation. Not stored.
+              description: >-
+                Minimal relevant source statement, including any exclusion.
+                Never the full conversation. Not stored.
             origin:
               type: string
               enum:
                 - user
                 - verified
-              description: User statement or observed authoritative source; this label is not independent proof.
+              description: >-
+                User statement or observed authoritative source; this label is
+                not independent proof.
             persistenceDisabled:
               type: boolean
-              description: True when the user has opted out of automatic memory in this conversation.
+              description: >-
+                True when the user has opted out of automatic memory in this
+                conversation.
     CaptureMemoryResult:
       type: object
       required:
@@ -226,7 +232,9 @@ components:
           type: string
         memory:
           $ref: '#/components/schemas/MemoryRecord'
-      description: Created and duplicate include memory. Skipped never includes candidate content or context.
+      description: >-
+        Created and duplicate include memory. Skipped never includes candidate
+        content or context.
     UpdateMemoryInput:
       type: object
       description: Partial update. The namespace field is immutable for memory records.
@@ -542,7 +550,10 @@ paths:
             - memory:write
       operationId: captureMemory
       summary: Proactively capture durable memory
-      description: Apply deterministic policy to a grounded durable statement without an explicit save request. Honor opt-out. Never retry skipped through createMemory. Only created confirms a new save.
+      description: >-
+        Apply deterministic policy to a grounded durable statement without an
+        explicit save request. Honor opt-out. Never retry skipped through
+        createMemory. Only created confirms a new save.
       x-openai-isConsequential: true
       requestBody:
         required: true
