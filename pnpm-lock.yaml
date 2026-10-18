@@ -97,6 +97,8 @@ importers:
 
   packages/profile-manager: {}
 
+  packages/skill-manager: {}
+
   packages/vscode-adapter:
     dependencies:
       '@alfred-labs/core':

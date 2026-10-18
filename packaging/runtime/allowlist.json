@@ -14,6 +14,7 @@
     "packages/setup-tui/NOTICE",
     "packages/core/src/**/*.js",
     "packages/profile-manager/src/**/*.js",
+    "packages/skill-manager/src/**/*.js",
     "packages/codex-adapter/src/**/*.js",
     "packages/opencode-adapter/src/**/*.js",
     "packages/pi-adapter/src/**/*.js",
@@ -47,6 +48,7 @@
   "packageMetadata": [
     "core",
     "profile-manager",
+    "skill-manager",
     "codex-adapter",
     "opencode-adapter",
     "pi-adapter",
