@@ -12,7 +12,7 @@ const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const installer = readFileSync(join(root, "install.sh"), "utf8");
 const installDocs = readFileSync(join(root, "site/docs/install.html"), "utf8");
 const installPolicy = readFileSync(join(root, ".ai/instructions/install-management.md"), "utf8");
-const specification = readFileSync(join(root, ".ai/execution/homebrew-installation.md"), "utf8");
+const specification = readFileSync(join(root, ".ai/execution/homebrew-public-install.md"), "utf8");
 const setupCommand = readFileSync(join(root, "packages/memory-server/scripts/setup.mjs"), "utf8");
 const version = manifest.version;
 const escapedVersion = version.replaceAll(".", "\\.");
@@ -21,7 +21,7 @@ assert.match(version, /^\d+\.\d+\.\d+$/);
 assert.match(installer, new RegExp(`^VERSION="${escapedVersion}" # x-release-please-version$`, "m"));
 for (const text of [installDocs, installPolicy, specification]) {
   const searchableText = text.replace(/<[^>]+>/g, "");
-  assert.match(searchableText, /brew install GOI17\/tap\/alfred/);
+  assert.match(searchableText, /brew install GOI17\/alfred\/alfred/);
   assert.match(searchableText, /preview-first/i);
 }
 
@@ -48,9 +48,9 @@ const temporaryDirectory = mkdtempSync(join(tmpdir(), "alfred-homebrew-validatio
 try {
   const formulaPath = join(temporaryDirectory, "Formula", "alfred.rb");
   const formula = renderFormula({
-    source: "git",
+    source: "release",
     version,
-    revision: "a".repeat(40)
+    sha256: "b".repeat(64)
   });
   writeFormulaAtomic(formulaPath, formula);
   const ruby = spawnSync("ruby", ["-c", formulaPath], { encoding: "utf8" });
@@ -69,7 +69,7 @@ assert.match(setupCommand, /--no-clone/);
 process.stdout.write(`${JSON.stringify({
   status: "pass",
   version,
-  formula_modes: ["git-revision", "archive-sha256"],
+  formula_modes: ["git-revision", "archive-sha256", "release-sha256"],
   commands: ["alfred"],
   provider_calls: 0
 })}\n`);

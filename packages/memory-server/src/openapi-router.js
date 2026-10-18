@@ -363,6 +363,17 @@ export function createOpenapiRouter({
             return json(res, 200, list);
           }
 
+          // Match the shared client's keyword-search endpoint before /memories/:id.
+          if (segs.length === 2 && segs[1] === "search" && req.method === "GET") {
+            const opts = {};
+            for (const key of ["limit", "offset", "type", "namespace", "tag", "q", "projectId"]) {
+              if (url.searchParams.has(key)) opts[key] = url.searchParams.get(key);
+            }
+            const list = await memoryService.searchMemories(tenantId, opts);
+            if (rl.record) await rl.record("success");
+            return json(res, 200, list);
+          }
+
           if (segs.length === 1 && req.method === "POST") {
             const body = await readJsonBody(req);
             if (body.__invalid) {

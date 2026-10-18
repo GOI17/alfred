@@ -114,20 +114,35 @@ Install scripts validate paths (reject root `/` and protected paths like `.ai/`,
 
 ### 8. Homebrew Distribution
 
-Starting with Alfred `0.7.0`, releases use a versioned Homebrew packaging
-boundary. Collaborators use
-the private `GOI17/homebrew-tap` and install the fully qualified formula with
-`brew install GOI17/tap/alfred`; the qualification avoids collision with the
-unrelated Alfred macOS application cask. The formula installs `alfred` and
-the `alfred` command, declares Node explicitly, and pins private Git source by
-both tag and commit revision. Formula installation never writes live harness
-config; `alfred setup` preserves the existing preview/apply approval flow and
-does not clone `main`. The former `alfred-install` executable was removed in
-0.6.0 so package installation and product configuration have distinct names.
-Eligible Conventional Commits on `main` are accumulated in a reviewable
-Release Please PR. Merging that PR publishes the stable GitHub Release and
-invokes the private tap publisher directly; manually published stable releases
-and manual tag dispatch remain supported recovery paths.
+Issue #219 prepares a public runtime distribution using the canonical
+`GOI17/homebrew-alfred` tap and `brew install GOI17/alfred/alfred`. Current
+availability is distinct from that target: `GOI17/alfred` source is public, the
+canonical tap remains private, and release `v0.7.2` does not contain the new
+runtime assets. Its existing Git-source formula is not the candidate package.
+Public activation and anonymous Homebrew verification have not been completed.
+
+The selected deterministic runtime archive includes reviewed production npm
+dependencies and licenses, with a versioned tar.gz, `runtime-manifest.json`,
+`SHA256SUMS` and `alfred.rb`. The formula pins the actual release-asset SHA-256
+and declares Node. Dependency staging uses the reviewed npm lockfile in an
+isolated temporary directory, subject to explicit installation approval.
+
+Release Please continues to collect Conventional Commits into a reviewable
+release PR. Merging it creates the stable release and directly invokes the
+publisher: validate tag/package version/source revision, build and verify the
+runtime, upload immutable assets to that release, verify anonymous downloads,
+then update only `Formula/alfred.rb` in `GOI17/homebrew-alfred` with the existing
+repository-scoped `HOMEBREW_TAP_DEPLOY_KEY`. Identical assets permit retries;
+different existing bytes fail without replacement. Manual copy is recovery only.
+Preparing the workflow does not itself publish assets, change tap visibility or
+modify the remote formula.
+
+Homebrew installs the shared runtime once. `alfred setup` uses its bundled Node
+TUI and installed files without cloning `main`, retaining preview/approval gates.
+Managed runtime initialization and exact-scope consent remain per project under
+`.alfred/runtime/`; they do not modify the shared installation or replace Memory
+`alfred init`. Model selection remains user-owned and outside setup. See
+`packaging/homebrew/README.md` for candidate builds and activation requirements.
 
 
 ## Memory Hosting

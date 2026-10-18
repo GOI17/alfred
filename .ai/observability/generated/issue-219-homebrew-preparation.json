@@ -1,0 +1,36 @@
+{
+  "issue": 219,
+  "event": "homebrew_preparation_started",
+  "timestamp": "2026-10-18T05:45:28.442223+00:00",
+  "actor": "developer",
+  "branch": "issue-219-homebrew-public-install",
+  "worktree": "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred-worktrees/issue-219-homebrew-public-install",
+  "base": "e9e4e3e0a8afce432a15a8e4d3f3ff8cb9bdbf67",
+  "source_visibility": "PUBLIC",
+  "tap_visibility": "PRIVATE",
+  "decision": "public release assets verified anonymously before existing automatic canonical tap deploy-key update",
+  "protected_access": "read-only core/harnesses/agents in issue219 worktree, explicitly approved",
+  "provider_calls": 0,
+  "network_operations": [
+    "fetch origin main",
+    "GitHub issue219 creation",
+    "read GitHub metadata",
+    "approved isolated npm registry dependency staging"
+  ],
+  "validation": {
+    "homebrew_tests": 36,
+    "independent_fixtures": 21,
+    "check": "pass",
+    "eval_runner": "pass",
+    "homebrew_validator": "pass",
+    "release_automation": "pass",
+    "actual_packaged_runtime": "pass",
+    "archive_sha256": "68eb0a8b6c37319c7655f685ec6e5c415cf6edb18d16834613f3ecc34d7d1e7d",
+    "files": 1911,
+    "broad_run": "all suites pass;18/19 release gates; parity count fixed by relocating new test, targeted memory91/parity9/eval pass; no full repeat"
+  },
+  "publication": "not performed",
+  "dependency_installation": "explicitly approved isolated npm ci --omit=dev --ignore-scripts;109 locked production packages; no workspace installation",
+  "review": "integrated review no open findings; no protected source or baseline edits",
+  "temporary_test_links": "approved staging and read-only original OpenTUI links removed; generated console build restored to HEAD"
+}

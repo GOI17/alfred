@@ -55,14 +55,32 @@ assert.match(releaseWorkflow, /npm run validate:homebrew/);
 assert.match(releaseWorkflow, /uses: \.\/\.github\/workflows\/release-homebrew-tap\.yml/);
 assert.match(releaseWorkflow, /if: \$\{\{ needs\.prepare-or-release\.outputs\.release_created == 'true' \}\}/);
 assert.match(releaseWorkflow, /tag: \$\{\{ needs\.prepare-or-release\.outputs\.tag_name \}\}/);
-assert.match(releaseWorkflow, /secrets: inherit/);
+assert.match(releaseWorkflow, /HOMEBREW_TAP_DEPLOY_KEY: \$\{\{ secrets\.HOMEBREW_TAP_DEPLOY_KEY \}\}/);
+assert.doesNotMatch(releaseWorkflow, /secrets: inherit/);
 
 assert.match(tapWorkflow, /release:\s*\n\s+types: \[published\]/);
 assert.match(tapWorkflow, /workflow_dispatch:/);
 assert.match(tapWorkflow, /workflow_call:/);
-assert.match(tapWorkflow, /github\.event_name == 'workflow_call'/);
+assert.match(tapWorkflow, /if: inputs\.tag != ''/);
 assert.match(tapWorkflow, /HOMEBREW_TAP_DEPLOY_KEY/);
 assert.match(tapWorkflow, /git diff --quiet -- Formula\/alfred\.rb/);
+
+assert.match(tapWorkflow, /repository: GOI17\/homebrew-alfred/);
+assert.match(tapWorkflow, /permissions:\s*\n\s+contents: write/);
+assert.match(tapWorkflow, /GH_TOKEN: \$\{\{ github.token \}\}/);
+assert.match(tapWorkflow, /--source-revision "\$REVISION" --builder-revision "\$REVISION"/);
+assert.match(tapWorkflow, /--dependencies "\$RUNNER_TEMP\/alfred-runtime-deps\/node_modules"/);
+assert.match(tapWorkflow, /--output "\$RUNNER_TEMP\/alfred-runtime-assets"/);
+assert.match(tapWorkflow, /npm ci --prefix "\$RUNNER_TEMP\/alfred-runtime-deps" --omit=dev --ignore-scripts/);
+assert.match(tapWorkflow, /cp "\$RUNNER_TEMP\/alfred-runtime-assets\/alfred\.rb" homebrew-tap\/Formula\/alfred\.rb/);
+assert.doesNotMatch(tapWorkflow, /--clobber|--force|gh release create|continue-on-error|--exploratory/);
+const orderedReleaseSteps = [
+  "Validate release identity", "node scripts/build-runtime.mjs", "node scripts/verify-runtime.mjs",
+  "node scripts/publish-runtime-assets.mjs", "repository: GOI17/homebrew-alfred", "git push origin HEAD:main"
+].map(text => tapWorkflow.indexOf(text));
+assert.ok(orderedReleaseSteps.every((position, index) => position >= 0 && (index === 0 || position > orderedReleaseSteps[index - 1])),
+  "Release assets must validate and publish successfully before the canonical tap can change");
+
 assert.doesNotMatch(`${releaseWorkflow}\n${tapWorkflow}`, /PERSONAL_ACCESS_TOKEN|RELEASE_PLEASE_TOKEN|\bPAT\b/);
 
 assert.match(validationWorkflow, /VERSION=\$\(node -p "require\('\.\/package\.json'\)\.version"\)/);
@@ -79,5 +97,7 @@ process.stdout.write(`${JSON.stringify({
   release_pr: "review-required",
   tap_publish_paths: ["release-published", "workflow-dispatch", "workflow-call"],
   cross_repository_write_credential: "HOMEBREW_TAP_DEPLOY_KEY",
+  canonical_tap: "GOI17/homebrew-alfred",
+  publication_order: ["validate-release", "build-runtime", "verify-runtime", "publish-immutable-assets", "update-tap"],
   provider_calls: 0
 })}\n`);

@@ -19,28 +19,56 @@ Provide deterministic, reproducible instructions for Alfred installation, update
 1. Detect the active harness from the runtime environment.
 2. Check the harness compatibility matrix for the adapter status.
 3. Generate installation previews using the adapter package.
-4. Apply the preview files to the harness config directory.
+4. Apply the preview files to the harness config directory only after explicit human approval.
 5. Emit trace events for every operation.
 
 ## Modes
 
 ### Mode 0: Human-First Suite Install
 
-Use for humans installing Alfred itself. For versioned Homebrew installation,
-authenticate Git for the private tap and run:
+Use for humans installing Alfred itself. Issue #219 prepares a public, versioned
+runtime package with the canonical command below. It is **not active yet**:
+Alfred source is public, `GOI17/homebrew-alfred` is still private, and current
+release `v0.7.2` does not contain the new runtime assets. Do not claim that an
+anonymous installation has passed until publication and verification complete.
+
+After a new runtime release and public tap activation:
 
 ```sh
-gh auth login
-gh auth setup-git
-brew install GOI17/tap/alfred
+brew install GOI17/alfred/alfred
+alfred version
 alfred setup
 ```
 
-Always use the fully qualified formula name because unqualified
-`brew install alfred` resolves to the unrelated Alfred macOS application cask.
-The formula installs packaged commands only; it does not write live harness
-configuration. `alfred setup` opens the same preview-first guided flow from
-the packaged, pinned source without cloning `main`.
+Use the fully qualified formula to distinguish this product from the unrelated
+Alfred macOS application cask. The formula installs a shared selected runtime
+archive, pinned by its actual SHA-256, and declares Node. Locked production
+dependencies are already in the archive; installation does not require a GitHub
+login, source clone or a package-manager install in the project.
+
+`alfred setup` uses the installed runtime and bundled Node TUI with `--no-clone`.
+It remains preview-first: no profile, project or live harness activation without
+review and explicit approval. Package installation is not that approval.
+
+For each project's managed requests, run `alfred runtime init --instructions
+/absolute/path/to/shared/instructions.json` from that project, then `alfred
+runtime status`. This separate initialization writes project-local
+`.alfred/runtime/` state and grants; it does not create Memory tenants or API
+keys, change the shared package, or transfer consent between worktrees. Memory
+continues to use `alfred init`. Alfred instructions take precedence; global
+options are considered only after confirmed absence, with `Permitir`, `Permitir
+siempre` (exact project/option/content/action/scope), or `Cancelar`.
+
+Release Please remains the normal automatic publication path: validate the exact
+stable tag/version/revision, build and verify the runtime, publish immutable
+`alfred-X.Y.Z-runtime.tar.gz`, `runtime-manifest.json`, `SHA256SUMS` and `alfred.rb`
+to the same Alfred release, verify anonymous downloads, then update only the
+canonical tap formula using the existing `HOMEBREW_TAP_DEPLOY_KEY`. Identical
+asset retries are allowed; different existing bytes must never be overwritten.
+Manual formula copying is recovery only. Preparing installation artifacts does
+not authorize publication, tap visibility changes or live configuration writes.
+See `packaging/homebrew/README.md` for the approved isolated dependency-build
+procedure and the remaining activation checks.
 
 The bootstrap alternative remains
 `curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh`.

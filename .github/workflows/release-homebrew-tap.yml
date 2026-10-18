@@ -16,8 +16,13 @@ on:
         required: true
         type: string
 
+    secrets:
+      HOMEBREW_TAP_DEPLOY_KEY:
+        description: "Existing deploy key scoped to GOI17/homebrew-alfred"
+        required: true
+
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: release-homebrew-tap
@@ -25,7 +30,8 @@ concurrency:
 
 jobs:
   publish:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event.release.prerelease == false
+    # A reusable workflow retains its caller event (normally push), so gate on its input.
+    if: inputs.tag != '' || (github.event_name == 'release' && github.event.release.prerelease == false && github.event.release.draft == false)
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
@@ -46,7 +52,7 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
-          if [[ ! "$RELEASE_TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo "Release tag must match vX.Y.Z" >&2
             exit 1
           fi
@@ -73,26 +79,47 @@ jobs:
           npm run homebrew:test
           npm run validate:homebrew
 
-      - name: Checkout the private tap with its repository-scoped deploy key
+      - name: Prepare locked production dependencies outside the source tree
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/alfred-runtime-deps"
+          cp packaging/runtime/package{,-lock}.json "$RUNNER_TEMP/alfred-runtime-deps/"
+          npm ci --prefix "$RUNNER_TEMP/alfred-runtime-deps" --omit=dev --ignore-scripts --no-audit --no-fund
+
+      - name: Build and verify the exact runtime release
+        env:
+          REVISION: ${{ steps.release.outputs.revision }}
+        run: |
+          set -euo pipefail
+          node scripts/build-runtime.mjs --root "$GITHUB_WORKSPACE" \
+            --source-revision "$REVISION" --builder-revision "$REVISION" \
+            --dependencies "$RUNNER_TEMP/alfred-runtime-deps/node_modules" \
+            --output "$RUNNER_TEMP/alfred-runtime-assets"
+          node scripts/verify-runtime.mjs "$RUNNER_TEMP/alfred-runtime-assets"
+          ruby -c "$RUNNER_TEMP/alfred-runtime-assets/alfred.rb"
+
+      - name: Publish immutable assets and verify anonymous downloads before updating the tap
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          REVISION: ${{ steps.release.outputs.revision }}
+        run: |
+          node scripts/publish-runtime-assets.mjs --directory "$RUNNER_TEMP/alfred-runtime-assets" \
+            --tag "$RELEASE_TAG" --revision "$REVISION"
+
+      - name: Checkout the canonical tap with its existing repository-scoped deploy key
         uses: actions/checkout@v6
         with:
-          repository: GOI17/homebrew-tap
+          repository: GOI17/homebrew-alfred
           ref: main
           ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
           persist-credentials: true
           path: homebrew-tap
 
-      - name: Generate and validate the release formula
-        env:
-          VERSION: ${{ steps.release.outputs.version }}
-          REVISION: ${{ steps.release.outputs.revision }}
+      - name: Copy and validate the already-published release formula
         run: |
           set -euo pipefail
-          node scripts/generate-homebrew-formula.mjs \
-            --version "$VERSION" \
-            --source git \
-            --revision "$REVISION" \
-            --output homebrew-tap/Formula/alfred.rb
+          cp "$RUNNER_TEMP/alfred-runtime-assets/alfred.rb" homebrew-tap/Formula/alfred.rb
           ruby -c homebrew-tap/Formula/alfred.rb
           brew style homebrew-tap/Formula/alfred.rb
 

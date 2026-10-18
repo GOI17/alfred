@@ -1265,7 +1265,21 @@ if [ "$APPLY" != true ] || [ "$TUI_USED" != true ]; then
 fi
 
 if [ "$APPLY" != true ]; then
-  if [ "$TUI_USED" = true ]; then
+  if [ "${ALFRED_DISTRIBUTION:-}" = "homebrew" ]; then
+    cat <<EOFNEXT
+
+No files were written. Preview-only mode is the default.
+Project modified: no.
+Run the installed version's guided setup:
+  alfred setup
+
+Automation fallback after reviewing the choices:
+  alfred setup --edition=$EDITION$MEMORY_CLI_ARG --name=$NAME --harness=$HARNESS --apply
+
+Project runtime state is initialized separately in each project:
+  alfred runtime init --instructions /absolute/path/to/shared/instructions.json
+EOFNEXT
+  elif [ "$TUI_USED" = true ]; then
     cat <<EOFNEXT
 
 No files were written. Preview-only mode is the default.
