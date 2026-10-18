@@ -13,6 +13,69 @@ does not update an existing Homebrew installation or publish a release:
 node packages/memory-server/scripts/alfred.mjs skills --help
 ```
 
+## Manage skills in chat
+
+Ask Alfred to manage skills without leaving the conversation. In Codex, invoke
+`$alfred skills list` or select `alfred` from the skills selector. In OpenCode,
+the generated `/alfred` command accepts the same `skills <action>` arguments:
+
+```text
+$alfred skills list
+$alfred skills search react
+$alfred skills add https://github.com/owner/repo --name selected-skill
+$alfred skills info selected-skill
+$alfred skills update selected-skill
+$alfred skills remove selected-skill
+$alfred skills create release-notes
+```
+
+Use `/alfred` instead of `$alfred` in OpenCode. Codex does not gain a custom
+native `/alfred` slash command from this integration. Natural-language requests
+also work when the `alfred` skill is available. The agent executes the commands
+and explains previews and results in chat.
+
+`create` is a conversation workflow: Alfred authors a useful draft at
+`skills/<name>/SKILL.md` or your chosen location. It uses the available
+`skill-creator` helper or its own fallback checklist, then validates the draft
+with `alfred skills validate <directory> --json`. Validation is local and
+read-only; it checks metadata, nonempty body, safe files and package limits,
+without selecting a harness or creating a receipt. The agent also reviews the
+skill's intended behavior and concrete example. Creation does not install the
+draft unless you request installation. There is no CLI `create` scaffolder.
+
+The canonical skill is included in generated Codex/OpenCode setup previews.
+OpenCode also receives `.opencode/commands/alfred.md`. Applying reviewed harness
+files and starting a new session makes them discoverable. The default skill
+invocation policy remains unchanged; no model or permission override is added.
+Source changes do not publish a release or update an existing Homebrew runtime
+or active session.
+
+## Search for a candidate
+
+```sh
+alfred skills search react performance --limit 5 --json
+alfred skills add https://github.com/owner/repo --name selected-skill --harness codex
+```
+
+`search` queries the public skills.sh catalog, using the unauthenticated endpoint
+used by its official CLI. Queries contain 2–200 characters; `--limit` defaults
+to 10 and accepts 1–20. A quoted query or multiple positional words are supported.
+Results include retrieval time, source repository, catalog skill ID, reported
+installation count when available, and a catalog link. They are not installed
+skills, verified versions, or quality/safety assessments. A malformed or
+unavailable service produces an error instead of fabricated or empty results.
+Search writes no files and accepts no harness/scope or mutation flags.
+
+A selected result supplies a repository and skill ID, not its directory.
+`add` is an exact alias of `install`. For either command, `--name` resolves one
+matching declared frontmatter name at the pinned GitHub commit; it is mutually
+exclusive with `--skill`, which still means a concrete directory. No matches
+produce a diagnostic; duplicate matches list paths and require `--skill`.
+Discovery is bounded to 100 candidate `SKILL.md` files, 64 KiB per candidate,
+and 1 MiB of metadata. Repositories exceeding those limits require a known
+`--skill` directory. The receipt stores the actual directory and commit;
+subsequent updates use that directory without repeating catalog search.
+
 ## Inspect installed skills
 
 ```sh
@@ -76,9 +139,19 @@ or force-delete option.
 
 Mutations default to project scope. Choose `--scope global` explicitly for global
 changes. Use `--harness codex|opencode` whenever discovery cannot identify exactly
-one destination; the inferred harness is always shown. All commands accept
+one destination; the inferred harness is always shown. Inventory and mutation commands accept
 `--cwd`, `--scope`, `--harness`, `--json`, and `--help`; mutations also accept
-`--apply` and `--dry-run`.
+`--apply` and `--dry-run`. Search and validation require no harness/scope, and
+reject those selectors and mutation flags.
+
+For an apply reviewed in a different process, `--expected-digest <sha256:...>`
+binds add/update to the reviewed candidate content and remove to the recorded
+installed content. For GitHub add/update, also supply
+`--expected-commit <full-commit>` to reject a changed revision, even if its bytes
+are identical. Keep `--ref` unchanged so a reviewed branch remains tracked.
+These optional guards require `--apply` and are checked before any mutation.
+Chat uses them when applying a previously reviewed preview. A mismatch requires
+a fresh preview and only the additional authorization warranted by the change.
 
 Local sources are copied as snapshots and recorded by absolute source path and
 digest. Updates reread that path; an unavailable source blocks the operation.

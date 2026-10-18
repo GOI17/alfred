@@ -38,3 +38,18 @@ Codex-owned effective-session evidence confirms both approval bypass and sandbox
 bypass were already selected by the user. Missing or conflicting evidence
 blocks activation. ULW cannot enable bypass, relaunch Codex, edit configuration,
 change models, or expand permissions.
+
+## Alfred skills from chat
+
+The canonical `alfred` skill routes skill inventory, search, add, inspection,
+updates, removal, and conversational creation to the existing skill manager.
+Codex uses `$alfred skills ...`; OpenCode additionally receives a native
+`/alfred skills ...` command in its reviewed preview. Codex slash-command parity
+is not claimed. Default invocation policy and existing permissions remain intact.
+
+Search is public-catalog discovery, not installed state. `create` produces a
+useful draft under the selected project's `skills/<name>` by default and runs
+read-only structural validation; it does not install or register a user draft
+without the corresponding request. See the
+[skill manager guide](../../packages/skill-manager/README.md) for guard flags,
+source-name resolution, coverage, and preview/application behavior.

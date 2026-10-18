@@ -5,7 +5,7 @@
   "type": "module",
   "exports": "./src/index.js",
   "scripts": {
-    "check": "node --check src/index.js && node --check src/model.js && node --check src/filesystem.js && node --check src/sources.js && node --check src/targets.js && node --check src/cli.js",
+    "check": "node --check src/index.js && node --check src/model.js && node --check src/filesystem.js && node --check src/sources.js && node --check src/targets.js && node --check src/cli.js && node --check src/catalog.js && node --check src/validation.js",
     "test": "node --test test/*.test.js"
   }
 }

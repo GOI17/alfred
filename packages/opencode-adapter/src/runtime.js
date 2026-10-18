@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { buildAlfredCommandArtifact } from "./chat-command.js";
 import {
   compactContext,
   createTraceEvent,
@@ -451,7 +452,9 @@ export function buildOpencodeInstallPreview({
         install_path: `.opencode/skills/${skill.id}/SKILL.md`,
         kind: "skill",
         content: buildSkillFileContent({ root: projectRoot, skill })
-      }))
+      })),
+      ...(kernel.skills.skills.some((skill) => skill.id === "alfred")
+        ? [buildAlfredCommandArtifact({ outputDir: relativeOutputDir })] : [])
     ],
     generated_artifacts: integration.generated_artifacts
   };

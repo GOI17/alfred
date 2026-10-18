@@ -6,6 +6,9 @@ import { assertSafePath, atomicWrite, readTree, safeReadFile, stageTree, statOrN
 import { fail, identity, planAction, sha256, skillMetadata, validName, validateLock } from "./model.js";
 import { acquireSource } from "./sources.js";
 import { checkSelection, createTargets, HARNESSES, SCOPES } from "./targets.js";
+import { searchSkills } from "./catalog.js";
+export { searchSkills } from "./catalog.js";
+export { validateSkillDirectory } from "./validation.js";
 
 const jsonBytes = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 const exclusions = ["plugin/system caches", "legacy and compatibility roots", "custom configuration roots", "ancestor project roots"];
@@ -120,6 +123,9 @@ export function createSkillManager({ cwd = process.cwd(), home = os.homedir(), e
   async function prepare(request) {
     if (!request || !["install", "update", "remove"].includes(request.operation)) fail("E_ARGUMENT", "Operation must be install, update or remove.");
     checkSelection(request);
+    if (request.operation === "install" && request.name !== undefined && request.skill !== undefined) fail("E_ARGUMENT", "--name and --skill are mutually exclusive selectors.");
+    if (request.expectedDigest !== undefined && !/^sha256:[a-f0-9]{64}$/.test(request.expectedDigest)) fail("E_ARGUMENT", "Expected digest must be a full sha256:<64 hexadecimal digits> value.");
+    if (request.expectedCommit !== undefined && (!/^[a-f0-9]{40}$/.test(request.expectedCommit) || request.operation === "remove")) fail("E_ARGUMENT", "Expected commit must be a full GitHub commit for add/install/update.");
     const scope = request.scope ?? "project";
     if (scope === "project" && targets.roots.project === targets.roots.global) {
       fail("E_SCOPE_ALIAS", "The selected project is your home directory and shares global skill state. Select --scope global explicitly, or --cwd a separate project directory.");
@@ -128,7 +134,7 @@ export function createSkillManager({ cwd = process.cwd(), home = os.homedir(), e
     let snapshot = null;
     let name = request.name;
     if (request.operation === "install") {
-      snapshot = await acquireSource(request.source, { cwd: targets.roots.project, skill: request.skill, ref: request.ref, fetcher });
+      snapshot = await acquireSource(request.source, { cwd: targets.roots.project, skill: request.skill, name: request.name, ref: request.ref, fetcher });
       name = snapshot.name;
     } else validName(name);
     const harness = chooseHarness(request, scope, name, lock);
@@ -155,6 +161,9 @@ export function createSkillManager({ cwd = process.cwd(), home = os.homedir(), e
     }
     const candidate = snapshot ? { name: snapshot.name, declaredVersion: snapshot.declaredVersion, source: snapshot.source,
       sourceDigest: snapshot.digest, installedDigest: snapshot.digest, files: snapshot.files.map((file) => file.path).sort() } : null;
+    const reviewedDigest = request.operation === "remove" ? current?.installedDigest : candidate?.installedDigest;
+    if (request.expectedDigest !== undefined && reviewedDigest !== request.expectedDigest) fail("E_STALE_PLAN", "Content differs from the reviewed digest. Review the new plan before applying.");
+    if (request.expectedCommit !== undefined && candidate?.source.resolvedCommit !== request.expectedCommit) fail("E_STALE_PLAN", "GitHub revision differs from the reviewed commit. Review the new plan before applying.");
     let decision = planAction(request.operation, current, candidate);
     if (snapshot?.source.kind === "local" && snapshot.source.path === targetPath) decision = { status: "blocked", action: "none", blockers: [{ code: "E_SOURCE_IS_TARGET", message: "The installed directory cannot be its own update source; select an independent source." }] };
     const source = snapshot?.source ?? receipt?.source ?? null;
@@ -171,8 +180,9 @@ export function createSkillManager({ cwd = process.cwd(), home = os.homedir(), e
 
   async function plan(request) {
     try {
-      const prepared = await prepare({ ...request });
-      plans.set(prepared.result, { request: { ...request }, fingerprint: prepared.fingerprint });
+      const normalized = { ...request, operation: request?.operation === "add" ? "install" : request?.operation };
+      const prepared = await prepare(normalized);
+      plans.set(prepared.result, { request: normalized, fingerprint: prepared.fingerprint });
       return prepared.result;
     } catch (error) {
       error.trace = trace(request?.operation ?? "unknown", { status: "failed", reason: error.code ?? "E_IO" });
@@ -298,5 +308,5 @@ export function createSkillManager({ cwd = process.cwd(), home = os.homedir(), e
     }
   }
 
-  return { list, info, plan, apply };
+  return { list, info, plan, apply, search: (query, options = {}) => searchSkills(query, { ...options, fetch: fetcher, now }) };
 }

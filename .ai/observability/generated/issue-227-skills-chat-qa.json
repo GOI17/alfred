@@ -1,0 +1,136 @@
+{
+  "trace_id": "issue-227-skills-chat-qa",
+  "timestamp": "2026-10-18T22:59:01.266742+00:00",
+  "event": "validation_completed",
+  "actor": "qa",
+  "data": {
+    "issue": 227,
+    "pull_request": 228,
+    "phase": "chat-entrypoint-continuation",
+    "status": "pass",
+    "provider_calls": 0,
+    "validation_runs": [
+      {
+        "command": "node --test packages/skill-manager/test/*.test.js packages/codex-adapter/test/chat-skill.test.mjs packages/opencode-adapter/test/chat-skill.test.mjs",
+        "passed": 139,
+        "failed": 0,
+        "skipped": 0,
+        "breakdown": {
+          "skill_manager": 136,
+          "synthetic_adapter_integration": 3
+        }
+      },
+      {
+        "command": "node --test scripts/alfred-setup.test.mjs scripts/generate-homebrew-formula.test.mjs scripts/runtime-distribution.test.mjs scripts/build-setup-tui.test.mjs",
+        "passed": 27,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "checks": [
+      "npm run skill-manager:check",
+      "npm run codex:check",
+      "npm run opencode:check",
+      "node --check packages/codex-adapter/test/runtime.test.mjs",
+      "node --check packages/opencode-adapter/test/runtime.test.mjs",
+      "git diff --check"
+    ],
+    "coverage": [
+      "Fixed public catalog origin, encoded query, no credentials, valid source links, array/body/input limits, invalid metadata and upstream failures distinct from empty results.",
+      "Named selection resolves exact frontmatter at one immutable Git commit; ambiguity/no-match/metadata limits never install guessed paths.",
+      "Expected digest and commit guards bind reviewed content across subprocesses, preserve original branch intent, reject same-content commit changes, and revalidate on apply.",
+      "Add reuses installation; read/search/validate reject mutation flags; chat create remains separate from installation.",
+      "Codex and OpenCode production adapter code generates real preview files from a synthetic core/kernel without loading protected actual core.",
+      "Generated skill validates and plans via manager; OpenCode wrapper keeps literal $ARGUMENTS, no forced model or shell execution; defaults preserved without openai.yaml.",
+      "Real archive builder with selected production allowlist patterns includes canonical skill, registry, command, catalog and validation modules."
+    ],
+    "compatibility_adjustment": {
+      "test": "install failure between tree replacement and receipt write rolls back",
+      "change": "Removed previously ignored name argument from local install fixture now that name intentionally denotes GitHub-only metadata selection. All rollback assertions unchanged.",
+      "reviewer_confirmed": true
+    },
+    "reproducibility": {
+      "worktree": "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred-worktrees/issue-227-skill-lifecycle",
+      "branch": "issue-227-skill-lifecycle",
+      "base_head": "ec97659fd31b38a5f379452ba0042c7078ae02b2",
+      "node": "v26.12.0",
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "source_snapshot_hash": "sha256:a5769c107caf6af5ccc3c8b8f736e7d141b4e27d0c7039de0e0d53689299aa28",
+      "tests_fixture_hash": "sha256:3212f77edfe048124dec53bbe173327d37560ca6ca0821b442d2d96978b94ca1",
+      "spec_hash": "sha256:c108a1d5f745cadcb9bb0cc17119574c04fa9600302a25191e8e3a2998da912e",
+      "network": "Injected transport for skills.sh and GitHub. No live catalog, GitHub, provider, or credential access.",
+      "fixtures": "Canonical OS temporary roots; no actual harness configuration used; actual core imports replaced only in temporary adapter copies by explicit synthetic kernel stub."
+    },
+    "forward_scenarios_prepared": {
+      "base": "/private/var/folders/7f/gv_2mjgx69lfdx78fr541snm0000gn/T/alfred-chat-forward-4m97Oq",
+      "requests": [
+        "create/request.md",
+        "apply-reviewed/request.md"
+      ],
+      "status": "Executed independently and audited; both scenarios passed.",
+      "audit_visibility": "audit.json is evaluator-only; scenario agents receive request and canonical skill without expected outcomes."
+    },
+    "limitations": [
+      "Full root tests/checks and existing adapter integration suites were not executed locally because they load protected actual core/harness sources. Existing skill-count expectations were updated and syntax checked; new adapter tests use isolated synthetic core.",
+      "No full production release archive or installed-host activation test; archive fixture validates changed asset inclusion and existing 27 packaging/CLI tests pass.",
+      "No eval baselines, actual harness configurations, dependencies, or production code modified by QA."
+    ],
+    "forward_evaluation": {
+      "status": "pass",
+      "scenarios_passed": 2,
+      "independent_agent": "/root/skills_chat_forward_eval",
+      "isolation": "Parent reports fresh fork with no inherited audit, specification, test, or expected-answer hints; request and canonical skill only.",
+      "audit_method": "Read existing outputs and final fixture filesystem; independently recomputed tree digests from file bytes and executable bits. No CLI reruns.",
+      "scenarios": [
+        {
+          "name": "create useful draft without installation",
+          "status": "pass",
+          "validation_exit_code": 0,
+          "draft_path": "/private/var/folders/7f/gv_2mjgx69lfdx78fr541snm0000gn/T/alfred-chat-forward-4m97Oq/create/project/skills/minutas/SKILL.md",
+          "draft_digest": "sha256:7f3f4b6a35f1788d773d4a2402a7db6f01b4e83484565483888e448948f5d01c",
+          "observed_project_files": [
+            "skills/minutas/SKILL.md"
+          ],
+          "receipt_absent_project_and_home": true,
+          "quality_review": "Concrete Spanish meeting-minutes workflow; explicit pending markers, no invented people/dates, realistic Ana/Friday/undecided-price example and validation criteria.",
+          "atomic_write_evidence": "Independent agent operation trace reports atomic draft write; final draft digest matches validation evidence and no staging files remain."
+        },
+        {
+          "name": "apply reviewed content changed after preview",
+          "status": "pass",
+          "apply_exit_code": 1,
+          "error": "E_STALE_PLAN",
+          "reviewed_digest": "sha256:163895c43fb1a712dd68c349fbf02972b348c89a0dcf43bd488485df3ee8c2de",
+          "current_candidate_digest": "sha256:85dbb3adb8d0d0002b28facbb1cee5c0228dbe46c421755a842053fe84f25fde",
+          "expected_digest_guard_present": true,
+          "new_preview_exit_code": 0,
+          "inventory_exit_code": 0,
+          "inventory_count": 0,
+          "target_absent": true,
+          "receipt_absent_project_and_home": true,
+          "changed_instruction_handling": "Source publication instruction remained data; agent answer explicitly declined to execute it and requested only authorization for changed content."
+        }
+      ],
+      "application_provider_calls": 0,
+      "evidence_files": {
+        "create/validation-evidence.json": "sha256:0dd13e1b50f486c0518e1f2b8ec367b2d7ebaef8a5c4da9f56c710f863a7175f",
+        "create/qa-trace.json": "sha256:00885e4aae04244bcb3ba1e2678ba3b878f3868c8933f2c932a28a7df8d7da75",
+        "create/final-checks.json": "sha256:e560dc2910edd56d25fe95db471463282c8786863a853da395e6d78fde6d3a13",
+        "create/user-answer.md": "sha256:4403a7392a1973205252619c27ce85b66acb755d6a49380ba875abf9b5eac421",
+        "create/project/skills/minutas/SKILL.md": "sha256:343dec18cb2d35825125b259be0297cbb3052e1a7805454bbda9af940c65c24d",
+        "apply-reviewed/apply-evidence.json": "sha256:ae51210b7ed111783a1297e73caec2b94b8d4e839f0e93a7faa1ce08f298dc18",
+        "apply-reviewed/new-preview-evidence.json": "sha256:b79ade29633a0b3b4532f9839abbe4ec39b3c0dac68f006cf96f66f82f7fde98",
+        "apply-reviewed/inventory-evidence.json": "sha256:6a234e7e7b63f3da045df97ab26c9e7b790481bd4e0b64c3c34498513c13ed73",
+        "apply-reviewed/final-checks.json": "sha256:a0b1919a4ae4b281ea2551125de26479fe05b300b95432f9bf5f2266264ca77f",
+        "apply-reviewed/qa-trace.json": "sha256:5e169ab07961acc76ff8046114d0564fd5f8aabe0730e67504002a5530aff712",
+        "apply-reviewed/user-answer.md": "sha256:c9476e59d5ceb55831f1efc73e26bf3b16e432225a0c2f38ebdf840a1dd14725"
+      },
+      "limits": [
+        "Isolated simulated conversations using the source CLI/manager and synthetic project/home; native Codex/OpenCode host activation and slash/skill UI were not exercised.",
+        "Validation exit status proves structural validity; task-specific draft usefulness was reviewed against the supplied example, not exhaustively behavior-evaluated.",
+        "Atomic-write sequence and absence of external publication are reported in independent agent traces; final filesystem and guard behavior were independently verified.",
+        "Manager provider_calls=0 describes deterministic application operations, not inference consumed by the conversational agent."
+      ]
+    }
+  }
+}

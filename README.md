@@ -51,10 +51,16 @@ from the prepared versioned runtime package.
 ## Skill inventory and lifecycle
 
 `alfred skills` inspects skills on disk and manages their installation receipts.
+Use `$alfred skills list`, `search`, `add`, `remove`, or `create` from Codex chat;
+in OpenCode, use its generated `/alfred skills ...` command. Codex uses the
+`alfred` skill and does not register a custom native `/alfred` slash command.
+`create` authors a validated local draft; installation is a separate request.
 Source changes do not update an already installed Homebrew release.
 
 ```sh
 alfred skills list
+alfred skills search testing --limit 5
+alfred skills add https://github.com/owner/repo --name selected-skill --harness codex
 alfred skills info tdd --harness codex --scope project
 alfred skills install ./skills/tdd --harness codex
 alfred skills install ./skills/tdd --harness codex --apply

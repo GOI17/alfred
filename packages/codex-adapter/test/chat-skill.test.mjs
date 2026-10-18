@@ -1,0 +1,35 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import test from "node:test";
+import { adapterFixture } from "../../skill-manager/test/adapter-fixture.js";
+import { createSkillManager, validateSkillDirectory } from "../../skill-manager/src/index.js";
+
+test("Codex generated Alfred skill validates and previews through the normal lifecycle without live writes", async (t) => {
+  const f = adapterFixture(t, "codex");
+  const adapter = await f.load();
+  const preview = adapter.writeCodexInstallPreview({ root: f.root, outputDir: ".ai/generated/chat-preview" });
+  const artifact = preview.files.find(file => file.install_path === ".agents/skills/alfred/SKILL.md");
+  assert.ok(artifact);
+  assert.equal(artifact.kind, "skill");
+  assert.equal(preview.provider_calls, 0);
+  assert.equal(preview.writes_harness_config_by_default, false);
+  assert.ok(f.noLiveTarget());
+  assert.equal(preview.files.some(file => /commands\/alfred|agents\/openai\.yaml/.test(file.install_path)), false);
+  const generatedPath = join(f.root, artifact.path);
+  const body = readFileSync(generatedPath, "utf8");
+  const canonicalBody = f.canonical.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
+  assert.ok(body.endsWith(`${canonicalBody}\n`));
+  assert.match(body, /\$alfred skills/);
+  assert.doesNotMatch(body, /^disable-model-invocation:|allow_implicit_invocation:\s*false/m);
+  const source = join(f.root, ".ai/generated/chat-preview/.agents/skills/alfred");
+  const validation = validateSkillDirectory(source, { cwd: f.root });
+  assert.equal(validation.status, "valid");
+  assert.equal(validation.name, "alfred");
+  const manager = createSkillManager({ cwd: join(f.root, "selected-project"), home: join(f.root, "home"), env: {} });
+  const plan = await manager.plan({ operation: "add", source, harness: "codex" });
+  assert.equal(plan.status, "preview");
+  assert.equal(plan.candidate.installedDigest, validation.digest);
+  assert.equal(existsSync(plan.targetPath), false);
+  assert.equal(existsSync(join(f.root, "selected-project/.alfred/skills-lock.json")), false);
+});

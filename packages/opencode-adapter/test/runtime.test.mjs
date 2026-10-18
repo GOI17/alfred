@@ -167,11 +167,11 @@ test("opencode preview delivers all canonical project skill bodies lazily", () =
   const preview = buildOpencodeInstallPreview({ root, outputDir: ".ai/generated/test-opencode-install" });
   const skills = preview.files.filter((file) => file.kind === "skill");
 
-  assert.equal(skills.length, 5);
+  assert.equal(skills.length, 6);
   assert.ok(preview.generated_artifacts.skills.every((skill) => skill.scope === "project"));
   assert.ok(preview.generated_artifacts.skills.every((skill) => skill.load_body_by_default === false));
 
-  for (const skillId of ["typescript-project", "architecture-docs", "goal", "loop", "ulw"]) {
+  for (const skillId of ["typescript-project", "architecture-docs", "goal", "loop", "ulw", "alfred"]) {
     const artifact = skills.find((file) => file.install_path === `.opencode/skills/${skillId}/SKILL.md`);
     const canonical = readFileSync(join(root, `.ai/skills/project/${skillId}/SKILL.md`), "utf8")
       .trim()

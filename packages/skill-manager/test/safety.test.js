@@ -31,7 +31,7 @@ for (const operation of ["install", "update", "remove"]) {
     if (operation !== "install") target = (await install(f)).target;
     if (operation === "update") put(join(f.source, "references", "guide.md"), "Candidate update.\n");
     const manager = f.create({ beforeCommit: () => { throw new Error("QA simulated receipt failure"); } });
-    const plan = await manager.plan({ operation, name: "sample", source: operation === "install" ? f.source : undefined, ...selection });
+    const plan = await manager.plan({ operation, name: operation === "install" ? undefined : "sample", source: operation === "install" ? f.source : undefined, ...selection });
     target ??= plan.targetPath;
     const before = tree(target), beforeLock = existsSync(f.lock) ? readFileSync(f.lock) : null;
     await assert.rejects(() => manager.apply(plan, { approval: true }), /QA simulated receipt failure/);
