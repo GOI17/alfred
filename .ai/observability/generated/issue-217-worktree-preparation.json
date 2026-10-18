@@ -189,6 +189,14 @@
         "/tmp/alfred-217-main-evals.log"
       ],
       "coverage": "managed read-text-v1 instruction loading only; host bridges and URL opening pending"
+    },
+    {
+      "type": "scope_corrected",
+      "timestamp": "2026-10-18T04:37:43.894297+00:00",
+      "source": "explicit user clarification",
+      "decision": "Opening URLs is an example, not a mandatory runtime contract or TODO. Concrete actions belong to future Alfred skills; issue217 covers generic resolution, authorization and invocation.",
+      "application_code_changed": false,
+      "delegation_decision": "small bounded documentation correction handled directly"
     }
   ]
 }

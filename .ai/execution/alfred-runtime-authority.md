@@ -15,6 +15,10 @@ Install Alfred once; initialize each project independently. Alfred owns instruct
 
 The first vertical slice is executable `alfred runtime init`, `alfred runtime run` and `alfred runtime status`. Keep existing Memory `alfred init` semantics intact. A plan-only command or generated host instruction is not completion of this slice.
 
+## Scope clarification: actions belong to skills
+
+Examples such as opening a URL illustrate Alfred-first resolution; they are not feature requirements, mandatory contracts or acceptance criteria for #217. Concrete actions belong to future Alfred skills. This objective provides the generic skill resolution, authorization and invocation boundary, without encoding example-specific behavior in the runtime. The existing `read-text-v1` slice is a verified foundation, not a requirement to implement every illustrated action as a built-in contract.
+
 ## Requirements
 
 ### R1: Alfred-first state transitions
@@ -106,7 +110,7 @@ Actual CLI help and the guide init/status/global run example were checked with t
 
 Final post-rebase verification reported by the main session: branch implementation `60778d2` is based directly on main `2ebe950`. `npm test` exits 0, including the actual installer PTY, all 19 release gates and release automation. `npm run check` exits 0. The existing eval-runner baseline comparison passes with zero regressions and no baseline updates. These successful results supersede the initial-base validation; the earlier installer timeout is not a current failure.
 
-Focused evidence includes QA 117/117, CLI 13/13 and runtime 43/43 (overlapping suites, not additive counts). Reviewer final assessment has no findings. The CLI executable mode remains 100755; main's package scripts are preserved with runtime registrations added. Native host bridges, URL operations, general execution and the full #217 objective remain pending.
+Focused evidence includes QA 117/117, CLI 13/13 and runtime 43/43 (overlapping suites, not additive counts). Reviewer final assessment has no findings. The CLI executable mode remains 100755; main's package scripts are preserved with runtime registrations added. Native host bridges, generic skill invocation and the full #217 objective remain pending.
 
 ## Architecture trace
 

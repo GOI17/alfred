@@ -1,6 +1,6 @@
 # ADR 010: Alfred authority within a managed execution boundary
 
-Status: first managed CLI slice verified after rebase onto main for issue #217. Full tests, checks and existing eval baseline comparison pass. Native host bridges, URL operations, general execution and the full objective remain pending. Validation evidence is recorded in the SDD.
+Status: first managed CLI slice verified after rebase onto main for issue #217. Full tests, checks and existing eval baseline comparison pass. Native host bridges, generic skill invocation and the full objective remain pending. Validation evidence is recorded in the SDD.
 
 ## Context
 
@@ -13,6 +13,8 @@ Alfred owns the policy and state machine in core. Infrastructure implements inst
 Every managed request consults Alfred first. Only an explicit absence of applicable instructions permits global discovery. Denials, lookup errors, ambiguity, cancellation and execution failures are terminal and never trigger fallback.
 
 Global option consent offers Permitir (one request), Permitir siempre (specific option/content/action/scope in this project), and Cancelar. Persistent grants bind to the canonical workspace path rather than the shared Git project root. Copied state and sibling worktrees do not inherit consent. Grants are checked against current policy and content before actual execution; they never supersede security policy.
+
+Concrete actions are supplied by future Alfred skills. Examples such as opening a URL do not create action-specific runtime requirements. The runtime owns generic resolution, authorization and invocation; skills own the procedures for their actions.
 
 ## Hard platform boundary
 

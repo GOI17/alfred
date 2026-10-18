@@ -104,6 +104,10 @@ If multiple candidates require selection, use the displayed numeric index or can
 
 The CLI writes JSON to stdout: successful reads expose `result.content`; failures report `status` and `reason`. Option metadata and prompts go to stderr. Local request traces live at `.alfred/runtime/trace.jsonl` and correlate events through `request_id`. Their metadata allowlist excludes source content, request input and source paths. The interactive option display still identifies the selected source so you can review consent.
 
+## Future skills
+
+Concrete actions will be implemented as Alfred skills. Opening a URL is an illustration of the resolution flow, not a required feature or built-in URL contract in #217. The runtime provides generic skill resolution, authorization and invocation; adding specific skills is separate future work.
+
 ## Current boundary
 
 The guarantee applies to requests through the managed CLI. This slice reads text only. It does not open URLs, run shell commands, enforce arbitrary host tools, apply a playbook's instructions, or intercept every native Codex/Pi/OpenCode/Copilot request. Host bridges and durable execution loops are later stages. Host system instructions, sandbox and approval controls remain in force.
@@ -114,4 +118,4 @@ See [ADR 010](architecture/010-runtime-authority.md) and the [implementation con
 
 Validated against the worktree CLI: actual `runtime --help`, initialization and status, the global playbook example with interactive `Permitir`, noninteractive rejection without consent, exact content including BOM, and absence of a persisted Once grant. Fixtures used temporary projects and a temporary home. These checks do not establish completion of the full issue or replace the regression suite.
 
-Final validation after rebase onto main: `npm test` and `npm run check` pass, including the actual installer PTY, all 19 release gates and release automation. The existing eval baseline comparison passes with zero regressions and no baseline updates. A real-terminal Always flow also verified persistence in project A, isolation from project B, and precedence of a later Alfred deny over a stored grant. The reviewer reported no remaining findings. Native host bridges, URL operations and general execution remain outside this slice; the broader #217 objective is not complete.
+Final validation after rebase onto main: `npm test` and `npm run check` pass, including the actual installer PTY, all 19 release gates and release automation. The existing eval baseline comparison passes with zero regressions and no baseline updates. A real-terminal Always flow also verified persistence in project A, isolation from project B, and precedence of a later Alfred deny over a stored grant. The reviewer reported no remaining findings. Native host bridges and generic skill invocation remain outside this slice; the broader #217 objective is not complete.
