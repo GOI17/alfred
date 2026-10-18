@@ -59,7 +59,7 @@ func run() int {
 	defer fmt.Fprint(os.Stderr, "\x1b[?2004l")
 	go func() { err := filterInput(os.Stdin, writer); writer.CloseWithError(err); cancel() }()
 	project, _ := os.Getwd()
-	p := tea.NewProgram(newModel(bridge, project), tea.WithInput(reader), tea.WithOutput(os.Stderr), tea.WithAltScreen(), tea.WithContext(ctx))
+	p := tea.NewProgram(newModel(bridge, project), tea.WithInput(reader), tea.WithOutput(setupTerminalOutput(os.Stderr)), tea.WithAltScreen(), tea.WithContext(ctx))
 	final, err := p.Run()
 	if err != nil && !errors.Is(err, tea.ErrProgramKilled) {
 		fmt.Fprintln(os.Stderr, "Setup stopped. Run alfred setup to try again.")
