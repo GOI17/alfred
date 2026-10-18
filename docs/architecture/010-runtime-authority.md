@@ -1,6 +1,6 @@
 # ADR 010: Alfred authority within a managed execution boundary
 
-Status: first managed CLI slice verified on initial base `6e5918f` for issue #217; validation after rebase onto current main is pending. Native host bridges and the full objective remain pending. Initial-base test results are recorded in the SDD; they do not establish the rebased full-suite result.
+Status: first managed CLI slice verified after rebase onto main for issue #217. Full tests, checks and existing eval baseline comparison pass. Native host bridges, URL operations, general execution and the full objective remain pending. Validation evidence is recorded in the SDD.
 
 ## Context
 

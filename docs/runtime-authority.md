@@ -1,6 +1,6 @@
 # Managed runtime authority
 
-This guide describes the first implementation slice of issue #217. It does not imply that the released Homebrew package already includes these commands. Use a build containing `alfred runtime`; the first managed CLI slice was verified on its initial development base. Validation after rebasing onto current main is pending.
+This guide describes the first implementation slice of issue #217. It does not imply that the released Homebrew package already includes these commands. Use a build containing `alfred runtime`; the first managed CLI slice is verified after rebasing onto main.
 
 ## Install once, initialize each project
 
@@ -114,4 +114,4 @@ See [ADR 010](architecture/010-runtime-authority.md) and the [implementation con
 
 Validated against the worktree CLI: actual `runtime --help`, initialization and status, the global playbook example with interactive `Permitir`, noninteractive rejection without consent, exact content including BOM, and absence of a persisted Once grant. Fixtures used temporary projects and a temporary home. These checks do not establish completion of the full issue or replace the regression suite.
 
-Initial-base validation (`6e5918f`, associated with unmerged PR #192): QA focus 117/117, CLI 13/13 and runtime 43/43 pass; these suites overlap. `npm check` and the existing eval baseline comparison pass with zero regressions. Full `npm test` reports 535 passing cases and 2 skipped out of 537, then hits a pre-existing installer PTY timeout. That initial-base full-suite gate was therefore non-green. A rebase onto `origin/main` (`2ebe950` at discovery) and fresh validation are pending; the timeout is not assumed to recur on that base. A real-terminal Always flow also verified persistence in project A, isolation from project B, and precedence of a later Alfred deny over a stored grant. The reviewer reported no remaining findings. None of this marks the broader #217 native-host objective complete.
+Final validation after rebase onto main: `npm test` and `npm run check` pass, including the actual installer PTY, all 19 release gates and release automation. The existing eval baseline comparison passes with zero regressions and no baseline updates. A real-terminal Always flow also verified persistence in project A, isolation from project B, and precedence of a later Alfred deny over a stored grant. The reviewer reported no remaining findings. Native host bridges, URL operations and general execution remain outside this slice; the broader #217 objective is not complete.

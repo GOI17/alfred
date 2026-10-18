@@ -3,7 +3,7 @@ id: alfred-runtime-authority
 issue: 217
 description: Managed Alfred-first runtime resolution, project consent and executable CLI boundary
 phase: issue-217-first-vertical-slice
-status: first-slice-verified-on-initial-base
+status: first-slice-verified
 owner: architect
 ---
 
@@ -81,12 +81,12 @@ Tests must prove actual managed execution, not only routing output:
 - Trace request, resolution, discovery, consent, permission, revalidation and actual execution outcome with correlated IDs; do not log secrets or full sensitive inputs.
 - Local deterministic tests and existing relevant regression gates pass with zero added provider requests. Never update baselines without separate human approval.
 
-## Completion conditions (initial-base evidence; rebase validation pending)
+## Completion conditions
 
 - [x] Runtime init/run/status implemented with actual read-text-v1 execution.
 - [x] First-slice behavioral acceptance verified, including no-fallback, consent and workspace isolation.
 - [x] Focused tests, npm check and existing baseline comparison pass without baseline updates.
-- [ ] Full npm test gate green on rebased origin/main: pending rerun; the initial base encountered an installer PTY timeout after unit/integration tests passed.
+- [x] Full npm test gate green after rebase onto main, including installer PTY, all 19 release gates and release automation.
 - [x] Runtime traces prove resolution, consent and actual execution outcomes.
 - [x] Host coverage explicitly states managed CLI only; native bridges remain pending.
 - [ ] Full issue #217 objective reviewed separately after staged host integration; this slice does not establish universal host authority.
@@ -104,7 +104,9 @@ Tests must prove actual managed execution, not only routing output:
 
 Actual CLI help and the guide init/status/global run example were checked with temporary project/home fixtures. Interactive Once returned exact BOM-preserving content and persisted no grant; noninteractive missing consent rejected execution. The main session additionally verified a real PTY Always flow: project A persists its grant, project B is denied, and a new Alfred deny overrides the stored grant without reading a malformed external catalog.
 
-Initial-base verification reported by the main session (worktree base `6e5918f`, associated with unmerged PR #192): QA focus 117/117, CLI 13/13 and runtime 43/43 pass (overlapping suites, not additive counts). Reviewer final assessment has no findings. `npm check` passes; the existing eval-runner baseline comparison passes with zero regressions. Full `npm test` reports 537 cases, 535 passed and 2 skipped, with zero unit/integration failures, then reaches the same pre-existing installer PTY timeout. Therefore that initial-base full-suite gate was not green. These results do not establish the state after rebasing onto `origin/main` (`2ebe950` at discovery); all final gates must be rerun. The installer timeout must not be presumed to persist on the new base. No baseline updates were made. Native host bridges, general execution and the full #217 objective remain pending.
+Final post-rebase verification reported by the main session: branch implementation `60778d2` is based directly on main `2ebe950`. `npm test` exits 0, including the actual installer PTY, all 19 release gates and release automation. `npm run check` exits 0. The existing eval-runner baseline comparison passes with zero regressions and no baseline updates. These successful results supersede the initial-base validation; the earlier installer timeout is not a current failure.
+
+Focused evidence includes QA 117/117, CLI 13/13 and runtime 43/43 (overlapping suites, not additive counts). Reviewer final assessment has no findings. The CLI executable mode remains 100755; main's package scripts are preserved with runtime registrations added. Native host bridges, URL operations, general execution and the full #217 objective remain pending.
 
 ## Architecture trace
 

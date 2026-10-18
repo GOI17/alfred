@@ -136,6 +136,59 @@
       "type": "review_finding",
       "scope": "source content read before external consent",
       "status": "confirmed; assigned developer"
+    },
+    {
+      "type": "worktree_base_updated",
+      "timestamp": "2026-10-18T04:11:32.790182+00:00",
+      "initial_base": "6e5918fef360a3e84e2b1646aebe58b02718d466",
+      "final_base": "2ebe950a295880ffa09383da7b2c3272f9c03888",
+      "feature_commit": "60778d2",
+      "reason": "independent feature PR without unmerged installer branch changes",
+      "conflict": "package.json resolved by developer, preserving all main scripts plus runtime tasks",
+      "cli_executable_mode": "100755"
+    },
+    {
+      "type": "manual_acceptance_verified",
+      "scope": "actual interactive PTY and CLI subprocesses with isolated fixtures",
+      "results": [
+        "Always persists only for project A",
+        "project B remains denied without consent",
+        "new Alfred denial overrides existing external grant without consulting malformed globals"
+      ],
+      "live_configuration_modified": false
+    },
+    {
+      "type": "review_completed",
+      "open_findings": 0,
+      "reviewed": "core/service, CLI, package scripts after rebase",
+      "resolved_findings": [
+        "prepared-option mutation",
+        "premature source content read",
+        "nested repository grant inheritance",
+        "failure/revalidation trace gaps"
+      ]
+    },
+    {
+      "type": "final_validation",
+      "timestamp": "2026-10-18T04:11:32.790279+00:00",
+      "base": "2ebe950a295880ffa09383da7b2c3272f9c03888",
+      "npm_test": "pass",
+      "npm_check": "pass",
+      "release_gates": "19/19 pass",
+      "eval_runner": "pass; zero regressions",
+      "focused_core_runtime_tests": "117/117 pass (overlaps full suite)",
+      "release_automation": "pass",
+      "baselines_modified": false,
+      "dependencies_installed": false,
+      "environment_adjustment": "reused root dependencies; local memory-mcp -> memory-client workspace link for stdio test",
+      "prior_base_installer_timeout": "not present after rebasing onto current main",
+      "application_provider_calls": 0,
+      "logs": [
+        "/tmp/alfred-217-main-test.log",
+        "/tmp/alfred-217-main-check.log",
+        "/tmp/alfred-217-main-evals.log"
+      ],
+      "coverage": "managed read-text-v1 instruction loading only; host bridges and URL opening pending"
     }
   ]
 }
