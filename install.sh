@@ -1421,8 +1421,7 @@ TRACE_DIR="$HOME/.alfred/observability"
 mkdir -p "$TRACE_DIR"
 TRACE_FILE="$TRACE_DIR/install-trace.json"
 INSTALL_TRACE_EVENTS='["install_management_operation", "provider_request_avoided"]'
-TRACE_TMP="$TRACE_FILE.$$ .tmp"
-TRACE_TMP="$(printf '%s' "$TRACE_TMP" | tr -d ' ')"
+TRACE_TMP="$(mktemp "$TRACE_FILE.XXXXXX")" || err "Unable to create install trace temporary file"
 cat > "$TRACE_TMP" <<EOFTRACE
 {
   "trace_id": "suite-install",

@@ -9,7 +9,7 @@ import { createSession, cleanEnvironment, safeText, schema } from "./bridge.mjs"
 const root = resolve(import.meta.dirname, "../..");
 function fixture(t) {
   const directory = mkdtempSync(join(tmpdir(), "alfred-setup-bridge-"));
-  const home = join(directory, "home"), project = join(directory, "project"); mkdirSync(home); mkdirSync(project);
+  const home = join(directory, "home with spaces"), project = join(directory, "project with spaces"); mkdirSync(home); mkdirSync(project);
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   return { home, project, env: { PATH: process.env.PATH, HOME: home, ALFRED_DISTRIBUTION: "homebrew" } };
 }
@@ -30,7 +30,7 @@ test("JSONL real discover/preview stays clean and exits on EOF without writes", 
   child.stdin.end(); const [code] = await once(child, "exit"); assert.equal(code, 0);
   assert.deepEqual(readdirSync(f.home), []); assert.deepEqual(readdirSync(f.project), []);
 });
-test("actual approved apply writes project previews and trace, not shared runtime", async t => {
+test("actual approved apply preserves spaces in project previews and home trace paths", async t => {
   const f = fixture(t), session = createSession({ cwd: f.project, env: f.env });
   const denied = await session(request("a", "apply", { selection, confirmed: true, previewToken: "missing" })); assert.equal(denied.error.code, "consent_required");
   const preview = await session(request("b", "preview", { selection })); assert.equal(preview.ok, true);

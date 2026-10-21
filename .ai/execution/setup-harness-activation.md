@@ -40,4 +40,3 @@ Validation completed locally:
 - Full built-runtime smoke remains pending CI on macOS/Linux, where the existing isolated dependency staging is available. `verify-runtime.mjs` now exercises the packaged bridge, real adapter manifests, separate confirmation and required installed files, in addition to native PTY cancellation.
 
 No package installation, live user harness changes, baseline changes, commits, publication or provider requests were performed. The only external lookup was the authorized GitHub issue metadata; setup and tests remained local. Only the dedicated #234 worktree was edited. Parent owns independent review, PR and CI gates; do not merge before Go and packaged-runtime verification pass.
-
