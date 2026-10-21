@@ -48,6 +48,20 @@ The existing `curl | sh` source bootstrap remains documented in the
 [install guide](https://alfred.alfredlabs.org/docs/install.html); it is separate
 from the prepared versioned runtime package.
 
+## Local Memory
+
+Alfred Memory runs only on your computer. The managed hosted service is retired.
+
+```bash
+alfred init --profile=coding --backend=sqlite --name my-memory
+ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve
+```
+
+Open <http://127.0.0.1:3000/console/> and unlock it with the API key printed by
+`init`. Keep the server running. SQLite and user-chosen Postgres storage remain
+available; the HTTP service always binds to loopback.
+See the [Memory quickstart](docs/QUICKSTART.md).
+
 ## Skill inventory and lifecycle
 
 `alfred skills` inspects skills on disk and manages their installation receipts.

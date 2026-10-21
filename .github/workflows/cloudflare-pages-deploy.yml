@@ -20,10 +20,6 @@ on:
       - ".github/workflows/cloudflare-pages-deploy.yml"
   workflow_dispatch:
     inputs:
-      alfred_api_base:
-        description: "Public Alfred Memory API URL"
-        required: false
-        default: "https://alfred-labs-memory.fly.dev"
       site_base_path:
         description: "Public path prefix; use / for pages.dev or a custom domain"
         required: false
@@ -40,7 +36,6 @@ jobs:
       contents: read
       deployments: write
     env:
-      ALFRED_API_BASE: ${{ inputs.alfred_api_base || vars.ALFRED_API_BASE || 'https://alfred-labs-memory.fly.dev' }}
       ALFRED_BUILD_VERSION: ${{ github.sha }}
       SITE_BASE_PATH: ${{ inputs.site_base_path || vars.CLOUDFLARE_PAGES_BASE_PATH || '/' }}
       CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT || 'alfred' }}

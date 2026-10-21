@@ -1,50 +1,29 @@
-# Alfred Memory Server v0.3.0
+# Alfred Memory Server
 
-The Alfred Memory Server is the **self-hosted** deployment shape of Alfred Memory. It exposes:
+Alfred Memory is a local HTTP service. The managed hosted service is retired.
+It preserves tenant isolation, API keys, optional OAuth, HTTP MCP, memory CRUD,
+search, and policy-governed capture. SQLite and user-chosen Postgres storage are
+supported; storage location does not enable remote HTTP access.
 
-- `/memories` — CRUD for the durable memory store.
-- `POST /memories/capture` — policy-governed proactive capture with `created`,
-  `duplicate`, or `skipped` results; requires existing write authorization.
-- `/search` — keyword/semantic/hybrid search.
-- `/oauth/authorize` and `/oauth/token` — direct ChatGPT OAuth flow.
-- `/openapi.yaml` — canonical ChatGPT Actions schema.
-- `/policy` — run hosting-policy validation against the registry.
-- `/health` — liveness probe.
-- `/tenants` — list tenants registered to this installation.
-
-## Quick start (local-only)
+## Quick start
 
 ```bash
-ALFRED_MEMORY_HOSTING=local \
-ALFRED_MEMORY_PORT=3000 \
-  node packages/memory-server/bin/alfred-memory-server.mjs
+alfred init --profile=coding --backend=sqlite --name my-memory
+ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve
 ```
 
-The server binds to `127.0.0.1:3000`. No auth — relies on loopback trust.
+Save the key printed by `init`, open <http://127.0.0.1:3000/console/>, and unlock
+the console with that key. Keep the process running. The console calls the API
+on the same origin, including when you select another loopback address or port.
+Cloud ChatGPT Actions and Google AI Studio cannot reach the local service.
 
-## Quick start (self-hosted)
-
-```bash
-ALFRED_MEMORY_HOSTING=self-hosted \
-ALFRED_MEMORY_PORT=443 \
-ALFRED_MEMORY_BIND=0.0.0.0 \
-ALFRED_MEMORY_TLS_CERT=/etc/letsencrypt/live/alfred.example.com/fullchain.pem \
-ALFRED_MEMORY_TLS_KEY=/etc/letsencrypt/live/alfred.example.com/privkey.pem \
-ALFRED_MEMORY_ALLOWED_ORIGINS=https://chat.openai.com,https://claude.ai \
-  node packages/memory-server/bin/alfred-memory-server.mjs
-```
-
-Required:
-
-- `ALFRED_MEMORY_TLS_CERT` and `ALFRED_MEMORY_TLS_KEY` pointing to valid files.
-- API key (`alk_...`) or OAuth access token (`alo_...`) in the standard
-  `Authorization: Bearer` header for every non-public route.
-- At least one origin in `ALFRED_MEMORY_ALLOWED_ORIGINS` for browser clients (Custom GPT, Claude web).
+From this repository use `node packages/memory-server/scripts/alfred.mjs` in
+place of `alfred`.
 
 ## CLI
 
 ```bash
-node packages/memory-server/scripts/alfred.mjs init --cwd ~/clients/acme --kind coding_agent_only --storage-backend sqlite
+node packages/memory-server/scripts/alfred.mjs init --cwd ~/clients/acme --profile=coding --backend=sqlite
 node packages/memory-server/scripts/alfred.mjs list
 node packages/memory-server/scripts/alfred.mjs validate-policy
 node packages/memory-server/scripts/alfred.mjs key rotate --tenant usr_xxx
@@ -72,7 +51,8 @@ Storage backend selection follows `.ai/policies/memory-hosting-policy.md`:
 
 - Human agents: Postgres only.
 - Coding agents: ask at init time.
-- Self-hosted server: Postgres only for the registry.
+- The local registry uses SQLite; tenant Postgres connections may point to a user-chosen database.
+- `web` and `both` are compatibility profile names, not hosted-service options.
 
 The check constraints, the application validation, and the CLI prompts all enforce this independently. The cross-tenant isolation tests verify the in-memory implementation; the same suite runs against the SQL migration via `node:test` when a Postgres instance is available.
 
@@ -87,33 +67,30 @@ npm run check
 npm test
 ```
 
-Test counts:
-
-- `init.test.mjs` — 11 tests.
-- `server.test.mjs` — 11 tests.
-- `cli.test.mjs` — 8 tests.
-- `cross-tenant-isolation.test.mjs` — 15 vectors, all green.
-
 ## Configuration
 
-| Env var | Default | Required in self-hosted |
+| Env var | Default | Purpose |
 |---|---|---|
-| `ALFRED_MEMORY_HOSTING` | `local` | yes (set to `self-hosted`) |
-| `ALFRED_MEMORY_PORT` | `3000` (local) / `443` (self-hosted) | optional |
-| `ALFRED_MEMORY_BIND` | `127.0.0.1` (local) / `0.0.0.0` (self-hosted) | optional |
-| `ALFRED_MEMORY_TLS_CERT` | none | **yes** |
-| `ALFRED_MEMORY_TLS_KEY` | none | **yes** |
-| `ALFRED_MEMORY_ALLOWED_ORIGINS` | none | optional (comma-separated) |
-| `ALFRED_MEMORY_REGISTRY` | `~/.alfred/registry.sqlite` | optional |
-| `ALFRED_PUBLIC_URL` | none | yes when OAuth is enabled |
-| `ALFRED_OAUTH_CLIENT_ID` | none | yes when OAuth is enabled |
-| `ALFRED_OAUTH_CLIENT_SECRET` | none | yes when OAuth is enabled; 32+ characters |
-| `ALFRED_OAUTH_REDIRECT_URIS` | none | yes when OAuth is enabled; comma-separated exact URLs |
-| `ALFRED_SMTP_HOST` | none | yes for email verification and key recovery |
-| `ALFRED_SMTP_PORT` | `587` | yes for production email |
-| `ALFRED_SMTP_USER` | none | yes for authenticated SMTP |
-| `ALFRED_SMTP_PASSWORD` | none | yes for authenticated SMTP; use an App Password with Gmail |
-| `ALFRED_SMTP_FROM` | `noreply@alfred.local` | yes for production email |
+| `ALFRED_MEMORY_HOSTING` | `local` | Only supported mode; other values fail startup |
+| `ALFRED_MEMORY_PORT` | `3000` | Integer 0–65535; 0 assigns an available local port |
+| `ALFRED_MEMORY_BIND` | `127.0.0.1` | `localhost`, IPv4 loopback, or `::1` only |
+| `ALFRED_MEMORY_REQUIRE_AUTH` | `false` | Set `true` as in the quickstart to require API keys |
+| `ALFRED_MEMORY_ALLOWED_ORIGINS` | none | Optional explicit browser origins; no wildcard default |
+| `ALFRED_MEMORY_REGISTRY` | `~/.alfred/registry.sqlite` | Local registry path |
+| `ALFRED_PUBLIC_URL` | none | Canonical URL for optional OAuth configuration |
+| `ALFRED_OAUTH_CLIENT_ID` | none | Optional OAuth client ID |
+| `ALFRED_OAUTH_CLIENT_SECRET` | none | Optional OAuth secret; 32+ characters |
+| `ALFRED_OAUTH_REDIRECT_URIS` | none | Optional exact redirect allowlist |
+| `ALFRED_SMTP_HOST` | none | Email verification and key recovery transport |
+| `ALFRED_SMTP_PORT` | `587` | SMTP port |
+| `ALFRED_SMTP_USER` | none | Authenticated SMTP username |
+| `ALFRED_SMTP_PASSWORD` | none | Authenticated SMTP password |
+| `ALFRED_SMTP_FROM` | `noreply@alfred.local` | Sender address |
+
+`alfred serve --port=4321 --bind=localhost` overrides the corresponding env vars.
+Invalid values fail before opening the registry. `createServer` and `startServer`
+enforce the same local contract, including direct `server.listen(...)` calls.
+`ALFRED_CONSOLE_URL` and nonlocal hosting modes are unsupported.
 
 OAuth remains disabled when all three `ALFRED_OAUTH_*` settings are absent.
 Supplying only part of the OAuth configuration fails startup rather than
@@ -168,76 +145,21 @@ the new key, and always provides an explicit **Continue with Alfred** action.
 
 ## Web console
 
-The `/console` route serves the optional web console. The server does not
-depend on `@alfred-labs/console-web` at the package level — the operator
-wires them together at runtime using one of three modes:
-
-### Mode 1 — Cross-origin deploy (recommended)
-
-Deploy the console to Vercel, Netlify, GitHub Pages, or any static host.
-The server only serves the JSON API under `/console/api/*` and redirects
-`/console` to the upstream URL.
+The local server serves the packaged console at `/console/`. In a repository
+checkout it discovers `packages/console-web/dist/index.html` automatically.
+To rebuild it with existing dependencies:
 
 ```bash
-# On the server
-export ALFRED_CONSOLE_URL=https://alfred-console.vercel.app
-alfred serve
+node packages/console-web/scripts/build.mjs
 ```
 
-The console build points at your server via `ALFRED_API_BASE`:
+For another package layout, set `ALFRED_CONSOLE_DIR` to the absolute path of that
+built `dist/` directory before starting `alfred serve`. The console and API must
+share an origin; `ALFRED_API_BASE` overrides and remote console redirects are not
+supported. The public website serves local-start instructions only.
 
-```bash
-cd packages/console-web
-ALFRED_API_BASE=https://alfred.example.com npm run build
-# upload dist/ to your static host
-```
-
-Remember to add your console's origin to `ALFRED_MEMORY_ALLOWED_ORIGINS`
-on the server so the browser allows API calls.
-
-### Mode 2 — Bundled inline
-
-Build the console and point the server at the `dist/` directory.
-
-```bash
-cd packages/console-web
-ALFRED_API_BASE=https://alfred.example.com npm run build
-# Result: packages/console-web/dist/index.html
-
-# On the server
-export ALFRED_CONSOLE_DIR=/opt/alfred/console-web/dist
-alfred serve
-```
-
-The server serves `index.html` for any `/console/...` path (SPA fallback).
-The console and the API are same-origin, so CORS is a non-issue.
-
-### Mode 3 — Auto-discovery (dev only)
-
-If neither env var is set and the server is launched from a workspace
-that contains `packages/console-web/dist/index.html`, the server picks it
-up automatically. Useful during development. **Do not rely on this in
-production** — set `ALFRED_CONSOLE_URL` or `ALFRED_CONSOLE_DIR` explicitly.
-
-### 503 fallback
-
-If none of the above resolves, `/console` returns 503 with an error body
-that includes the searched paths and instructions for fixing the
-deployment. The `/console/api/*` endpoints continue to work in all
-modes (the API is decoupled from the static SPA).
-
-### Env vars
-
-| Env var | Default | Purpose |
-|---|---|---|
-| `ALFRED_CONSOLE_URL` | none | Cross-origin deploy URL (Mode 1) |
-| `ALFRED_CONSOLE_DIR` | none | Path to built `dist/` (Mode 2) |
-
-## Future work (v0.3.1+)
-
-- Real `alfred migrate` SQLite ↔ Postgres data migration.
-- Postgres-backed `createPostgresTenantStore` (currently a stub).
-- WSGI-style multi-process listen via `cluster` module.
+If the build cannot be found, `/console/` returns `503 console_not_installed`
+with local build/path instructions. JSON endpoints remain available.
 
 ## Memory history and observed agent activity
 

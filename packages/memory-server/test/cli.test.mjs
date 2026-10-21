@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { run as adapters } from "../scripts/adapters.mjs";
 import { run as provision } from "../scripts/provision.mjs";
 import { run as listTenants } from "../scripts/list.mjs";
 import { run as validatePolicy } from "../scripts/validate-policy.mjs";
@@ -146,4 +147,14 @@ test("migrate rejects missing tenant args", async () => {
     const { code } = await captureStderr(() => migrate([]));
     assert.notEqual(code, 0);
   });
+});
+
+
+test("cloud adapter instructions explain the retired hosted connection", async () => {
+  for (const name of ["chatgpt-custom-gpt", "google-ai-studio"]) {
+    const { code, output } = await captureStdout(() => adapters(["instructions", name]));
+    assert.equal(code, 0);
+    assert.match(output, /cannot reach.*loopback|cannot reach local Memory/i);
+    assert.doesNotMatch(output, /choose Sign in|Create Extension|chatgpt\.com\/gpts\/mine/);
+  }
 });

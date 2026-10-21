@@ -132,18 +132,18 @@ test("npm run build creates dist/index.html", () => {
   assert.ok(existsSync(join(distDir, "index.html")));
   const text = readFileSync(join(distDir, "index.html"), "utf8");
   // The build script injects window.ALFRED_API_BASE with the default.
-  assert.match(text, /window\.ALFRED_API_BASE = "http:\/\/localhost:3000"/);
+  assert.match(text, /window\.ALFRED_API_BASE = ""/);
   assert.match(text, /window\.ALFRED_BUILD_VERSION = /);
 });
 
-test("build honors ALFRED_API_BASE env var", () => {
+test("build includes a version while retaining same-origin API", () => {
   const customDir = mkdtempSync(join(tmpdir(), "alfred-console-build-"));
   try {
     const result = spawnSync("node", ["scripts/build.mjs"], {
       cwd: pkgRoot,
       env: {
         ...process.env,
-        ALFRED_API_BASE: "https://alfred.example.com",
+        ALFRED_API_BASE: "",
         ALFRED_BUILD_VERSION: "test-build",
         ALFRED_CONSOLE_OUTPUT_DIR: customDir
       },
@@ -151,7 +151,7 @@ test("build honors ALFRED_API_BASE env var", () => {
     });
     assert.equal(result.status, 0, "build failed: " + result.stderr);
     const text = readFileSync(join(customDir, "index.html"), "utf8");
-    assert.match(text, /window\.ALFRED_API_BASE = "https:\/\/alfred\.example\.com"/);
+    assert.match(text, /window\.ALFRED_API_BASE = ""/);
     assert.match(text, /window\.ALFRED_BUILD_VERSION = "test-build"/);
   } finally {
     rmSync(customDir, { recursive: true, force: true });
@@ -184,18 +184,26 @@ test("dist/index.html has CORS-friendly Authorization usage", () => {
   assert.match(text, /"authorization":\s*"Bearer/);
 });
 
-test("vercel.json declares the dist/ output and build command", () => {
-  const text = readFileSync(join(pkgRoot, "vercel.json"), "utf8");
-  assert.match(text, /"outputDirectory":\s*"dist"/);
-  assert.match(text, /"buildCommand":\s*"node scripts\/build\.mjs"/);
+test("hosted console manifests are retired", () => {
+  assert.equal(existsSync(join(pkgRoot, "vercel.json")), false);
+  assert.equal(existsSync(join(pkgRoot, "netlify.toml")), false);
 });
 
-test("netlify.toml publishes dist/ with the build command", () => {
-  const text = readFileSync(join(pkgRoot, "netlify.toml"), "utf8");
-  assert.match(text, /publish\s*=\s*"dist"/);
-  assert.match(text, /command\s*=\s*"node scripts\/build\.mjs"/);
+test("console build rejects a cross-origin API override", () => {
+  for (const base of ["https://alfred.example.com", "http://localhost:3000"]) {
+    const result = spawnSync(process.execPath, ["scripts/build.mjs"], { cwd: pkgRoot, encoding: "utf8", env: { ...process.env, ALFRED_API_BASE: base } });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /own origin/);
+  }
 });
 
-test("GitHub Pages public/.nojekyll exists for Jekyll bypass", () => {
-  assert.ok(existsSync(join(pkgRoot, "public", ".nojekyll")));
+test("console API requests resolve on loopback aliases and custom ports", () => {
+  const text = readFileSync(srcIndex, "utf8");
+  const code = text.slice(text.indexOf("function apiBase(path) {"), text.indexOf("async function api("));
+  const apiBase = new Function(code + "; return apiBase;")();
+  for (const origin of ["http://localhost:4321", "http://127.0.0.2:9321", "http://[::1]:6789"]) {
+    assert.equal(new URL(apiBase("/console/api/tenants"), origin).origin, origin);
+  }
+  assert.throws(() => apiBase("https://external.example/key"), /same-origin/);
+  assert.throws(() => apiBase("//external.example/key"), /same-origin/);
 });

@@ -52,86 +52,21 @@
 
     <main class="docs-main">
       <h1>Memory &amp; persistence</h1>
-      <p class="doc-lead">
-        Alfred Memory is a vendor-agnostic persistent store for the
-        decisions, conventions, and gotchas your agents accumulate over
-        time. Choose a hosting mode per tenant.
-      </p>
-
-      <h2 id="modes">Hosting modes</h2>
-      <table class="matrix">
-        <thead>
-          <tr><th>Mode</th><th>Store</th><th>When to pick it</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><code>coding</code></td>
-            <td>SQLite</td>
-            <td>Local dev, single user, no network.</td>
-          </tr>
-          <tr>
-            <td><code>web</code></td>
-            <td>Postgres</td>
-            <td>Memory shared with ChatGPT / Claude / Gemini.</td>
-          </tr>
-          <tr>
-            <td><code>self-hosted</code></td>
-            <td>Postgres + TLS</td>
-            <td>Production, multi-machine, HTTPS.</td>
-          </tr>
-          <tr>
-            <td><code>human</code></td>
-            <td>Postgres (managed)</td>
-            <td>Memory for a human agent. Postgres only.</td>
-          </tr>
-        </tbody>
-      </table>
-
+      <p class="doc-lead">Alfred Memory stores the decisions, conventions, and lessons your agents accumulate. Its server runs only on your computer; the managed hosted service is retired.</p>
+      <h2 id="modes">Local process, chosen storage</h2>
+      <p>The HTTP server accepts only loopback addresses. SQLite works for coding tenants; user-chosen Postgres storage remains available, including a remote database. A remote database does not make the HTTP service remote. The compatibility profiles <code>web</code> and <code>both</code> still require Postgres and use local clients.</p>
       <h2 id="workspaces">Workspaces &amp; tenants</h2>
-      <p>
-        A <strong>workspace</strong> is a directory with an Alfred install.
-        A <strong>tenant</strong> is a memory partition. Workspaces are
-        not tenants &mdash; <code>tenant_access</code> is many-to-many
-        with explicit inheritance.
-      </p>
-
-      <h2 id="api">Memory API</h2>
-      <div class="terminal">
-        <div class="terminal-bar">
-          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">curl</span>
-        </div>
-<pre><span class="c"># Save a memory</span>
-<span class="f">curl</span> -X POST http://localhost:3000/v1/memories \
-  -H <span class="s">"x-api-key: alk_..."</span> \
-  -H <span class="s">"content-type: application/json"</span> \
-  -d <span class="s">'{"title":"BCrypt cost=12","tags":["security","perf"]}'</span>
-
-<span class="c"># Search memories</span>
-<span class="f">curl</span> -G http://localhost:3000/v1/memories/search \
-  -H <span class="s">"x-api-key: alk_..."</span> \
-  --data-urlencode <span class="s">"q=bcrypt cost"</span>
-</pre>
-      </div>
-
-      <h2 id="console">Web console</h2>
-      <p>
-        The web console (<code>packages/console-web</code>) lists tenants,
-        rotates keys, and renders copy-paste snippets for every adapter.
-        It can be hosted on Vercel/Netlify pointing at a self-hosted API.
-      </p>
-
-      <h2 id="migrate">Migrating</h2>
-      <p>Switching modes is a one-shot, traceable migration:</p>
-      <div class="terminal">
-        <div class="terminal-bar">
-          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">migrate</span>
-        </div>
-<pre><span class="c"># Migration is handled by Alfred Memory tooling</span>
-Target backend: postgres://user:pass@host/db?sslmode=require
-</pre>
-      </div>
+      <p>A workspace is a directory with an Alfred install. A tenant is a memory partition. Workspaces are not tenants: <code>tenant_access</code> is many-to-many with explicit inheritance.</p>
+      <h2 id="api">Start locally</h2>
+      <pre>alfred init --profile=coding --backend=sqlite --name my-memory
+ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve</pre>
+      <p>Save the API key printed by <code>init</code>. Keep the server running and configure local clients with your loopback endpoint and that key.</p>
+      <h2 id="console">Local console</h2>
+      <p>Open <a href="http://127.0.0.1:3000/console/">the local console</a> and unlock it with your key. The console and API share an origin, including custom ports. Use <code>alfred serve --port=4321</code> and open <code>http://127.0.0.1:4321/console/</code> to select a different port.</p>
+      <p>The public website contains instructions only. Cloud ChatGPT Actions and Google AI Studio cannot reach the local service.</p>
+      <h2 id="migrate">Existing data</h2>
+      <p>Existing tenants, API keys, OAuth, MCP, SQLite and Postgres data backends remain supported. No database is deleted as part of hosted retirement. Keep independent backups and use the local API or console to manage your data.</p>
+      <p><a href="/alfred/memory/">Local setup instructions</a> · <a href="/alfred/support/">Support</a></p>
     </main>
 
     <aside class="docs-toc">

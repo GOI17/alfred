@@ -14,8 +14,8 @@ Alfred is a local-first agent operations runtime. It designs, tests, evaluates, 
 
 ### Core Philosophy
 
-- **Local-first execution (compute, not persistence)**: No provider calls for deterministic operations. Memory persistence may be local (SQLite) or remote (Postgres) based on hosting mode; see Memory Hosting below.
-- **Memory hosting policy**: Storage backend selection rules per tenant kind live in `.ai/policies/memory-hosting-policy.md`. Human agents require Postgres; coding agents are asked on `alfred init`; self-hosted servers use Postgres.
+- **Local-first execution (compute, not persistence)**: No provider calls for deterministic operations. Memory persistence may be local (SQLite) or remote (Postgres) according to tenant storage choice; the HTTP process remains local. See Memory Hosting below.
+- **Memory hosting policy**: Storage backend selection rules per tenant kind live in `.ai/policies/memory-hosting-policy.md`. Human agents require Postgres; coding agents are asked on `alfred init`; the server always binds to loopback, independently of database location.
 - **Workspace hierarchy policy**: The relationship between filesystem workspaces and Alfred Memory tenants is governed by `.ai/policies/memory-workspace-policy.md`. Workspaces are not tenants; `tenant_access` is many-to-many with explicit inheritance.
 - **Harness-agnostic**: Core has no knowledge of specific harnesses (Pi, opencode, VSCode, etc.)
 - **User-owned model assignment**: Model selection happens at runtime, not hardcoded
@@ -150,14 +150,19 @@ Managed runtime initialization and exact-scope consent remain per project under
 
 ## Memory Hosting
 
-Alfred Memory supports four hosting modes. See `.ai/architecture/memory-hosting-modes.md` for the full matrix.
+Alfred Memory runs only as a local loopback process (`ALFRED_MEMORY_HOSTING=local`).
+Issue #232 retires the managed hosted service and deployment workflow. The local
+console uses same-origin API requests; public Pages provides setup instructions.
+Wildcard binds and other hosting modes are rejected before the registry opens.
 
-| Mode | Backend | Use case | Status |
-|---|---|---|---|
-| `local-only` | SQLite per tenant | Solo dev on a single laptop | shipped (MVP) |
-| `self-hosted` | Postgres per tenant | Multi-agent, multi-machine, auditable | target of v0.3.0 |
-| `federated` | per-agent SQLite/Postgres with sync | Strict local-first with sync | deferred to v0.4.0 |
-| `hybrid` | Postgres in cloud + SQLite cache | Mostly online with offline fallback | deferred to v0.4.0 |
+| Process | Tenant storage | Availability |
+|---|---|---|
+| Local loopback HTTP | SQLite per coding tenant | supported |
+| Local loopback HTTP | User-chosen Postgres, local or remote | supported |
+
+Storage policy, authentication, tenants, OAuth and MCP remain intact. Cloud
+clients cannot reach the loopback process. Earlier hosting roadmaps are historical;
+see `.ai/execution/memory-local-only.md` for the current runtime contract.
 
 Key concepts introduced in v0.3.0:
 

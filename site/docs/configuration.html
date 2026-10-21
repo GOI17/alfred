@@ -160,33 +160,8 @@
       </p>
 
       <h2 id="memory-hosting">Memory hosting</h2>
-      <p>Three modes, chosen at init time:</p>
-      <table class="matrix">
-        <thead>
-          <tr><th>Mode</th><th>Store</th><th>Use case</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><code>coding</code></td>
-            <td>SQLite</td>
-            <td>Local dev, single user, no network.</td>
-          </tr>
-          <tr>
-            <td><code>web</code></td>
-            <td>Postgres</td>
-            <td>Memory shared with ChatGPT / Claude / Gemini.</td>
-          </tr>
-          <tr>
-            <td><code>self-hosted</code></td>
-            <td>Postgres + TLS</td>
-            <td>Production, multi-machine, HTTPS.</td>
-          </tr>
-        </tbody>
-      </table>
-      <p>
-        Switching modes is a one-shot migration handled by Alfred Memory
-        tooling. Alfred emits a trace event for every row moved.
-      </p>
+      <p>Memory runs only as a local process bound to loopback. The managed hosted service is retired. Use SQLite for a coding tenant or your own Postgres database; database location does not change the local HTTP contract.</p>
+      <p>The <code>web</code> and <code>both</code> profile names are retained for Postgres-backed local clients. Cloud ChatGPT Actions and AI Studio cannot reach this process.</p>
 
       <h2 id="env">Environment variables</h2>
       <p>
@@ -198,14 +173,14 @@
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">env</span>
         </div>
-<pre><span class="c"># Required</span>
-<span class="k">export</span> <span class="o">ALFRED_TENANT</span>=my-project
-<span class="k">export</span> <span class="o">ALFRED_API_KEY</span>=alk_...
+<pre><span class="c"># Local server (use the key issued by alfred init)</span>
+<span class="k">export</span> <span class="o">ALFRED_MEMORY_REQUIRE_AUTH</span>=true
+<span class="k">export</span> <span class="o">ALFRED_MEMORY_PORT</span>=3000
+<span class="k">export</span> <span class="o">ALFRED_MEMORY_BIND</span>=127.0.0.1
 
-<span class="c"># Optional</span>
-<span class="k">export</span> <span class="o">ALFRED_MEMORY_DB</span>=postgres://user:pass@host/db?sslmode=require
-<span class="k">export</span> <span class="o">ALFRED_CONSOLE_URL</span>=https://alfred-console.example.com
-<span class="k">export</span> <span class="o">ALFRED_LOG_LEVEL</span>=info
+<span class="c"># Local client</span>
+<span class="k">export</span> <span class="o">ALFRED_MEMORY_BASE_URL</span>=http://127.0.0.1:3000
+<span class="k">export</span> <span class="o">ALFRED_MEMORY_API_KEY</span>=alk_...
 </pre>
       </div>
 

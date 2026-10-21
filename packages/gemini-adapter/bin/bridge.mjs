@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // Run the Gemini / Google AI Studio bridge HTTPS server.
-import http from "node:http";
 import https from "node:https";
 import { readFileSync, existsSync } from "node:fs";
 import { createBridge, createBridgeServer } from "../src/bridge.mjs";
@@ -20,8 +19,8 @@ const bridge = createBridgeServer({ baseUrl, apiKey });
 
 if (cert && key && existsSync(cert) && existsSync(key)) {
   const opts = { cert: readFileSync(cert), key: readFileSync(key) };
-  const server = https.createServer(opts, bridge);
-  server.listen(port, () => process.stderr.write(`gemini-bridge listening on https://*:${port} -> ${baseUrl}\n`));
+  const server = https.createServer(opts, createBridge({ baseUrl, apiKey }));
+  server.listen(port, "127.0.0.1", () => process.stderr.write(`gemini-bridge listening on https://127.0.0.1:${server.address().port} -> ${baseUrl}\n`));
 } else {
-  bridge.listen(port, () => process.stderr.write(`gemini-bridge listening on http://*:${port} -> ${baseUrl}\n`));
+  bridge.listen(port, "127.0.0.1", () => process.stderr.write(`gemini-bridge listening on http://127.0.0.1:${bridge.address().port} -> ${baseUrl}\n`));
 }

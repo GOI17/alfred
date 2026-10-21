@@ -25,7 +25,7 @@ export const PROFILES = Object.freeze({
   },
   web: {
     name: "web",
-    description: "Web-only usage from ChatGPT, Claude, Gemini.",
+    description: "Local browser and desktop clients using a Postgres tenant.",
     tenant_kind: "human_agent",
     storage_default: "postgres",
     write_workspace_config: false,
@@ -34,7 +34,7 @@ export const PROFILES = Object.freeze({
   },
   both: {
     name: "both",
-    description: "Shared memory across coding agents in cwd AND web clients.",
+    description: "Shared memory across coding agents in cwd and local browser clients.",
     tenant_kind: "hybrid_with_human",
     storage_default: "postgres",
     write_workspace_config: true,
@@ -116,70 +116,27 @@ export function buildInitPlan({
   };
 }
 
-export function nextStepsFor(kind, { tenant_id, workspace_id, api_key, registry_path, server_base_url = "http://localhost:3000" } = {}) {
-  // Each line is a human-readable step. Lines starting with "#" are headers.
-  if (kind === "coding") {
-    return [
-      "# Coding agent setup (opencode / Codex / Pi / Copilot)",
-      "",
-      "Your config is already in <cwd>/.alfred/config.json. The agent reads it.",
-      "",
-      "If the agent supports env-var override, set:",
-      "  ALFRED_MEMORY_BASE_URL=" + server_base_url,
-      "  ALFRED_MEMORY_API_KEY=" + (api_key || "alk_..."),
-      "",
-      "Test it:",
-      "  curl -H 'Authorization: Bearer " + (api_key || "alk_...") + "' " + server_base_url + "/memories?limit=5"
-    ];
-  }
-  if (kind === "web") {
-    return [
-      "# Web agent setup",
-      "",
-      "Your API key is the credential for ALL your web clients.",
-      "Save it now: " + (api_key || "alk_..."),
-      "",
-      "## ChatGPT (Plus/Pro)",
-      "1. Open https://chatgpt.com/gpts/mine and select Alfred Memory.",
-      "2. Ask Alfred to list your last 5 memories and choose Sign in.",
-      "3. Enter your alk_... key only on Alfred's consent page and approve access.",
-      "4. Retry the request.",
-      "   If Alfred Memory is absent, create it from packages/chatgpt-adapter/README.md.",
-      "   Never enter your API key, Client ID, or Client Secret in a chat.",
-      "",
-      "## Claude (Desktop)",
-      "1. Edit ~/Library/Application Support/Claude/claude_desktop_config.json:",
-      "   { \"mcpServers\": { \"alfred-memory\": {",
-      "     \"command\": \"node\",",
-      "     \"args\": [\"<abs path>/packages/anthropic-adapter/bin/alfred-mcp.mjs\"],",
-      "     \"env\": { \"ALFRED_MEMORY_API_KEY\": \"" + (api_key || "alk_...") + "\",",
-      "               \"ALFRED_MEMORY_BASE_URL\": \"" + server_base_url + "\" } } } }",
-      "2. Restart Claude Desktop.",
-      "",
-      "## Google Gemini / AI Studio",
-      "1. Run the bridge:",
-      "   ALFRED_MEMORY_BASE_URL=" + server_base_url + " ALFRED_MEMORY_API_KEY=" + (api_key || "alk_...") + " \\",
-      "     node packages/gemini-adapter/bin/bridge.mjs &",
-      "2. In AI Studio: Tools -> Extensions -> Create Extension.",
-      "3. Upload packages/gemini-adapter/openapi.json.",
-      "4. Auth: API Key, header x-api-key, value=" + (api_key || "alk_..."),
-      "",
-      "Tenant: " + (tenant_id || "..."),
-      "Registry: " + (registry_path || "~/.alfred/registry.sqlite")
-    ];
-  }
-  if (kind === "both") {
-    return [
-      "# Both: coding + web",
-      "",
-      "Coding agent config is in <cwd>/.alfred/config.json.",
-      "API key works for any agent. Save it: " + (api_key || "alk_..."),
-      "",
-      "For web setup, see:",
-      "  alfred adapters instructions chatgpt-custom-gpt",
-      "  alfred adapters instructions claude-desktop",
-      "  alfred adapters instructions google-ai-studio"
-    ];
-  }
-  return ["# No next steps available for kind=" + kind];
+export function nextStepsFor(kind, { tenant_id, api_key, registry_path, server_base_url = "http://127.0.0.1:3000" } = {}) {
+  if (!["coding", "web", "both"].includes(kind)) return ["# No next steps available for kind=" + kind];
+  return [
+    kind === "coding" ? "# Coding agent setup (opencode / Codex / Pi / Copilot)" : kind === "both" ? "# Both: coding + web (local clients)" : "# Local browser and desktop setup",
+    "",
+    "Save your API key now: " + (api_key || "alk_..."),
+    "Start the local server in another terminal:",
+    "  ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve",
+    "Open " + server_base_url + "/console/ and unlock it with your API key.",
+    "Keep the local server running while using Memory.",
+    "",
+    ...(kind !== "web" ? ["Your config is in <cwd>/.alfred/config.json."] : []),
+    "For local coding clients, Claude Desktop, or the Gemini bridge, set:",
+    "  ALFRED_MEMORY_BASE_URL=" + server_base_url,
+    "  ALFRED_MEMORY_API_KEY=" + (api_key || "alk_..."),
+    "Cloud ChatGPT Actions and Google AI Studio cannot reach this loopback service.",
+    "Postgres storage does not enable remote access to the server.",
+    "",
+    "Test it:",
+    "  curl -H 'Authorization: Bearer " + (api_key || "alk_...") + "' " + server_base_url + "/memories?limit=5",
+    "Tenant: " + (tenant_id || "..."),
+    "Registry: " + (registry_path || "~/.alfred/registry.sqlite")
+  ];
 }

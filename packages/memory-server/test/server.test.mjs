@@ -11,7 +11,7 @@ import {
 } from "../../memory/src/index.js";
 import {
   loadServerConfig,
-  createApp
+  createApp, createServer, startServer
 } from "../src/server.js";
 
 function makeWireServices() {
@@ -118,15 +118,41 @@ test("loadServerConfig defaults to local mode and bind 127.0.0.1", () => {
   assert.equal(cfg.requireAuth, false);
 });
 
-test("loadServerConfig can require auth behind a TLS-terminating proxy", () => {
-  const cfg = loadServerConfig({
-    ALFRED_MEMORY_HOSTING: "local",
-    ALFRED_MEMORY_REQUIRE_AUTH: "true",
-    ALFRED_MEMORY_BIND: "0.0.0.0"
-  });
-  assert.equal(cfg.mode, "local");
-  assert.equal(cfg.requireAuth, true);
-  assert.equal(cfg.bind, "0.0.0.0");
+test("local authentication remains configurable", () => {
+  assert.equal(loadServerConfig({ ALFRED_MEMORY_REQUIRE_AUTH: "true" }).requireAuth, true);
+});
+
+test("server configuration rejects exposed binds, unsupported modes and invalid ports", () => {
+  for (const bind of ["0.0.0.0", "::", "192.168.1.1", "example.com", "localhost.example.com", "", true]) {
+    assert.throws(() => loadServerConfig({ ALFRED_MEMORY_BIND: bind }), /loopback/);
+    for (const construct of [createServer, startServer]) {
+      assert.throws(() => construct({ app() {}, config: { mode: "local", bind, port: 3000 } }), /loopback/);
+    }
+  }
+  for (const port of ["", " ", "NaN", "1e3", "3.2", -1, 65536, Infinity, true]) {
+    assert.throws(() => loadServerConfig({ ALFRED_MEMORY_PORT: port }), /integer/);
+    assert.throws(() => createServer({ config: { mode: "local", bind: "127.0.0.1", port } }), /integer/);
+  }
+  for (const mode of ["self-hosted", "hybrid", "federated", "", undefined]) {
+    for (const construct of [createServer, startServer]) {
+      assert.throws(() => construct({ config: { mode, bind: "127.0.0.1", port: 3000 } }), /locally only/);
+    }
+  }
+  assert.throws(() => loadServerConfig({ ALFRED_CONSOLE_URL: "https://console.example" }), /local server/);
+});
+
+test("safe loopback addresses and ephemeral or custom ports remain supported", async () => {
+  for (const bind of ["127.0.0.1", "127.0.0.2", "::1", "localhost"]) {
+    const config = loadServerConfig({ ALFRED_MEMORY_BIND: bind, ALFRED_MEMORY_PORT: "4321" });
+    assert.equal(config.port, 4321);
+    assert.equal(config.bind, bind === "localhost" ? "127.0.0.1" : bind);
+  }
+  const server = await startServer({ app(req, res) { res.end("local"); }, config: { mode: "local", bind: "localhost", port: 0 } });
+  try {
+    assert.equal(server.address().address, "127.0.0.1");
+    const response = await fetch(`http://127.0.0.1:${server.address().port}`);
+    assert.equal(await response.text(), "local");
+  } finally { await new Promise((resolve) => server.close(resolve)); }
 });
 
 test("loadServerConfig rejects an invalid ALFRED_MEMORY_REQUIRE_AUTH value", () => {
@@ -143,7 +169,7 @@ test("loadServerConfig rejects unknown mode", () => {
   );
 });
 
-test("loadServerConfig self-hosted requires TLS cert and key", () => {
+test("loadServerConfig rejects retired self-hosted mode", () => {
   assert.throws(
     () => loadServerConfig({ ALFRED_MEMORY_HOSTING: "self-hosted" }),
     (err) => err.name === "ServerConfigError"
@@ -199,7 +225,7 @@ test("/tenants requires a valid API key when auth is enabled and redacts storage
   const app = createApp({
     ...services,
     getMemoryService: services.getMemoryService,
-    config: { mode: "local", requireAuth: true, allowedOrigins: [], port: 0, bind: "0.0.0.0" }
+    config: { mode: "local", requireAuth: true, allowedOrigins: [], port: 0, bind: "127.0.0.1" }
   });
 
   const missing = await invoke(app, fakeReq({ method: "GET", url: "/tenants" }));
@@ -219,12 +245,12 @@ test("/tenants requires a valid API key when auth is enabled and redacts storage
   assert.deepEqual(body.items[0].metadata, {});
 });
 
-test("/memories requires API key when mode is self-hosted", async () => {
+test("/memories requires API key when local auth is enabled", async () => {
   const services = makeWireServices();
   const app = createApp({
     ...services,
     getMemoryService: services.getMemoryService,
-    config: { mode: "self-hosted", requireAuth: true, allowedOrigins: [], port: 0, bind: "127.0.0.1" }
+    config: { mode: "local", requireAuth: true, allowedOrigins: [], port: 0, bind: "127.0.0.1" }
   });
   const res = await invoke(app, fakeReq({ method: "GET", url: "/memories" }));
   assert.equal(res.statusCode, 401);
@@ -236,7 +262,7 @@ test("/memories accepts a valid API key and CRUD lifecycle", async () => {
   const app = createApp({
     ...services,
     getMemoryService: services.getMemoryService,
-    config: { mode: "self-hosted", requireAuth: true, allowedOrigins: [], port: 0, bind: "127.0.0.1" }
+    config: { mode: "local", requireAuth: true, allowedOrigins: [], port: 0, bind: "127.0.0.1" }
   });
 
   const create = await invoke(app, fakeReq({
@@ -281,7 +307,7 @@ test("/memories rejects a tampered API key with 401", async () => {
   const app = createApp({
     ...services,
     getMemoryService: services.getMemoryService,
-    config: { mode: "self-hosted", requireAuth: true, allowedOrigins: [], port: 0, bind: "127.0.0.1" }
+    config: { mode: "local", requireAuth: true, allowedOrigins: [], port: 0, bind: "127.0.0.1" }
   });
   const res = await invoke(app, fakeReq({
     method: "GET",
@@ -291,13 +317,13 @@ test("/memories rejects a tampered API key with 401", async () => {
   assert.equal(res.statusCode, 401);
 });
 
-test("OPTIONS preflight in self-hosted with allowed origin echoes that origin", async () => {
+test("OPTIONS preflight with explicit local CORS configuration with allowed origin echoes that origin", async () => {
   const services = makeWireServices();
   const app = createApp({
     ...services,
     getMemoryService: services.getMemoryService,
     config: {
-            mode: "self-hosted",
+            mode: "local",
       requireAuth: true,
       allowedOrigins: ["https://chat.openai.com"],
       port: 0,
@@ -322,7 +348,7 @@ test("OPTIONS preflight without allowed origin does not set CORS header", async 
     ...services,
     getMemoryService: services.getMemoryService,
     config: {
-            mode: "self-hosted",
+            mode: "local",
       requireAuth: true,
       allowedOrigins: ["https://chat.openai.com"],
       port: 0,
@@ -352,4 +378,24 @@ test("Local mode accepts loopback-anonymous without API key", async () => {
   assert.equal(res.statusCode, 200);
   const body = JSON.parse(res.body);
   assert.ok(Array.isArray(body.items));
+});
+
+
+test("createServer listen defaults and overloads stay on loopback", async () => {
+  const config = loadServerConfig({ ALFRED_MEMORY_PORT: "0" });
+  for (const args of [[], [0], [0, "localhost"], [{ port: 0 }], [{ port: 0, host: "127.0.0.1" }], [0, "127.0.0.1", 10]]) {
+    const server = createServer({ config, app: (_req, res) => res.end("local") });
+    await new Promise((resolve, reject) => { server.once("error", reject); server.listen(...args, resolve); });
+    try { assert.match(server.address().address, /^127\./); }
+    finally { await new Promise(resolve => server.close(resolve)); }
+  }
+});
+
+test("createServer rejects public and unsupported listen forms before opening", () => {
+  const config = loadServerConfig({ ALFRED_MEMORY_PORT: "0" });
+  for (const args of [[0, "0.0.0.0"], [0, "::"], [{ port: 0, host: "example.com" }], [{ port: 0, host: "0.0.0.0" }], ["/tmp/memory.sock"], [{ fd: 3 }], [{ port: 0, path: "/tmp/memory.sock" }]]) {
+    const server = createServer({ config, app: (_req, res) => res.end("local") });
+    assert.throws(() => server.listen(...args), { name: "ServerConfigError" });
+    assert.equal(server.listening, false);
+  }
 });

@@ -1,86 +1,17 @@
-# Alfred Memory for ChatGPT Actions
+# ChatGPT adapter contracts
 
-ChatGPT connects directly to the public Alfred Memory API with OAuth 2.0. No
-local bridge is required and the tenant API key is never stored in the GPT.
+Alfred Memory now runs only as a local loopback service. The managed hosted
+endpoint has been retired. Cloud ChatGPT Actions cannot reach this service;
+there is no supported cloud Custom GPT connection flow.
 
-## Tenant users
+Use the [local quickstart](../../docs/QUICKSTART.md) and the console served at
+`http://127.0.0.1:3000/console/` with the API key issued by `alfred init`.
 
-Open [My GPTs](https://chatgpt.com/gpts/mine), select **Alfred Memory**, ask for
-your memories, choose **Sign in**, and enter your `alk_...` key only on Alfred's
-consent page. The configured GPT is currently owner-only because its ChatGPT
-account does not offer public GPT sharing. If Alfred Memory is not present in
-your account, an operator must create it from the configuration below.
+This package retains the OpenAPI schema, OAuth-related contracts and proactive
+capture instructions for compatibility, local tooling and regression tests.
+Keeping those assets does not expose the local service to ChatGPT. Existing
+memory data, tenant isolation, API-key hashing, OAuth and capture authorization
+are preserved by the server.
 
-## Operator-only configuration for a different Custom GPT
-
-Use this section when Alfred Memory is not already available under **My GPTs**
-or when deliberately creating and hosting a separate GPT Action.
-
-Import the hosted schema:
-
-```text
-https://alfred-labs-memory.fly.dev/openapi.yaml
-```
-
-Use the public privacy policy URL when publishing the GPT:
-
-```text
-https://alfred-labs-memory.fly.dev/privacy
-```
-
-Choose **OAuth** and configure:
-
-| Field | Value |
-|---|---|
-| Authorization URL | `https://alfred-labs-memory.fly.dev/oauth/authorize` |
-| Token URL | `https://alfred-labs-memory.fly.dev/oauth/token` |
-| Scope | `memory:read memory:write` |
-| Client ID | `alfred-chatgpt` for AlfredLabs production, or the exact value of `ALFRED_OAUTH_CLIENT_ID` on your server |
-| Client secret | The exact private `ALFRED_OAUTH_CLIENT_SECRET` value on your server |
-
-There is no public/default Client Secret. If the current value was not retained,
-generate a new value of at least 32 characters and rotate the server and GPT
-editor together. Never publish or commit it.
-
-After the Action is saved, copy both callback URLs displayed by ChatGPT into
-the server's comma-separated `ALFRED_OAUTH_REDIRECT_URIS` allowlist. Redirect
-URIs are matched exactly.
-
-When a user chooses **Sign in**, Alfred asks for their existing `alk_...` API
-key on Alfred's own consent page. Alfred validates it and issues scoped OAuth
-tokens to ChatGPT. The API key itself never leaves Alfred.
-
-The canonical schema lives at
-`packages/memory-openapi/openapi.yaml`; `/openapi.yaml` serves it directly.
-
-## Proactive memory
-
-The canonical GPT prompt in `.ai/gpt/alfred-memory-gpt.json` directs Alfred to use
-`captureMemory` for useful durable statements even without “remember this”. The
-Action calls `POST /memories/capture` and returns `created`, `duplicate`, or
-`skipped`. Alfred acknowledges confirmed new memories briefly, respects
-conversation opt-outs, and never bypasses rejected capture through `createMemory`.
-
-Operators must deploy the updated server/schema and apply the canonical prompt
-to their GPT for this behavior to be available there. Changing repository files
-does not update an already published GPT. Existing OAuth and host confirmation
-requirements still apply.
-
-## Security properties
-
-- Authorization Code flow with mandatory `state`.
-- Five-minute, single-use authorization codes.
-- One-hour access tokens.
-- Rotating refresh tokens with family revocation on reuse.
-- Exact redirect URI allowlist.
-- Only SHA-256 credential hashes are stored.
-- `memory:read` and `memory:write` are enforced per operation.
-- Existing API-key authentication remains available to CLI and technical
-  integrations.
-
-## Tests
-
-```bash
-npm run chatgpt:check
-npm run chatgpt:test
-```
+Do not enter API keys or OAuth client secrets in a chat. Selectively provide
+memory content to external clients only when you intend to share it.

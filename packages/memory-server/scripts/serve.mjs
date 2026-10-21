@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 // alfred serve: start the Alfred Memory Server.
-// Honors ALFRED_MEMORY_HOSTING (local|self-hosted) and binds accordingly.
+// Runs only on loopback; validates configuration before opening any registry.
 // Tenant data lives in the SQLite-backed registry (canonical) at
 // ALFRED_MEMORY_REGISTRY. Per-tenant memories are stored at the path
 // recorded in the registry (db_path or db_connection).
 import {
   loadServerConfig,
   createApp,
-  createServer,
   startServer
 } from "../src/server.js";
 import {
@@ -24,10 +23,9 @@ import {
   createMemoryService,
   createPostgresMemoryStore
 } from "../../memory/src/index.js";
-import { openRegistry, defaultRegistryPath } from "../src/registry/store-factory.js";
+import { openRegistry } from "../src/registry/store-factory.js";
 import { openSqliteMemoryStore } from "../../memory/src/sqlite-memory-store.js";
 import { createAgentActivity } from "../src/agent-activity.js";
-import { readFileSync } from "node:fs";
 
 const POSTGRES_SCHEMA_RE = /^[a-z_][a-z0-9_]{0,62}$/;
 
@@ -89,17 +87,19 @@ export function tenantPostgresSchema(tenant) {
   return "public";
 }
 
-function parseArgs(argv) {
-  const out = { _: [] };
+export function loadServeConfig(argv = [], env = process.env) {
+  const merged = { ...env };
+  const names = { port: "ALFRED_MEMORY_PORT", bind: "ALFRED_MEMORY_BIND", hosting: "ALFRED_MEMORY_HOSTING" };
   for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i];
-    if (a.startsWith("--")) {
-      const k = a.slice(2);
-      const v = argv[i + 1];
-      if (v === undefined || v.startsWith("--")) { out[k] = true; } else { out[k] = v; i += 1; }
-    } else { out._.push(a); }
+    const match = /^--(port|bind|hosting)(?:=(.*))?$/.exec(argv[i]);
+    if (!match) throw new Error(`Unknown serve option: ${argv[i]}`);
+    const value = match[2] ?? argv[++i];
+    if (typeof value !== "string" || value === "" || value.startsWith("--")) {
+      throw new Error(`--${match[1]} requires a value.`);
+    }
+    merged[names[match[1]]] = value;
   }
-  return out;
+  return { config: loadServerConfig(merged), env: merged };
 }
 
 async function defaultPostgresPoolFactory({ connectionString }) {
@@ -190,19 +190,18 @@ export function createTenantMemoryStoreFactory(registry, {
 }
 
 export async function run(argv = [], env = process.env) {
-  const args = parseArgs(argv);
-  const merged = { ...env, ...args };
+  let merged;
   let config;
   let oauthConfig;
   try {
-    config = loadServerConfig(merged);
+    ({ config, env: merged } = loadServeConfig(argv, env));
     oauthConfig = loadOAuthConfig(merged);
   } catch (err) {
     process.stderr.write(`Server config error: ${err.message}\n`);
     return 2;
   }
 
-  const registry = await openRegistry();
+  const registry = await openRegistry({ dbPath: config.registryPath });
   const tenantService = createTenantService({ store: registry.tenants });
   const userService = createUserService({ store: registry.users });
   const oauthService = oauthConfig.enabled
@@ -211,14 +210,9 @@ export async function run(argv = [], env = process.env) {
   const oauthRouter = createOAuthRouter({ oauthService });
   const memoryFactory = createTenantMemoryStoreFactory(registry);
   const agentActivity = createAgentActivity({ trace: (event) => registry.oauth.recordTrace(event) });
-  // The web console may be deployed elsewhere (Vercel, Netlify, GH Pages) or
-  // alongside the server. Three resolution modes:
-  //   1. ALFRED_CONSOLE_URL set → cross-origin upstream (e.g. https://console.alfred.example.com)
-  //   2. ALFRED_CONSOLE_DIR set → operator-built dist/ path
-  //   3. neither set → router auto-discovers or returns 503 with instructions
+  // The console is served by this local process and uses its own origin.
   const consoleOpts = {};
-  if (env.ALFRED_CONSOLE_URL) consoleOpts.consoleUrl = env.ALFRED_CONSOLE_URL;
-  if (env.ALFRED_CONSOLE_DIR) consoleOpts.consoleDirOverride = env.ALFRED_CONSOLE_DIR;
+  if (merged.ALFRED_CONSOLE_DIR) consoleOpts.consoleDirOverride = merged.ALFRED_CONSOLE_DIR;
   const consoleRouter = createConsoleRouter({
     userService, tenantService, config,
     getMemoryService: memoryFactory, agentActivity,
@@ -259,19 +253,18 @@ export async function run(argv = [], env = process.env) {
     registry
   });
 
-  const server = createServer({ app, config, consoleRouter, registry });
-  await new Promise((resolve, reject) => {
-    if (config.mode === "self-hosted") {
-      try {
-        const tls = { cert: readFileSync(config.tlsCert), key: readFileSync(config.tlsKey) };
-        // Replace with new https server reading our handler.
-        server.close();
-      } catch (e) { /* ignore */ }
-    }
-    server.listen(config.port, config.bind, () => resolve());
-    server.on("error", reject);
-  });
-  process.stderr.write(`alfred-memory listening on ${config.bind}:${config.port} (${config.mode})\n`);
+  let server;
+  try {
+    server = await startServer({ app, config, consoleRouter });
+  } catch (err) {
+    await memoryFactory.close();
+    registry.close();
+    throw err;
+  }
+  const actualPort = server.address().port;
+  const host = config.bind === "::1" ? "[::1]" : config.bind;
+  process.stderr.write(`alfred-memory listening on http://${host}:${actualPort} (local)\n`);
+  process.stderr.write(`console: http://${host}:${actualPort}/console/\n`);
   process.stderr.write(`registry: ${registry.dbPath}\n`);
   let shuttingDown = false;
   const shutdown = () => {

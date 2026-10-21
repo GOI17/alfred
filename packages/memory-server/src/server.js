@@ -11,13 +11,11 @@
 //   /policy      -- registry policy report
 //   /memories    -- per-tenant CRUD, scoped by API key
 //
-// Auth in self-hosted mode: Authorization: Bearer alk_...
+// Optional local authentication: Authorization: Bearer alk_...
 
 import { observeAgentRequest, agentIdentity } from "./agent-activity.js";
 import http from "node:http";
-import https from "node:https";
-import { readFileSync, existsSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { isIP } from "node:net";
 
 const JSON_TYPE = { "content-type": "application/json; charset=utf-8" };
 
@@ -55,30 +53,34 @@ function publicTenant(tenant) {
   };
 }
 
+export function validateServerConfig(config) {
+  if (!config || config.mode !== "local") {
+    throw new ServerConfigError("Alfred Memory runs locally only; ALFRED_MEMORY_HOSTING must be local.");
+  }
+  const bind = config.bind === "localhost" ? "127.0.0.1" : config.bind;
+  if (!(bind === "::1" || (typeof bind === "string" && isIP(bind) === 4 && bind.startsWith("127.")))) {
+    throw new ServerConfigError("ALFRED_MEMORY_BIND must be a loopback address (127.0.0.1, ::1, or localhost).");
+  }
+  const rawPort = config.port;
+  if (!((typeof rawPort === "number" || (typeof rawPort === "string" && /^\d+$/.test(rawPort))) &&
+        Number.isInteger(Number(rawPort)) && Number(rawPort) >= 0 && Number(rawPort) <= 65535)) {
+    throw new ServerConfigError("ALFRED_MEMORY_PORT must be an integer from 0 to 65535 (0 chooses an available local port).");
+  }
+  return { ...config, bind, port: Number(rawPort) };
+}
+
 export function loadServerConfig(env = process.env) {
-  const mode = env.ALFRED_MEMORY_HOSTING ?? "local";
-  if (!["local", "self-hosted"].includes(mode)) {
-    throw new ServerConfigError(`ALFRED_MEMORY_HOSTING must be local or self-hosted, got '${mode}'`);
+  if (env.ALFRED_CONSOLE_URL) {
+    throw new ServerConfigError("ALFRED_CONSOLE_URL is unsupported; use the local server's /console/ page.");
   }
-  const cfg = {
-    mode,
-    port: Number(env.ALFRED_MEMORY_PORT ?? (mode === "local" ? 3000 : 443)),
-    bind: env.ALFRED_MEMORY_BIND ?? (mode === "local" ? "127.0.0.1" : "0.0.0.0"),
+  return validateServerConfig({
+    mode: env.ALFRED_MEMORY_HOSTING ?? "local",
+    port: env.ALFRED_MEMORY_PORT ?? 3000,
+    bind: env.ALFRED_MEMORY_BIND ?? "127.0.0.1",
     allowedOrigins: (env.ALFRED_MEMORY_ALLOWED_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
-    tlsCert: env.ALFRED_MEMORY_TLS_CERT ?? null,
-    tlsKey: env.ALFRED_MEMORY_TLS_KEY ?? null,
-    registryPath: env.ALFRED_MEMORY_REGISTRY ?? `${process.env.HOME ?? "/tmp"}/.alfred/registry.sqlite`,
-    requireAuth: booleanFromEnv(env.ALFRED_MEMORY_REQUIRE_AUTH, mode === "self-hosted", "ALFRED_MEMORY_REQUIRE_AUTH")
-  };
-  if (cfg.mode === "self-hosted") {
-    if (!cfg.tlsCert || !existsSync(cfg.tlsCert)) {
-      throw new ServerConfigError("ALFRED_MEMORY_TLS_CERT must point to a valid cert file in self-hosted mode");
-    }
-    if (!cfg.tlsKey || !existsSync(cfg.tlsKey)) {
-      throw new ServerConfigError("ALFRED_MEMORY_TLS_KEY must point to a valid key file in self-hosted mode");
-    }
-  }
-  return cfg;
+    registryPath: env.ALFRED_MEMORY_REGISTRY ?? `${env.HOME ?? process.env.HOME ?? "/tmp"}/.alfred/registry.sqlite`,
+    requireAuth: booleanFromEnv(env.ALFRED_MEMORY_REQUIRE_AUTH, false, "ALFRED_MEMORY_REQUIRE_AUTH")
+  });
 }
 
 function json(res, status, body) {
@@ -113,9 +115,9 @@ export function createApp({
   return async function app(req, res) {
     const url = new URL(req.url ?? "/", "http://localhost");
 
-    if (config?.mode === "self-hosted") {
+    if (config?.allowedOrigins?.length) {
       const origin = req.headers.origin;
-      if (origin && (config.allowedOrigins.length === 0 || config.allowedOrigins.includes(origin))) {
+      if (origin && config.allowedOrigins.includes(origin)) {
         res.setHeader("access-control-allow-origin", origin);
         res.setHeader("vary", "Origin");
         res.setHeader("access-control-allow-headers", "content-type, x-api-key, authorization");
@@ -345,10 +347,6 @@ function consoleHandler(config, consoleRouter, fallbackApp) {
 }
 
 function serverHandler(config, app) {
-  if (config.mode === "self-hosted") {
-    const tls = { cert: readFileSync(config.tlsCert), key: readFileSync(config.tlsKey) };
-    return https.createServer(tls, app);
-  }
   return http.createServer(app);
 }
 
@@ -357,23 +355,41 @@ function serverHandlerWithConsole(config, app, consoleRouter) {
   return serverHandler(config, consoleHandler(config, consoleRouter, app));
 }
 
-export function createServer({ app, config, consoleRouter, registry = null } = {}) {
+export function createServer({ app, config = loadServerConfig(), consoleRouter, registry = null } = {}) {
+  config = validateServerConfig(config);
   // createServer is intentionally sync. Console router wiring is the
   // caller's responsibility (pass consoleRouter explicitly) because the
   // console-router module is async-imported at the top of serve.mjs anyway.
-  return serverHandlerWithConsole(config, app, consoleRouter);
+  const server = serverHandlerWithConsole(config, app, consoleRouter);
+  const listen = server.listen.bind(server);
+  server.listen = (...args) => {
+    const callback = typeof args.at(-1) === "function" ? args.pop() : undefined;
+    let options;
+    if (args.length === 0) options = { port: config.port };
+    else if (typeof args[0] === "object" && args[0] !== null && !Array.isArray(args[0]) && args.length === 1) {
+      options = { ...args[0] };
+      if ("path" in options || "fd" in options || "handle" in options || !("port" in options)) {
+        throw new ServerConfigError("Memory supports only local TCP listeners with a port.");
+      }
+    } else if ((typeof args[0] === "number" || typeof args[0] === "string") && args.length <= 3) {
+      options = { port: args[0] };
+      if (typeof args[1] === "string") options.host = args[1];
+      else if (typeof args[1] === "number") options.backlog = args[1];
+      else if (args[1] !== undefined) throw new ServerConfigError("Unsupported Memory listen arguments.");
+      if (args[2] !== undefined) {
+        if (typeof args[1] !== "string" || typeof args[2] !== "number") throw new ServerConfigError("Unsupported Memory listen arguments.");
+        options.backlog = args[2];
+      }
+    } else throw new ServerConfigError("Memory supports only local TCP listeners with a port.");
+    const local = validateServerConfig({ ...config, port: options.port, bind: options.host ?? config.bind });
+    return listen({ ...options, port: local.port, host: local.bind }, callback);
+  };
+  return server;
 }
 
-export function startServer({ app, config, consoleRouter, registry = null } = {}) {
-  let effectiveRouter = consoleRouter;
-  if (registry && !effectiveRouter) {
-    // Lazy: same default as createServer.
-    import("./console-router.js").then(({ createConsoleRouter }) => {
-      // Note: this path is sync from the caller's perspective; we resolve
-      // the router inline at boot.
-    });
-  }
-  const server = serverHandlerWithConsole(config, app, effectiveRouter);
+export function startServer({ app, config = loadServerConfig(), consoleRouter } = {}) {
+  config = validateServerConfig(config);
+  const server = createServer({ app, config, consoleRouter });
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.bind, () => {
