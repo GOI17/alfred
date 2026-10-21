@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/GOI17/alfred/compare/v1.0.0...v1.0.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **setup:** complete reviewed project harness activation ([#235](https://github.com/GOI17/alfred/issues/235)) ([bf95e84](https://github.com/GOI17/alfred/commit/bf95e84906b7c49f83117f00580102b0c5ddb445))
+
 ## [1.0.0](https://github.com/GOI17/alfred/compare/v0.7.4...v1.0.0) (2026-10-21)
 
 
