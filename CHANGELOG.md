@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.0](https://github.com/GOI17/alfred/compare/v0.7.4...v1.0.0) (2026-10-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **memory:** retire hosted service and require loopback ([#233](https://github.com/GOI17/alfred/issues/233))
+
+### Features
+
+* **memory:** retire hosted service and require loopback ([#233](https://github.com/GOI17/alfred/issues/233)) ([2f9b80c](https://github.com/GOI17/alfred/commit/2f9b80c2dd6b2b19b81436af518b624655c072ad))
+* **skills:** manage versioned skills from chat and CLI ([#228](https://github.com/GOI17/alfred/issues/228)) ([901bed8](https://github.com/GOI17/alfred/commit/901bed8c4f478c765c8b835b88a8a33a0a331c34))
+
+
+### Bug Fixes
+
+* **setup:** avoid blocking terminal color queries ([#226](https://github.com/GOI17/alfred/issues/226)) ([b1d4505](https://github.com/GOI17/alfred/commit/b1d450549f9007133ac39c9af14f06e69d84783b))
+
 ## [0.7.4](https://github.com/GOI17/alfred/compare/v0.7.3...v0.7.4) (2026-10-18)
 
 
