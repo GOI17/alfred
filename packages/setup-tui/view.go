@@ -157,9 +157,11 @@ func (m model) View() string {
 			if m.screen == pathScreen && m.height >= 20 {
 				body = append(body, "", truncate("Project: "+safeText(m.project), width))
 			}
+		case activationConfirmScreen:
+			body = append(body, truncate("Install only reviewed files into this project.", width), "", focusStyle.Render("y  Install      n  Keep previews"))
 		case confirmScreen:
-			body = append(body, truncate("Only the reviewed changes will be applied.", width), "", focusStyle.Render("y  Apply       n  Back"))
-		case previewScreen, resultScreen, errorScreen:
+			body = append(body, truncate("Only the reviewed changes will be applied.", width), "", focusStyle.Render("y  Prepare previews   n  Back"))
+		case previewScreen, activationPreviewScreen, resultScreen, errorScreen:
 			all := m.outputLines()
 			end := min(len(all), m.offset+m.bodyHeight())
 			body = append(body, all[m.offset:end]...)
@@ -206,8 +208,10 @@ func (m model) View() string {
 		help = "Enter next · Esc back · Ctrl+C cancel"
 	case harnessScreen:
 		help = "↑/↓ choose · Space select · Enter next · Esc back"
-	case previewScreen:
+	case previewScreen, activationPreviewScreen:
 		help = "↑/↓ scroll · Enter review · Esc back · q quit"
+	case activationConfirmScreen:
+		help = "y install · n/Esc keep previews · Ctrl+C cancel"
 	case confirmScreen:
 		help = "y apply · n/Esc back · Ctrl+C cancel"
 	case resultScreen, errorScreen:
@@ -220,8 +224,10 @@ func (m model) View() string {
 			help = "Enter next · Esc back · ^C cancel"
 		case harnessScreen:
 			help = "↑↓ · Space select · Enter · Esc"
-		case previewScreen:
+		case previewScreen, activationPreviewScreen:
 			help = "↑↓ scroll · Enter · Esc back · q"
+		case activationConfirmScreen:
+			help = "y install · n/Esc decline · ^C"
 		case confirmScreen:
 			help = "y apply · n/Esc back · ^C cancel"
 		case resultScreen, errorScreen:

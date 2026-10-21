@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { writeCodexInstallPreview } from "./runtime.js";
+import { writePreviewManifest } from "../../../scripts/setup/activation.mjs";
 
 const root = process.cwd();
 const args = process.argv.slice(2);
@@ -7,6 +8,7 @@ const outputIndex = args.indexOf("--output");
 const outputDir = outputIndex === -1 ? ".ai/generated/codex-install" : args[outputIndex + 1];
 
 const preview = writeCodexInstallPreview({ root, outputDir });
+writePreviewManifest({ root, preview });
 
 console.log(
   JSON.stringify(

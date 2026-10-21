@@ -59,6 +59,7 @@ type result struct {
 	Discover discovery
 	Text     string
 	Token    string
+	Status   string
 }
 type backend interface {
 	Call(string, *selection, string) (result, error)
@@ -120,7 +121,7 @@ func (b *processBridge) Call(op string, s *selection, token string) (result, err
 	defer b.mu.Unlock()
 	var r result
 	b.sequence++
-	req := request{Schema: schema, ID: fmt.Sprint(b.sequence), Operation: op, Selection: s, PreviewToken: token, Confirmed: op == "apply"}
+	req := request{Schema: schema, ID: fmt.Sprint(b.sequence), Operation: op, Selection: s, PreviewToken: token, Confirmed: op == "apply" || op == "activate"}
 	data, err := json.Marshal(req)
 	if err != nil || len(data) >= maxMessage {
 		return r, errors.New("setup choices are too large")
@@ -160,12 +161,21 @@ func (b *processBridge) Call(op string, s *selection, token string) (result, err
 		if d.Token == "" || d.Text == "" {
 			err = errors.New("missing preview")
 		}
-	case "apply":
+	case "apply", "activate", "decline":
 		var d struct {
-			Text string `json:"text"`
+			Text        string            `json:"text"`
+			Token       string            `json:"previewToken,omitempty"`
+			Status      string            `json:"status,omitempty"`
+			TraceEvents []json.RawMessage `json:"traceEvents,omitempty"`
 		}
 		err = decodeStrict(resp.Data, &d)
-		r.Text = d.Text
+		r.Text, r.Token, r.Status = d.Text, d.Token, d.Status
+		validStatus := (op == "apply" && (d.Status == "previews_only" || d.Status == "activation_review" || d.Status == "activation_blocked")) ||
+			(op == "activate" && (d.Status == "activation_verified" || d.Status == "activation_failed" || d.Status == "activation_partial")) ||
+			(op == "decline" && d.Status == "activation_declined")
+		if !validStatus || d.Text == "" || (d.Status == "activation_review" && d.Token == "") || (d.Status != "activation_review" && d.Token != "") {
+			err = errors.New("invalid activation result")
+		}
 	default:
 		err = errors.New("unknown operation")
 	}

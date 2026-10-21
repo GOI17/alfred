@@ -26,9 +26,9 @@ Provide deterministic, reproducible instructions for Alfred installation, update
 
 ### Mode 0: Human-First Suite Install
 
-Use for humans installing Alfred itself. The canonical tap is public and
-release0.7.3 includes the verified runtime assets. Public installation passed;
-new setup UI changes in #222 await their own release.
+Use for humans installing Alfred itself. The public canonical tap distributes
+versioned runtime releases. The two-stage Go activation flow in issue #234 must
+be released before it is available to an already-installed 1.0.0 user.
 
 ```sh
 brew install GOI17/alfred/alfred
@@ -42,15 +42,19 @@ archive, pinned by its actual SHA-256, and declares Node. Locked production
 dependencies are already in the archive; installation does not require a GitHub
 login, source clone or a package-manager install in the project.
 
-The next release's interactive `alfred setup` uses the installed runtime and
-bundled Go Bubble Tea/Lip Gloss TUI with `--no-clone`;0.7.3 retains its old UI.
-Explicit flags/non-TTY previews and `--legacy-ui` remain available. The UI sends
-structured JSONL requests to the Node backend; only a reviewed, unchanged plan
-and explicit Apply confirmation authorize the safe setup operation.
-Approved generated previews live in the invoking project's `.alfred/setup/previews`,
-never the shared Homebrew installation. Live harness activation is still separate.
-It remains preview-first: no profile, project or live harness activation without
-review and explicit approval. Package installation is not that approval.
+Interactive `alfred setup` uses the installed runtime and bundled Go TUI with
+`--no-clone`. Explicit flags/non-TTY previews and `--legacy-ui` remain available.
+First review and approve preparation; this creates fresh adapter manifests under
+`.alfred/setup/previews/<session>`. Next review the exact invoking-project target,
+paths, actions and hashes, then explicitly approve installation. This separate
+consent is bound to source contents, target snapshots and selection and is one-use.
+No live harness files are written before it. Declining keeps previews only.
+Codex preserves the managed primary block and honors AGENTS.override.md; OpenCode
+preserves existing JSON settings. Conflicting artifacts, JSONC ambiguity, unsafe
+paths and stale plans fail closed. Verified files require a new harness session;
+setup cannot prove that a running session loaded them. Pi remains preview-only.
+`--apply` in automation still authorizes preparation only; package installation
+is not live configuration approval. Model selection remains user-owned.
 
 For each project's managed requests, run `alfred runtime init --instructions
 /absolute/path/to/shared/instructions.json` from that project, then `alfred
@@ -117,8 +121,8 @@ Process:
 1. Detect the active harness (opencode, VSCode, Pi).
 2. Look up the harness in the compatibility matrix (`.ai/harnesses/compatibility-matrix.json`).
 3. Check `adapter_status`:
-   - `executable-spike` (Pi) or `executable-translation-spike` (opencode): proceed to generate preview.
-   - `compatibility-contract` (VSCode, Claude, Codex, Kiro): STOP. Show the message: `[Agent] is not supported by Alfred currently`.
+   - `executable-spike` (Pi) or `executable-translation-spike` (opencode, Codex): proceed to generate preview.
+   - `compatibility-contract` (VSCode, Claude, Kiro): STOP. Show the message: `[Agent] is not supported by Alfred currently`.
 4. Call the harness adapter's install preview generator:
    - opencode: `buildOpencodeInstallPreview({ root })` → `.ai/generated/opencode-install`
    - Pi: native, no install needed

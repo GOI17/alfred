@@ -18,7 +18,13 @@ changes and is not a rollback.
 
 The next action is always a real preview from the existing installer. Scroll
 to its end and press Enter to reach confirmation. Press `y` to apply the
-reviewed changes, or `n`/Esc to return. Enter never applies. Editing or leaving confirmation discards its token. Bracketed paste
+reviewed preparation steps, or `n`/Esc to return. This creates previews, not live
+harness files. For Codex CLI/App and OpenCode a second scrollable review shows
+the exact project destination, paths, actions and hashes. A second `y` installs
+only those files; `n`/Esc declines activation and keeps previews. Existing settings
+are preserved; conflicting artifacts or JSONC require manual resolution. Pi stays
+preview-only. Only verified files produce a success result, with a reminder to
+start a new harness session. Enter never applies. Editing or leaving confirmation discards its token. Bracketed paste
 is deliberately discarded in this frontend because Bubble Tea 0.25 predates
 support for distinguishing pasted input from approval keys. Unbracketed
 multi-character input cannot authorize confirmation.
@@ -59,7 +65,14 @@ The frontend starts one child with argv, never shell evaluation. Its private
 stdin/stdout carry `alfred.setup/v1` JSONL; terminal rendering uses stderr.
 `discover` supplies defaults, `preview` supplies actual text and an opaque
 session token, and `apply` requires the same selection, token and explicit
-confirmation. The backend remains the authority for validation, token binding
+confirmation. Successful preparation returns an `activation_review` and a new
+one-use token. `activate` needs its own explicit confirmation; `decline` consumes
+that token without live writes. Source bytes, target snapshots, project identity
+and selection are bound to approval. A fresh generation directory and adapter
+manifest exclude stale/extra previews; each write uses temporary-file rename.
+Failed or partial activation reports what was written without claiming success.
+Sanitized JSONL trace events report approval and verification with zero provider
+calls. The backend remains the authority for validation, token binding
 and installation. Child shutdown uses SIGTERM followed by a bounded fallback;
 EOF or terminal signals cancel the UI. No Go installation, dependency download,
 model selection or credential entry occurs at runtime.

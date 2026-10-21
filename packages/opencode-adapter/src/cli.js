@@ -2,6 +2,8 @@
 import path from "node:path";
 import { runOpencodePortabilitySpike, writeOpencodeInstallPreview } from "./runtime.js";
 
+import { writePreviewManifest } from "../../../scripts/setup/activation.mjs";
+
 const root = process.cwd();
 const args = process.argv.slice(2);
 const phase7 = args.includes("--phase7");
@@ -29,6 +31,7 @@ if (phase7) {
   );
 } else {
   const preview = writeOpencodeInstallPreview({ root, outputDir });
+  writePreviewManifest({ root, preview });
 
   console.log(
     JSON.stringify(

@@ -114,9 +114,11 @@
       </div>
 
       <p>
-        The next release replaces interactive setup with a bundled Go TUI using
-        Wave's Bubble Tea and Lip Gloss framework. Version 0.7.3 still has the old UI.
-        Review the plan before explicitly approving it; cancel makes no setup changes.
+        The bundled Go UI first reviews and prepares previews, then offers a separate
+        review of the exact project files for Codex and OpenCode. Approve that second
+        step to install the files; declining keeps previews only. A verified result
+        requires a new harness session. Conflicts stop activation without replacing
+        user configuration. Pi remains preview-only.
         Explicit flags and <code>alfred setup --legacy-ui</code> preserve automation.
       </p>
       <h2 id="profiles">Choose an edition</h2>
@@ -250,8 +252,10 @@ Apply changes? <span class="p">[y/N]</span>
       </div>
       <p>
         Review the list first. The root installer writes no files unless you
-        choose apply in the TUI or pass <code>--apply</code> in automation; harness config still remains preview-only
-        until a human explicitly copies or applies those generated artifacts.
+        approve preparation in the TUI or pass <code>--apply</code> in automation.
+        This produces previews only. Guided setup then requires another explicit
+        confirmation before installing the reviewed harness files into the invoking
+        project. Do not treat preview generation as activation.
       </p>
 
       <h2 id="verify">Verify the install</h2>

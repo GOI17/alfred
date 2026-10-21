@@ -291,3 +291,66 @@ func TestConfirmationRejectsAltYAndMissingToken(t *testing.T) {
 		t.Fatal("approval without preview")
 	}
 }
+
+func TestActivationRequiresSecondReviewAndExplicitConfirmation(t *testing.T) {
+	m := readyModel()
+	next, cmd := m.Update(replyMsg{operation: "apply", result: result{Text: "Exact project files", Token: "activation-token", Status: "activation_review"}})
+	m = next.(model)
+	if cmd != nil || m.screen != activationPreviewScreen || m.token == "" {
+		t.Fatal("preparation claimed activation")
+	}
+	m, cmd = key(m, "y")
+	if cmd != nil {
+		t.Fatal("review screen allowed activation")
+	}
+	m, _ = key(m, "enter")
+	if m.screen != activationConfirmScreen {
+		t.Fatal("missing separate confirmation")
+	}
+	for _, k := range []string{"enter", "yes", "yy", "y\r"} {
+		m, cmd = key(m, k)
+		if cmd != nil {
+			t.Fatal("unsafe confirmation", k)
+		}
+	}
+	m, cmd = key(m, "y")
+	if cmd == nil || m.token != "" {
+		t.Fatal("activation not dispatched once")
+	}
+	cmd()
+	if got := m.backend.(*fakeBackend).calls; len(got) != 1 || got[0] != "activate" {
+		t.Fatal(got)
+	}
+	next, _ = m.Update(replyMsg{operation: "activate", result: result{Text: "Files verified. Start a new session.", Status: "activation_verified"}})
+	m = next.(model)
+	if m.screen != resultScreen || !strings.Contains(m.subtitle(), "new session") {
+		t.Fatal("missing honest completion")
+	}
+}
+func TestActivationDeclineAndFailureNeverClaimSuccess(t *testing.T) {
+	for _, k := range []string{"n", "esc"} {
+		m := readyModel()
+		m.screen = activationConfirmScreen
+		m.token = "reviewed"
+		m, cmd := key(m, k)
+		if cmd == nil || m.token != "" {
+			t.Fatal("decline not dispatched")
+		}
+		cmd()
+		if got := m.backend.(*fakeBackend).calls; len(got) != 1 || got[0] != "decline" {
+			t.Fatal(got)
+		}
+		next, _ := m.Update(replyMsg{operation: "decline", result: result{Status: "activation_declined"}})
+		if !strings.Contains(next.(model).subtitle(), "declined") {
+			t.Fatal("decline hidden")
+		}
+	}
+	for _, status := range []string{"activation_blocked", "activation_failed", "activation_partial"} {
+		m := readyModel()
+		next, _ := m.Update(replyMsg{operation: "activate", result: result{Status: status}})
+		m = next.(model)
+		if !m.failure || !strings.Contains(m.subtitle(), "not verified") {
+			t.Fatal("failure claimed success", status)
+		}
+	}
+}

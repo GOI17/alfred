@@ -21,14 +21,16 @@ with a pinned SHA-256, including locked production dependencies; Node is a
 Homebrew dependency. It installs shared commands without activating a harness.
 No GitHub login is required for the public download.
 
-Install the runtime once. Review `alfred setup` previews before approving any
-project or live harness configuration. This branch replaces the default interactive
-setup with a bundled Go TUI using Wave's Bubble Tea/Lip Gloss framework and Darcula
-palette. The published0.7.3 installer still uses the older UI until the next release.
-The new UI reviews the actual plan before asking for explicit confirmation; canceling
-makes no setup changes. Approved harness previews go under the invoking project's
-`.alfred/setup/previews`, outside the shared installation. Explicit setup flags,
-non-TTY previews and `alfred setup --legacy-ui` retain the automation interface.
+Install the runtime once. Run `alfred setup` from the project directory you want
+to configure. The Go UI first reviews and prepares previews. It then shows an
+exact project file list for Codex CLI/App and OpenCode and asks for a **second
+approval** to install those files. Declining keeps previews only. Completion
+reports verified files on disk; start a new harness session to load them.
+Previews stay in `.alfred/setup/previews/<session>` outside the shared runtime.
+Conflicting files, JSONC ambiguity, changed plans and symlinks stop activation;
+existing unrelated settings are preserved. Pi remains preview-only in this UI.
+Explicit flags and `alfred setup --legacy-ui` retain the existing interface;
+`--apply` alone prepares previews and does not approve live harness installation.
 No setup downloads code, compiles Go, or installs dependencies at runtime.
 Model assignment remains user-owned; setup does not change `~/.alfred/models.json`.
 For each project, initialize managed execution separately:

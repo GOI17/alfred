@@ -19,6 +19,8 @@ const (
 	profilesScreen
 	previewScreen
 	confirmScreen
+	activationPreviewScreen
+	activationConfirmScreen
 	resultScreen
 	errorScreen
 )
@@ -43,6 +45,7 @@ type model struct {
 	position      int
 	token         string
 	output        string
+	status        string
 	offset        int
 	busy          bool
 	quit          bool
@@ -111,7 +114,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.err != nil {
 			m.failure = true
 			m.output = safeText(v.err.Error())
-			if v.operation == "apply" {
+			if v.operation == "apply" || v.operation == "activate" {
 				m.output += "\nSome changes may already have been applied. Review them before retrying."
 			}
 			m.enter(errorScreen)
@@ -127,10 +130,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.token = v.result.Token
 			m.output = safeText(v.result.Text)
 			m.enter(previewScreen)
-		case "apply":
+		case "apply", "activate", "decline":
 			m.token = ""
 			m.output = safeText(v.result.Text)
-			m.enter(resultScreen)
+			m.status = v.result.Status
+			if v.result.Status == "activation_review" {
+				m.token = v.result.Token
+				m.enter(activationPreviewScreen)
+			} else {
+				m.failure = v.result.Status == "activation_failed" || v.result.Status == "activation_partial" || v.result.Status == "activation_blocked"
+				m.enter(resultScreen)
+			}
 		}
 		return m, nil
 	case tea.KeyMsg:
@@ -143,6 +153,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key == "esc" {
+			if m.screen == activationPreviewScreen || m.screen == activationConfirmScreen {
+				m.busy = true
+				cmd := m.call("decline")
+				m.token = ""
+				return m, cmd
+			}
 			if m.screen == editionScreen || m.screen == resultScreen || m.screen == errorScreen {
 				m.quit = true
 				return m, tea.Quit
@@ -238,7 +254,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if m.screen == confirmScreen {
+		if m.screen == confirmScreen || m.screen == activationConfirmScreen {
 			// Only one explicit key can approve. Enter, Alt combinations and
 			// multi-rune input cannot; bracketed paste is removed before parsing.
 			if v.Type != tea.KeyRunes || v.Alt || len(v.Runes) != 1 {
@@ -248,11 +264,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case 'y':
 				if m.token != "" {
 					m.busy = true
-					cmd := m.call("apply")
+					op := "apply"
+					if m.screen == activationConfirmScreen {
+						op = "activate"
+					}
+					cmd := m.call(op)
 					m.token = ""
 					return m, cmd
 				}
 			case 'n':
+				if m.screen == activationConfirmScreen {
+					m.busy = true
+					cmd := m.call("decline")
+					m.token = ""
+					return m, cmd
+				}
 				m.token = ""
 				m.enter(profilesScreen)
 			}
@@ -263,7 +289,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quit = true
 			return m, tea.Quit
 		}
-		if m.screen == previewScreen || m.screen == resultScreen || m.screen == errorScreen {
+		if m.screen == previewScreen || m.screen == activationPreviewScreen || m.screen == resultScreen || m.screen == errorScreen {
 			switch key {
 			case "down", "j":
 				if m.offset < m.maxOffset() {
@@ -282,8 +308,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "home":
 				m.offset = 0
 			case "enter":
-				if m.screen == previewScreen && m.offset == m.maxOffset() {
-					m.enter(confirmScreen)
+				if (m.screen == previewScreen || m.screen == activationPreviewScreen) && m.offset == m.maxOffset() {
+					if m.screen == activationPreviewScreen {
+						m.enter(activationConfirmScreen)
+					} else {
+						m.enter(confirmScreen)
+					}
 				} else if m.screen == resultScreen || m.screen == errorScreen {
 					m.quit = true
 					return m, tea.Quit
@@ -390,9 +420,22 @@ func (m model) subtitle() string {
 	case previewScreen:
 		return "Review proposed changes"
 	case confirmScreen:
-		return "Apply these changes?"
+		return "Prepare these previews?"
+	case activationPreviewScreen:
+		return "Review project harness installation"
+	case activationConfirmScreen:
+		return "Install these harness files?"
 	case resultScreen:
-		return "Setup complete"
+		switch m.status {
+		case "activation_verified":
+			return "Harness files verified · start a new session"
+		case "activation_declined":
+			return "Previews only · activation declined"
+		case "activation_blocked", "activation_failed", "activation_partial":
+			return "Harness activation not verified"
+		default:
+			return "Preparation complete · no harness activated"
+		}
 	case errorScreen:
 		return "Setup could not finish"
 	default:
@@ -417,8 +460,10 @@ func (m model) contextLine() string {
 	case profilesScreen:
 		return "Preview comes next. Nothing has been applied."
 	case confirmScreen:
-		return "y applies reviewed changes. n or Esc goes back."
-	case previewScreen:
+		return "y prepares previews. Live activation needs a separate approval."
+	case activationConfirmScreen:
+		return "y installs reviewed project files. n or Esc keeps previews only."
+	case previewScreen, activationPreviewScreen:
 		return fmt.Sprintf("Preview only · lines %d–%d of %d", m.offset+1, min(len(m.outputLines()), m.offset+m.bodyHeight()), len(m.outputLines()))
 	}
 	return ""

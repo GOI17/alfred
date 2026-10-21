@@ -5,6 +5,8 @@ import { existsSync, readFileSync, realpathSync, lstatSync } from "node:fs";
 import { dirname, delimiter, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { buildActivationPlan, describeActivation, activatePlan } from "./activation.mjs";
+
 export const schema = "alfred.setup/v1";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const harnessIds = ["opencode", "codex-cli", "codex-app", "pi"];
@@ -61,19 +63,21 @@ export function runInstaller(args, { cwd, env, installRoot, signal }) {
 export function createSession({ installRoot = root, cwd = process.cwd(), env = process.env, execute = runInstaller, signal } = {}) {
   installRoot = realpathSync(installRoot); cwd = realpathSync(cwd);
   const packaged = env.ALFRED_DISTRIBUTION === "homebrew";
-  let approval = null;
+  let approval = null, activation = null;
+  // Fresh generation directory avoids consuming previews from an earlier selection.
+  const previewRoot = join(cwd, ".alfred/setup/previews", randomBytes(12).toString("hex"));
   const seen = new Set();
   let busy = false;
   const context = { installRoot, cwd, env, signal };
-  signal?.addEventListener("abort", () => { approval = null; }, { once: true });
+  signal?.addEventListener("abort", () => { approval = null; activation = null; }, { once: true });
   const notCancelled = () => { if (signal?.aborted) throw fault("cancelled", "Setup was cancelled."); };
   const fingerprint = () => digest(readFileSync(join(installRoot, "install.sh")));
   function argv(selection, apply = false) {
-    return [`--edition=${selection.edition}`, `--harness=${selection.harnesses.join(",") || "none"}`, `--memory=${selection.memory}`, `--name=${selection.name}`, `--path=${selection.path}`, "--no-clone", `--preview-output=${join(cwd, ".alfred/setup/previews")}`, ...(selection.profiles ? [] : ["--skip-profile-manager"]), ...(apply ? ["--apply"] : [])];
+    return [`--edition=${selection.edition}`, `--harness=${selection.harnesses.join(",") || "none"}`, `--memory=${selection.memory}`, `--name=${selection.name}`, `--path=${selection.path}`, "--no-clone", `--preview-output=${previewRoot}`, ...(selection.profiles ? [] : ["--skip-profile-manager"]), ...(apply ? ["--apply"] : [])];
   }
   return async request => {
     let id = "";
-    if (busy) { approval = null; return { schema, id, ok: false, error: { code: "busy", message: "Another setup operation is in progress." } }; }
+    if (busy) { approval = null; activation = null; return { schema, id, ok: false, error: { code: "busy", message: "Another setup operation is in progress." } }; }
     busy = true;
     try {
       notCancelled();
@@ -88,12 +92,22 @@ export function createSession({ installRoot = root, cwd = process.cwd(), env = p
         const harnesses = Object.fromEntries(harnessIds.map(id => [id, (env.PATH || "").split(delimiter).some(p => p && existsSync(join(p, commands[id]))) ? "installed" : "not-installed"]));
         return { schema, id, ok: true, data: { version: JSON.parse(readFileSync(join(installRoot, "package.json"))).version, packaged, defaults: { edition: "coding", harnesses: [], memory: "decide-later", name: "default", path: installRoot, profiles: true }, capabilities: { platform: process.platform, arch: process.arch, node: process.version, harnesses } } };
       }
-      if (!["preview", "apply"].includes(request.operation)) throw fault("invalid_request", "Unknown setup operation.");
+      if (!["preview", "apply", "activate", "decline"].includes(request.operation)) throw fault("invalid_request", "Unknown setup operation.");
       const selection = normalizeSelection(request.selection, { packaged, installRoot });
       if (!existsSync(selection.path) || lstatSync(selection.path).isSymbolicLink() || realpathSync(selection.path) !== selection.path || !existsSync(join(selection.path, "install.sh"))) throw fault("invalid_selection", "Use an existing Alfred installation; setup does not download source.");
-      const binding = JSON.stringify({ selection, cwd, installRoot, previewRoot: join(cwd, ".alfred/setup/previews"), installer: fingerprint() });
+      const binding = JSON.stringify({ selection, cwd, installRoot, previewRoot, installer: fingerprint() });
+      const trace = (event, status, humanApproval) => [{ event, status, project: cwd, harnesses: selection.harnesses, human_approval: humanApproval, provider_calls: 0 }];
+      if (["activate", "decline"].includes(request.operation)) {
+        const current = activation; activation = null; approval = null;
+        if (!current || request.previewToken !== current.token || binding !== current.binding) throw fault("consent_required", "Review this exact activation plan first.");
+        if (request.operation === "decline") return { schema, id, ok: true, data: { text: "Activation declined. Previews were generated; no live harness files were written.", status: "activation_declined", traceEvents: trace("setup_activation_declined", "declined", false) } };
+        if (request.confirmed !== true) throw fault("consent_required", "Explicitly approve installation of the reviewed harness files.");
+        notCancelled();
+        const result = activatePlan(current.plan, { signal });
+        return { schema, id, ok: true, data: { text: result.text, status: result.status, traceEvents: trace("setup_activation_finished", result.status, true) } };
+      }
       if (request.operation === "preview") {
-        approval = null;
+        approval = null; activation = null;
         keys(request, ["schema", "id", "operation", "selection"]);
         const text = await execute(argv(selection), context);
         notCancelled();
@@ -107,9 +121,22 @@ export function createSession({ installRoot = root, cwd = process.cwd(), env = p
       notCancelled();
       if (refreshed !== current.text) throw fault("preview_changed", "Setup changed since review. Generate a new preview.");
       const text = await execute(argv(selection, true), context);
-      return { schema, id, ok: true, data: { text: safeText(text) } };
+      notCancelled();
+      if (selection.harnesses.some(h => h === "opencode" || h.startsWith("codex-"))) {
+        try {
+          if (packaged && (cwd === installRoot || cwd.startsWith(installRoot + "/"))) throw fault("activation_conflict", "Run setup from the project, not the shared Homebrew installation.");
+          const plan = buildActivationPlan({ projectRoot: cwd, previewRoot, harnesses: selection.harnesses });
+          const token = randomBytes(32).toString("hex");
+          activation = { plan, token, binding };
+          const piNote = selection.harnesses.includes("pi") ? "\nPi is preview-only; no Pi activation is available in this setup." : "";
+          return { schema, id, ok: true, data: { text: safeText(describeActivation(plan) + piNote), previewToken: token, status: "activation_review", traceEvents: trace("setup_activation_reviewed", "pending_approval", false) } };
+        } catch (error) {
+          return { schema, id, ok: true, data: { text: safeText(`Previews generated, but harness activation is blocked. No live harness files were written.\n${error.code?.startsWith("E") ? "Cannot inspect activation paths." : error.message}\nResolve the conflict and start a new setup review.`), status: "activation_blocked", traceEvents: trace("setup_activation_blocked", "blocked", false) } };
+        }
+      }
+      return { schema, id, ok: true, data: { text: safeText(text + "\nPreparation complete. No harness files were activated. Pi, if selected, remains preview-only."), status: "previews_only", traceEvents: trace("setup_previews_prepared", "previews_only", false) } };
     } catch (error) {
-      approval = null;
+      approval = null; activation = null;
       return { schema, id, ok: false, error: { code: error.code?.startsWith?.("E") ? "setup_failed" : error.code || "invalid_request", message: safeText(error.code && !error.code.startsWith("E") ? error.message : "Setup request failed.") } };
     } finally { busy = false; }
   };
