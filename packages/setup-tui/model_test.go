@@ -354,3 +354,24 @@ func TestActivationDeclineAndFailureNeverClaimSuccess(t *testing.T) {
 		}
 	}
 }
+
+func TestConfirmationsKeepBothChoicesVisibleAtMinimumSize(t *testing.T) {
+	for _, tc := range []struct {
+		screen           screen
+		approve, decline string
+	}{
+		{confirmScreen, "y Prepare", "n Back"},
+		{activationConfirmScreen, "y Install", "n Keep previews"},
+	} {
+		m := readyModel()
+		m.width, m.height = 30, 10
+		m.enter(tc.screen)
+		view := m.View()
+		if !strings.Contains(view, tc.approve) || !strings.Contains(view, tc.decline) {
+			t.Fatalf("screen %d hid a confirmation choice: %q", tc.screen, view)
+		}
+		if len(strings.Split(view, "\n")) > m.height {
+			t.Fatalf("screen %d overflowed minimum terminal height", tc.screen)
+		}
+	}
+}

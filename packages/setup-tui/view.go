@@ -158,9 +158,9 @@ func (m model) View() string {
 				body = append(body, "", truncate("Project: "+safeText(m.project), width))
 			}
 		case activationConfirmScreen:
-			body = append(body, truncate("Install only reviewed files into this project.", width), "", focusStyle.Render("y  Install      n  Keep previews"))
+			body = append(body, truncate("Install only reviewed files into this project.", width), "", focusStyle.Render("y Install · n Keep previews"))
 		case confirmScreen:
-			body = append(body, truncate("Only the reviewed changes will be applied.", width), "", focusStyle.Render("y  Prepare previews   n  Back"))
+			body = append(body, truncate("Only the reviewed changes will be applied.", width), "", focusStyle.Render("y Prepare · n Back"))
 		case previewScreen, activationPreviewScreen, resultScreen, errorScreen:
 			all := m.outputLines()
 			end := min(len(all), m.offset+m.bodyHeight())
