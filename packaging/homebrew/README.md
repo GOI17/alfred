@@ -2,11 +2,10 @@
 
 ## Availability
 
-The public canonical tap `GOI17/homebrew-alfred` and runtime release `v0.7.3`
-are published. Anonymous asset/checksum verification and a real macOS Homebrew
-installation passed during #219. Never replace historical release assets with
-newer code. The Go setup UI in #222 requires a future release; it is not already
-part of the installed0.7.3 package.
+The public canonical tap `GOI17/homebrew-alfred` publishes the versioned runtime.
+Version 1.0.0 includes the Go setup UI; issue #234 adds its separate reviewed
+harness activation step in the next release. Do not assume a source change has
+updated an installed package. Never replace historical release assets.
 
 ## Public installation
 
@@ -22,9 +21,13 @@ Homebrew supplies Node; the archive supplies the selected runtime and its locked
 production npm dependencies. Users do not run npm install in the installed tree.
 
 Homebrew installs a shared runtime, not project state or live harness config.
-The next release's interactive `alfred setup` uses bundled Go/Bubble Tea0.25.0
+Interactive `alfred setup` uses bundled Go/Bubble Tea0.25.0
 and Lip Gloss0.9.1 executables, matching Wave's terminal framework. A Node JSONL
-backend preserves validation and preview/apply gates; Go owns presentation only.
+backend preserves validation and approval gates; Go owns presentation only.
+Preparation generates a fresh project-local manifest. A second review and explicit
+confirmation installs only its enumerated Codex/OpenCode files, preserving existing
+settings or rejecting conflicts. A verified result still requires a new harness
+session. Declining leaves previews only; Pi is not activated by this flow.
 Source and packaged setup reuse an existing installation with `--no-clone`.
 No runtime compiler/download is used. Missing or mismatched native executables
 fail clearly; explicit flags and `--legacy-ui` retain deterministic compatibility.

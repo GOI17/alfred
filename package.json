@@ -62,7 +62,7 @@
     "runtime:test": "node --test scripts/runtime/*.test.mjs",
     "runtime:check": "node --check packages/core/src/runtime-authority.js && node --check scripts/runtime/service.mjs && node --check scripts/runtime/cli.mjs && node --check scripts/runtime/cli.test.mjs && node --check packages/memory-server/scripts/runtime.mjs && node --check packages/memory-server/scripts/alfred.mjs",
     "setup:test": "node --test scripts/setup/*.test.mjs",
-    "setup:check": "node --check scripts/setup/bridge.mjs && node --check scripts/build-setup-tui.mjs",
+    "setup:check": "node --check scripts/setup/activation.mjs && node --check scripts/setup/bridge.mjs && node --check scripts/build-setup-tui.mjs",
     "build:setup-tui": "node scripts/build-setup-tui.mjs",
     "setup-tui:test": "cd packages/setup-tui && go test ./...",
     "skill-manager:test": "cd packages/skill-manager && npm test",

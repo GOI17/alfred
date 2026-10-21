@@ -94,3 +94,11 @@ test("compiled metadata must prove pinned frameworks, native target and reproduc
   assert.throws(() => verifySetupBuildInfo(info + "  => /local/replacement\n", "linux-arm64"), /replacements/);
   assert.throws(() => verifySetupBuildInfo(info + "  build vcs.revision=123\n", "linux-arm64"), /checkout metadata/);
 });
+
+
+test("published runtime policy includes the activation implementation and its safe merge dependency", () => {
+  const policy = JSON.parse(readFileSync(new URL("../packaging/runtime/allowlist.json", import.meta.url)));
+  assert.ok(policy.includes.includes("scripts/setup/activation.mjs"));
+  assert.ok(policy.includes.includes("scripts/setup/bridge.mjs"));
+  assert.ok(policy.includes.includes("packages/codex-adapter/src/**/*.js"));
+});

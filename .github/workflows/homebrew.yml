@@ -67,7 +67,9 @@ jobs:
         with:
           node-version: "24"
       - name: Test formula generator
-        run: npm run homebrew:test
+        run: |
+          npm run homebrew:test
+          npm run setup:test
       - name: Validate Homebrew contract
         run: |
           npm run validate:homebrew

@@ -8,6 +8,7 @@
     "scripts/tui/install-discovery.mjs",
     "scripts/tui/install-pathfinder.mjs",
     "scripts/setup/bridge.mjs",
+    "scripts/setup/activation.mjs",
     "packages/setup-tui/go.mod",
     "packages/setup-tui/go.sum",
     "packages/setup-tui/THIRD-PARTY-LICENSES.txt",

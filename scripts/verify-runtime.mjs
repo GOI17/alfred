@@ -158,6 +158,32 @@ finally:
     const guided = run([cli, "setup"], workspace, { ALFRED_INSTALL_APP_TUI_EVENTS: "set:edition=coding,set:harnesses=none,set:profiles=false,set:name=guided-smoke,set:apply=false,submit" });
     assert.match(guided, /ALFRED SUITE INSTALL PREVIEW/);
     assert.ok(!existsSync(join(workspace, ".alfred")), "Setup preview wrote workspace configuration");
+    // Exercise the shipped bridge and real adapters, not checkout imports or a
+    // synthetic manifest. Preparation alone must never install live artifacts.
+    const activationWorkspace = join(temporary, "activation project");
+    mkdirSync(activationWorkspace);
+    const activationSmoke = run(["--input-type=module", "-e", `
+      import assert from 'node:assert/strict';
+      import { existsSync } from 'node:fs';
+      import { join } from 'node:path';
+      import { pathToFileURL } from 'node:url';
+      const runtime = ${JSON.stringify(runtime)};
+      const { createSession, schema } = await import(pathToFileURL(join(runtime, 'scripts/setup/bridge.mjs')));
+      const session = createSession({ installRoot: runtime });
+      const selection = { edition: 'coding', harnesses: ['codex-cli', 'codex-app', 'opencode'], memory: 'decide-later', name: 'packaged-activation', path: runtime, profiles: false };
+      const request = (id, operation, extra = {}) => ({ schema, id, operation, selection, ...extra });
+      const p = await session(request('p', 'preview')); assert.equal(p.ok, true, JSON.stringify(p));
+      const a = await session(request('a', 'apply', { previewToken: p.data.previewToken, confirmed: true }));
+      assert.equal(a.data?.status, 'activation_review', JSON.stringify(a));
+      assert.equal(existsSync('.agents'), false); assert.equal(existsSync('.opencode'), false);
+      const installed = await session(request('install', 'activate', { previewToken: a.data.previewToken, confirmed: true }));
+      assert.equal(installed.data?.status, 'activation_verified', JSON.stringify(installed));
+      for (const path of ['.agents/skills/alfred/SKILL.md', '.codex/agents/developer.toml', '.opencode/skills/alfred/SKILL.md', '.opencode/commands/alfred.md']) assert.ok(existsSync(path), path);
+      assert.equal(existsSync(join(runtime, '.agents')), false);
+      assert.equal(installed.data.traceEvents[0].provider_calls, 0);
+      console.log('Packaged two-stage harness activation verified');
+    `], activationWorkspace);
+    process.stdout.write(activationSmoke);
     const shared = join(temporary, "instructions.json"), playbook = join(temporary, "playbook.txt");
     atomic(playbook, Buffer.from("Reviewed shared instructions\n"));
     atomic(shared, Buffer.from(JSON.stringify({ version: 1, instructions: [{ id: "direct", action: "load", scope: "project", disposition: "execute", option: "playbook" }], options: [{ id: "playbook", action: "load", scope: "project", contract: "read-text-v1", source: playbook, digest: sha256(readFileSync(playbook)) }] })));
@@ -256,7 +282,7 @@ finally:
     const stopped = await Promise.race([serviceClosed, delay(5000).then(() => null)]);
     assert.equal(stopped?.code, 0, "Packaged HTTP server did not shut down cleanly");
     service = null;
-    process.stdout.write(`${JSON.stringify({ status: "pass", verification: "anonymous-local-http,archive-integrity,relocated-wrapper,CLI,managed-runtime-project-isolation,native-Go-setup-PTY-cancel,guided-setup-preview,SQLite,MCP-stdio-CRUD,live-HTTP,dependencies,coding-previews", version: checked.manifest.version, sha256: sha256(archive), public_github_install: "pending-publication-approval", external_network_attempts: 0, provider_calls: 0 })}\n`);
+    process.stdout.write(`${JSON.stringify({ status: "pass", verification: "anonymous-local-http,archive-integrity,relocated-wrapper,CLI,managed-runtime-project-isolation,native-Go-setup-PTY-cancel,guided-setup-preview,packaged-reviewed-harness-activation,SQLite,MCP-stdio-CRUD,live-HTTP,dependencies,coding-previews", version: checked.manifest.version, sha256: sha256(archive), public_github_install: "pending-publication-approval", external_network_attempts: 0, provider_calls: 0 })}\n`);
   } finally {
     if (service) { service.kill("SIGKILL"); await serviceClosed; }
     await new Promise((done) => server.close(done));

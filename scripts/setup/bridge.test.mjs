@@ -9,7 +9,7 @@ import { createSession, cleanEnvironment, safeText, schema } from "./bridge.mjs"
 const root = resolve(import.meta.dirname, "../..");
 function fixture(t) {
   const directory = mkdtempSync(join(tmpdir(), "alfred-setup-bridge-"));
-  const home = join(directory, "home"), project = join(directory, "project"); mkdirSync(home); mkdirSync(project);
+  const home = join(directory, "home with spaces"), project = join(directory, "project with spaces"); mkdirSync(home); mkdirSync(project);
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   return { home, project, env: { PATH: process.env.PATH, HOME: home, ALFRED_DISTRIBUTION: "homebrew" } };
 }
@@ -30,12 +30,15 @@ test("JSONL real discover/preview stays clean and exits on EOF without writes", 
   child.stdin.end(); const [code] = await once(child, "exit"); assert.equal(code, 0);
   assert.deepEqual(readdirSync(f.home), []); assert.deepEqual(readdirSync(f.project), []);
 });
-test("actual approved apply writes project previews and trace, not shared runtime", async t => {
+test("actual approved apply preserves spaces in project previews and home trace paths", async t => {
   const f = fixture(t), session = createSession({ cwd: f.project, env: f.env });
   const denied = await session(request("a", "apply", { selection, confirmed: true, previewToken: "missing" })); assert.equal(denied.error.code, "consent_required");
   const preview = await session(request("b", "preview", { selection })); assert.equal(preview.ok, true);
   const applied = await session(request("c", "apply", { selection, previewToken: preview.data.previewToken, confirmed: true })); assert.equal(applied.ok, true, JSON.stringify(applied));
-  assert.ok(existsSync(join(f.project, ".alfred/setup/previews/install-handoff.txt")));
+  const generations = readdirSync(join(f.project, ".alfred/setup/previews"));
+  assert.equal(generations.length, 1);
+  assert.ok(existsSync(join(f.project, ".alfred/setup/previews", generations[0], "install-handoff.txt")));
+  assert.equal(applied.data.status, "previews_only");
   assert.ok(existsSync(join(f.home, ".alfred/observability/install-trace.json")));
   assert.ok(!existsSync(join(f.home, ".alfred/runtime-profiles")));
   assert.ok(!existsSync(join(f.project, ".codex"))); assert.ok(!existsSync(join(f.project, ".alfred/runtime")));
@@ -88,12 +91,19 @@ test("terminal strings remove control injection and oversized protocol exits pro
 
 test("selected harness review artifacts are generated outside the installed runtime", async t => {
   const f = fixture(t), session = createSession({ cwd: f.project, env: f.env });
-  const selected = { ...selection, harnesses: ["codex-cli", "opencode"] };
+  const selected = { ...selection, harnesses: ["codex-cli", "codex-app", "opencode"] };
   const p = await session(request("p", "preview", { selection: selected })); assert.equal(p.ok, true);
   const a = await session(request("a", "apply", { selection: selected, previewToken: p.data.previewToken, confirmed: true })); assert.equal(a.ok, true, JSON.stringify(a));
-  assert.ok(existsSync(join(f.project, ".alfred/setup/previews/codex-install/AGENTS.md")));
-  assert.ok(existsSync(join(f.project, ".alfred/setup/previews/opencode-install")));
+  assert.equal(a.data.status, "activation_review", JSON.stringify(a));
+  const generation = readdirSync(join(f.project, ".alfred/setup/previews"))[0];
+  const generated = join(f.project, ".alfred/setup/previews", generation);
+  assert.ok(existsSync(join(generated, "codex-install/AGENTS.md")));
+  assert.ok(existsSync(join(generated, "opencode-install/activation-manifest.json")));
   assert.ok(!existsSync(join(f.project, ".agents"))); assert.ok(!existsSync(join(f.project, ".opencode")));
+  const activated = await session(request("activate", "activate", { selection: selected, previewToken: a.data.previewToken, confirmed: true }));
+  assert.equal(activated.data.status, "activation_verified", JSON.stringify(activated));
+  for (const path of [".agents/skills/alfred/SKILL.md", ".opencode/skills/alfred/SKILL.md", ".opencode/commands/alfred.md", ".codex/agents/developer.toml"]) assert.ok(existsSync(join(f.project, path)), path);
+  assert.match(activated.data.text, /NEW harness session/);
 });
 
 test("bidi spoofing is rejected in paths and removed from terminal text", async t => {
