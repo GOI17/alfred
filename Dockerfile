@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Alfred Memory v0.4.1 production image.
+# Alfred Memory local process image; no public listener or published ports.
 #
 # Alfred Memory uses Node.js built-ins for its local-first path and the `pg`
 # driver when SaaS tenant bootstrap is enabled with ALFRED_SAAS_DATABASE_URL.
@@ -11,9 +11,8 @@ FROM node:${NODE_VERSION}
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=8080
-ENV ALFRED_MEMORY_PORT=8080
-ENV ALFRED_MEMORY_BIND=0.0.0.0
+ENV ALFRED_MEMORY_PORT=3000
+ENV ALFRED_MEMORY_BIND=127.0.0.1
 ENV ALFRED_MEMORY_REGISTRY=/app/data/registry.sqlite
 
 # Create a non-root user for runtime safety.
@@ -39,7 +38,5 @@ COPY --chown=alfred:alfred .ai/skills/registry.json ./.ai/skills/registry.json
 
 USER alfred
 
-EXPOSE 8080
-
 # The entrypoint runs migrations then starts the server.
-CMD ["/bin/sh", "-c", "node packages/memory-server/scripts/migrate-on-boot.mjs && node packages/memory-server/scripts/alfred.mjs serve --port $PORT --bind 0.0.0.0"]
+CMD ["/bin/sh", "-c", "node packages/memory-server/scripts/migrate-on-boot.mjs && node packages/memory-server/scripts/alfred.mjs serve"]

@@ -10,9 +10,6 @@ const rawBasePath = (process.env.SITE_BASE_PATH ?? "/").trim() || "/";
 const basePath = rawBasePath === "/"
   ? "/"
   : `${rawBasePath.startsWith("/") ? rawBasePath : `/${rawBasePath}`}`.replace(/\/+$/, "") + "/";
-const expectedApiBase = (
-  process.env.ALFRED_API_BASE ?? "https://alfred-labs-memory.fly.dev"
-).replace(/\/+$/, "");
 
 const required = [
   "index.html",
@@ -68,11 +65,11 @@ for (const file of htmlFiles) {
 }
 
 const consoleHtml = await readFile(join(outputDir, "memory", "app", "index.html"), "utf8");
-if (!consoleHtml.includes(`window.ALFRED_API_BASE = ${JSON.stringify(expectedApiBase)}`)) {
-  problems.push("memory/app/index.html does not contain the expected ALFRED_API_BASE");
+if (!consoleHtml.includes('data-memory-local-only') || !consoleHtml.includes('alfred serve')) {
+  problems.push("memory/app/index.html must explain starting the local Memory server");
 }
-if (consoleHtml.includes('window.ALFRED_API_BASE = "http://localhost:3000"') && !expectedApiBase.includes("localhost")) {
-  problems.push("production Memory Console still points to localhost");
+if (/ALFRED_API_BASE|alfred-labs-memory\.fly\.dev|<script\b|<form\b/.test(consoleHtml)) {
+  problems.push("memory/app/index.html must be static local-start instructions, without a live API client");
 }
 
 const supportHtml = await readFile(join(outputDir, "support", "index.html"), "utf8");
@@ -93,6 +90,6 @@ process.stdout.write(`${JSON.stringify({
   status: "pass",
   output: relative(root, outputDir),
   html_files: htmlFiles.length,
-  api_base: expectedApiBase,
+  memory_ui: "local-start-instructions",
   provider_calls: 0
 })}\n`);

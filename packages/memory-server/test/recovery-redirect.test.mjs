@@ -248,23 +248,8 @@ test("OAuth recovery preserves MCP resource and PKCE without accepting extra fie
   assert.equal(parsed.searchParams.get("code_challenge_method"), "S256");
 });
 
-test("cross-origin console redirects preserve only one continuation value", async () => {
-  const router = createConsoleRouter({
-    userService: {},
-    tenantService: {},
-    config: {},
-    consoleDirOverride: "",
-    consoleUrl: "https://console.example/"
-  });
-  const path = authorizationPath();
-  const res = responseRecorder();
-  await router(request({ url: `/console/?${new URLSearchParams({ continue_to: path })}` }), res);
-  assert.equal(res.statusCode, 302);
-  assert.equal(new URL(res.headers.location).searchParams.get("continue_to"), path);
-
-  const duplicate = responseRecorder();
-  await router(request({ url: `/console/?continue_to=first&continue_to=second` }), duplicate);
-  assert.equal(new URL(duplicate.headers.location).searchParams.has("continue_to"), false);
+test("recovery cannot redirect the local console to an external host", () => {
+  assert.throws(() => createConsoleRouter({ userService: {}, tenantService: {}, config: {}, consoleDirOverride: "", consoleUrl: "https://console.example/" }), /Remote console URLs/);
 });
 
 test("OAuth browser recovery gets a secured auto-return bridge and JSON remains compatible", async () => {

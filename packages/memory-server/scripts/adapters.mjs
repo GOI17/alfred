@@ -23,7 +23,7 @@ const adapters = [
     description: "Codex CLI adapter for Alfred Memory",
     relDir: "packages/opencode-adapter",
     commands: [
-      "Use the codex plug-in: alfred memory-server start",
+      "Start the local service: ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve",
       "Codex picks up .alfred/config.json automatically when invoked from cwd."
     ]
   },
@@ -49,24 +49,24 @@ const adapters = [
   },
   {
     name: "chatgpt-custom-gpt",
-    description: "Direct OAuth connection from ChatGPT Actions to Alfred Memory",
+    description: "Compatibility schema; cloud ChatGPT Actions cannot reach local Memory",
     relDir: "packages/chatgpt-adapter",
     commands: [
-      "Tenant user: open https://chatgpt.com/gpts/mine and select Alfred Memory.",
-      "Ask for your memories, choose Sign in, and enter alk_... only on Alfred's consent page.",
-      "If Alfred Memory is absent, create it from packages/chatgpt-adapter/README.md; never enter credentials in a chat.",
-      "Operator-only deployment details: packages/chatgpt-adapter/README.md."
+      "The managed hosted service is retired. Cloud ChatGPT Actions cannot reach loopback.",
+      "Start local Memory: ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve",
+      "Open http://127.0.0.1:3000/console/ with the key issued by alfred init.",
+      "Schema compatibility details: packages/chatgpt-adapter/README.md; never enter credentials in a chat."
     ]
   },
   {
     name: "google-ai-studio",
-    description: "Google AI Studio / Gemini Enterprise custom Extension",
+    description: "Local Gemini bridge; cloud AI Studio cannot reach loopback",
     relDir: "packages/gemini-adapter",
     commands: [
       "Run bridge: ALFRED_MEMORY_BASE_URL=... ALFRED_MEMORY_API_KEY=... node packages/gemini-adapter/bin/bridge.mjs",
-      "Open AI Studio → Tools → Extensions → Create Extension.",
-      "Upload packages/gemini-adapter/openapi.json.",
-      "Auth: API Key, header x-api-key, value=alk_..."
+      "The bridge listens only on 127.0.0.1:8788 for clients on this computer.",
+      "Cloud Google AI Studio cannot reach the loopback bridge.",
+      "See packages/gemini-adapter/README.md for local configuration."
     ]
   }
 ];

@@ -19,9 +19,9 @@
       <nav class="nav-links" aria-label="Primary">
         <a href="/alfred/">Home</a>
         <a href="/alfred/docs/">Docs</a>
-        <a href="/alfred/memory/">Memory Console</a>
+        <a href="/alfred/memory/">Local Memory</a>
         <a href="/alfred/support/">Support</a>
-        <a href="https://alfred-labs-memory.fly.dev/privacy">Privacy</a>
+        <a href="/alfred/terms/#privacy">Privacy</a>
       </nav>
       <a class="nav-cta" href="/alfred/support/">Get support</a>
     </div>
@@ -30,11 +30,11 @@
   <div class="docs-layout" style="display:block;max-width:840px;">
     <main class="docs-main" style="max-width:760px;margin:0 auto;">
       <h1>Alfred Memory Terms of Use</h1>
-      <p class="doc-lead"><strong>Effective date:</strong> September 3, 2026</p>
-      <p>These Terms govern use of the hosted Alfred Memory service provided by AlfredLabs. By connecting to or using the hosted service, you agree to these Terms.</p>
+      <p class="doc-lead"><strong>Effective date:</strong> October 21, 2026</p>
+      <p>The managed Alfred Memory service has been retired. Alfred Memory now runs locally on your computer. The distributed open-source software is governed by its repository license; this page describes the current website and local product.</p>
 
-      <h2>The service</h2>
-      <p>Alfred Memory lets you store, retrieve, update, and delete user-directed memory through supported clients. The separately distributed open-source Alfred software remains governed by its repository license when you operate it yourself.</p>
+      <h2>The software</h2>
+      <p>Alfred Memory lets you store, retrieve, update, and delete user-directed memory through local clients. The separately distributed open-source Alfred software remains governed by its repository license when you operate it yourself.</p>
 
       <h2>Your account and content</h2>
       <p>You are responsible for safeguarding your credentials, for activity performed through your account, and for the content you choose to store. You retain responsibility for and any rights you hold in that content. Do not store passwords, access tokens, private keys, illegal material, or content you lack the right to use.</p>
@@ -42,11 +42,11 @@
       <h2>Acceptable use</h2>
       <p>You may not misuse the service, interfere with its operation, bypass access controls or limits, probe another user's data, distribute malware, or use the service in violation of applicable law or another person's rights.</p>
 
-      <h2>Privacy and third parties</h2>
-      <p>Our <a href="https://alfred-labs-memory.fly.dev/privacy">Privacy Policy</a> explains how Alfred Memory processes data. When you connect through ChatGPT, Codex, or another client, that provider also processes information under its own terms and policies.</p>
+      <h2 id="privacy">Privacy and third parties</h2>
+      <p>Your local installation stores memory and credential metadata in your chosen SQLite files or Postgres database. The public Memory pages do not collect API keys or connect to your local API. Clients and database providers you choose may process shared information under their own policies. Review and delete memories through your local console or API; manage database backups separately.</p>
 
       <h2>Availability and changes</h2>
-      <p>The hosted service may change, be interrupted, or be discontinued. We may limit or suspend access to protect users, comply with law, address abuse, or maintain service security. Where practical, material changes will be communicated through the service or this site.</p>
+      <p>Software updates and this website may change. Keep your local installation and database backups under your control. There is no managed Memory availability commitment.</p>
 
       <h2>Disclaimers</h2>
       <p>The service is provided on an “as is” and “as available” basis to the extent permitted by law. AlfredLabs does not warrant uninterrupted or error-free operation, permanent retention of content, or suitability for a particular purpose. Keep independent copies of information you cannot afford to lose.</p>
@@ -55,7 +55,7 @@
       <p>To the extent permitted by law, AlfredLabs will not be liable for indirect, incidental, special, consequential, or exemplary damages, or for loss of data, profits, goodwill, or business opportunities arising from use of the service.</p>
 
       <h2>Termination</h2>
-      <p>You may stop using the service at any time and request deletion through the support channel. Provisions that by their nature should survive termination, including responsibility, disclaimers, and liability limitations, will survive.</p>
+      <p>You may stop the local process at any time and delete data from your own installation. Contact support for assistance; support does not have access to your local database. Provisions that by their nature should survive termination, including responsibility, disclaimers, and liability limitations, will survive.</p>
 
       <h2>Changes and contact</h2>
       <p>Material changes will appear here with an updated effective date. Questions about these Terms may be sent to <a href="mailto:alfred.support@alfredlabs.org">alfred.support@alfredlabs.org</a>.</p>
@@ -65,7 +65,7 @@
   <footer>
     <div class="footer-bottom">
       <span>&copy; 2026 AlfredLabs.</span>
-      <span><a href="/alfred/support/">Support</a> · <a href="https://alfred-labs-memory.fly.dev/privacy">Privacy</a></span>
+      <span><a href="/alfred/support/">Support</a> · <a href="/alfred/terms/#privacy">Privacy</a></span>
     </div>
   </footer>
 </body>

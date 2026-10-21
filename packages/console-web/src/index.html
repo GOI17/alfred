@@ -103,11 +103,13 @@
 <div class="container">
 
   <div id="locked" class="panel">
-    <h2>Welcome</h2>
-    <p class="hint">This console manages API keys and connected services for your Alfred Memory install.</p>
+    <h2>Your local Memory console</h2>
+    <p class="hint">This console runs on your computer with Alfred Memory. Unlock it with the key issued by alfred init.</p>
 
-    <div id="signupBlock">
-      <p class="hint"><strong>No terminal? No problem.</strong> Create a free tenant in 10 seconds.</p>
+    <pre>alfred init --profile=coding --backend=sqlite --name my-memory
+ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve</pre>
+    <details id="signupBlock"><summary>Optional Postgres tenant setup</summary>
+      <p class="hint">Requires a Postgres connection configured by this local server operator. AlfredLabs does not provide hosted accounts.</p>
       <div class="row" style="margin-bottom: 8px;">
         <input id="signupName" maxlength="64" pattern="[A-Za-z0-9 _-]{1,64}" aria-describedby="signupNameHelp" placeholder="display name (e.g. my-mem)" style="flex: 1; background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace;" />
       </div>
@@ -118,15 +120,15 @@
       <div id="turnstileContainer" style="margin-bottom: 12px;"></div>
       <button onclick="signup()">Create my memory</button>
       <p class="small" style="margin-top: 8px;" id="signupHint">You'll get an API key immediately. Copy it; we don't store the secret.</p>
-    </div>
+    </details>
 
-    <details style="margin-top: 16px;">
-      <summary>Already have an API key?</summary>
+    <details open style="margin-top: 16px;">
+      <summary>Unlock with your API key</summary>
       <div style="margin-top: 8px;">
         <input id="apiKey" type="password" placeholder="alk_..." style="background: #0d0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font: 12px ui-monospace, monospace; width: 100%;" />
         <button onclick="setKey()" style="margin-top: 8px;">Unlock</button>
       </div>
-      <p class="small" style="margin-top: 8px;">Paste an API key from <code>alfred init</code> or <code>alfred keys issue</code>.</p>
+      <p class="small" style="margin-top: 8px;">Paste an API key from <code>alfred init</code> or <code>alfred key rotate --tenant &lt;tenant-id&gt;</code>.</p>
     </details>
 
     <details style="margin-top: 16px;">
@@ -208,25 +210,7 @@
 
     <div class="panel">
       <h2>Connected services</h2>
-      <p class="hint">Set up ChatGPT, Claude Desktop, or Gemini to use the same memory. ChatGPT connects through OAuth; technical adapters can continue using tenant API keys.</p>
-
-      <div class="step">
-        <span class="step-num">1</span><strong>ChatGPT (Plus/Pro)</strong>
-        <div class="small" style="margin-top: 4px;">Open My GPTs and select Alfred Memory. If it is absent, use the operator guide to create it.</div>
-        <details>
-          <summary>Show steps</summary>
-          <pre>
-1. Open: https://chatgpt.com/gpts/mine and select Alfred Memory.
-2. Ask Alfred to list your last 5 memories.
-3. Choose "Sign in" when ChatGPT offers it.
-4. Enter your alk_... key only on Alfred's consent page.
-5. Approve access and retry your request.
-
-If Alfred Memory is absent, create it from packages/chatgpt-adapter/README.md.
-Your alk_ key is entered only on Alfred's consent page. Never enter the API key,
-Client ID, or Client Secret in a chat.</pre>
-        </details>
-      </div>
+      <p class="hint">Connect clients running on this computer to the local API. Cloud ChatGPT Actions and AI Studio cannot reach a loopback-only server; the managed hosted service has been retired.</p>
 
       <div class="step">
         <span class="step-num">2</span><strong>Claude Desktop (MCP)</strong>
@@ -241,7 +225,7 @@ Edit ~/Library/Application Support/Claude/claude_desktop_config.json:
       "args": ["&lt;abs path&gt;/packages/anthropic-adapter/bin/alfred-mcp.mjs"],
       "env": {
         "ALFRED_MEMORY_API_KEY": "&lt;paste alk_...&gt;",
-        "ALFRED_MEMORY_BASE_URL": "&lt;your-server&gt;"
+        "ALFRED_MEMORY_BASE_URL": "http://127.0.0.1:3000"
       }
     }
   }
@@ -252,18 +236,8 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
       </div>
 
       <div class="step">
-        <span class="step-num">3</span><strong>Google Gemini / AI Studio</strong>
-        <details>
-          <summary>Show steps</summary>
-          <pre>
-1. Run the bridge:
-   ALFRED_MEMORY_BASE_URL=&lt;your-server&gt; ALFRED_MEMORY_API_KEY=&lt;key&gt; \
-     node packages/gemini-adapter/bin/bridge.mjs &amp;
-
-2. In AI Studio: Tools → Extensions → Create Extension.
-3. Upload: packages/gemini-adapter/openapi.json
-4. Auth: API Key · header x-api-key · paste alk_...</pre>
-        </details>
+        <strong>Local Gemini bridge</strong>
+        <p class="small">Run the bridge locally with your loopback Memory URL and API key. It listens only on 127.0.0.1:8788 for local clients.</p>
       </div>
 
       <div class="step">
@@ -272,10 +246,10 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
           <summary>Show steps</summary>
           <pre>
 1. cd into your project directory.
-2. Run: alfred init --profile=coding --name=&lt;project-name&gt;
+2. Run: alfred init --profile=coding --backend=sqlite --name=&lt;project-name&gt;
 3. This writes .alfred/config.json in cwd with your API key.
 4. The agent reads it on every session start.
-5. Run the server: alfred serve</pre>
+5. Run the server: ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve</pre>
         </details>
       </div>
     </div>
@@ -516,16 +490,11 @@ if (localStorage.getItem("alfred_api_key")) {
   setKey();
 }
 
-// Build the base URL for API calls. The build script injects
-// window.ALFRED_API_BASE. When the page is served same-origin (e.g. by
-// alfred-memory-server) we use relative paths. When the page is served
-// from a different origin (Vercel, GitHub Pages, Netlify) we use the
-// absolute base.
+// API paths stay on the same local origin, including its chosen host and port.
 function apiBase(path) {
-  const base = (typeof window !== "undefined" && window.ALFRED_API_BASE) || "";
-  // If path is absolute (starts with http) or base is empty, use as-is.
-  if (path.startsWith("http")) return path;
-  if (base) return base.replace(/\/$/, "") + path;
+  if (typeof path !== "string" || !path.startsWith("/") || path.startsWith("//")) {
+    throw new Error("Console API calls require a same-origin path.");
+  }
   return path;
 }
 

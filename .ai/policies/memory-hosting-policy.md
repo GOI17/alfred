@@ -3,7 +3,7 @@ id: memory-hosting-policy
 description: >
   Storage backend selection rules per tenant kind. Codifies the
   decision that human agents require Postgres, coding agents
-  ask the user, and self-hosted servers use Postgres.
+  ask the user, and the HTTP server runs only on loopback.
 owner: core
 status: active
 applies_to: packages/memory/** and packages/memory-server/**
@@ -32,8 +32,8 @@ Defense in depth: any of the three can fail and the policy still holds.
 |---|---|
 | `tenant.kind` | One of `human_agent`, `coding_agent_only`, `hybrid_with_human`, `server_managed` |
 | `tenant.storage_backend` | One of `sqlite`, `postgres` |
-| `human_agent` | A user-facing chat interface (ChatGPT, Claude web, Gemini web) talking to Alfred Memory over HTTPS |
-| `coding_agent` | An IDE/CLI-based agent (opencode, Codex, Pi, Copilot) talking to Alfred Memory over loopback or HTTPS |
+| `human_agent` | A user-facing tenant kind retained for local browser/desktop clients; requires Postgres |
+| `coding_agent` | An IDE/CLI-based agent (opencode, Codex, Pi, Copilot) talking to Alfred Memory over loopback |
 | `workspace` | A directory on disk from which an agent invokes Alfred Memory. Each workspace corresponds to one `tenant_id` at init time |
 
 ## Rules
@@ -44,11 +44,9 @@ Tenants with `kind IN ('human_agent', 'hybrid_with_human')` MUST use Postgres.
 Provisioning a SQLite tenant for these kinds is rejected at the DB constraint
 level and at the application level.
 
-**Why**: Human agents only run in cloud environments. SQLite cannot serve
-HTTPS traffic at production scale, cannot be backed up atomically by `pg_dump`,
-and cannot accept writes from multiple isolated processes. The isolation guarantee
-that "two tenants never share a DB" is also materially stronger with Postgres
-because the audit copy is a real `pg_dump`, not a file copy.
+This is the existing tenant storage contract, preserved by issue #232. Tenant
+kind does not grant remote access to the server. Cloud clients cannot reach its
+loopback listener; local browser and desktop clients can use these tenant kinds.
 
 ### Rule 2 — Coding agents ask the user
 
@@ -57,20 +55,17 @@ is asked to choose between SQLite and Postgres.
 
 **Default when running locally**: SQLite (one file per tenant, easy to audit,
 fast on SSD).
-**Default when running against a `self-hosted` server**: Postgres (the server's
-connection-pool model expects Postgres).
 
 The choice is recorded in `<cwd>/.alfred/config.json` and bound to the tenant.
 
-### Rule 3 — Self-hosted servers use Postgres
+### Rule 3 — The HTTP process runs locally
 
-Alfred Memory Server in `self-hosted` mode MUST use Postgres for the registry
-and for all tenants. SQLite is allowed only in `local` mode
-(single-process loopback).
-
-The registry process refuses to start in `self-hosted` mode if the registry DB
-is SQLite. This is enforced at boot time, not at runtime, so misconfiguration
-fails fast.
+Only hosting mode `local` is supported. The server validates loopback bind and
+port before opening the registry, and enforces the same rule for direct server
+construction and listening. `self-hosted` and wildcard/public binds are rejected.
+The local registry uses SQLite. User-chosen tenant Postgres storage may be local
+or remote; this does not change the HTTP listener contract. Existing tenant
+backend restrictions, including `server_managed`, remain unchanged.
 
 ### Rule 4 — Migrations are allowed and auditable
 
@@ -101,7 +96,7 @@ When `TenantService.provision` is called:
 
 1. Validate `kind`, `storage_backend` against the enums.
 2. Reject if `kind IN ('human_agent', 'hybrid_with_human')` and `storage_backend = 'sqlite'`.
-3. Reject if `server_managed` and `storage_backend = 'sqlite'` (self-hosted).
+3. Reject if `server_managed` and `storage_backend = 'sqlite'` (existing tenant-kind constraint).
 4. Ensure `db_path` XOR `db_connection` matches the backend.
 5. Delegate to the storage-specific factory.
 
@@ -126,6 +121,13 @@ The one cross-policy rule is **Rule 5**: a single workspace never carries two
 backends. This is enforced by `UNIQUE (workspace_hash)`, not by anything in the
 workspace policy itself.
 
+## Local-only clarification (issue #232)
+
+The user-directed retirement changes HTTP exposure and onboarding only. It does
+not change tenant backend enums, provisioning constraints, migrations or data.
+Focused server, CLI and console regressions verify the local runtime. Historical
+hosting plans are superseded; eval baselines remain unchanged.
+
 ## Versioning
 
 This policy is part of Alfred v0.3.0. Any change to the five rules above
@@ -142,9 +144,9 @@ requires:
 - `.ai/policies/memory-workspace-policy.md` — the parallel policy governing
   workspace hierarchy and `tenant_access`.
 
-### Rule 6 — SaaS Web Onboarding: shared Postgres cluster with schema-per-tenant
+### Rule 6 — Optional local Postgres provisioning: schema-per-tenant
 
-Operators who expose `POST /console/api/bootstrap` (web signup) MUST configure
+Local operators using `POST /console/api/bootstrap` (optional tenant setup) MUST configure
 `ALFRED_SAAS_DATABASE_URL` to a single shared Postgres cluster. Each signup
 provisions a **logical database** as a dedicated schema named
 `tenant_<id>` (where `<id>` is the `usr_t_<uuid>` tenant id with the prefix
@@ -159,7 +161,7 @@ queries require explicit qualification, and `search_path` is per-session.
 Tenants cannot read each other's tables unless they share the connection,
 which they do not.
 
-**Why we relax the physical-isolation rule for SaaS:**
+**Why the existing provisioning path uses logical isolation:**
 - Operational cost: one shared cluster is dramatically cheaper to back up,
   monitor, and replicate than one cluster per tenant.
 - Provision cost: `CREATE SCHEMA` is cheaper and faster than `CREATE DATABASE`

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Local dev server. Serves src/ as static files, with CORS for cross-origin
-// testing. Listens on port 4321 by default; override with PORT env.
+// Loopback static preview only; use alfred serve for working same-origin APIs.
+// Listens on port 4321 by default; override with PORT env.
 import http from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname, extname } from "node:path";
@@ -32,12 +32,11 @@ const server = http.createServer((req, res) => {
   const ext = extname(filePath);
   const type = MIME[ext] ?? "application/octet-stream";
   res.writeHead(200, {
-    "content-type": type,
-    "access-control-allow-origin": "*"
+    "content-type": type
   });
   res.end(readFileSync(filePath));
 });
 
-server.listen(PORT, () => {
-  process.stdout.write(`console-web dev server: http://localhost:${PORT}\n`);
+server.listen(PORT, "127.0.0.1", () => {
+  process.stdout.write(`console-web dev server: http://127.0.0.1:${PORT}\n`);
 });

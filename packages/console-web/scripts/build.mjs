@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Build the console-web SPA for static hosting.
+// Build the console-web SPA served by the local Memory process.
 //
 // Reads src/index.html and writes dist/index.html, optionally injecting a
-// runtime API base URL (from ALFRED_API_BASE env var) and a build version.
+// same-origin API base and a build version.
 //
 // Usage:
 //   npm run build                      # default API base
-//   ALFRED_API_BASE=https://alfred.example.com npm run build
+//   ALFRED_BUILD_VERSION=local npm run build
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
@@ -20,7 +20,10 @@ const DIST_DIR = process.env.ALFRED_CONSOLE_OUTPUT_DIR
 const SRC_HTML = join(SRC_DIR, "index.html");
 const DIST_HTML = join(DIST_DIR, "index.html");
 
-const API_BASE = process.env.ALFRED_API_BASE ?? "http://localhost:3000";
+if (process.env.ALFRED_API_BASE?.trim()) {
+  throw new Error("The local console uses the server's own origin; remove ALFRED_API_BASE.");
+}
+const API_BASE = "";
 const BUILD_VERSION = process.env.ALFRED_BUILD_VERSION ?? new Date().toISOString().slice(0, 10);
 
 function build() {

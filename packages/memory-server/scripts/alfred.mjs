@@ -34,7 +34,7 @@ const usage = () => {
     "  key revoke       Revoke a single API key by id",
     "  key list         List API keys for a tenant (--include-revoked for history)",
     "  migrate          Migrate tenant storage (sqlite<->sqlite, sqlite->pg SQL dump)",
-    "  serve            Run the Alfred Memory Server (HTTP/HTTPS)",
+    "  serve            Run the local Memory Server (--port N --bind loopback)",
     "  adapters         List agent adapters + print integration steps",
   "  dashboard         TUI dashboard (tenants, keys, memory counts)",
     "  version          Print the Alfred CLI version",

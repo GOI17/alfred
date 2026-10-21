@@ -109,7 +109,7 @@ test("init both profile produces hybrid_with_human + workspace + web steps", asy
     assert.ok(json.api_key.startsWith("alk_"));
     // Next steps on stderr mention both coding and web.
     assert.match(output, /coding \+ web/);
-    assert.match(output, /adapters instructions/);
+    assert.match(output, /ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve/);
   });
 });
 

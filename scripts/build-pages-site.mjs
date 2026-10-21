@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
 import {
   cp,
   mkdir,
@@ -27,15 +26,6 @@ function normalizeBasePath(value) {
   return withLeadingSlash === "/" ? "/" : `${withLeadingSlash.replace(/\/+$/, "")}/`;
 }
 
-function normalizeApiBase(value) {
-  const raw = value.trim();
-  const url = new URL(raw);
-  const isLocal = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
-  if (url.protocol !== "https:" && !(isLocal && url.protocol === "http:")) {
-    throw new Error("ALFRED_API_BASE must use HTTPS, except for localhost previews");
-  }
-  return raw.replace(/\/+$/, "");
-}
 
 async function listFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -67,9 +57,6 @@ async function publishAtomically(stage, target) {
 }
 
 const basePath = normalizeBasePath(process.env.SITE_BASE_PATH ?? "/");
-const apiBase = normalizeApiBase(
-  process.env.ALFRED_API_BASE ?? "https://alfred-labs-memory.fly.dev"
-);
 
 if (outputDir === root || !outputDir.startsWith(`${root}${sep}`)) {
   throw new Error("SITE_OUTPUT_DIR must stay inside the Alfred repository");
@@ -87,26 +74,6 @@ try {
     }
   });
 
-  const consoleDir = join(stageDir, ".console-build");
-  const consoleBuild = spawnSync(process.execPath, ["scripts/build.mjs"], {
-    cwd: join(root, "packages", "console-web"),
-    env: {
-      ...process.env,
-      ALFRED_API_BASE: apiBase,
-      ALFRED_BUILD_VERSION: process.env.ALFRED_BUILD_VERSION ?? process.env.GITHUB_SHA ?? "local",
-      ALFRED_CONSOLE_OUTPUT_DIR: consoleDir
-    },
-    encoding: "utf8"
-  });
-  if (consoleBuild.status !== 0) {
-    throw new Error(`Memory Console build failed:\n${consoleBuild.stderr || consoleBuild.stdout}`);
-  }
-
-  const consoleTarget = join(stageDir, "memory", "app");
-  await mkdir(consoleTarget, { recursive: true });
-  await cp(join(consoleDir, "index.html"), join(consoleTarget, "index.html"));
-  await rm(consoleDir, { recursive: true, force: true });
-
   const textFiles = (await listFiles(stageDir)).filter((file) => /\.(?:html|css|txt)$/.test(file));
   for (const file of textFiles) {
     const current = await readFile(file, "utf8");
@@ -123,6 +90,6 @@ try {
 process.stdout.write(`${JSON.stringify({
   output: relative(root, outputDir),
   base_path: basePath,
-  api_base: apiBase,
+  memory_ui: "local-start-instructions",
   provider_calls: 0
 })}\n`);

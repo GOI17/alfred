@@ -1,42 +1,26 @@
-# Alfred Memory Gemini Adapter v0.3.0
+# Local Gemini bridge
 
-Bridge for Google AI Studio and Gemini Enterprise. Provides an OpenAPI 3.0
-schema compatible with Google AI Studio's Extensions feature and a thin HTTPS
-forwarder.
+The bridge forwards local HTTP requests to an explicitly configured Memory
+endpoint using an issued API key. Its shipped command binds only to
+`127.0.0.1`; Google AI Studio cloud extensions cannot reach it. The managed
+Alfred Memory endpoint has been retired.
 
-## Setup (Google AI Studio)
-
-1. Open Google AI Studio → Tools → Extensions → Create Extension.
-2. Paste `openapi.json` and provide the schema name "alfred-memory".
-3. Configure auth: API Key, header `x-api-key`, value = your `alk_...` key.
-4. In Extension settings, point the base URL to your bridge (`https://<host>/`).
-
-## Setup (bridge)
+First follow the [local quickstart](../../docs/QUICKSTART.md), then run:
 
 ```bash
-ALFRED_MEMORY_BASE_URL=https://alfred-memory.example.com \
-ALFRED_MEMORY_API_KEY=alk_... \
-ALFRED_MEMORY_BRIDGE_PORT=8788 \
-  node packages/gemini-adapter/bin/bridge.mjs
+ALFRED_MEMORY_BASE_URL=http://127.0.0.1:3000 \
+ALFRED_MEMORY_API_KEY='<your issued key>' \
+node packages/gemini-adapter/bin/bridge.mjs
 ```
 
-Env vars:
+Local clients can call `http://127.0.0.1:8788`. Set
+`ALFRED_MEMORY_BRIDGE_PORT` to change the local port. Optional
+`ALFRED_MEMORY_BRIDGE_TLS_CERT` and `ALFRED_MEMORY_BRIDGE_TLS_KEY` enable TLS on
+the same loopback listener. Neither TLS nor Postgres storage makes it a hosted
+service. Keep the key out of source control and chat.
 
-| Var | Required | Default |
-|---|---|---|
-| `ALFRED_MEMORY_BASE_URL` | yes | none |
-| `ALFRED_MEMORY_API_KEY` | yes | none |
-| `ALFRED_MEMORY_BRIDGE_PORT` | no | `8788` |
-| `ALFRED_MEMORY_BRIDGE_TLS_CERT` | no | none |
-| `ALFRED_MEMORY_BRIDGE_TLS_KEY` | no | none |
-
-If both cert and key are present, the bridge starts in HTTPS mode.
-
-## Tests
+The OpenAPI and forwarding contracts remain for local tooling and compatibility.
 
 ```bash
-npm run check
-npm test
+node --test packages/gemini-adapter/test/*.mjs
 ```
-
-10 tests covering the OpenAPI schema and the bridge forwarding flow.

@@ -339,22 +339,14 @@ test("GET /console with no console installed returns 503 with instructions", asy
   }
 });
 
-test("GET /console with ALFRED_CONSOLE_URL set redirects to upstream", async () => {
-  const prev1 = process.env.ALFRED_CONSOLE_DIR;
-  const prev2 = process.env.ALFRED_CONSOLE_URL;
-  delete process.env.ALFRED_CONSOLE_DIR;
-  process.env.ALFRED_CONSOLE_URL = "https://console.alfred.example.com/";
+test("remote console environment is rejected", () => {
+  const previous = process.env.ALFRED_CONSOLE_URL;
+  process.env.ALFRED_CONSOLE_URL = "https://console.example.com";
   try {
-    const { tenantService, userService } = makeServices();
-    const router = createConsoleRouter({ userService, tenantService, config: {}, consoleDirOverride: "" });
-    const res = await invoke(router, makeReq({ url: "/console" }));
-    assert.equal(res.statusCode, 302);
-    assert.equal(res.headers.location, "https://console.alfred.example.com/");
+    assert.throws(() => createConsoleRouter({ userService: {}, tenantService: {}, config: {}, consoleDirOverride: "" }), /Remote console URLs/);
   } finally {
-    if (prev1 === undefined) delete process.env.ALFRED_CONSOLE_DIR;
-    else process.env.ALFRED_CONSOLE_DIR = prev1;
-    if (prev2 === undefined) delete process.env.ALFRED_CONSOLE_URL;
-    else process.env.ALFRED_CONSOLE_URL = prev2;
+    if (previous === undefined) delete process.env.ALFRED_CONSOLE_URL;
+    else process.env.ALFRED_CONSOLE_URL = previous;
   }
 });
 
@@ -378,19 +370,8 @@ test("GET /console/api/tenants works regardless of console install (API is alway
   }
 });
 
-test("GET /console/anything-else with cross-origin upstream redirects to upstream + path", async () => {
-  const prev2 = process.env.ALFRED_CONSOLE_URL;
-  process.env.ALFRED_CONSOLE_URL = "https://console.alfred.example.com";
-  try {
-    const { tenantService, userService } = makeServices();
-    const router = createConsoleRouter({ userService, tenantService, config: {}, consoleDirOverride: "" });
-    const res = await invoke(router, makeReq({ url: "/console/some/path" }));
-    assert.equal(res.statusCode, 302);
-    assert.equal(res.headers.location, "https://console.alfred.example.com/some/path");
-  } finally {
-    if (prev2 === undefined) delete process.env.ALFRED_CONSOLE_URL;
-    else process.env.ALFRED_CONSOLE_URL = prev2;
-  }
+test("remote console constructor option is rejected", () => {
+  assert.throws(() => createConsoleRouter({ userService: {}, tenantService: {}, config: {}, consoleDirOverride: "", consoleUrl: "https://console.example.com" }), /Remote console URLs/);
 });
 
 test("Console router does not require console-web at construction time", () => {
@@ -724,7 +705,7 @@ test("console-web index.html contains the signup form and the bootstrap endpoint
   assert.match(htmlText, /display_name/);
   assert.match(htmlText, /human_agent/);
   assert.match(htmlText, /hybrid_with_human/);
-  assert.match(htmlText, /No terminal\? No problem\./);
+  assert.match(htmlText, /Optional Postgres tenant setup/);
   assert.match(htmlText, /pattern="\[A-Za-z0-9 _-\]\{1,64\}"/);
   assert.match(htmlText, /validateTenantName/);
   assert.match(htmlText, /class ApiError extends Error/);
@@ -1486,22 +1467,9 @@ test("console-web index.html includes the forgot-my-key panel", () => {
   assert.match(htmlText, /Forgot your API key\?/);
 });
 
-test("Fly deploy stages the complete SMTP configuration atomically", () => {
-  const workflowPath = join(makeProjectRoot(), ".github/workflows/deploy-fly.yml");
-  const workflow = readFileSync(workflowPath, "utf8");
-  const smtpNames = [
-    "ALFRED_SMTP_HOST",
-    "ALFRED_SMTP_PORT",
-    "ALFRED_SMTP_USER",
-    "ALFRED_SMTP_PASSWORD",
-    "ALFRED_SMTP_FROM"
-  ];
-  for (const name of smtpNames) {
-    assert.match(workflow, new RegExp(`secrets\\.${name}`));
-    assert.match(workflow, new RegExp(`printf '${name}=%s\\\\n'`));
-  }
-  assert.equal((workflow.match(/flyctl secrets import --stage/g) ?? []).length, 1);
-  assert.match(workflow, /pnpm install --frozen-lockfile --filter @alfred-labs\/memory-server\.\.\./);
+test("hosted deploy configuration has been retired", () => {
+  assert.equal(existsSync(join(makeProjectRoot(), ".github/workflows/deploy-fly.yml")), false);
+  assert.equal(existsSync(join(makeProjectRoot(), "fly.toml")), false);
 });
 
 
@@ -1700,7 +1668,7 @@ test("GET /privacy is public, plain-language HTML with restrictive headers", asy
   assert.equal(res.headers["referrer-policy"], "no-referrer");
   assert.match(res.headers["content-security-policy"], /default-src 'none'/);
   assert.match(res.body, /Alfred Memory Privacy Policy/);
-  assert.match(res.body, /Information we process/);
+  assert.match(res.body, /Information your local installation processes/);
   assert.match(res.body, /Retention and deletion/);
   assert.match(res.body, /do not sell personal information/i);
   assert.match(res.body, /not ChatGPT's native Memory feature/i);

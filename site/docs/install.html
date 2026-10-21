@@ -197,13 +197,16 @@ Provider calls   : <span class="k">0</span>
       </div>
 
       <h2 id="web">Option B &mdash; Memory edition</h2>
-      <p>Use Alfred Memory from ChatGPT, Claude, Gemini, or coding agents.</p>
+      <p>Use Alfred Memory from the local browser console, desktop clients, or coding agents. Cloud ChatGPT Actions and AI Studio cannot reach this local-only service.</p>
+      <pre>alfred init --profile=coding --backend=sqlite --name my-memory
+ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve</pre>
+      <p>Save the issued key and open <a href="http://127.0.0.1:3000/console/">the local console</a>. Keep the server running. The managed hosted service is retired.</p>
       <ol>
         <li>If you already created a tenant in the Memory app, choose
           <strong>Use existing tenant</strong>. Alfred will not create another
           tenant; clients reuse <code>ALFRED_MEMORY_BASE_URL</code> and
           <code>ALFRED_MEMORY_API_KEY</code>.</li>
-        <li>For a new self-hosted tenant, create a Postgres database and copy
+        <li>For a new Postgres-backed tenant, create your own database and copy
           its connection string, such as
           <code>postgres://user:pass@host/db?sslmode=require</code>.</li>
         <li>Run the guided installer and choose the Memory edition. Pick

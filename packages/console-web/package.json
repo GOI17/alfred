@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.3.0",
   "type": "module",
-  "description": "Standalone web console for Alfred Memory. Static SPA, deployable to Cloudflare Pages or any static host.",
+  "description": "Same-origin web console served by the local Alfred Memory server.",
   "scripts": {
     "build": "node scripts/build.mjs",
     "serve": "node scripts/serve.mjs",

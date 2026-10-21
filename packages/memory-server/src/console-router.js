@@ -173,9 +173,7 @@ function notInstalledResponse(res, searchedPaths) {
     error: {
       code: "console_not_installed",
       message: "The web console is not installed alongside this server. " +
-               "Either deploy the web console (recommended) at https://alfred.example.com/console and " +
-               "set ALFRED_CONSOLE_URL in this server to that URL (cross-origin mode), " +
-               "or run `npm run build` in @alfred-labs/console-web and set ALFRED_CONSOLE_DIR " +
+               "Run `npm run build` in @alfred-labs/console-web and set ALFRED_CONSOLE_DIR " +
                "to the resulting dist/ path. " +
                "Searched: " + searchedPaths.join(", ")
     }
@@ -263,10 +261,9 @@ export function createConsoleRouter({
   }
   // indexPath may be null here → we will respond 503.
 
-  // If consoleUrl is set (cross-origin deploy), the SPA lives elsewhere; the
-  // server only serves the JSON API under /console/api/. The HTML index
-  // returns a redirect to the upstream.
-  const upstreamConsoleUrl = consoleUrl ?? process.env.ALFRED_CONSOLE_URL ?? null;
+  if (consoleUrl || process.env.ALFRED_CONSOLE_URL) {
+    throw new Error("Remote console URLs are unsupported; use the local /console/ page.");
+  }
 
   return async function consoleHandler(req, res) {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -279,7 +276,7 @@ export function createConsoleRouter({
       // A recovery GET can carry a one-time API key. Keep it limited to top-level
       // navigation and direct machine clients rather than exposing it to browser CORS.
       const isRecoveryResult = url.pathname === "/console/api/recover" && req.method === "GET";
-      if (origin && !isRecoveryResult && (allowedOrigins.length === 0 || allowedOrigins.includes(origin))) {
+      if (origin && !isRecoveryResult && allowedOrigins.includes(origin)) {
         res.setHeader("access-control-allow-origin", origin);
         res.setHeader("vary", "Origin");
         res.setHeader("access-control-allow-headers", "content-type, authorization, x-api-key");
@@ -292,18 +289,8 @@ export function createConsoleRouter({
       }
     }
 
-    // Cross-origin upstream: redirect HTML index to the upstream URL.
+    // Serve the local console from the API origin.
     if (url.pathname === "/console" || url.pathname === "/console/") {
-      if (upstreamConsoleUrl) {
-        const target = new URL(upstreamConsoleUrl);
-        const continuationValues = url.searchParams.getAll("continue_to");
-        if (continuationValues.length === 1) {
-          target.searchParams.set("continue_to", continuationValues[0]);
-        }
-        res.writeHead(302, { location: target.toString() });
-        res.end();
-        return;
-      }
       // Inline mode: serve the bundled HTML.
       if (!indexPath) {
         return notInstalledResponse(res, SEARCH_PATHS);
@@ -318,12 +305,6 @@ export function createConsoleRouter({
 
     // Static assets: /console/<path>
     if (url.pathname.startsWith("/console/") && !url.pathname.startsWith("/console/api/")) {
-      if (upstreamConsoleUrl) {
-        // Same as above — redirect.
-        res.writeHead(302, { location: upstreamConsoleUrl + url.pathname.slice("/console".length) });
-        res.end();
-        return;
-      }
       if (!indexPath) {
         return notInstalledResponse(res, SEARCH_PATHS);
       }
