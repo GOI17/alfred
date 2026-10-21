@@ -108,7 +108,9 @@ output = bytearray()
 sent = False
 status = None
 try:
-    deadline = time.monotonic() + 15
+    started = time.monotonic()
+    deadline = started + 15
+    first_menu_ms = None
     while time.monotonic() < deadline:
         if select.select([fd], [], [], 0.1)[0]:
             try:
@@ -117,7 +119,12 @@ try:
                 if error.errno != errno.EIO: raise
                 chunk = b""
             output.extend(chunk)
-        if not sent and b"Alfred setup" in output and b"Coding" in output:
+        # Remain silent: startup must not depend on terminal color replies.
+        if not sent:
+            for query in (b"\x1b]10;?", b"\x1b]11;?", b"\x1b[6n"):
+                assert query not in output, "Native setup issued a blocking startup query: " + repr(query)
+        if not sent and all(text in output for text in (b"Alfred setup", b"Coding", b"Enter next")):
+            first_menu_ms = (time.monotonic() - started) * 1000
             os.write(fd, b"\x03")
             sent = True
         done, result = os.waitpid(pid, os.WNOHANG)
@@ -134,6 +141,7 @@ try:
             break
     assert status is not None, "Native setup PTY timed out"
     assert sent, "Native setup did not render its actual menu"
+    print("Native setup first useful menu: %.3fms" % first_menu_ms)
     assert termios.tcgetattr(fd) == original_terminal, "Native setup did not restore terminal attributes"
     assert os.waitstatus_to_exitcode(status) == 0, "Native setup cancellation failed"
     assert b"\x1b[?1049h" in output and b"\x1b[?1049l" in output, "Native setup did not restore alternate screen"
@@ -145,6 +153,7 @@ finally:
     os.close(fd)
 `, process.execPath, cli], { cwd: workspace, env: nativeEnv, encoding: "utf8", timeout: 20000 });
     assert.equal(nativeSmoke.status, 0, `Native setup PTY smoke failed: ${nativeSmoke.stderr}`);
+    process.stdout.write(nativeSmoke.stdout);
     assert.deepEqual(readdirSync(workspace), [], "Cancelled native setup wrote workspace files");
     const guided = run([cli, "setup"], workspace, { ALFRED_INSTALL_APP_TUI_EVENTS: "set:edition=coding,set:harnesses=none,set:profiles=false,set:name=guided-smoke,set:apply=false,submit" });
     assert.match(guided, /ALFRED SUITE INSTALL PREVIEW/);

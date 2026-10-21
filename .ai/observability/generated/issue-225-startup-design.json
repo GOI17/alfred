@@ -1,0 +1,20 @@
+{
+  "issue": 225,
+  "operation": "setup_startup_inventory",
+  "base": "3846080aa0bc56fc056b3f367d2ab82cdc50db31",
+  "skills": [
+    "architecture-docs",
+    "typescript-project"
+  ],
+  "protectedReads": false,
+  "providerCalls": 0,
+  "dependencyDownloads": [
+    "golang.org/x/sync@v0.1.0",
+    "golang.org/x/text@v0.3.8"
+  ],
+  "decision": "measured Go terminal-only fix; source and actual CLI guard review accepted",
+  "downloadAuthorization": "explicit user approval; isolated task cache",
+  "qaReport": "/tmp/alfred-startup-perf/comparison.md",
+  "candidateSamples": 25,
+  "blockingQueries": 0
+}
