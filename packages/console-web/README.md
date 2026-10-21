@@ -39,6 +39,6 @@ npm run pages:build
 npm run pages:check
 ```
 
-API keys stay in browser session storage and are sent only to same-origin API
-paths. Do not paste keys into chat. Cloud ChatGPT Actions and Google AI Studio
-cannot reach the local service.
+API keys stay in browser localStorage and persist across sessions; logout removes
+the stored key. Keys are sent only to same-origin API paths. Do not paste keys
+into chat. Cloud ChatGPT Actions and Google AI Studio cannot reach the local service.

@@ -51,7 +51,7 @@ phase: review
 - [x] Console and static Pages behavior are validated.
 - [x] Authenticated local HTTP CRUD smoke passes with temporary data.
 - [x] Current docs and relevant canonical hosting guidance match the new contract.
-- [ ] Reviewer examines the implementation; validation limitations are recorded.
+- [x] Reviewer examines the implementation; validation limitations are recorded.
 
 ## Validation evidence
 
@@ -76,14 +76,25 @@ phase: review
   static local-start instructions and no script, form or hosted API reference.
   `git diff --check` passed.
 
+- Independent Reviewer runtime verification passed **22/22** server/CLI checks,
+  including direct listen protection, custom-port authenticated CRUD, and an
+  unauthenticated 401 response. The code/docs review passed after correcting the
+  console README to describe persistent browser localStorage and logout cleanup.
+- All six CI checks passed on PR #233 head
+  `aa22f0951f09d592039ec37583b4ba74a6c8506f`, including real Postgres isolation.
+  The subsequent factual documentation correction changes no runtime behavior;
+  atomic edits and `git diff --check` validate this documentation-only follow-up.
+
 ## Validation limits
 
-- No package installation, live Postgres/SMTP access, Docker image build, or
-  semantic-model download was performed. Existing Postgres fixture tests passed;
-  absent optional `@xenova/transformers` uses the existing keyword fallback.
+- Local validation used no package installation, live Postgres/SMTP access,
+  Docker image build, or semantic-model download. Local Postgres fixture tests
+  passed; CI separately verified real Postgres isolation. Live SMTP, a Docker
+  build, and a semantic-model download remain untested. Absent optional
+  `@xenova/transformers` uses the existing keyword fallback.
 - Full root suites were not run because they include protected source imports.
   Eval baselines, installed artifacts, original main checkout and user data were
-  not changed. Independent Reviewer approval is pending at this handoff.
+  not changed. Independent runtime review passed as recorded above.
 - Operational probes establish no public response and a stopped machine with
   autostart disabled, not a particular HTTP error code or deletion of resources.
 
