@@ -60,6 +60,18 @@
       "bodyPath": ".ai/skills/project/ulw/SKILL.md",
       "allowedAgents": ["orchestrator"],
       "loadsBodyByDefault": false
+    },
+    {
+      "id": "alfred",
+      "name": "alfred",
+      "description": "Manage Alfred skills from chat when asked to add, list, search, inspect, update, remove, or create a skill, including alfred skills requests.",
+      "triggers": ["alfred skills", "$alfred", "/alfred", "manage skills", "skill inventory"],
+      "projectSignals": ["AGENTS.md", ".ai/manifest.json"],
+      "source": "project",
+      "scope": "project",
+      "bodyPath": ".ai/skills/project/alfred/SKILL.md",
+      "allowedAgents": ["orchestrator", "developer", "qa", "reviewer", "librarian", "architect"],
+      "loadsBodyByDefault": false
     }
   ],
   "policy": {

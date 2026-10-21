@@ -48,6 +48,33 @@ The existing `curl | sh` source bootstrap remains documented in the
 [install guide](https://alfred.alfredlabs.org/docs/install.html); it is separate
 from the prepared versioned runtime package.
 
+## Skill inventory and lifecycle
+
+`alfred skills` inspects skills on disk and manages their installation receipts.
+Use `$alfred skills list`, `search`, `add`, `remove`, or `create` from Codex chat;
+in OpenCode, use its generated `/alfred skills ...` command. Codex uses the
+`alfred` skill and does not register a custom native `/alfred` slash command.
+`create` authors a validated local draft; installation is a separate request.
+Source changes do not update an already installed Homebrew release.
+
+```sh
+alfred skills list
+alfred skills search testing --limit 5
+alfred skills add https://github.com/owner/repo --name selected-skill --harness codex
+alfred skills info tdd --harness codex --scope project
+alfred skills install ./skills/tdd --harness codex
+alfred skills install ./skills/tdd --harness codex --apply
+alfred skills update tdd --harness codex
+alfred skills remove tdd --harness codex
+```
+
+`install`, `update`, and `remove` preview by default; add `--apply` to authorize
+the selected operation. Offline inventory reports location, declared version
+when present, revision/digest, and management/integrity status. Existing setup
+skills are unmanaged until explicitly adopted from an identical source.
+See the [skill manager guide](packages/skill-manager/README.md) for GitHub sources,
+project/global destinations, migration, and inventory coverage.
+
 ## Managed runtime (issue #217)
 
 The [runtime authority guide](docs/runtime-authority.md) describes install-once,

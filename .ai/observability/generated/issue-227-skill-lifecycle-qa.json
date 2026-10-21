@@ -1,0 +1,145 @@
+{
+  "trace_id": "issue-227-skill-lifecycle-qa",
+  "timestamp": "2026-10-18T18:37:03.277955+00:00",
+  "event": "validation_completed",
+  "actor": "qa",
+  "data": {
+    "issue": 227,
+    "phase": "final-validation",
+    "provider_calls": 0,
+    "status": "pass",
+    "baseline_runs": [
+      {
+        "head": "6e5918fef360a3e84e2b1646aebe58b02718d466",
+        "branch": "issue-227-skill-lifecycle",
+        "tests": {
+          "command": "node --test scripts/alfred-setup.test.mjs scripts/generate-homebrew-formula.test.mjs",
+          "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        "checks": [
+          "node --check packages/memory-server/scripts/alfred.mjs"
+        ],
+        "note": "Historical first baseline before task branch was rebased onto current origin/main."
+      },
+      {
+        "head": "3846080aa0bc56fc056b3f367d2ab82cdc50db31",
+        "branch": "issue-227-skill-lifecycle",
+        "tests": {
+          "command": "node --test scripts/alfred-setup.test.mjs scripts/generate-homebrew-formula.test.mjs",
+          "passed": 9,
+          "failed": 0,
+          "skipped": 0
+        },
+        "checks": [
+          "node --check packages/memory-server/scripts/alfred.mjs"
+        ],
+        "note": "Current baseline after parent rebased isolated task branch."
+      }
+    ],
+    "reproducibility": {
+      "worktree": "/Users/josegilbertoolivasibarra/Documents/personal/workspace/alfred-worktrees/issue-227-skill-lifecycle",
+      "branch": "issue-227-skill-lifecycle",
+      "head": "3846080aa0bc56fc056b3f367d2ab82cdc50db31",
+      "node": "v26.12.0",
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+      "source_snapshot_hash": "sha256:43c05e9e9f0069012db05e08d52a850f6c963454e56e972ec474726dd8ecc091",
+      "fixture_and_tests_hash": "sha256:73036ec721b0440914665554dd11b48cca6643e9e8a9c8ec2f8ed0c52c26fdb0",
+      "spec_hash": "sha256:1c4dc685ee611f84175c7bfb5f593cc17fdd43ca35c7adf0d1f37d3aaeb90d5a",
+      "agent_spec_hash": "sha256:adaca8be99693ac4f07a4b7e12b2d08a2ae444409478b75314b16df1df9983dc",
+      "instruction_policy_hash": "sha256:56ebe6017efb0f82d32e186d0920be3418f4391913932bbdab90828e21ad30a7",
+      "github_transport": "Injected WHATWG fetch with deterministic commit/tree/blob JSON and verified Git SHA1 fixtures; no live HTTP requests.",
+      "fixtures": "Fresh canonical OS temp directories with isolated project/home per test; cleanup registered with node:test.",
+      "seed": null
+    },
+    "test_design": {
+      "P0": [
+        "Preview/approval/dry-run/apply; exact explicit adoption; no-op timestamps",
+        "Edited/added/deleted/executable-mode drift; missing and unmanaged protection",
+        "Source/target/lock stale plans; rollback install/update/remove; concurrent mutation guard",
+        "Malformed lock schema/duplicates/digests/paths/scope",
+        "Source/state/destination symlinks and hardlinks; traversal names",
+        "Offline list/info with zero provider calls"
+      ],
+      "P1": [
+        "GitHub ref pinning and tree/blob identity; branch movement; private source errors",
+        "Remote unsafe/oversized/truncated tree rejection",
+        "CLI dispatcher/help/json/argument errors/scope selection",
+        "Codex/opencode project/global isolation; resources and modes"
+      ]
+    },
+    "limitations": [
+      "Full root npm test/check was not executed because it includes protected core paths and unrelated packages; targeted required checks above passed.",
+      "Live GitHub transport and real harness activation were not exercised; GitHub acquisition used deterministic injected transport.",
+      "Full release runtime archive was not built; existing archive/packaging fixture tests passed and skill-manager allowlist integration was inspected.",
+      "No dependencies installed, real harness configurations inspected or modified, model assignments changed, or eval baselines updated."
+    ],
+    "validation_runs": [
+      {
+        "command": "npm run skill-manager:test",
+        "passed": 80,
+        "failed": 0,
+        "skipped": 0,
+        "note": "Re-executed after final preview-file union change; 80 feature tests passed."
+      },
+      {
+        "command": "node --test scripts/alfred-setup.test.mjs scripts/generate-homebrew-formula.test.mjs scripts/runtime-distribution.test.mjs scripts/build-setup-tui.test.mjs",
+        "passed": 27,
+        "failed": 0,
+        "skipped": 0,
+        "note": "Previous 27-test pass retained; final delta changed only skill preview file union, with CLI dispatch/packaging unchanged."
+      }
+    ],
+    "checks": [
+      "npm run skill-manager:check",
+      "node --check packages/memory-server/scripts/alfred.mjs",
+      "node --check on all packages/skill-manager/test/*.js",
+      "git diff --check"
+    ],
+    "regression_findings": [
+      {
+        "finding": "Local destination edit during remote apply acquisition could be overwritten.",
+        "source": "reviewer independent reproduction",
+        "resolution": "Destination and receipt revalidated after source acquisition and before replacement.",
+        "test": "a local edit during apply's remote acquisition survives as a stale-plan rejection",
+        "status": "verified-fixed"
+      },
+      {
+        "finding": "Reading a FIFO source could hang.",
+        "source": "reviewer independent reproduction",
+        "resolution": "Reject special files before nonblocking open.",
+        "test": "a FIFO source fails promptly without opening a blocking stream",
+        "status": "verified-fixed"
+      },
+      {
+        "finding": "Source-control exclusion could hide user-added .git/.hg/.svn files in installed targets.",
+        "source": "qa inspection and regression design",
+        "resolution": "Exclude control internals only on source acquisition; target additions are observed and block mutation.",
+        "tests": 3,
+        "status": "verified-fixed"
+      },
+      {
+        "finding": "Shared canonical home/project roots could duplicate inventory or write a project receipt into global state.",
+        "source": "reviewer independent reproduction",
+        "resolution": "Deduplicate physical discovery roots; require explicit global scope for mutation from home; global receipts remain readable from other projects.",
+        "tests": 3,
+        "status": "verified-fixed"
+      },
+      {
+        "finding": "A concurrent replacement during remove must not be overwritten by rollback or reported as success.",
+        "source": "reviewer recommendation and qa regression",
+        "resolution": "Preserve new user files and old backup with E_RECOVERY_REQUIRED and a persisted recovery path.",
+        "test": "remove preserves concurrent replacement and its original backup with an explicit recovery diagnostic",
+        "status": "verified-fixed"
+      },
+      {
+        "finding": "Update preview omitted resources removed from the candidate source.",
+        "source": "developer final self-review",
+        "resolution": "Affected file list is the sorted union of current intact files and candidate files.",
+        "test": "update preview includes a resource removed from its candidate snapshot",
+        "status": "verified-fixed"
+      }
+    ]
+  }
+}

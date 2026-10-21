@@ -59,12 +59,12 @@ test("codex install preview writes valid custom agent fields without hard-coded 
 test("codex install preview emits canonical repo skill artifacts with progressive disclosure", () => {
   const preview = buildCodexInstallPreview({ root, outputDir: ".ai/generated/test-codex-install" });
   const skills = preview.files.filter((file) => file.kind === "skill");
-  assert.equal(skills.length, 5);
+  assert.equal(skills.length, 6);
   assert.ok(skills.every((file) => file.install_path.startsWith(".agents/skills/")));
   assert.ok(preview.generated_artifacts.skills.every((skill) => skill.scope === "project"));
   assert.ok(preview.generated_artifacts.skills.every((skill) => skill.load_body_by_default === false));
 
-  for (const skillId of ["typescript-project", "architecture-docs", "goal", "loop", "ulw"]) {
+  for (const skillId of ["typescript-project", "architecture-docs", "goal", "loop", "ulw", "alfred"]) {
     const artifact = skills.find((file) => file.install_path === `.agents/skills/${skillId}/SKILL.md`);
     const canonical = readFileSync(join(root, `.ai/skills/project/${skillId}/SKILL.md`), "utf8")
       .trim()

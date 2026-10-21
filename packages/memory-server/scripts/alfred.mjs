@@ -24,6 +24,7 @@ const usage = () => {
     "Subcommands:",
     "  runtime          Initialize and run managed Alfred instruction loading",
     "  setup            Configure Alfred with a guided, preview-first flow",
+    "  skills           List, inspect, install, update and remove skills",
     "  init             Initialize a tenant + workspace + API key (3 profiles)",
     "  provision        Provision a tenant only (no workspace, no key)",
     "  list             List tenants in the registry",
@@ -65,6 +66,8 @@ async function main(argv, env = process.env) {
         return await (await import("./runtime.mjs")).run(rest, env);
       case "setup":
         return await (await import("./setup.mjs")).run(rest, env);
+      case "skills":
+        return await (await import("../../skill-manager/src/cli.js")).run(rest, env);
       case "init":
         return await (await import("./init.mjs")).run(rest, env);
       case "provision":

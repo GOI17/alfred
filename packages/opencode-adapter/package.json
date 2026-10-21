@@ -9,7 +9,7 @@
     "alfred-opencode-install-preview": "./src/cli.js"
   },
   "scripts": {
-    "check": "node --check src/runtime.js && node --check src/cli.js",
+    "check": "node --check src/runtime.js && node --check src/cli.js && node --check src/chat-command.js",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
