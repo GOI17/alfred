@@ -48,7 +48,7 @@
     "visibility": "only_me",
     "sharing_constraint": "The ChatGPT builder reported that sharing GPTs with the public is no longer available for this account on September 2, 2026.",
     "oauth_callback_id": "g-31ee07319349c89eb0a46bd25648afbf99fd6b84",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "openapi_spec": "packages/memory-openapi/openapi.yaml",
     "provider_calls_per_request": 0
   }
