@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/GOI17/alfred/compare/v1.0.1...v1.1.0) (2026-10-24)
+
+
+### Features
+
+* **setup:** offer CLI and project integration updates ([#238](https://github.com/GOI17/alfred/issues/238)) ([5d573fd](https://github.com/GOI17/alfred/commit/5d573fd3c80fee1faa225499571bc6abaed8e8f1))
+
 ## [1.0.1](https://github.com/GOI17/alfred/compare/v1.0.0...v1.0.1) (2026-10-21)
 
 

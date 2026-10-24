@@ -6,7 +6,7 @@ info:
     create, update and delete durable memories for a user through this schema.
     This is not a native ChatGPT Memory integration: Alfred Memory remains an
     external service invoked by the Custom GPT at runtime.
-  version: 1.0.1
+  version: 1.1.0
   contact:
     name: Alfred Labs
 servers:
