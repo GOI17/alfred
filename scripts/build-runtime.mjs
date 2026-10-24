@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Build a reviewed runtime, never an archive of the source checkout.
+import { assertNative, readNativeArtifacts } from "./workspace-native-artifacts.mjs";
 import { renderFormula } from "./generate-homebrew-formula.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, fsyncSync, openSync, unlinkSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
@@ -105,7 +106,7 @@ export function assertSetupBinary(bytes, target) {
     : bytes.length >= 64 && bytes.subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46])) && bytes[4] === 2 && bytes[5] === 1 && bytes.readUInt16LE(18) === (arch === "arm64" ? 183 : 62);
   if (!valid) throw new Error(`Invalid setup TUI native executable: ${target}`);
 }
-export function buildRuntime({ root, dependencies, output, sourceRevision, builderRevision, exploratory = false, allowlist = join(repositoryRoot, "packaging/runtime/allowlist.json") }) {
+export function buildRuntime({ root, dependencies, output, sourceRevision, builderRevision, workspaceNative, exploratory = false, allowlist = join(repositoryRoot, "packaging/runtime/allowlist.json") }) {
   root = realpathSync(resolve(root)); dependencies = realpathSync(resolve(dependencies)); output = resolve(output);
   const existingOutputParent = (() => { let p = output; while (!existsSync(p)) p = dirname(p); return realpathSync(p); })();
   if (inside(root, output) || inside(output, root) || inside(dependencies, output) || inside(output, dependencies) || inside(root, existingOutputParent) || inside(dependencies, existingOutputParent)) throw new Error("Runtime output must not overlap source or dependencies");
@@ -190,18 +191,40 @@ export function buildRuntime({ root, dependencies, output, sourceRevision, build
     }
   }
   checkPackageDirectory(dependencies);
-  for (const [name, entry] of lockedPackages) if (!entry.dev && !entry.optional && !discoveredPackages.has(name)) throw new Error(`Missing locked production dependency: ${name}`);
+  for (const [name, entry] of lockedPackages) if (!entry.dev && !entry.optional && !entry.devOptional && !discoveredPackages.has(name)) throw new Error(`Missing locked production dependency: ${name}`);
+  const nativeRecords = [];
+  if (policy.workspaceNative) {
+    if (JSON.stringify(policy.workspaceNative.targets) !== JSON.stringify(['darwin-arm64','darwin-x64','linux-arm64','linux-x64']) || policy.workspaceNative.version !== '1.1.0' || policy.dependencies['node-pty'] !== policy.workspaceNative.version) throw new Error('Invalid Workspace native target policy');
+    nativeRecords.push(...readNativeArtifacts(workspaceNative, lockBytes, sourceRevision));
+  }
+  const executablePaths = new Set();
+  for (const name of discoveredPackages) {
+    const metadata = JSON.parse(readFileSync(join(dependencies, name.slice('node_modules/'.length), 'package.json')));
+    const bins = typeof metadata.bin === 'string' ? [metadata.bin] : Object.values(metadata.bin ?? {});
+    for (const bin of bins) {
+      const file = `${name}/${bin.replace(/^\.\//, '')}`;
+      assertSafePath(file); executablePaths.add(file);
+    }
+  }
   // npm's executable symlinks and development files are not runtime imports.
   function vendor(directory, prefix = "node_modules") {
     for (const entry of readdirSync(directory).sort()) {
       if (entry === ".bin" || entry === ".package-lock.json") continue;
       const path = join(directory, entry), name = `${prefix}/${entry}`;
       if (/(?:^|\/)(?:\.github|spec|test|tests|__tests__|fixtures|coverage|docs|examples)(?:\/|$)/i.test(name) || /(?:\.d\.[cm]ts|\.(?:map|ts))$/.test(name) || /(?:^|\/)(?:\.travis\.yml|\.eslintrc[^/]*|Makefile)$/.test(name)) continue;
+      // Windows PTY binaries are not part of Alfred's macOS/Linux release.
+      if (policy.workspaceNative && (/^node_modules\/node-pty\/(?:build|prebuilds\/win32-[^/]+)(?:\/|$)/.test(name) || /^node_modules\/node-pty\/.*\.(?:dll|exe)$/.test(name))) continue;
       assertSafePath(name);
       const stat = lstatSync(path);
       if (stat.isSymbolicLink()) throw new Error(`Dependency symlink is not allowed: ${name}`);
       if (stat.isDirectory()) vendor(path, name);
-      else if (stat.isFile()) add(name, readFileSync(path));
+      else if (stat.isFile()) {
+        const bytes = readFileSync(path);
+        const native = name.match(/^node_modules\/node-pty\/prebuilds\/(darwin-(?:arm64|x64))\/(pty\.node|spawn-helper)$/);
+        if (policy.workspaceNative && name.endsWith('.node') && !native) throw new Error(`Unreviewed native dependency: ${name}`);
+        if (native && policy.workspaceNative) assertNative(bytes, native[1]);
+        add(name, bytes, executablePaths.has(name) || native?.[2] === 'spawn-helper' ? 0o755 : 0o644);
+      }
       else throw new Error(`Unsupported dependency input: ${name}`);
     }
   }
@@ -211,6 +234,16 @@ export function buildRuntime({ root, dependencies, output, sourceRevision, build
     if (metadata.name !== name || metadata.version !== expected) throw new Error(`Dependency version mismatch: ${name}`);
   }
   vendor(dependencies);
+  if (policy.workspaceNative) {
+    for (const target of ['darwin-arm64','darwin-x64']) for (const name of ['pty.node','spawn-helper']) {
+      if (!files.has(`node_modules/node-pty/prebuilds/${target}/${name}`)) throw new Error(`Missing vendored Workspace native binary: ${target}/${name}`);
+    }
+    for (const record of nativeRecords) add(`node_modules/node-pty/prebuilds/${record.target}/pty.node`, record.bytes);
+    add('packages/workspace/native-manifest.json', jsonBytes({ schema: 'alfred.workspace.native-bundle/v1',
+      dependencies_lock_sha256: sha256(lockBytes), linux_builds: nativeRecords.map(record => record.manifest),
+      darwin: { provenance: 'node-pty npm package integrity in the reviewed production lock', version: policy.workspaceNative.version },
+    }));
+  }
   for (const [name, source] of Object.entries(policy.workspaceModules ?? {})) {
     assertSafePath(name); assertSafePath(source);
     for (const [path, file] of [...files]) if (path.startsWith(`${source}/`)) add(`node_modules/${name}/${path.slice(source.length + 1)}`, file.bytes, file.mode);
@@ -221,7 +254,7 @@ export function buildRuntime({ root, dependencies, output, sourceRevision, build
     files.delete("packages/console-web/src/index.html");
     add("packages/console-web/dist/index.html", consoleSource.bytes);
   }
-  add("RUNTIME-DISCLOSURE.txt", Buffer.from("Alfred runtime includes readable JavaScript, shell, HTML, SQL, agent and skill instructions, and third-party production dependencies with their licenses. It is not an opaque native binary. Source checkout history, workflows, tests, execution specifications and local credentials are excluded. Node is required. Optional OpenTUI and Transformers are not bundled. The bundled Go setup TUI supports Darwin/Linux amd64/arm64; explicit Node automation and keyword search remain available. Go dependency licenses and module checksums are included.\n"));
+  add("RUNTIME-DISCLOSURE.txt", Buffer.from("Alfred runtime includes readable JavaScript, shell, HTML, SQL, agent and skill instructions, and third-party production dependencies with their licenses. It is not an opaque native binary. Source checkout history, workflows, tests, execution specifications and local credentials are excluded. Node is required. Optional OpenTUI and Transformers are not bundled. The bundled Go setup TUI supports Darwin/Linux amd64/arm64; explicit Node automation and keyword search remain available. Go dependency licenses and module checksums are included. Workspace ships compiled web/server assets and node-pty N-API binaries for Darwin/Linux x64/arm64. Darwin binaries come from the pinned npm package; Linux provenance is recorded in packages/workspace/native-manifest.json. Chromium and WebKit are opt-in external browser installations and are not bundled.\n"));
   const manifest = { schema: "alfred.runtime.manifest/v1", version,
     provenance: { source_revision: sourceRevision, builder_revision: builderRevision, exploratory, generator_sha256: sha256(readFileSync(join(repositoryRoot, "scripts/generate-homebrew-formula.mjs"))), builder_sha256: sha256(readFileSync(fileURLToPath(import.meta.url))), allowlist_sha256: sha256(allowlistBytes), dependencies_lock_sha256: sha256(lockBytes), source_repository: "GOI17/alfred" },
     transformations: ["root and package metadata reduced to runtime fields", "console HTML relocated to runtime dist path", "workspace module copies materialized inside node_modules", "mtime/ownership/modes normalized", "development files omitted from production dependencies", ...(policy.generatedRuntimeMetadata ? ["minimal runtime kernel manifest and install instructions generated", "historical eval runner removed from runtime component metadata"] : [])],
@@ -246,8 +279,8 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
     for (let i = 2; i < process.argv.length; i += 2) {
       const flag = process.argv[i];
       if (flag === "--exploratory") { options.exploratory = true; i -= 1; continue; }
-      if (!["--root", "--dependencies", "--output", "--allowlist", "--source-revision", "--builder-revision"].includes(flag) || !process.argv[i + 1]) throw new Error(`Invalid runtime build argument: ${flag}`);
-      options[flag === "--source-revision" ? "sourceRevision" : flag === "--builder-revision" ? "builderRevision" : flag.slice(2)] = process.argv[i + 1];
+      if (!["--root", "--dependencies", "--output", "--allowlist", "--source-revision", "--builder-revision", "--workspace-native"].includes(flag) || !process.argv[i + 1]) throw new Error(`Invalid runtime build argument: ${flag}`);
+      options[flag === "--source-revision" ? "sourceRevision" : flag === "--builder-revision" ? "builderRevision" : flag === "--workspace-native" ? "workspaceNative" : flag.slice(2)] = process.argv[i + 1];
     }
     if (!options.root || !options.dependencies || !options.output) throw new Error("Required: --root --dependencies --output");
     process.stdout.write(`${JSON.stringify(buildRuntime(options))}\n`);

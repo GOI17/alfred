@@ -1,0 +1,205 @@
+{
+  "schema": "alfred.workspace.import-validation-baseline/v1",
+  "sourceRevision": "1e8c624d65e9814549d8604db181d716bc0dd0f4",
+  "sourceTree": "2683a7993053da9cd3c81293869ba214cdd079ba",
+  "lintErrorCount": 25,
+  "files": [
+    {
+      "path": "src/renderer/src/git-panel.tsx",
+      "sha256": "dc441660d084ae5eba9054e1240d637422f675f5758ceb66d76bdd0ab6142887",
+      "messages": [
+        {
+          "line": 502,
+          "rule": "max-lines"
+        }
+      ]
+    },
+    {
+      "path": "src/renderer/src/model-picker.tsx",
+      "sha256": "e663436ff0bb26def4a10d64fdf66d8ecd8d2577b53abec04f67e0d66e34eb81",
+      "messages": [
+        {
+          "line": 67,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        }
+      ]
+    },
+    {
+      "path": "src/renderer/src/sidebar.tsx",
+      "sha256": "f621f9fa061fc5305e402b756c177f42520dcb8490b52de7c1fafad5d4017026",
+      "messages": [
+        {
+          "line": 119,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        }
+      ]
+    },
+    {
+      "path": "src/renderer/src/ui-preferences.tsx",
+      "sha256": "068ca4045843392e160ef6bd5dce1eff784a4bc95084a143418d35d3367c3781",
+      "messages": [
+        {
+          "line": 8,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        },
+        {
+          "line": 8,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        },
+        {
+          "line": 26,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        },
+        {
+          "line": 29,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        }
+      ]
+    },
+    {
+      "path": "src/renderer/src/use-persistent-layout.ts",
+      "sha256": "3c8fd6cfad3693eb7e0ca55952c6c175105b5fe51e5b43729a2fb2d5df9dcfd8",
+      "messages": [
+        {
+          "line": 24,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        }
+      ]
+    },
+    {
+      "path": "src/server/chat-recovery.ts",
+      "sha256": "0132093ab603c9907226be3fe3baa87cf92792fcee0a684bb9ae624b14343d06",
+      "messages": [
+        {
+          "line": 7,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        },
+        {
+          "line": 36,
+          "rule": "no-useless-assignment"
+        }
+      ]
+    },
+    {
+      "path": "src/server/git-actions.ts",
+      "sha256": "a8904d1953cb12faa40dbded47cae1efd209fcb36cc991738a8103625a9e12dd",
+      "messages": [
+        {
+          "line": 89,
+          "rule": "preserve-caught-error"
+        }
+      ]
+    },
+    {
+      "path": "src/server/notifications.ts",
+      "sha256": "b22a130b95d33ee0255862bdceae94f14845654af0945099df450180cbe3a031",
+      "messages": [
+        {
+          "line": 25,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        }
+      ]
+    },
+    {
+      "path": "src/server/reveal-file.ts",
+      "sha256": "957f42590f631ccee3419ba99bb4f718bae80052538f9fa9cf3ed6497df92db2",
+      "messages": [
+        {
+          "line": 24,
+          "rule": "no-control-regex"
+        }
+      ]
+    },
+    {
+      "path": "src/server/workspace-path-policy.ts",
+      "sha256": "528cb94238bbdf029247ba64cb02e4992891641425d83b5968a83d6da9731887",
+      "messages": [
+        {
+          "line": 10,
+          "rule": "no-control-regex"
+        }
+      ]
+    },
+    {
+      "path": "src/shared/file-link.ts",
+      "sha256": "1e7c61935af705a731189cbdcef5e460bbef610849c127fd5ed78914161edb07",
+      "messages": [
+        {
+          "line": 19,
+          "rule": "no-control-regex"
+        }
+      ]
+    },
+    {
+      "path": "tests/additional-providers.test.ts",
+      "sha256": "4988688e96c6929977c6487b69d49cfd5a77475245b0a09f0a4d74fdc610f23b",
+      "messages": [
+        {
+          "line": 14,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        },
+        {
+          "line": 15,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        },
+        {
+          "line": 15,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        }
+      ]
+    },
+    {
+      "path": "tests/agent-access.test.ts",
+      "sha256": "b84b5e164be335ef259952021f971b35738ff2d72e8719c1c706fca47b05b5d1",
+      "messages": [
+        {
+          "line": 91,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        }
+      ]
+    },
+    {
+      "path": "tests/cloudflare.test.ts",
+      "sha256": "b9b1720e3f1e6fa88e17f028523622e080c0b28dc1fd6b03bd31bd881fbeb441",
+      "messages": [
+        {
+          "line": 19,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        },
+        {
+          "line": 19,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        },
+        {
+          "line": 20,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        },
+        {
+          "line": 20,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        }
+      ]
+    },
+    {
+      "path": "tests/notifications.test.ts",
+      "sha256": "f62a29949f82af492492b14b49b76110dff6d6619e03c592a4ade893efec1510",
+      "messages": [
+        {
+          "line": 37,
+          "rule": "@typescript-eslint/consistent-type-assertions"
+        }
+      ]
+    },
+    {
+      "path": "tests/security-regression.test.ts",
+      "sha256": "2ea1b743cf4daefd0a9d73f4e58aac3bfa50d068ca1d9a63003b0075149c6c91",
+      "messages": [
+        {
+          "line": 24,
+          "rule": "no-unexpected-multiline"
+        }
+      ]
+    }
+  ],
+  "note": "These files are byte-identical to the imported source snapshot. No rule suppressions or unrelated fixes were added to conceal this pre-existing lint baseline."
+}

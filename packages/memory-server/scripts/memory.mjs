@@ -1,0 +1,114 @@
+#!/usr/bin/env node
+// Standalone Memory CLI; no product peers are loaded by this entrypoint.
+//
+// This script is intentionally minimal: each command lives in its own file in
+// this directory. Future commands (key list, validate-policy, migrate) plug in
+// here without touching the dispatcher.
+
+import { readFileSync, realpathSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
+
+const { version: ALFRED_VERSION } = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8")
+);
+
+const usage = () => {
+  process.stderr.write([
+    "alfred-memory <subcommand> [options]",
+    "",
+    "Quick start (no install needed if you have the source tree):",
+    "  alfred-memory init --profile=web --name my-mem   # web-only API key for ChatGPT/Claude/Gemini",
+    "  alfred-memory init --profile=coding --name acme  # coding agent in cwd (default)",
+    "  alfred-memory init --profile=both --name shared  # both kinds",
+    "",
+    "Subcommands:",
+    "  init             Initialize a tenant + workspace + API key (3 profiles)",
+    "  provision        Provision a tenant only (no workspace, no key)",
+    "  list             List tenants in the registry",
+    "  validate-policy  Run hosting-policy checks against the registry",
+    "  keys issue       Issue a new API key for an existing tenant",
+    "  key rotate       Revoke all current keys for a tenant and issue a new one",
+    "  key revoke       Revoke a single API key by id",
+    "  key list         List API keys for a tenant (--include-revoked for history)",
+    "  migrate          Migrate tenant storage (sqlite<->sqlite, sqlite->pg SQL dump)",
+    "  serve            Run the local Memory Server (--port N --bind loopback)",
+    "  adapters         List agent adapters + print integration steps",
+  "  dashboard         TUI dashboard (tenants, keys, memory counts)",
+    "  version          Print the Memory package version",
+    "",
+    "Init profiles:",
+    "  coding (default) - coding_agent_only + sqlite + writes <cwd>/.alfred/config.json",
+    "  web              - human_agent + postgres, NO workspace binding, prints web setup",
+    "  both             - hybrid_with_human + postgres, workspace + web setup",
+    "",
+    "Global options:",
+    "  --non-interactive  never prompt (CI/automation)",
+    "  --print-only       show the plan without executing",
+    "  --backend <b>      sqlite (default for coding) or postgres (default for web)",
+    "  --cwd <path>       workspace path (default: process.cwd())",
+    "",
+    "Run `alfred-memory <subcommand> --help` for command-specific options."
+  ].join("\n"));
+};
+
+export async function run(args = [], env = process.env) {
+  const [subcmd, ...rest] = args;
+  if (!subcmd || subcmd === "--help" || subcmd === "-h" || subcmd === "help") {
+    usage();
+    return 0;
+  }
+  try {
+    switch (subcmd) {
+      case "init":
+        return await (await import("./init.mjs")).run(rest, env);
+      case "provision":
+        return await (await import("./provision.mjs")).run(rest, env);
+      case "list":
+        return await (await import("./list.mjs")).run(rest, env);
+      case "validate-policy":
+        return await (await import("./validate-policy.mjs")).run(rest, env);
+      case "key":
+        return await runKey(rest, env);
+      case "keys":
+        return await (await import("./keys-issue.mjs")).run(rest, env);
+      case "migrate":
+        return await (await import("./migrate.mjs")).run(rest, env);
+      case "adapters":
+        return await (await import("./adapters.mjs")).run(rest, env);
+      case "dashboard":
+        return await (await import("../../console/tui/dashboard.mjs")).runTui(rest);
+      case "serve":
+        return await (await import("./serve.mjs")).run(rest, env);
+      case "--version":
+      case "version":
+        process.stdout.write(`alfred-memory ${ALFRED_VERSION}\n`);
+        return 0;
+      default:
+        process.stderr.write(`Unknown subcommand: ${subcmd}\n`);
+        usage();
+        return 2;
+    }
+  } catch (err) {
+    process.stderr.write(`Error: ${err.message}\n`);
+    if (env.ALFRED_DEBUG === "1" && err.stack) process.stderr.write(err.stack + "\n");
+    return 1;
+  }
+}
+
+async function runKey(rest, env) {
+  const [sub, ...args] = rest;
+  switch (sub) {
+    case "rotate":
+      return await (await import("./key-rotate.mjs")).run(args, env);
+    case "revoke":
+      return await (await import("./key-revoke.mjs")).run(args, env);
+    case "list":
+      return await (await import("./key-list.mjs")).run(args, env);
+    default:
+      process.stderr.write(`alfred-memory key <rotate|revoke|list>\n`);
+      return 2;
+  }
+}
+
+if (process.argv[1] && pathToFileURL(realpathSync(process.argv[1])).href === import.meta.url) process.exitCode = await run(process.argv.slice(2));

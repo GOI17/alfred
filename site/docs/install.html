@@ -19,7 +19,7 @@
         <a href="/alfred/#pillars">Pillars</a>
         <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
-        <a href="/alfred/memory/">Memory Console</a>
+        <a href="/alfred/memory/">Memory</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
       </nav>
       <a class="nav-cta" href="/alfred/docs/index.html">Docs &rarr;</a>
@@ -32,6 +32,8 @@
       <a href="/alfred/docs/index.html">Overview</a>
       <a href="/alfred/docs/install.html" class="active">Install Alfred</a>
       <a href="/alfred/docs/configuration.html">Configuration</a>
+      <a href="/alfred/docs/components.html">Product capabilities</a>
+      <a href="/alfred/docs/workspace.html">Workspace</a>
       <h6>Concepts</h6>
       <a href="/alfred/docs/architecture.html">Architecture</a>
       <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
@@ -76,8 +78,7 @@
         A failed version lookup still allows continuing setup and updating a
         recorded project from the installed runtime. Set
         <code>ALFRED_SETUP_CHECK_UPDATES=0</code> to skip the remote check.</p>
-      <p>For an existing 1.0.1 installation, install a release containing this
-        feature once with <code>brew update</code> and
+      <p>For an existing 1.0.1 installation, upgrade to 1.1.0 or later once with <code>brew update</code> and
         <code>brew upgrade GOI17/alfred/alfred</code>. Future releases can then be
         offered inside setup.</p>
 
@@ -86,23 +87,17 @@
         <li>Homebrew for the versioned macOS/Linux package</li>
         <li>Node.js <strong>22+</strong> (<code>node -v</code>)</li>
         <li>pnpm 10+ <em>(optional)</em> &mdash; only for monorepo development</li>
-        <li>One of: opencode, Pi, Codex, Claude, VSCode</li>
+        <li>A compatible coding harness only when using Agent Harness integration</li>
         <li>macOS, Linux, or WSL2</li>
       </ul>
 
       <div class="doc-callout">
-        <strong>OpenTUI with a safe fallback.</strong> The guided installer
-        prefers a checksum-verified OpenTUI executable, using the same native
-        terminal framework that powers OpenCode. Node 22+ remains supported:
-        when a compatible OpenTUI artifact or runtime is unavailable, Alfred
-        automatically uses its dependency-free Node terminal adapter with the
-        same decisions and approval gates.
+        <strong>Packaged UI and source compatibility.</strong> The published runtime uses its bundled Go setup UI. The source bootstrap retains an OpenTUI compatibility frontend and a dependency-free Node fallback, with the same preparation and approval boundaries.
       </div>
 
       <h2 id="homebrew">Install with Homebrew</h2>
       <p>
-        Alfred source and its dedicated tap are public. Version 0.7.3 includes the
-        verified runtime package. Install the fully qualified formula without GitHub credentials:
+        Alfred source and its dedicated tap are public. Install the fully qualified formula without GitHub credentials. Check the installed release with <code>alfred version</code>:
       </p>
       <div class="terminal" aria-label="Install Alfred with Homebrew">
         <div class="terminal-bar">
@@ -136,7 +131,10 @@
         user configuration. Pi remains preview-only.
         Explicit flags and <code>alfred setup --legacy-ui</code> preserve automation.
       </p>
-      <h2 id="profiles">Choose an edition</h2>
+      <h2 id="profiles">Choose capabilities</h2>
+      <p>In releases with the composition layer, setup offers independent Workspace, Memory, and Agent Harness checkboxes. Choose any nonempty combination, or use <code>alfred setup --components=workspace,memory,harness</code>. Approved Apply records component preferences; selecting several does not connect services, credentials, MCP, or session runtimes.</p>
+      <div class="doc-callout warn"><strong>Workspace availability.</strong> Workspace requires the packaged web asset and real terminal gates on all four supported targets before release. It is not included in 1.1.0. See <a href="/alfred/docs/workspace.html">Workspace</a> for commands and source migration.</div>
+      <h3>Historical edition compatibility</h3>
       <p>
         After installing the runtime, start with the guided flow:
         <code>alfred setup</code>.
@@ -144,12 +142,12 @@
       </p>
       <table class="matrix">
         <thead>
-          <tr><th>Edition</th><th>What it installs</th><th>What you need</th></tr>
+          <tr><th>Legacy edition</th><th>Capability mapping</th><th>What you need</th></tr>
         </thead>
         <tbody>
           <tr>
             <td><code>coding</code></td>
-            <td>Core, agents, skills, runtime profiles, opencode/Codex adapters, eval gates.</td>
+            <td>Agent Harness: agents, skills, policies, profiles, adapters, eval gates.</td>
             <td>Node 22+ and your coding harness.</td>
           </tr>
           <tr>
@@ -159,13 +157,13 @@
           </tr>
           <tr>
             <td><code>full</code></td>
-            <td>The complete Alfred operations system: coding + Memory components.</td>
+            <td>Agent Harness + Memory. Historical full does not add Workspace during an upgrade.</td>
             <td>Node 22+, harness, and Memory storage configuration.</td>
           </tr>
         </tbody>
       </table>
 
-      <h2 id="coding">Option A &mdash; coding edition</h2>
+      <h2 id="coding">Agent Harness (legacy coding edition)</h2>
       <p>The fastest path. Perfect for coding harness operations without forcing Memory setup.</p>
       <div class="terminal" aria-label="Install Alfred coding profile">
         <div class="terminal-bar">
@@ -213,10 +211,11 @@ Provider calls   : <span class="k">0</span>
 </pre>
       </div>
 
-      <h2 id="web">Option B &mdash; Memory edition</h2>
+      <h2 id="web">Memory</h2>
       <p>Use Alfred Memory from the local browser console, desktop clients, or coding agents. Cloud ChatGPT Actions and AI Studio cannot reach this local-only service.</p>
-      <pre>alfred init --profile=coding --backend=sqlite --name my-memory
-ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve</pre>
+      <pre>alfred memory init --profile=coding --backend=sqlite --name my-memory
+ALFRED_MEMORY_REQUIRE_AUTH=true alfred memory serve</pre>
+      <p>On 1.1.0, use the preserved aliases <code>alfred init</code> and <code>alfred serve</code>; namespaced commands require a later release that includes the composition layer.</p>
       <p>Save the issued key and open <a href="http://127.0.0.1:3000/console/">the local console</a>. Keep the server running. The managed hosted service is retired.</p>
       <ol>
         <li>If you already created a tenant in the Memory app, choose
@@ -274,14 +273,14 @@ Apply changes? <span class="p">[y/N]</span>
       </p>
 
       <h2 id="verify">Verify the install</h2>
-      <p>Use local checks instead of assuming a global CLI binary exists:</p>
+      <p>Check the installed runtime and review the setup result. A component preference or files on disk alone do not prove a harness loaded its integration; start a new harness session after activation.</p>
       <div class="terminal">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
           <span class="title">verify</span>
         </div>
-<pre><span class="f">node</span> -v                     <span class="c"># Node 22+</span>
-<span class="f">test</span> -d ~/.alfred/installs/default <span class="c"># default suite install target</span>
+<pre><span class="f">alfred</span> version
+<span class="f">alfred</span> setup <span class="c"># review installed/project versions and updates</span>
 </pre>
       </div>
 
@@ -313,10 +312,10 @@ Apply changes? <span class="p">[y/N]</span>
       <h6>On this page</h6>
       <a href="#requirements">Requirements</a>
       <a href="#homebrew">Homebrew</a>
-      <a href="#profiles">Editions</a>
-      <a href="#coding">Coding edition</a>
+      <a href="#profiles">Capabilities</a>
+      <a href="#coding">Agent Harness</a>
       <a href="#models">Model assignment</a>
-      <a href="#web">Memory edition</a>
+      <a href="#web">Memory</a>
       <a href="#approve">Approve &amp; write</a>
       <a href="#verify">Verify</a>
       <a href="#uninstall">Uninstall</a>

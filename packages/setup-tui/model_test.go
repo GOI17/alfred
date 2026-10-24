@@ -30,7 +30,7 @@ func readyModel() model {
 	m.width = 80
 	m.height = 24
 	m.busy = false
-	m.selection = selection{"coding", []string{}, "decide-later", "default", "/install", true}
+	m.selection = selection{nil, "coding", []string{}, "decide-later", "default", "/install", true}
 	m.enter(editionScreen)
 	return m
 }

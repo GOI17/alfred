@@ -9,6 +9,8 @@ import { buildActivationPlan, describeActivation, activatePlan } from "./activat
 import { inspectIntegration, activationReceipt, saveActivationReceipt, generateIntegrationPreview, buildIntegrationPlan, describeIntegration, applyIntegration } from "./integration.mjs";
 import { checkForUpdates, handoffRuntimeUpgrade } from "./releases.mjs";
 
+import { normalizeComponents, legacyEdition, componentPlan, readComponentPreferences, saveComponentPreferences } from "../../packages/cli/src/components.mjs";
+
 export const schema = "alfred.setup/v1";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const harnessIds = ["opencode", "codex-cli", "codex-app", "pi"];
@@ -24,14 +26,21 @@ function keys(value, allowed) {
   if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some(key => !allowed.includes(key))) throw fault("invalid_request", "Unexpected request fields.");
 }
 export function normalizeSelection(value, { packaged, installRoot }) {
-  keys(value, ["edition", "harnesses", "memory", "name", "path", "profiles"]);
-  if (!["coding", "memory", "full"].includes(value.edition) || !["decide-later", "existing-tenant", "local-sqlite", "postgres"].includes(value.memory) || typeof value.profiles !== "boolean") throw fault("invalid_selection", "Choose supported setup options.");
+  keys(value, ["edition", "harnesses", "memory", "name", "path", "profiles", "components"]);
+  if (!["coding", "memory", "full", "workspace"].includes(value.edition) || !["decide-later", "existing-tenant", "local-sqlite", "postgres"].includes(value.memory) || typeof value.profiles !== "boolean") throw fault("invalid_selection", "Choose supported setup options.");
   if (!Array.isArray(value.harnesses) || value.harnesses.length > 4 || new Set(value.harnesses).size !== value.harnesses.length || value.harnesses.some(id => !harnessIds.includes(id))) throw fault("invalid_selection", "Choose supported harnesses.");
   if (typeof value.name !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(value.name)) throw fault("invalid_selection", "Name must contain letters, numbers, dots, underscores or hyphens.");
   if (typeof value.path !== "string" || value.path.length > 4096 || unsafe.test(value.path) || /["\\]/.test(value.path) || !isAbsolute(value.path)) throw fault("invalid_selection", "Choose an absolute installation path.");
   const selectedPath = resolve(value.path);
   if (packaged && selectedPath !== installRoot) throw fault("invalid_selection", "The Homebrew installation path is read-only.");
-  return { edition: value.edition, harnesses: harnessIds.filter(id => value.harnesses.includes(id)), memory: value.memory, name: value.name, path: selectedPath, profiles: value.profiles };
+  let components;
+  try { components = normalizeComponents(value.components, value.edition); }
+  catch (error) { throw fault("invalid_selection", error.message); }
+  const explicit = value.components !== undefined;
+  return { edition: explicit ? legacyEdition(components) : value.edition,
+    harnesses: components.includes("harness") ? harnessIds.filter(id => value.harnesses.includes(id)) : [],
+    memory: components.includes("memory") ? value.memory : "decide-later", name: value.name, path: selectedPath,
+    profiles: components.includes("harness") && value.profiles, ...(explicit ? { components } : {}) };
 }
 export function cleanEnvironment(env) {
   const result = { ...env };
@@ -76,7 +85,12 @@ export function createSession({ installRoot = root, cwd = process.cwd(), env = p
   const notCancelled = () => { if (signal?.aborted) throw fault("cancelled", "Setup was cancelled."); };
   const fingerprint = () => digest(readFileSync(join(installRoot, "install.sh")) + readFileSync(join(installRoot, "package.json"), "utf8"));
   function argv(selection, apply = false) {
-    return [`--edition=${selection.edition}`, `--harness=${selection.harnesses.join(",") || "none"}`, `--memory=${selection.memory}`, `--name=${selection.name}`, `--path=${selection.path}`, "--no-clone", `--preview-output=${previewRoot}`, ...(selection.profiles ? [] : ["--skip-profile-manager"]), ...(apply ? ["--apply"] : [])];
+    return [`--edition=${selection.edition}`, `--harness=${selection.harnesses.join(",") || "none"}`, `--memory=${selection.memory}`, `--name=${selection.name}`, `--path=${selection.path}`, "--no-clone", `--preview-output=${previewRoot}`, ...(selection.components ? componentPlan(selection.components, selection.profiles).map(id => `--component=${id}`) : []), ...(selection.profiles ? [] : ["--skip-profile-manager"]), ...(apply ? ["--apply"] : [])];
+  }
+  function preparationText(text, selection) {
+    if (!selection.components) return text;
+    const names = selection.components.map(id => ({ workspace: "Workspace", memory: "Memory", harness: "Agent Harness" })[id]).join(", ");
+    return text + `\nProduct choices: ${names}\nAfter Apply, save these choices to ${join(cwd, ".alfred/setup/components.json")}.\nThis preferences file is separate from the harness installation receipt.\nServices start only when you run their commands.\n`;
   }
   return async request => {
     let id = "";
@@ -94,9 +108,12 @@ export function createSession({ installRoot = root, cwd = process.cwd(), env = p
         const commands = { opencode: "opencode", "codex-cli": "codex", "codex-app": "codex", pi: "pi" };
         const harnesses = Object.fromEntries(harnessIds.map(id => [id, (env.PATH || "").split(delimiter).some(p => p && existsSync(join(p, commands[id]))) ? "installed" : "not-installed"]));
         const integration = inspectIntegration(cwd, version);
-        const defaults = normalizeSelection({ edition: "coding", memory: "decide-later", name: "default", profiles: true, ...(integration.selection ?? {}), harnesses: integration.harnesses ?? [], path: installRoot }, { packaged, installRoot });
+        const base = { edition: "coding", memory: "decide-later", name: "default", profiles: true, ...(integration.selection ?? {}), harnesses: integration.harnesses ?? [], path: installRoot };
+        const preferences = readComponentPreferences(cwd);
+        const defaults = normalizeSelection({ ...base, components: preferences.value?.components ?? normalizeComponents(undefined, base.edition) }, { packaged, installRoot });
+        const integrationDefaults = normalizeSelection(base, { packaged, installRoot });
         const project = { status: integration.status, version: integration.version, text: safeText(integration.text), canUpdate: integration.canUpdate };
-        return { schema, id, ok: true, data: { version, packaged, defaults, project, resume: env.ALFRED_SETUP_RESUME === "1", capabilities: { platform: process.platform, arch: process.arch, node: process.version, harnesses } } };
+        return { schema, id, ok: true, data: { version, packaged, defaults, integrationDefaults, project, resume: env.ALFRED_SETUP_RESUME === "1", capabilities: { platform: process.platform, arch: process.arch, node: process.version, harnesses } } };
       }
       if (request.operation === "check-update") {
         keys(request, ["schema", "id", "operation"]);
@@ -111,7 +128,7 @@ export function createSession({ installRoot = root, cwd = process.cwd(), env = p
       const selection = normalizeSelection(request.selection, { packaged, installRoot });
       if (!existsSync(selection.path) || lstatSync(selection.path).isSymbolicLink() || realpathSync(selection.path) !== selection.path || !existsSync(join(selection.path, "install.sh"))) throw fault("invalid_selection", "Use an existing Alfred installation; setup does not download source.");
       const binding = JSON.stringify({ selection, cwd, installRoot, previewRoot, installer: fingerprint() });
-      const trace = (event, status, humanApproval) => [{ event, status, project: cwd, harnesses: selection.harnesses, human_approval: humanApproval, provider_calls: 0 }];
+      const trace = (event, status, humanApproval) => [{ event, status, project: cwd, harnesses: selection.harnesses, components: normalizeComponents(selection.components, selection.edition), human_approval: humanApproval, provider_calls: 0 }];
       if (["runtime-preview", "project-preview"].includes(request.operation)) {
         approval = null; activation = null; updateApproval = null;
         keys(request, ["schema", "id", "operation", "selection"]);
@@ -169,19 +186,22 @@ export function createSession({ installRoot = root, cwd = process.cwd(), env = p
       if (request.operation === "preview") {
         approval = null; activation = null; updateApproval = null;
         keys(request, ["schema", "id", "operation", "selection"]);
-        const text = await execute(argv(selection), context);
+        const preferences = readComponentPreferences(cwd);
+        const text = preparationText(await execute(argv(selection), context), selection);
         notCancelled();
         const previewToken = randomBytes(32).toString("hex");
-        approval = { previewToken, binding, text };
+        approval = { previewToken, binding, text, preferencesDigest: preferences.digest };
         return { schema, id, ok: true, data: { text: safeText(text), previewToken } };
       }
       const current = approval; approval = null;
       if (request.confirmed !== true || !current || request.previewToken !== current.previewToken || binding !== current.binding) throw fault("consent_required", "Review this exact setup and explicitly confirm Apply.");
-      const refreshed = await execute(argv(selection), context);
+      if (readComponentPreferences(cwd).digest !== current.preferencesDigest) throw fault("preview_changed", "Product choices changed since review. Generate a new preview.");
+      const refreshed = preparationText(await execute(argv(selection), context), selection);
       notCancelled();
       if (refreshed !== current.text) throw fault("preview_changed", "Setup changed since review. Generate a new preview.");
       const text = await execute(argv(selection, true), context);
       notCancelled();
+      if (selection.components) saveComponentPreferences(cwd, selection.components, version, current.preferencesDigest);
       if (selection.harnesses.some(h => h === "opencode" || h.startsWith("codex-"))) {
         try {
           if (packaged && (cwd === installRoot || cwd.startsWith(installRoot + "/"))) throw fault("activation_conflict", "Run setup from the project, not the shared Homebrew installation.");
@@ -194,7 +214,7 @@ export function createSession({ installRoot = root, cwd = process.cwd(), env = p
           return { schema, id, ok: true, data: { text: safeText(`Previews generated, but harness activation is blocked. No live harness files were written.\n${error.code?.startsWith("E") ? "Cannot inspect activation paths." : error.message}\nResolve the conflict and start a new setup review.`), status: "activation_blocked", traceEvents: trace("setup_activation_blocked", "blocked", false) } };
         }
       }
-      return { schema, id, ok: true, data: { text: safeText(text + "\nPreparation complete. No harness files were activated. Pi, if selected, remains preview-only."), status: "previews_only", traceEvents: trace("setup_previews_prepared", "previews_only", false) } };
+      return { schema, id, ok: true, data: { text: safeText(text + (selection.components ? `\nSaved product choices: ${selection.components.join(", ")}.` : "") + (normalizeComponents(selection.components, selection.edition).includes("harness") ? "\nPreparation complete. No harness files were activated. Pi, if selected, remains preview-only." : "\nPreparation complete. Run a selected capability's command when you need its server.")), status: "previews_only", traceEvents: trace("setup_previews_prepared", "previews_only", true) } };
     } catch (error) {
       approval = null; activation = null; updateApproval = null;
       return { schema, id, ok: false, error: { code: error.code?.startsWith?.("E") ? "setup_failed" : error.code || "invalid_request", message: safeText(error.code && !error.code.startsWith("E") ? error.message : "Setup request failed.") } };

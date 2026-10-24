@@ -13,7 +13,7 @@ const installer = readFileSync(join(root, "install.sh"), "utf8");
 const installDocs = readFileSync(join(root, "site/docs/install.html"), "utf8");
 const installPolicy = readFileSync(join(root, ".ai/instructions/install-management.md"), "utf8");
 const specification = readFileSync(join(root, ".ai/execution/homebrew-public-install.md"), "utf8");
-const setupCommand = readFileSync(join(root, "packages/memory-server/scripts/setup.mjs"), "utf8");
+const setupCommand = readFileSync(join(root, "packages/cli/scripts/setup.mjs"), "utf8");
 const version = manifest.version;
 const escapedVersion = version.replaceAll(".", "\\.");
 
@@ -27,7 +27,7 @@ for (const text of [installDocs, installPolicy, specification]) {
 
 const cli = spawnSync(
   process.execPath,
-  [join(root, "packages/memory-server/scripts/alfred.mjs"), "version"],
+  [join(root, "packages/cli/scripts/alfred.mjs"), "version"],
   { encoding: "utf8", cwd: root }
 );
 assert.equal(cli.status, 0, cli.stderr);
@@ -36,7 +36,7 @@ assert.equal(cli.stdout.trim(), `alfred ${version}`);
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "alfred-homebrew-validation-"));
 const preview = spawnSync(
   process.execPath,
-  [join(root, "packages/memory-server/scripts/alfred.mjs"), "setup", "--edition=coding", "--name=brew-validation", "--harness=none"],
+  [join(root, "packages/cli/scripts/alfred.mjs"), "setup", "--edition=coding", "--name=brew-validation", "--harness=none"],
   { encoding: "utf8", cwd: temporaryDirectory, env: { ...process.env, HOME: temporaryDirectory, ALFRED_DISTRIBUTION: "homebrew" } }
 );
 assert.equal(preview.status, 0, preview.stderr);

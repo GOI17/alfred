@@ -2,12 +2,31 @@
 
 Alfred handles the operational burden so humans focus on decisions.
 
-Alfred is a model-readable, harness-agnostic agent operations system for creating, testing, evaluating, securing, and porting agents, subagents, and skills.
+Alfred is a local-first product with three independent capabilities: Workspace for projects, conversations, and local tools; Memory for persistent knowledge; and Agent Harness for operating agents, subagents, and skills across coding harnesses. Use each capability on its own, or connect them explicitly through public contracts.
+
+| Capability | Product command | Standalone command | Responsibility |
+|---|---|---|---|
+| Workspace | `alfred workspace` | `alfred-workspace` | Projects, conversations, files, terminals, and local tools |
+| Memory | `alfred memory` | `alfred-memory` | Persistent knowledge, tenants, local API, MCP, and console |
+| Agent Harness | `alfred harness` | `alfred-agent-harness` | Agents, skills, policies, runtime profiles, and harness integration |
+
+The shared CLI composes commands; the capabilities do not require one another.
+Selecting multiple capabilities does not connect services, credentials, MCP, or
+session runtimes. See [product capabilities](docs/product-capabilities.md) and
+[the Workspace migration guide](docs/workspace-migration.md).
+
+**Availability:** the Workspace package and namespaced commands described here
+are available in source and require a release after 1.1.0. They are not included in Alfred
+1.1.0. A checkout change does not update an installed Homebrew package. Workspace
+release artifacts must pass native terminal and web asset checks on macOS and
+Linux, on both x64 and arm64, before distribution is declared ready.
+
 
 ## Human Installation
 
-Alfred is available from the public `GOI17/homebrew-alfred` tap. Release
-`v0.7.3` ships the verified runtime archive and locked production dependencies.
+Alfred is available from the public `GOI17/homebrew-alfred` tap. Published
+runtime archives include locked production dependencies. Check `alfred version`
+for the installed release; source documentation may describe a later release.
 
 ```sh
 brew install GOI17/alfred/alfred
@@ -51,19 +70,30 @@ preview-only installations still need their first activation. Offline checks
 leave Continue setup and local project updates usable. To skip the release
 lookup explicitly, use `ALFRED_SETUP_CHECK_UPDATES=0 alfred setup`.
 
-An existing 1.0.1 CLI needs one bootstrap upgrade **after a release containing
-this feature is published**: `brew update` followed by
+An existing 1.0.1 CLI needs one bootstrap upgrade to 1.1.0 or later: `brew update` followed by
 `brew upgrade GOI17/alfred/alfred`. Subsequent updates are offered in setup.
+
+Releases with the composition layer offer independent Workspace, Memory, and Agent Harness choices:
+
+```sh
+alfred setup --components=workspace,memory,harness
+```
+
+Choose any nonempty combination. Approved Apply records the selection in
+`.alfred/setup/components.json`; preview and discovery do not write it. Existing
+1.1.0 integration receipts remain valid. Historical `coding` maps to Agent
+Harness, `memory` to Memory, and `full` to Agent Harness + Memory. Updating an
+older installation never silently adds Workspace.
 
 For each project, initialize managed execution separately:
 
 ```sh
-alfred runtime init --instructions /absolute/path/to/shared/instructions.json
-alfred runtime status
+alfred harness runtime init --instructions /absolute/path/to/shared/instructions.json
+alfred harness runtime status
 ```
 
 Run those commands in each project's directory. Runtime initialization is
-separate from Memory `alfred init`; project state and exact-scope approvals stay
+separate from Memory `alfred memory init`; project state and exact-scope approvals stay
 under that project's `.alfred/runtime/`, outside the shared installation.
 See the [packaging and release guide](packaging/homebrew/README.md) for artifacts,
 verification, current availability and the automatic publishing pipeline.
@@ -72,13 +102,29 @@ The existing `curl | sh` source bootstrap remains documented in the
 [install guide](https://alfred.alfredlabs.org/docs/install.html); it is separate
 from the prepared versioned runtime package.
 
+## Local Workspace
+
+After building the Workspace package or installing a release that includes it:
+
+```sh
+alfred workspace serve --port 4310 --data-dir /absolute/path/to/workspace-state
+# Equivalent standalone command:
+alfred-workspace serve --port 4310 --data-dir /absolute/path/to/workspace-state
+```
+
+Open <http://127.0.0.1:4310/>. State lives outside the installed package.
+Starting Workspace does not start Memory or configure an Agent Harness runtime.
+Browser tools require separately installed Playwright browser engines when used;
+ordinary Workspace operation does not require them. See
+[Workspace](packages/workspace/README.md) for configuration and runtime adapters.
+
 ## Local Memory
 
 Alfred Memory runs only on your computer. The managed hosted service is retired.
 
 ```bash
-alfred init --profile=coding --backend=sqlite --name my-memory
-ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve
+alfred memory init --profile=coding --backend=sqlite --name my-memory
+ALFRED_MEMORY_REQUIRE_AUTH=true alfred memory serve
 ```
 
 Open <http://127.0.0.1:3000/console/> and unlock it with the API key printed by
@@ -88,7 +134,7 @@ See the [Memory quickstart](docs/QUICKSTART.md).
 
 ## Skill inventory and lifecycle
 
-`alfred skills` inspects skills on disk and manages their installation receipts.
+`alfred harness skills` inspects skills on disk and manages their installation receipts.
 Use `$alfred skills list`, `search`, `add`, `remove`, or `create` from Codex chat;
 in OpenCode, use its generated `/alfred skills ...` command. Codex uses the
 `alfred` skill and does not register a custom native `/alfred` slash command.
@@ -96,14 +142,14 @@ in OpenCode, use its generated `/alfred skills ...` command. Codex uses the
 Source changes do not update an already installed Homebrew release.
 
 ```sh
-alfred skills list
-alfred skills search testing --limit 5
-alfred skills add https://github.com/owner/repo --name selected-skill --harness codex
-alfred skills info tdd --harness codex --scope project
-alfred skills install ./skills/tdd --harness codex
-alfred skills install ./skills/tdd --harness codex --apply
-alfred skills update tdd --harness codex
-alfred skills remove tdd --harness codex
+alfred harness skills list
+alfred harness skills search testing --limit 5
+alfred harness skills add https://github.com/owner/repo --name selected-skill --harness codex
+alfred harness skills info tdd --harness codex --scope project
+alfred harness skills install ./skills/tdd --harness codex
+alfred harness skills install ./skills/tdd --harness codex --apply
+alfred harness skills update tdd --harness codex
+alfred harness skills remove tdd --harness codex
 ```
 
 `install`, `update`, and `remove` preview by default; add `--apply` to authorize
@@ -114,6 +160,10 @@ identical source. Setup uses a separate receipt for updating the complete projec
 integration.
 See the [skill manager guide](packages/skill-manager/README.md) for GitHub sources,
 project/global destinations, migration, and inventory coverage.
+
+Existing global commands such as `alfred init`, `alfred serve`, `alfred runtime`,
+and `alfred skills` remain compatibility aliases. On Alfred 1.1.0, use those
+aliases until upgrading to a release with the namespaced commands.
 
 ## Managed runtime (issue #217)
 
@@ -156,9 +206,13 @@ You are an AI agent working in an Alfred workspace. Start here to find your next
 
 ```
 packages/
-├── core/        # Domain, use cases, ports, policies (harness-agnostic)
+├── cli/         # Product command composition; lazy capability dispatch
+├── workspace/   # Standalone projects/conversations/tools application
+├── agent-harness/ # Agent Harness command facade
+├── core/        # Agent Harness domain, use cases, ports, policies
 ├── installer-tui/ # OpenTUI adapter for the guided installer
-├── memory/      # Vendor-agnostic persistent memory MVP
+├── memory/      # Memory domain and ports
+├── memory-server/ # Standalone local Memory service/CLI
 ├── profile-manager/ # Runtime profiles for PATH/provider/model/plugin portability
 ├── pi-adapter/  # Pi.dev runtime integration
 ├── opencode-adapter/ # opencode runtime integration

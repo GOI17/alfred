@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Product capabilities — Alfred Docs</title>
+  <meta name="description" content="Alfred documentation: install, configure, architecture, agents, evals, and harness adapters." />
+  <link rel="stylesheet" href="/alfred/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/alfred/">
+        <span class="brand-mark">A</span>
+        <span class="brand-name">Alfred</span>
+        <span class="brand-tag">Alfred labs</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="/alfred/">Home</a>
+        <a href="/alfred/#problem">Problem</a>
+        <a href="/alfred/#pillars">Pillars</a>
+        <a href="/alfred/#harnesses">Harnesses</a>
+        <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
+        <a href="/alfred/memory/">Memory</a>
+        <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <!-- ============= SIDEBAR ============= -->
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <h6>Getting started</h6>
+      <a href="/alfred/docs/index.html">Overview</a>
+      <a href="/alfred/docs/install.html">Install Alfred</a>
+      <a href="/alfred/docs/configuration.html">Configuration</a>
+
+      <a href="/alfred/docs/components.html" class="active">Product capabilities</a>
+      <a href="/alfred/docs/workspace.html">Workspace</a>
+      <h6>Concepts</h6>
+      <a href="/alfred/docs/architecture.html">Architecture</a>
+      <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
+      <a href="/alfred/docs/skills.html">Skills</a>
+      <a href="/alfred/docs/memory.html">Memory &amp; persistence</a>
+      <a href="/alfred/docs/security.html">Security model</a>
+
+      <h6>Operations</h6>
+      <a href="/alfred/docs/evals.html">Evals &amp; baselines</a>
+      <a href="/alfred/docs/tracing.html">Tracing &amp; observability</a>
+      <a href="/alfred/docs/permissions.html">Permissions &amp; approval</a>
+
+      <h6>Harnesses</h6>
+      <a href="/alfred/docs/harnesses-pi.html">Pi</a>
+      <a href="/alfred/docs/harnesses-opencode.html">opencode</a>
+      <a href="/alfred/docs/harnesses-codex.html">Codex</a>
+      <a href="/alfred/docs/harnesses-claude.html">Claude</a>
+      <a href="/alfred/docs/harnesses-vscode.html">VSCode</a>
+    </aside>
+
+    <!-- ============= MAIN ============= -->
+    <main class="docs-main">
+      <h1>One product, three independent capabilities</h1>
+      <p class="doc-lead">Use Workspace, Memory, and Agent Harness separately, or connect them explicitly through public contracts. None requires another to be installed or running.</p>
+      <div class="doc-callout warn"><strong>Release availability.</strong> Workspace and the namespaced commands below are available in source and require a release after 1.1.0. Source changes do not update an installed Homebrew package. The Workspace release requires packaged web asset and native terminal checks on macOS/Linux, x64/arm64.</div>
+      <h2 id="capabilities">Choose what you need</h2>
+      <table class="matrix">
+        <thead><tr><th>Capability</th><th>What it does</th><th>Command / standalone</th></tr></thead>
+        <tbody>
+          <tr><td><a href="/alfred/docs/workspace.html">Workspace</a></td><td>Projects, conversations, files, terminals, and local tools.</td><td><code>alfred workspace</code><br><code>alfred-workspace</code></td></tr>
+          <tr><td><a href="/alfred/docs/memory.html">Memory</a></td><td>Persistent knowledge, tenants, local API, MCP, and console.</td><td><code>alfred memory</code><br><code>alfred-memory</code></td></tr>
+          <tr><td><a href="/alfred/docs/agents.html">Agent Harness</a></td><td>Agent operations, skills, policies, profiles, and integration with coding harnesses.</td><td><code>alfred harness</code><br><code>alfred-agent-harness</code></td></tr>
+        </tbody>
+      </table>
+      <p>The product CLI composes the commands and loads only the requested capability. Standalone commands use the same entrypoints. Existing <code>alfred init</code>, <code>serve</code>, <code>runtime</code>, and <code>skills</code> aliases remain supported, including on 1.1.0.</p>
+      <h2 id="setup">Independent selection</h2>
+      <p>Setup offers three checkboxes and supports all seven nonempty combinations. For automation:</p>
+      <pre>alfred setup --components=workspace,memory,harness</pre>
+      <p>Only approved Apply records <code>.alfred/setup/components.json</code>. Discovery and preview do not write it. Managed harness files keep their separate <code>.alfred/setup/installation.json</code> receipt, compatible with 1.1.0.</p>
+      <p>Historical <code>coding</code> means Agent Harness, <code>memory</code> means Memory, and <code>full</code> means Agent Harness + Memory. Updating an existing setup does not add Workspace. Select it explicitly after upgrading to a release that includes it.</p>
+      <h2 id="connections">Optional connections</h2>
+      <p>Selecting several capabilities does not start services, create tenants, copy credentials, configure MCP, or choose a session runtime. Each connection needs explicit configuration through the receiving capability's public contract.</p>
+      <p>Workspace exposes <code>SessionPort</code>/<code>SessionAdapter</code> for a caller-supplied runtime. Its legacy adapter remains a compatibility option; this migration does not implement an Alfred Agent Harness adapter or an ACP execution backend.</p>
+      <p>Memory exposes HTTP, client, and MCP contracts. Callers explicitly supply endpoint, credentials, and scope. The HTTP server remains local and loopback-only, even when its database is remote. Agent Harness can use an authorized persistence capability, but works without one.</p>
+      <h2 id="names">Workspace names</h2>
+      <p>The Workspace application is distinct from a Memory filesystem workspace binding. Existing workspace IDs, tenant access, and database tables keep their meanings. Installing the application does not migrate Memory data.</p>
+      <p><a href="https://github.com/GOI17/alfred/blob/main/docs/workspace-migration.md">Source migration and provenance</a> · <a href="/alfred/docs/install.html">Installation and updates</a></p>
+    </main>
+
+    <!-- ============= TOC ============= -->
+    <aside class="docs-toc" aria-label="On this page">
+<h6>On this page</h6>
+<a href="#capabilities">Capabilities</a><a href="#setup">Setup</a><a href="#connections">Connections</a><a href="#names">Workspace names</a>
+</aside>
+  </div>
+</body>
+</html>

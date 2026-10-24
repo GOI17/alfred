@@ -1,0 +1,73 @@
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 8px;
+}
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--foreground);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+.attachment-chip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-chip > svg,
+.attachment-chip > button {
+  flex-shrink: 0;
+}
+.attachment-chip > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+}
+a.attachment-chip:hover,
+.attachment-chip > button:hover {
+  background: var(--accent);
+}
+.attachment-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.attachment-controls > select {
+  min-width: 0;
+  max-width: 220px;
+}
+.attachment-controls > button {
+  flex-shrink: 0;
+}
+.composer-dragging {
+  border-color: var(--success);
+  background: var(--accent);
+}
+.attachment-drop-hint {
+  padding: 8px;
+  color: var(--primary);
+  font-size: var(--text-sm);
+  text-align: center;
+  pointer-events: none;
+}
+@media (pointer: coarse) {
+  .attachment-chip > button {
+    width: 44px;
+    height: 44px;
+  }
+}

@@ -13,7 +13,7 @@ Start here before taking any action in this workspace.
 - **Project:** Alfred
 - **Umbrella:** AlfredLabs
 - **Tagline:** Alfred handles the operational burden so humans focus on decisions.
-- **What it is:** A model-readable, harness-agnostic agent operations system for creating, testing, evaluating, securing, and porting agents, subagents, and skills.
+- **What it is:** A local-first product offering Workspace, Memory, and Agent Harness as independent capabilities, usable separately or explicitly composed through public contracts.
 
 ## 2. First Actions
 

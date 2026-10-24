@@ -1,0 +1,48 @@
+name: workspace-native
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: linux-x64
+          - runner: ubuntu-22.04-arm
+            target: linux-arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Stage pinned native build dependencies outside checkout
+        run: |
+          mkdir -p "$RUNNER_TEMP/alfred-native-deps"
+          cp packaging/runtime/package{,-lock}.json "$RUNNER_TEMP/alfred-native-deps/"
+          (cd "$RUNNER_TEMP/alfred-native-deps" && npm ci --prefix "$RUNNER_TEMP/alfred-native-deps" --include=dev --ignore-scripts --no-audit --no-fund --workspaces=false)
+      - name: Compile N-API with local headers and verify a real PTY
+        run: |
+          node scripts/build-workspace-native.mjs \
+            --dependencies "$RUNNER_TEMP/alfred-native-deps/node_modules" \
+            --source-revision "$(git rev-parse HEAD)" \
+            --output "$RUNNER_TEMP/alfred-workspace-native"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workspace-native-${{ matrix.target }}
+          path: ${{ runner.temp }}/alfred-workspace-native/
+          if-no-files-found: error
+          retention-days: 7

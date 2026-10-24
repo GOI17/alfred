@@ -19,12 +19,13 @@ const schema = "alfred.setup/v1"
 const maxMessage = 1024 * 1024
 
 type selection struct {
-	Edition   string   `json:"edition"`
-	Harnesses []string `json:"harnesses"`
-	Memory    string   `json:"memory"`
-	Name      string   `json:"name"`
-	Path      string   `json:"path"`
-	Profiles  bool     `json:"profiles"`
+	Components []string `json:"components,omitempty"`
+	Edition    string   `json:"edition"`
+	Harnesses  []string `json:"harnesses"`
+	Memory     string   `json:"memory"`
+	Name       string   `json:"name"`
+	Path       string   `json:"path"`
+	Profiles   bool     `json:"profiles"`
 }
 type projectStatus struct {
 	Status    string `json:"status"`
@@ -40,9 +41,10 @@ type updateStatus struct {
 	CanUpgrade     bool   `json:"canUpgrade"`
 }
 type discovery struct {
-	Version      string    `json:"version"`
-	Defaults     selection `json:"defaults"`
-	Capabilities struct {
+	Version             string     `json:"version"`
+	Defaults            selection  `json:"defaults"`
+	IntegrationDefaults *selection `json:"integrationDefaults,omitempty"`
+	Capabilities        struct {
 		Platform  string            `json:"platform"`
 		Arch      string            `json:"arch"`
 		Node      string            `json:"node"`
@@ -246,7 +248,7 @@ func validateDiscovery(d discovery) error {
 		return errors.New("incomplete discovery")
 	}
 	s := d.Defaults
-	if s.Edition != "coding" && s.Edition != "memory" && s.Edition != "full" {
+	if s.Edition != "coding" && s.Edition != "memory" && s.Edition != "full" && s.Edition != "workspace" {
 		return errors.New("invalid edition")
 	}
 	if s.Memory != "decide-later" && s.Memory != "existing-tenant" && s.Memory != "local-sqlite" && s.Memory != "postgres" {
@@ -254,6 +256,18 @@ func validateDiscovery(d discovery) error {
 	}
 	if s.Name == "" || s.Path == "" || s.Harnesses == nil {
 		return errors.New("incomplete defaults")
+	}
+	if s.Components != nil {
+		seenComponents := map[string]bool{}
+		if len(s.Components) == 0 {
+			return errors.New("empty component selection")
+		}
+		for _, c := range s.Components {
+			if (c != "workspace" && c != "memory" && c != "harness") || seenComponents[c] {
+				return errors.New("invalid component")
+			}
+			seenComponents[c] = true
+		}
 	}
 	seen := map[string]bool{}
 	for _, h := range s.Harnesses {

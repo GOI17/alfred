@@ -1,5 +1,16 @@
 # Hexagonal Architecture
 
+## Product families
+
+Workspace, Memory, and Agent Harness own separate domains and lifecycles.
+`packages/cli` composes their public commands; the families do not import peers.
+Workspace's session port and Memory's persistence contracts are explicit optional
+integration surfaces. Sharing a release does not configure them. See
+[Monorepo boundaries](003-monorepo-boundaries.md).
+
+The core/adapter rules below govern the Agent Harness family. They do not require
+Workspace or Memory to depend on Agent Harness core.
+
 ## Dependency Rule
 
 `packages/core` owns domain, application use cases, and ports. It must not import adapters, harness SDKs, provider SDKs, terminal runtimes, filesystem implementations, or network implementations.

@@ -253,7 +253,7 @@ func (m model) View() string {
 	switch m.screen {
 	case nameScreen, pathScreen:
 		help = "Enter next · Esc back · Ctrl+C cancel"
-	case harnessScreen:
+	case harnessScreen, editionScreen:
 		help = "↑/↓ choose · Space select · Enter next · Esc back"
 	case previewScreen, activationPreviewScreen, updatePreviewScreen:
 		help = "↑/↓ scroll · Enter review · Esc back · q quit"
@@ -271,7 +271,7 @@ func (m model) View() string {
 		switch m.screen {
 		case nameScreen, pathScreen:
 			help = "Enter next · Esc back · ^C cancel"
-		case harnessScreen:
+		case harnessScreen, editionScreen:
 			help = "↑↓ · Space select · Enter · Esc"
 		case previewScreen, activationPreviewScreen, updatePreviewScreen:
 			help = "↑↓ scroll · Enter · Esc back · q"

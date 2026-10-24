@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Workspace — Alfred Docs</title>
+  <meta name="description" content="Alfred documentation: install, configure, architecture, agents, evals, and harness adapters." />
+  <link rel="stylesheet" href="/alfred/assets/styles.css" />
+  <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
+</head>
+<body>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/alfred/">
+        <span class="brand-mark">A</span>
+        <span class="brand-name">Alfred</span>
+        <span class="brand-tag">Alfred labs</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="/alfred/">Home</a>
+        <a href="/alfred/#problem">Problem</a>
+        <a href="/alfred/#pillars">Pillars</a>
+        <a href="/alfred/#harnesses">Harnesses</a>
+        <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
+        <a href="/alfred/memory/">Memory</a>
+        <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
+    </div>
+  </header>
+
+  <div class="docs-layout">
+    <!-- ============= SIDEBAR ============= -->
+    <aside class="docs-sidebar" aria-label="Documentation navigation">
+      <h6>Getting started</h6>
+      <a href="/alfred/docs/index.html">Overview</a>
+      <a href="/alfred/docs/install.html">Install Alfred</a>
+      <a href="/alfred/docs/configuration.html">Configuration</a>
+
+      <a href="/alfred/docs/components.html">Product capabilities</a>
+      <a href="/alfred/docs/workspace.html" class="active">Workspace</a>
+      <h6>Concepts</h6>
+      <a href="/alfred/docs/architecture.html">Architecture</a>
+      <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
+      <a href="/alfred/docs/skills.html">Skills</a>
+      <a href="/alfred/docs/memory.html">Memory &amp; persistence</a>
+      <a href="/alfred/docs/security.html">Security model</a>
+
+      <h6>Operations</h6>
+      <a href="/alfred/docs/evals.html">Evals &amp; baselines</a>
+      <a href="/alfred/docs/tracing.html">Tracing &amp; observability</a>
+      <a href="/alfred/docs/permissions.html">Permissions &amp; approval</a>
+
+      <h6>Harnesses</h6>
+      <a href="/alfred/docs/harnesses-pi.html">Pi</a>
+      <a href="/alfred/docs/harnesses-opencode.html">opencode</a>
+      <a href="/alfred/docs/harnesses-codex.html">Codex</a>
+      <a href="/alfred/docs/harnesses-claude.html">Claude</a>
+      <a href="/alfred/docs/harnesses-vscode.html">VSCode</a>
+    </aside>
+
+    <!-- ============= MAIN ============= -->
+    <main class="docs-main">
+      <h1>Workspace</h1>
+      <p class="doc-lead">A local application for projects, conversations, files, terminals, and tools. Workspace runs independently of Memory and Agent Harness.</p>
+      <div class="doc-callout warn"><strong>Availability.</strong> Workspace is integrated in source and requires a release after 1.1.0. Build the package from source or install a release whose runtime includes it. An installed 1.1.0 CLI does not gain Workspace from repository changes.</div>
+      <h2 id="start">Start locally</h2>
+      <pre>alfred workspace serve --port 4310 --data-dir /absolute/path/to/workspace-state
+# Equivalent standalone entrypoint:
+alfred-workspace serve --port 4310 --data-dir /absolute/path/to/workspace-state</pre>
+      <p>Open <a href="http://127.0.0.1:4310/">http://127.0.0.1:4310/</a>. The default host is <code>127.0.0.1</code> and the default port is <code>4310</code>. Keep state outside the installed package. <code>--help</code> and <code>--version</code> do not start services.</p>
+      <p><code>--host</code> explicitly chooses an interface; <code>--share</code> opts into local-network listening. These Workspace options do not change Memory's loopback-only hosting policy.</p>
+      <h2 id="runtime">Choose a session runtime explicitly</h2>
+      <p>Workspace exposes <code>SessionPort</code>/<code>SessionAdapter</code> and accepts a supplied adapter through <code>createApp({ sessionAdapter })</code>. Runtime capabilities are reported by its descriptor endpoint. An injected runtime does not inherit legacy tools, permissions, credentials, or recovery.</p>
+      <p>The legacy adapter remains available for compatibility. No sibling Agent Harness runtime is discovered or configured automatically. This source migration does not add an Alfred Agent Harness SessionAdapter or promise ACP execution.</p>
+      <h2 id="tools">Local tools and optional browsers</h2>
+      <p>The release includes the native terminal dependency for its target platform. Packaged terminal spawn/exit and web assets must pass validation on macOS/Linux, x64/arm64. Browser engines are separate, opt-in installations for browser tools; Homebrew installation does not download them. Workspace's other functions remain available without those engines.</p>
+      <h2 id="migration">Existing Workspace repository</h2>
+      <p>The published source snapshot at <code>1e8c624d65e9814549d8604db181d716bc0dd0f4</code> is imported into <code>packages/workspace</code>, with file hashes and transformations recorded in <code>upstream-snapshot.json</code>. The original checkout and Git history remain preserved. This migration does not copy private state, credentials, or Memory tenant data.</p>
+      <p><a href="https://github.com/GOI17/alfred/blob/main/docs/workspace-migration.md">Migration guide</a> · <a href="https://github.com/GOI17/alfred/blob/main/packages/workspace/README.md">Package development guide</a> · <a href="/alfred/docs/components.html">Product capabilities</a></p>
+    </main>
+
+    <!-- ============= TOC ============= -->
+    <aside class="docs-toc" aria-label="On this page">
+<h6>On this page</h6>
+<a href="#start">Start</a><a href="#runtime">Session runtime</a><a href="#tools">Local tools</a><a href="#migration">Migration</a>
+</aside>
+  </div>
+</body>
+</html>

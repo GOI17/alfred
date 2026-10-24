@@ -19,7 +19,7 @@
         <a href="/alfred/#pillars">Pillars</a>
         <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
-        <a href="/alfred/memory/">Memory Console</a>
+        <a href="/alfred/memory/">Memory</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
       </nav>
       <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
@@ -32,6 +32,8 @@
       <a href="/alfred/docs/index.html">Overview</a>
       <a href="/alfred/docs/install.html">Install Alfred</a>
       <a href="/alfred/docs/configuration.html">Configuration</a>
+      <a href="/alfred/docs/components.html">Product capabilities</a>
+      <a href="/alfred/docs/workspace.html">Workspace</a>
       <h6>Concepts</h6>
       <a href="/alfred/docs/architecture.html">Architecture</a>
       <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
@@ -53,16 +55,18 @@
     <main class="docs-main">
       <h1>Memory &amp; persistence</h1>
       <p class="doc-lead">Alfred Memory stores the decisions, conventions, and lessons your agents accumulate. Its server runs only on your computer; the managed hosted service is retired.</p>
+      <p>Memory is independently usable. Workspace and Agent Harness are optional callers, connected only through explicit endpoint, credentials, and scope. Selecting them in setup does not create a connection.</p>
       <h2 id="modes">Local process, chosen storage</h2>
       <p>The HTTP server accepts only loopback addresses. SQLite works for coding tenants; user-chosen Postgres storage remains available, including a remote database. A remote database does not make the HTTP service remote. The compatibility profiles <code>web</code> and <code>both</code> still require Postgres and use local clients.</p>
       <h2 id="workspaces">Workspaces &amp; tenants</h2>
-      <p>A workspace is a directory with an Alfred install. A tenant is a memory partition. Workspaces are not tenants: <code>tenant_access</code> is many-to-many with explicit inheritance.</p>
+      <p>A Memory filesystem workspace is a directory binding, distinct from the Workspace application. Existing registry IDs and tables keep their meanings. A tenant is a memory partition. Workspaces are not tenants: <code>tenant_access</code> is many-to-many with explicit inheritance.</p>
       <h2 id="api">Start locally</h2>
-      <pre>alfred init --profile=coding --backend=sqlite --name my-memory
-ALFRED_MEMORY_REQUIRE_AUTH=true alfred serve</pre>
+      <pre>alfred memory init --profile=coding --backend=sqlite --name my-memory
+ALFRED_MEMORY_REQUIRE_AUTH=true alfred memory serve</pre>
+      <p>Namespaced commands are available in source and require a release after 1.1.0. Existing <code>alfred init</code> and <code>alfred serve</code> aliases remain supported on 1.1.0 and later. Standalone <code>alfred-memory</code> uses the same Memory entrypoint in releases with the composition layer.</p>
       <p>Save the API key printed by <code>init</code>. Keep the server running and configure local clients with your loopback endpoint and that key.</p>
       <h2 id="console">Local console</h2>
-      <p>Open <a href="http://127.0.0.1:3000/console/">the local console</a> and unlock it with your key. The console and API share an origin, including custom ports. Use <code>alfred serve --port=4321</code> and open <code>http://127.0.0.1:4321/console/</code> to select a different port.</p>
+      <p>Open <a href="http://127.0.0.1:3000/console/">the local console</a> and unlock it with your key. The console and API share an origin, including custom ports. Use <code>alfred memory serve --port=4321</code> and open <code>http://127.0.0.1:4321/console/</code> to select a different port.</p>
       <p>The public website contains instructions only. Cloud ChatGPT Actions and Google AI Studio cannot reach the local service.</p>
       <h2 id="migrate">Existing data</h2>
       <p>Existing tenants, API keys, OAuth, MCP, SQLite and Postgres data backends remain supported. No database is deleted as part of hosted retirement. Keep independent backups and use the local API or console to manage your data.</p>

@@ -23,11 +23,13 @@ test("renders a private formula pinned by tag and revision", () => {
   assert.doesNotMatch(formula, /^\s*version\s/m);
   assert.match(formula, /depends_on "node"/);
   assert.match(formula, /formula_opt_bin\("node"\)/);
-  assert.match(formula, /packages\/memory-server\/scripts\/alfred\.mjs/);
+  assert.match(formula, /packages\/cli\/scripts\/alfred\.mjs/);
   assert.match(formula, /ALFRED_DISTRIBUTION=homebrew/);
   assert.match(formula, /alfred setup/);
   assert.doesNotMatch(formula, /bin\/"alfred-install"/);
   assert.match(formula, /Provider calls: 0/);
+  for (const command of ['alfred-workspace', 'alfred-memory', 'alfred-agent-harness']) assert.ok(formula.includes(`"${command}"`));
+  assert.match(formula, /verify-workspace-native\.mjs/);
   assert.doesNotMatch(formula, /sha256/);
 });
 

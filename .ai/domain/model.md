@@ -1,5 +1,20 @@
 # Domain Model
 
+## Product vocabulary
+
+- ProductCapability: an independently usable Alfred capability: Workspace, Memory, or Agent Harness.
+- ProductComposition: explicit command routing or configured integration through public contracts; owned by the composition layer, not a peer capability.
+- Workspace capability: the projects, conversations, files, terminals, and local tools application.
+- Memory workspace binding: an association between a filesystem directory and Memory tenants; distinct from the Workspace capability. Existing IDs and database tables remain unchanged.
+- Agent Harness capability: Alfred's agents, skills, policies, profiles, runtime management, and harness integration family.
+- SessionPort / SessionAdapter: Workspace's public session contract and its configured implementation. The legacy adapter is a compatibility implementation, not an automatic Agent Harness integration.
+- ComponentSelection: explicit capability preferences in `.alfred/setup/components.json`, written only on approved Apply.
+- IntegrationReceipt: the separate managed project integration record in `.alfred/setup/installation.json`; compatible with existing 1.1.0 receipts.
+
+Product boundaries and optional connections are specified in
+`docs/architecture/011-product-capabilities.md`. Existing domain identifiers below
+are preserved; product naming does not rename Memory registry data.
+
 ## Entities
 
 - Agent

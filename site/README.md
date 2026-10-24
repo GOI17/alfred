@@ -1,9 +1,9 @@
 # Alfred public site
 
-The public static site introduces Alfred and documents local setup. Memory
+The public static site introduces Workspace, Memory, and Agent Harness, their independent use, and explicit optional composition. It is documentation, not the Workspace application. Memory
 pages at `/memory/` and `/memory/app/` contain local-start instructions only:
 they do not collect API keys, run a console, or call a local/hosted Memory API.
-The operational console is served by `alfred serve` at `/console/`.
+The operational console is served by `alfred memory serve` at `/console/` in releases after 1.1.0; the existing `alfred serve` alias remains supported, including in 1.1.0.
 
 ## Build and check
 

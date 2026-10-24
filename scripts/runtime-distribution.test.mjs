@@ -4,7 +4,9 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
+import { downloadSmokeArchive } from "./runtime-smoke-download.mjs";
 import { buildRuntime, createTar, sha256, writeAssetAtomic } from "./build-runtime.mjs";
+import { nativeDependencyIdentity } from "./workspace-native-artifacts.mjs";
 import { renderFormula } from "./generate-homebrew-formula.mjs";
 import { inspectRuntime } from "./runtime-archive.mjs";
 import { gunzipSync, gzipSync } from "node:zlib";
@@ -183,4 +185,87 @@ test("checksums bind archive, inventory and generated public formula", t => {
   const name = `alfred-${candidate.result.version}-runtime.tar.gz`;
   assert.equal(readFileSync(join(f.output, "SHA256SUMS"), "utf8"),
     `${sha256(candidate.archive)}  ${name}\n${sha256(candidate.manifestBytes)}  runtime-manifest.json\n${sha256(candidate.formula)}  alfred.rb\n`);
+});
+
+function nativeFixture(t) {
+  const f = fixture(t);
+  const lock = JSON.parse(readFileSync(join(f.temp, 'deps/package-lock.json')));
+  for (const [name, version] of [['node-pty', '1.1.0'], ['node-addon-api', '7.1.1']]) {
+    lock.packages[`node_modules/${name}`] = { version, resolved: `https://registry.npmjs.org/${name}/-/${name}-${version}.tgz`, integrity: `sha512-${name}` };
+    f.put(join(f.dependencies, name, 'package.json'), { name, version });
+  }
+  const lockBytes = Buffer.from(JSON.stringify(lock));
+  f.put(join(f.temp, 'deps/package-lock.json'), lock);
+  f.put(join(f.temp, 'package-lock.json'), lock);
+  const policy = JSON.parse(readFileSync(f.allowlist));
+  policy.dependencies['node-pty'] = '1.1.0';
+  policy.workspaceNative = { targets: ['darwin-arm64','darwin-x64','linux-arm64','linux-x64'], version: '1.1.0' };
+  f.put(f.allowlist, policy);
+  f.options.workspaceNative = join(f.temp, 'native');
+  const binary = target => {
+    const bytes = Buffer.alloc(64);
+    if (target.startsWith('darwin')) { bytes.writeUInt32LE(0xfeedfacf,0); bytes.writeUInt32LE(target.endsWith('arm64') ? 0x100000c : 0x1000007,4); }
+    else { bytes.set([0x7f,0x45,0x4c,0x46,2,1]); bytes.writeUInt16LE(target.endsWith('arm64') ? 183 : 62,18); }
+    return bytes;
+  };
+  for (const target of policy.workspaceNative.targets) {
+    const dir = target.startsWith('darwin') ? join(f.dependencies,'node-pty/prebuilds',target) : join(f.options.workspaceNative,target);
+    mkdirSync(dir,{recursive:true});
+    writeFileSync(join(dir,'pty.node'),binary(target));
+    if (target.startsWith('darwin')) writeFileSync(join(dir,'spawn-helper'),binary(target));
+    else f.put(join(dir,'manifest.json'), { schema:'alfred.workspace.native/v1', target, source_revision:f.options.sourceRevision,
+      ...nativeDependencyIdentity(lockBytes), builder_sha256:sha256(readFileSync(new URL('./build-workspace-native.mjs',import.meta.url))), sha256:sha256(binary(target)), smoke:'pty-spawn-output-exit' });
+  }
+  return f;
+}
+
+test('Workspace distribution preserves real executable modes and requires all four native targets', t => {
+  const f = nativeFixture(t);
+  f.put(join(f.dependencies, 'example/package.json'), { name:'example', version:'1.0.0', bin:{example:'./index.js'} });
+  f.put(join(f.dependencies, 'node-pty/third_party/conpty/version/win10-x64/OpenConsole.exe'), 'unneeded Windows executable');
+  const {archive,manifestBytes} = f.candidate();
+  const {files} = inspectRuntime(archive,manifestBytes);
+  assert.ok(!files.has('node_modules/node-pty/third_party/conpty/version/win10-x64/OpenConsole.exe'));
+  for (const target of ['darwin-arm64','darwin-x64','linux-arm64','linux-x64']) assert.equal(files.get(`node_modules/node-pty/prebuilds/${target}/pty.node`).mode,0o644);
+  for (const target of ['darwin-arm64','darwin-x64']) assert.equal(files.get(`node_modules/node-pty/prebuilds/${target}/spawn-helper`).mode,0o755);
+  assert.equal(files.get('node_modules/example/index.js').mode,0o755);
+  assert.ok(files.has('packages/workspace/native-manifest.json'));
+  rmSync(join(f.dependencies,'node-pty/prebuilds/darwin-x64/spawn-helper'));
+  assert.throws(f.build,/Missing vendored Workspace native/);
+});
+
+test('Workspace native provenance rejects stale lock, revision, wrong architecture, tampering and symlinks', t => {
+  const f = nativeFixture(t);
+  const dir = join(f.options.workspaceNative,'linux-arm64'), path=join(dir,'manifest.json');
+  const original = JSON.parse(readFileSync(path));
+  for (const patch of [ {source_revision:'c'.repeat(40)}, {dependencies_lock_sha256:'0'.repeat(64)}, {sha256:'0'.repeat(64)}, {builder_sha256:'0'.repeat(64)}, {target:'linux-x64'}, {smoke:'help-only'} ]) {
+    f.put(path,{...original,...patch}); assert.throws(f.build,/native provenance mismatch/);
+  }
+  f.put(path,original);
+  writeFileSync(join(dir,'pty.node'),readFileSync(join(f.options.workspaceNative,'linux-x64/pty.node')));
+  f.put(path,{...original,sha256:sha256(readFileSync(join(dir,'pty.node')))});
+  assert.throws(f.build,/Invalid Workspace PTY binary/);
+  rmSync(join(dir,'pty.node'));
+  symlinkSync(join(f.options.workspaceNative,'linux-x64/pty.node'),join(dir,'pty.node'));
+  assert.throws(f.build,/Invalid native artifact input/);
+});
+
+
+test("runtime smoke verifies a slow complete archive body and still rejects stalls and corruption", async t => {
+  const payload = Buffer.from("complete runtime archive fixture");
+  const server = createServer((request, response) => {
+    response.writeHead(200, { "content-type": "application/gzip" });
+    if (request.url === "/stall") { response.write("partial"); return; }
+    if (request.url === "/corrupt") { response.end("changed bytes"); return; }
+    response.write(payload.subarray(0, 4));
+    // Reproduce the old five-second body abort on a slow/loaded Intel runner.
+    const timer = setTimeout(() => response.end(payload.subarray(4)), 5500);
+    response.once("close", () => clearTimeout(timer));
+  });
+  await new Promise((done, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", done); });
+  t.after(async () => { server.closeAllConnections(); await new Promise(done => server.close(done)); });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  assert.deepEqual(await downloadSmokeArchive(`${origin}/slow`, sha256(payload)), payload);
+  await assert.rejects(downloadSmokeArchive(`${origin}/stall`, sha256(payload), 20), /archive transfer failed \(20ms deadline\)/);
+  await assert.rejects(downloadSmokeArchive(`${origin}/corrupt`, sha256(payload)), /archive transfer checksum/);
 });

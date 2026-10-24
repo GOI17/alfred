@@ -1,0 +1,67 @@
+name: workspace
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/workspace/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "scripts/*workspace*"
+      - ".github/workflows/workspace.yml"
+  pull_request:
+    paths:
+      - "packages/workspace/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "scripts/*workspace*"
+      - ".github/workflows/workspace.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  workspace:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      ORCA_BACKGROUND_LAUNCH: "1"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10.0.0"
+          run_install: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Install exactly the monorepo lock in the isolated CI checkout
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Prepare only the reviewed PTY helper and verify a real terminal
+        run: |
+          node packages/workspace/scripts/prepare-pty.mjs
+          mkdir -p "$RUNNER_TEMP/workspace-pty-home"
+          HOME="$RUNNER_TEMP/workspace-pty-home" node scripts/verify-workspace-native.mjs "$GITHUB_WORKSPACE/packages/workspace/node_modules"
+      - name: Explicitly stage test browsers
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/workspace-browsers
+        run: pnpm --filter @alfred-labs/workspace exec playwright install chromium webkit
+      - name: Check, build and test Workspace in fixtures without provider access
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/workspace-browsers
+        run: |
+          mkdir -p "$RUNNER_TEMP/workspace-home"
+          export HOME="$RUNNER_TEMP/workspace-home"
+          export NODE_OPTIONS="--import=file://$GITHUB_WORKSPACE/scripts/workspace-test-network-guard.mjs"
+          export ALFRED_TEST_NETWORK_DENIED="$RUNNER_TEMP/workspace-denied-network.log"
+          pnpm --filter @alfred-labs/workspace tc
+          pnpm --filter @alfred-labs/workspace build
+          pnpm --filter @alfred-labs/workspace test
+          pnpm --filter @alfred-labs/workspace test:package
+          pnpm --filter @alfred-labs/workspace exec playwright test
+          pnpm --filter @alfred-labs/workspace test:chat
+          test ! -e "$ALFRED_TEST_NETWORK_DENIED"

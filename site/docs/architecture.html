@@ -19,7 +19,7 @@
         <a href="/alfred/#pillars">Pillars</a>
         <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
-        <a href="/alfred/memory/">Memory Console</a>
+        <a href="/alfred/memory/">Memory</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
       </nav>
       <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
@@ -32,6 +32,8 @@
       <a href="/alfred/docs/index.html">Overview</a>
       <a href="/alfred/docs/install.html">Install Alfred</a>
       <a href="/alfred/docs/configuration.html">Configuration</a>
+      <a href="/alfred/docs/components.html">Product capabilities</a>
+      <a href="/alfred/docs/workspace.html">Workspace</a>
       <h6>Concepts</h6>
       <a href="/alfred/docs/architecture.html" class="active">Architecture</a>
       <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
@@ -53,15 +55,18 @@
     <main class="docs-main">
       <h1>Architecture</h1>
       <p class="doc-lead">
-        Alfred is shaped by three constraints: a harness-agnostic core,
+        Alfred has three independent capabilities: Workspace, Memory, and Agent Harness. Agent Harness is shaped by a harness-agnostic core,
         deny-by-default security, and evals-as-gate. This page explains
         why it is built the way it is, and what that means for your
         agents and skills.
       </p>
 
+      <h2 id="composition">Capability composition</h2>
+      <p>The neutral <code>packages/cli</code> routes commands to public capability entrypoints. Workspace, Memory, and Agent Harness do not import each other's implementations or require peer services. Optional connections use explicitly configured public contracts. Selecting components does not wire credentials, MCP, or a session runtime.</p>
+      <p>Workspace owns <code>SessionPort</code>/<code>SessionAdapter</code>; Memory owns its persistence APIs; Agent Harness owns agent operations and harness integration. See <a href="/alfred/docs/components.html">Product capabilities</a> for current implementation limits.</p>
       <h2 id="hexagonal">Hexagonal architecture</h2>
       <p>
-        The codebase is split into a <strong>core</strong> and a set of
+        The Agent Harness family is split into a <strong>core</strong> and a set of
         <strong>adapters</strong>. The rule is enforced by the build, not
         by convention:
       </p>
@@ -120,47 +125,15 @@
 
       <h2 id="package-layout">Package layout</h2>
       <table class="matrix">
-        <thead>
-          <tr><th>Package</th><th>Role</th><th>Imports from core</th></tr>
-        </thead>
+        <thead><tr><th>Family</th><th>Packages</th><th>Responsibility</th></tr></thead>
         <tbody>
-          <tr>
-            <td><code>packages/core</code></td>
-            <td>Domain, use cases, ports, policies. Harness-agnostic.</td>
-            <td>&mdash;</td>
-          </tr>
-          <tr>
-            <td><code>packages/pi-adapter</code></td>
-            <td>First-class Pi runtime.</td>
-            <td>yes</td>
-          </tr>
-          <tr>
-            <td><code>packages/opencode-adapter</code></td>
-            <td>opencode translation spike.</td>
-            <td>yes</td>
-          </tr>
-          <tr>
-            <td><code>packages/codex-adapter</code></td>
-            <td>Codex custom agents + repo skills.</td>
-            <td>yes</td>
-          </tr>
-          <tr>
-            <td><code>packages/memory-server</code></td>
-            <td>Vendor-agnostic memory API (SQLite or Postgres).</td>
-            <td>yes</td>
-          </tr>
-          <tr>
-            <td><code>packages/evals</code></td>
-            <td>Eval runner, baselines, reports.</td>
-            <td>yes</td>
-          </tr>
-          <tr>
-            <td><code>packages/console-web</code></td>
-            <td>Web console for tenants, keys, and copy-paste snippets.</td>
-            <td>via memory-client</td>
-          </tr>
+          <tr><td>Composition</td><td><code>cli</code>, setup UI</td><td>Lazy command dispatch and approved capability preparation.</td></tr>
+          <tr><td>Workspace</td><td><code>workspace</code></td><td>Projects, conversations, local tools, web assets, session contracts.</td></tr>
+          <tr><td>Memory</td><td><code>memory</code>, <code>memory-server</code>, clients, MCP, console, adapters</td><td>Independent persistence domain and local service.</td></tr>
+          <tr><td>Agent Harness</td><td><code>agent-harness</code>, <code>core</code>, managers, harness adapters, evals</td><td>Agent operations; adapters depend on core, never the reverse.</td></tr>
         </tbody>
       </table>
+      <p>The legacy launcher paths under Memory are compatibility shims only. Standalone Memory does not import those product shims.</p>
 
       <h2 id="trace">Everything is a trace</h2>
       <p>

@@ -22,6 +22,26 @@
           "type": "yaml",
           "path": "packages/memory-openapi/openapi.yaml",
           "jsonpath": "$.info.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/cli/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/agent-harness/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/workspace/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "packages/memory-server/package.json",
+          "jsonpath": "$.version"
         }
       ]
     }

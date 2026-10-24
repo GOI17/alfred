@@ -73,6 +73,9 @@ func (m model) call(op string) tea.Cmd {
 		s = m.updateSelection
 	}
 	s.Harnesses = append([]string{}, s.Harnesses...)
+	if s.Components != nil {
+		s.Components = append([]string{}, s.Components...)
+	}
 	token := m.token
 	return func() tea.Msg {
 		var ptr *selection
@@ -91,7 +94,7 @@ func (m *model) enter(s screen) {
 	case startScreen:
 		m.cursor = 1 // A late update check never changes the default Continue action.
 	case editionScreen:
-		m.cursor = indexOf([]string{"coding", "memory", "full"}, m.selection.Edition)
+		m.selection.Components = selectedComponents(m.selection)
 	case memoryScreen:
 		m.cursor = indexOf([]string{"decide-later", "existing-tenant", "local-sqlite", "postgres"}, m.selection.Memory)
 	case nameScreen:
@@ -153,8 +156,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "discover":
 			d := v.result.Discover
 			m.selection = d.Defaults
+			m.selection.Components = selectedComponents(d.Defaults)
 			m.updateSelection = d.Defaults
-			m.updateSelection.Harnesses = append([]string{}, d.Defaults.Harnesses...)
+			if d.IntegrationDefaults != nil {
+				m.updateSelection = *d.IntegrationDefaults
+			}
+			m.updateSelection.Harnesses = append([]string{}, m.updateSelection.Harnesses...)
+			if m.updateSelection.Components != nil {
+				m.updateSelection.Components = append([]string{}, m.updateSelection.Components...)
+			}
 			m.packaged = d.Packaged
 			m.capabilities = d.Capabilities.Harnesses
 			m.runtimeVersion = d.Version
@@ -258,26 +268,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case harnessScreen:
 				m.enter(editionScreen)
 			case memoryScreen:
-				if m.selection.Edition == "memory" {
+				if !hasComponent(m.selection, "harness") {
 					m.enter(editionScreen)
 				} else {
 					m.enter(harnessScreen)
 				}
 			case nameScreen:
-				if m.selection.Edition == "coding" {
+				if hasComponent(m.selection, "memory") {
+					m.enter(memoryScreen)
+				} else if hasComponent(m.selection, "harness") {
 					m.enter(harnessScreen)
 				} else {
-					m.enter(memoryScreen)
+					m.enter(editionScreen)
 				}
 			case pathScreen:
 				m.enter(nameScreen)
 			case profilesScreen:
 				m.enter(pathScreen)
 			case previewScreen:
-				m.enter(profilesScreen)
+				if hasComponent(m.selection, "harness") {
+					m.enter(profilesScreen)
+				} else {
+					m.enter(pathScreen)
+				}
 			case confirmScreen:
 				// Returning requires a fresh preview; an abandoned token is never reused.
-				m.enter(profilesScreen)
+				if hasComponent(m.selection, "harness") {
+					m.enter(profilesScreen)
+				} else {
+					m.enter(pathScreen)
+				}
 			}
 			return m, nil
 		}
@@ -293,6 +313,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.enter(pathScreen)
 				} else {
 					m.selection.Path = value
+					if !hasComponent(m.selection, "harness") {
+						return m.previewComponents()
+					}
 					m.enter(profilesScreen)
 				}
 			case "left":
@@ -429,6 +452,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case " ":
 			if m.screen == harnessScreen {
 				m.toggleHarness()
+			} else if m.screen == editionScreen {
+				m.toggleComponent()
 			}
 		case "enter":
 			switch m.screen {
@@ -454,15 +479,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.call(op)
 				}
 			case editionScreen:
-				m.selection.Edition = []string{"coding", "memory", "full"}[m.cursor]
-				if m.selection.Edition == "memory" {
+				if len(m.selection.Components) == 0 {
+					return m, nil
+				}
+				m.selection.Edition = componentEdition(m.selection)
+				if !hasComponent(m.selection, "harness") {
 					m.selection.Harnesses = []string{}
+					m.selection.Profiles = false
+				}
+				if !hasComponent(m.selection, "memory") {
+					m.selection.Memory = "decide-later"
+				}
+				if hasComponent(m.selection, "harness") {
+					m.enter(harnessScreen)
+				} else if hasComponent(m.selection, "memory") {
 					m.enter(memoryScreen)
 				} else {
-					m.enter(harnessScreen)
+					m.enter(nameScreen)
 				}
 			case harnessScreen:
-				if m.selection.Edition == "coding" {
+				if !hasComponent(m.selection, "memory") {
 					m.selection.Memory = "decide-later"
 					m.enter(nameScreen)
 				} else {
@@ -474,6 +510,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case nameScreen:
 				m.enter(pathScreen)
 			case pathScreen:
+				if !hasComponent(m.selection, "harness") {
+					return m.previewComponents()
+				}
 				m.enter(profilesScreen)
 			case profilesScreen:
 				m.selection.Profiles = m.cursor == 0
@@ -524,7 +563,15 @@ func (m model) options() []string {
 		}
 		return []string{label, "Continue setup"}
 	case editionScreen:
-		return []string{"Coding", "Memory", "Full"}
+		labels := []string{"Workspace", "Memory", "Agent Harness"}
+		for i, c := range componentIDs {
+			mark := "○"
+			if hasComponent(m.selection, c) {
+				mark = "●"
+			}
+			labels[i] = mark + " " + labels[i]
+		}
+		return labels
 	case harnessScreen:
 		labels := []string{"opencode", "Codex CLI", "Codex app", "Pi"}
 		for i, h := range harnessIDs {
@@ -630,7 +677,7 @@ func (m model) contextLine() string {
 		}
 		return "Apply only the reviewed project changes."
 	case editionScreen:
-		return []string{"Agents and skills for your coding tools.", "Configure Alfred's persistent memory.", "Coding tools and persistent memory."}[m.cursor]
+		return "Space selects independent capabilities; choose one or more."
 	case harnessScreen:
 		return "Select with Space; Enter continues. None is OK."
 	case memoryScreen:
@@ -652,4 +699,59 @@ func (m model) contextLine() string {
 		return fmt.Sprintf("Preview only · lines %d–%d of %d", m.offset+1, min(len(m.outputLines()), m.offset+m.bodyHeight()), len(m.outputLines()))
 	}
 	return ""
+}
+
+var componentIDs = []string{"workspace", "memory", "harness"}
+
+func selectedComponents(s selection) []string {
+	if s.Components != nil {
+		return append([]string{}, s.Components...)
+	}
+	switch s.Edition {
+	case "memory":
+		return []string{"memory"}
+	case "full":
+		return []string{"memory", "harness"}
+	case "workspace":
+		return []string{"workspace"}
+	default:
+		return []string{"harness"}
+	}
+}
+func hasComponent(s selection, component string) bool {
+	for _, c := range selectedComponents(s) {
+		if c == component {
+			return true
+		}
+	}
+	return false
+}
+func componentEdition(s selection) string {
+	if hasComponent(s, "harness") {
+		if hasComponent(s, "memory") {
+			return "full"
+		}
+		return "coding"
+	}
+	if hasComponent(s, "memory") {
+		return "memory"
+	}
+	return "workspace"
+}
+func (m *model) toggleComponent() {
+	c := componentIDs[m.cursor]
+	for i, v := range m.selection.Components {
+		if v == c {
+			m.selection.Components = append(m.selection.Components[:i], m.selection.Components[i+1:]...)
+			return
+		}
+	}
+	m.selection.Components = append(m.selection.Components, c)
+}
+func (m model) previewComponents() (model, tea.Cmd) {
+	m.selection.Profiles = false
+	m.token = ""
+	m.busy = true
+	m.screen = loading
+	return m, m.call("preview")
 }
