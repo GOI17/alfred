@@ -11,6 +11,7 @@ type screen int
 
 const (
 	loading screen = iota
+	startScreen
 	editionScreen
 	harnessScreen
 	memoryScreen
@@ -21,6 +22,8 @@ const (
 	confirmScreen
 	activationPreviewScreen
 	activationConfirmScreen
+	updatePreviewScreen
+	updateConfirmScreen
 	resultScreen
 	errorScreen
 )
@@ -33,24 +36,31 @@ type replyMsg struct {
 	err       error
 }
 type model struct {
-	backend       backend
-	screen        screen
-	previous      screen
-	selection     selection
-	packaged      bool
-	project       string
-	cursor        int
-	width, height int
-	edit          []rune
-	position      int
-	token         string
-	output        string
-	status        string
-	offset        int
-	busy          bool
-	quit          bool
-	failure       bool
-	capabilities  map[string]string
+	backend          backend
+	screen           screen
+	previous         screen
+	selection        selection
+	packaged         bool
+	project          string
+	cursor           int
+	width, height    int
+	edit             []rune
+	position         int
+	token            string
+	output           string
+	status           string
+	offset           int
+	busy             bool
+	quit             bool
+	failure          bool
+	capabilities     map[string]string
+	runtimeVersion   string
+	installedProject projectStatus
+	updateSelection  selection
+	update           updateStatus
+	checking         bool
+	updateMode       string
+	runtimeUpgrade   bool
 }
 
 func newModel(b backend, project string) model {
@@ -59,11 +69,14 @@ func newModel(b backend, project string) model {
 func (m model) Init() tea.Cmd { return m.call("discover") }
 func (m model) call(op string) tea.Cmd {
 	s := m.selection
-	s.Harnesses = append([]string{}, m.selection.Harnesses...)
+	if strings.HasPrefix(op, "runtime-") || strings.HasPrefix(op, "project-") {
+		s = m.updateSelection
+	}
+	s.Harnesses = append([]string{}, s.Harnesses...)
 	token := m.token
 	return func() tea.Msg {
 		var ptr *selection
-		if op != "discover" {
+		if op != "discover" && op != "check-update" {
 			ptr = &s
 		}
 		r, e := m.backend.Call(op, ptr, token)
@@ -75,6 +88,8 @@ func (m *model) enter(s screen) {
 	m.cursor = 0
 	m.offset = 0
 	switch s {
+	case startScreen:
+		m.cursor = 1 // A late update check never changes the default Continue action.
 	case editionScreen:
 		m.cursor = indexOf([]string{"coding", "memory", "full"}, m.selection.Edition)
 	case memoryScreen:
@@ -101,6 +116,9 @@ func indexOf(xs []string, s string) int {
 }
 func (m model) small() bool { return m.width < 30 || m.height < 10 }
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.quit {
+		return m, nil
+	}
 	switch v := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = v.Width
@@ -110,11 +128,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case replyMsg:
+		// This reply may arrive during a preview/apply. It must not release that
+		// operation's busy guard, change screens, or replace its approval token.
+		if v.operation == "check-update" {
+			m.checking = false
+			if v.err != nil {
+				m.update = updateStatus{Status: "unavailable", Text: "Could not check for updates. You can continue setup.", CurrentVersion: m.runtimeVersion}
+			} else {
+				m.update = v.result.Update
+			}
+			return m, nil
+		}
 		m.busy = false
 		if v.err != nil {
 			m.failure = true
 			m.output = safeText(v.err.Error())
-			if v.operation == "apply" || v.operation == "activate" {
+			if v.operation == "apply" || v.operation == "activate" || v.operation == "project-apply" {
 				m.output += "\nSome changes may already have been applied. Review them before retrying."
 			}
 			m.enter(errorScreen)
@@ -122,10 +151,60 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch v.operation {
 		case "discover":
-			m.selection = v.result.Discover.Defaults
-			m.packaged = v.result.Discover.Packaged
-			m.capabilities = v.result.Discover.Capabilities.Harnesses
-			m.enter(editionScreen)
+			d := v.result.Discover
+			m.selection = d.Defaults
+			m.updateSelection = d.Defaults
+			m.updateSelection.Harnesses = append([]string{}, d.Defaults.Harnesses...)
+			m.packaged = d.Packaged
+			m.capabilities = d.Capabilities.Harnesses
+			m.runtimeVersion = d.Version
+			m.installedProject = d.Project
+			m.checking = true
+			m.enter(startScreen)
+			check := m.call("check-update")
+			if d.Resume && d.Project.CanUpdate {
+				m.updateMode = "project"
+				m.busy = true
+				m.screen = loading
+				return m, tea.Batch(check, m.call("project-preview"))
+			}
+			return m, check
+		case "runtime-preview", "project-preview":
+			m.token = v.result.Token
+			m.output = safeText(v.result.Text)
+			if v.operation == "project-preview" && m.update.Status != "current" {
+				m.output = "Project integration using CLI " + safeText(m.runtimeVersion) + ".\n" + safeText(m.update.Text) + "\n\n" + m.output
+			}
+			m.status = v.result.Status
+			m.updateMode = strings.TrimSuffix(v.operation, "-preview")
+			if v.result.Status == "runtime_review" || v.result.Status == "project_review" {
+				m.enter(updatePreviewScreen)
+			} else {
+				m.failure = v.result.Status == "project_blocked" || v.result.Status == "runtime_blocked"
+				m.enter(resultScreen)
+			}
+		case "runtime-approve":
+			m.token = ""
+			m.status = v.result.Status
+			if v.result.Status == "runtime_upgrade_approved" {
+				m.runtimeUpgrade = true
+				m.quit = true
+				return m, tea.Quit
+			}
+		case "project-apply":
+			m.token = ""
+			m.status = v.result.Status
+			m.output = safeText(v.result.Text)
+			m.failure = v.result.Status == "project_partial" || v.result.Status == "project_failed"
+			if v.result.Status == "project_verified" {
+				m.installedProject.Version = m.runtimeVersion
+			}
+			m.enter(resultScreen)
+		case "project-decline":
+			m.token = ""
+			m.failure = false
+			m.updateMode = ""
+			m.enter(startScreen)
 		case "preview":
 			m.token = v.result.Token
 			m.output = safeText(v.result.Text)
@@ -153,13 +232,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key == "esc" {
+			if m.screen == updatePreviewScreen || m.screen == updateConfirmScreen {
+				return m.declineUpdate()
+			}
 			if m.screen == activationPreviewScreen || m.screen == activationConfirmScreen {
 				m.busy = true
 				cmd := m.call("decline")
 				m.token = ""
 				return m, cmd
 			}
-			if m.screen == editionScreen || m.screen == resultScreen || m.screen == errorScreen {
+			if m.screen == startScreen || m.screen == resultScreen || m.screen == errorScreen {
 				m.quit = true
 				return m, tea.Quit
 			}
@@ -171,6 +253,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selection.Path = string(m.edit)
 			}
 			switch m.screen {
+			case editionScreen:
+				m.enter(startScreen)
 			case harnessScreen:
 				m.enter(editionScreen)
 			case memoryScreen:
@@ -254,7 +338,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if m.screen == confirmScreen || m.screen == activationConfirmScreen {
+		if m.screen == confirmScreen || m.screen == activationConfirmScreen || m.screen == updateConfirmScreen {
 			// Only one explicit key can approve. Enter, Alt combinations and
 			// multi-rune input cannot; bracketed paste is removed before parsing.
 			if v.Type != tea.KeyRunes || v.Alt || len(v.Runes) != 1 {
@@ -267,12 +351,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					op := "apply"
 					if m.screen == activationConfirmScreen {
 						op = "activate"
+					} else if m.screen == updateConfirmScreen {
+						if m.updateMode == "runtime" {
+							op = "runtime-approve"
+						} else {
+							op = "project-apply"
+						}
 					}
 					cmd := m.call(op)
 					m.token = ""
 					return m, cmd
 				}
 			case 'n':
+				if m.screen == updateConfirmScreen {
+					return m.declineUpdate()
+				}
 				if m.screen == activationConfirmScreen {
 					m.busy = true
 					cmd := m.call("decline")
@@ -289,7 +382,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quit = true
 			return m, tea.Quit
 		}
-		if m.screen == previewScreen || m.screen == activationPreviewScreen || m.screen == resultScreen || m.screen == errorScreen {
+		if m.screen == previewScreen || m.screen == activationPreviewScreen || m.screen == updatePreviewScreen || m.screen == resultScreen || m.screen == errorScreen {
 			switch key {
 			case "down", "j":
 				if m.offset < m.maxOffset() {
@@ -308,8 +401,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "home":
 				m.offset = 0
 			case "enter":
-				if (m.screen == previewScreen || m.screen == activationPreviewScreen) && m.offset == m.maxOffset() {
-					if m.screen == activationPreviewScreen {
+				if (m.screen == previewScreen || m.screen == activationPreviewScreen || m.screen == updatePreviewScreen) && m.offset == m.maxOffset() {
+					if m.screen == updatePreviewScreen {
+						m.enter(updateConfirmScreen)
+					} else if m.screen == activationPreviewScreen {
 						m.enter(activationConfirmScreen)
 					} else {
 						m.enter(confirmScreen)
@@ -337,6 +432,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			switch m.screen {
+			case startScreen:
+				if m.cursor == 1 {
+					m.enter(editionScreen)
+					return m, nil
+				}
+				if m.checking {
+					return m, nil
+				}
+				op := ""
+				if m.update.CanUpgrade {
+					m.updateMode, op = "runtime", "runtime-preview"
+				} else if m.installedProject.CanUpdate {
+					m.updateMode, op = "project", "project-preview"
+				}
+				if op != "" {
+					m.token = ""
+					m.failure = false
+					m.busy = true
+					m.screen = loading
+					return m, m.call(op)
+				}
 			case editionScreen:
 				m.selection.Edition = []string{"coding", "memory", "full"}[m.cursor]
 				if m.selection.Edition == "memory" {
@@ -370,6 +486,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	return m, nil
 }
+func (m model) declineUpdate() (model, tea.Cmd) {
+	if m.updateMode == "project" && m.token != "" {
+		m.busy = true
+		cmd := m.call("project-decline")
+		m.token = ""
+		return m, cmd
+	}
+	m.token = ""
+	m.updateMode = ""
+	m.failure = false
+	m.enter(startScreen)
+	return m, nil
+}
 func (m *model) toggleHarness() {
 	h := harnessIDs[m.cursor]
 	for i, v := range m.selection.Harnesses {
@@ -382,6 +511,18 @@ func (m *model) toggleHarness() {
 }
 func (m model) options() []string {
 	switch m.screen {
+	case startScreen:
+		label := "Update"
+		if m.checking {
+			label = "Checking updates…"
+		} else if !m.update.CanUpgrade && !m.installedProject.CanUpdate {
+			if m.update.Status == "current" {
+				label = "No updates available"
+			} else {
+				label = "Update unavailable"
+			}
+		}
+		return []string{label, "Continue setup"}
 	case editionScreen:
 		return []string{"Coding", "Memory", "Full"}
 	case harnessScreen:
@@ -405,6 +546,18 @@ func (m model) options() []string {
 }
 func (m model) subtitle() string {
 	switch m.screen {
+	case startScreen:
+		return "CLI " + safeText(m.runtimeVersion)
+	case updatePreviewScreen:
+		if m.updateMode == "runtime" {
+			return "Review Alfred upgrade"
+		}
+		return "Review project update"
+	case updateConfirmScreen:
+		if m.updateMode == "runtime" {
+			return "Upgrade Alfred now?"
+		}
+		return "Update these project files?"
 	case editionScreen:
 		return "What should Alfred configure?"
 	case harnessScreen:
@@ -427,6 +580,16 @@ func (m model) subtitle() string {
 		return "Install these harness files?"
 	case resultScreen:
 		switch m.status {
+		case "project_verified":
+			return "Project updated · start a new session"
+		case "project_current":
+			return "Project is up to date"
+		case "project_partial", "project_failed":
+			return "Project update not complete"
+		case "project_blocked":
+			return "Project update needs attention"
+		case "runtime_blocked":
+			return "Alfred upgrade unavailable"
 		case "activation_verified":
 			return "Harness files verified · start a new session"
 		case "activation_declined":
@@ -444,6 +607,28 @@ func (m model) subtitle() string {
 }
 func (m model) contextLine() string {
 	switch m.screen {
+	case startScreen:
+		version := m.installedProject.Version
+		label := "Project " + safeText(version)
+		if version == "" {
+			switch m.installedProject.Status {
+			case "none":
+				label = "Project not configured"
+			case "blocked":
+				label = "Project needs attention"
+			default:
+				label = "Project version unknown"
+			}
+		}
+		if m.installedProject.CanUpdate {
+			label += " · review update"
+		}
+		return label
+	case updateConfirmScreen:
+		if m.updateMode == "runtime" {
+			return "Upgrade Alfred, then review this project's integration."
+		}
+		return "Apply only the reviewed project changes."
 	case editionScreen:
 		return []string{"Agents and skills for your coding tools.", "Configure Alfred's persistent memory.", "Coding tools and persistent memory."}[m.cursor]
 	case harnessScreen:
@@ -463,7 +648,7 @@ func (m model) contextLine() string {
 		return "y prepares previews. Live activation needs a separate approval."
 	case activationConfirmScreen:
 		return "y installs reviewed project files. n or Esc keeps previews only."
-	case previewScreen, activationPreviewScreen:
+	case previewScreen, activationPreviewScreen, updatePreviewScreen:
 		return fmt.Sprintf("Preview only · lines %d–%d of %d", m.offset+1, min(len(m.outputLines()), m.offset+m.bodyHeight()), len(m.outputLines()))
 	}
 	return ""

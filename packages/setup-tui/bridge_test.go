@@ -105,3 +105,83 @@ func TestBridgeActivationConfirmationAndStructuredResult(t *testing.T) {
 		t.Fatalf("%+v %v", r, e)
 	}
 }
+
+func TestBridgeUpdateDiscoveryAndApprovalProtocol(t *testing.T) {
+	node, script := nodeFixture(t, `
+ require('node:readline').createInterface({input:process.stdin}).on('line',line=>{
+  const q=JSON.parse(line); let data;
+  const approving=q.operation==='runtime-approve'||q.operation==='project-apply';
+  if(approving!==Boolean(q.confirmed))process.exit(2);
+  switch(q.operation){
+   case 'discover':
+    if(q.selection)process.exit(2);
+    data={version:'1.1.0',defaults:{edition:'coding',harnesses:['codex-cli'],memory:'decide-later',name:'saved',path:'/runtime',profiles:false},capabilities:{platform:'darwin',arch:'arm64',node:'24',harnesses:{'codex-cli':'installed'}},packaged:true,project:{status:'managed',version:'1.0.1',text:'Project update available',canUpdate:true},resume:true};break;
+   case 'check-update':
+    if(q.selection||q.previewToken)process.exit(2);
+    data={status:'available',text:'Upgrade available',currentVersion:'1.1.0',latestVersion:'1.2.0',canUpgrade:true};break;
+   case 'runtime-preview':data={status:'runtime_review',text:'Upgrade Alfred',previewToken:'runtime-token'};break;
+   case 'runtime-approve':
+    if(q.previewToken!=='runtime-token')process.exit(2);
+    data={status:'runtime_upgrade_approved',text:'Ready for launcher',traceEvents:[{provider_calls:0}]};break;
+   case 'project-preview':data={status:'project_review',text:'Exact project files',previewToken:'project-token'};break;
+   case 'project-apply':
+    if(q.previewToken!=='project-token')process.exit(2);
+    data={status:'project_verified',text:'Integration updated'};break;
+   case 'project-decline':data={status:'project_declined',text:'No project writes'};break;
+   default:process.exit(2);
+  }
+  process.stdout.write(JSON.stringify({schema:q.schema,id:q.id,ok:true,data})+'\n');
+ });`)
+	b, e := startBridge(context.Background(), node, script)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer b.Close()
+	d, e := b.Call("discover", nil, "")
+	if e != nil || !d.Discover.Resume || d.Discover.Project.Version != "1.0.1" || !d.Discover.Project.CanUpdate {
+		t.Fatalf("%+v %v", d, e)
+	}
+	r, e := b.Call("check-update", nil, "")
+	if e != nil || !r.Update.CanUpgrade || r.Update.LatestVersion != "1.2.0" {
+		t.Fatalf("%+v %v", r, e)
+	}
+	s := d.Discover.Defaults
+	for _, tc := range []struct{ op, token, status string }{
+		{"runtime-preview", "", "runtime_review"},
+		{"runtime-approve", "runtime-token", "runtime_upgrade_approved"},
+		{"project-preview", "", "project_review"},
+		{"project-apply", "project-token", "project_verified"},
+		{"project-decline", "project-token", "project_declined"},
+	} {
+		r, e = b.Call(tc.op, &s, tc.token)
+		if e != nil || r.Status != tc.status {
+			t.Fatalf("%s: %+v %v", tc.op, r, e)
+		}
+	}
+}
+func TestBridgeRejectsInvalidUpdateStatesAndConsentTokens(t *testing.T) {
+	for _, tc := range []struct{ op, data string }{
+		{"check-update", `{status:'unavailable',text:'Offline',currentVersion:'1.1.0',latestVersion:'',canUpgrade:true}`},
+		{"check-update", `{status:'available',text:'Upgrade',currentVersion:'1.1.0',latestVersion:'',canUpgrade:true}`},
+		{"check-update", `{status:'available',text:'Upgrade',currentVersion:'1.1.0',latestVersion:'1.2.0',canUpgrade:true,command:'untrusted'}`},
+		{"runtime-preview", `{status:'runtime_review',text:'Upgrade',previewToken:''}`},
+		{"runtime-preview", `{status:'runtime_blocked',text:'Unsupported',previewToken:'unsafe'}`},
+		{"runtime-approve", `{status:'runtime_upgrade_approved',text:'Approved',previewToken:'reusable'}`},
+		{"project-preview", `{status:'project_current',text:'Current',previewToken:'unsafe'}`},
+		{"project-apply", `{status:'project_review',text:'Still review',previewToken:'unsafe'}`},
+		{"project-decline", `{status:'project_verified',text:'Wrong result'}`},
+	} {
+		t.Run(tc.op+tc.data, func(t *testing.T) {
+			node, script := nodeFixture(t, `require('node:readline').createInterface({input:process.stdin}).on('line',line=>{const q=JSON.parse(line);process.stdout.write(JSON.stringify({schema:q.schema,id:q.id,ok:true,data:`+tc.data+`})+'\n');});`)
+			b, e := startBridge(context.Background(), node, script)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer b.Close()
+			s := readyModel().selection
+			if _, e = b.Call(tc.op, &s, ""); e == nil {
+				t.Fatal("invalid update response accepted")
+			}
+		})
+	}
+}

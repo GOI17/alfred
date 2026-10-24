@@ -15,6 +15,10 @@ import (
 	"unicode/utf8"
 )
 
+// The launcher owns Homebrew execution and must resolve the newly installed
+// executable only after this UI and its backend have restored/closed the terminal.
+const runtimeUpgradeExitCode = 20
+
 func main() { os.Exit(run()) }
 func run() int {
 	flags := flag.NewFlagSet("alfred-setup", flag.ContinueOnError)
@@ -65,8 +69,17 @@ func run() int {
 		fmt.Fprintln(os.Stderr, "Setup stopped. Run alfred setup to try again.")
 		return 1
 	}
-	if m, ok := final.(model); ok && m.failure {
+	if m, ok := final.(model); ok && ctx.Err() == nil {
+		return modelExitCode(m)
+	}
+	return 0
+}
+func modelExitCode(m model) int {
+	if m.failure {
 		return 1
+	}
+	if m.runtimeUpgrade && m.quit {
+		return runtimeUpgradeExitCode
 	}
 	return 0
 }

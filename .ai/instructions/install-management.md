@@ -56,6 +56,27 @@ setup cannot prove that a running session loaded them. Pi remains preview-only.
 `--apply` in automation still authorizes preparation only; package installation
 is not live configuration approval. Model selection remains user-owned.
 
+### Updating a configured project
+
+The interactive setup entry screen reports CLI and project integration versions.
+Choose Update to review an available Homebrew upgrade and then review the project
+integration changes using saved harness choices. Runtime upgrade and project-file
+approval remain separate; resume never implies permission to write project files.
+An already-current CLI can still refresh an older project integration.
+
+Setup records managed baselines in `.alfred/setup/installation.json`; the skill
+manager's independent receipts are not a substitute for this project receipt.
+Matching 1.0.1 previews may be adopted after explicit review. Missing/modified
+artifacts, unsafe paths, ambiguous evidence or retired artifacts produce conflicts
+without overwriting user work. Partial updates retain recoverable attempt evidence
+and do not claim the final integration version. Retry Update, not the questionnaire.
+
+Release lookup is bounded, credential-free and visible. Offline/failed checks
+leave the setup menu usable; `ALFRED_SETUP_CHECK_UPDATES=0` disables lookup.
+Explicit flags and legacy/noninteractive paths do not add network checks. The
+first release containing this feature must be installed once through Homebrew by
+users on 1.0.1; subsequent releases can be offered inside setup.
+
 For each project's managed requests, run `alfred runtime init --instructions
 /absolute/path/to/shared/instructions.json` from that project, then `alfred
 runtime status`. This separate initialization writes project-local

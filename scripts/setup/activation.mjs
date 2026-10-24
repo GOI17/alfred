@@ -151,3 +151,6 @@ export function activatePlan(plan, { signal, write = atomic } = {}) {
     return { status: written.length ? "activation_partial" : "activation_failed", written, harnesses: [], text: `Harness activation was NOT verified. ${error.code?.startsWith("E") ? "Filesystem write failed." : error.message}\nFiles written before failure: ${written.length ? written.join(", ") : "none"}.\nPreviews remain available. Review a new plan before retrying.` };
   }
 }
+
+// Shared deterministic guards for the setup update lifecycle.
+export { hash, fail, safeRelative, stat, checked, identity, file, snapshot, atomic, allowed, required, parseJSON };

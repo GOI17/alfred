@@ -66,6 +66,21 @@
         harness config still requires explicit human approval.
       </div>
 
+      <h2 id="updates">Updating an existing setup</h2>
+      <p>Open <code>alfred setup</code> in your project. The opening screen shows
+        CLI and project integration versions and offers <strong>Update</strong>.
+        Review the Homebrew upgrade, then review the project file changes. Alfred
+        reuses your saved coding-tool choices instead of repeating the setup
+        questionnaire. Restart your harness after changed files are verified.</p>
+      <p>Local edits and ambiguous older installations are reported as conflicts.
+        A failed version lookup still allows continuing setup and updating a
+        recorded project from the installed runtime. Set
+        <code>ALFRED_SETUP_CHECK_UPDATES=0</code> to skip the remote check.</p>
+      <p>For an existing 1.0.1 installation, install a release containing this
+        feature once with <code>brew update</code> and
+        <code>brew upgrade GOI17/alfred/alfred</code>. Future releases can then be
+        offered inside setup.</p>
+
       <h2 id="requirements">Requirements</h2>
       <ul>
         <li>Homebrew for the versioned macOS/Linux package</li>

@@ -26,6 +26,19 @@ type selection struct {
 	Path      string   `json:"path"`
 	Profiles  bool     `json:"profiles"`
 }
+type projectStatus struct {
+	Status    string `json:"status"`
+	Version   string `json:"version"`
+	Text      string `json:"text"`
+	CanUpdate bool   `json:"canUpdate"`
+}
+type updateStatus struct {
+	Status         string `json:"status"`
+	Text           string `json:"text"`
+	CurrentVersion string `json:"currentVersion"`
+	LatestVersion  string `json:"latestVersion"`
+	CanUpgrade     bool   `json:"canUpgrade"`
+}
 type discovery struct {
 	Version      string    `json:"version"`
 	Defaults     selection `json:"defaults"`
@@ -35,7 +48,9 @@ type discovery struct {
 		Node      string            `json:"node"`
 		Harnesses map[string]string `json:"harnesses"`
 	} `json:"capabilities"`
-	Packaged bool `json:"packaged"`
+	Packaged bool          `json:"packaged"`
+	Project  projectStatus `json:"project"`
+	Resume   bool          `json:"resume"`
 }
 type request struct {
 	Schema       string     `json:"schema"`
@@ -57,6 +72,7 @@ type response struct {
 }
 type result struct {
 	Discover discovery
+	Update   updateStatus
 	Text     string
 	Token    string
 	Status   string
@@ -121,7 +137,7 @@ func (b *processBridge) Call(op string, s *selection, token string) (result, err
 	defer b.mu.Unlock()
 	var r result
 	b.sequence++
-	req := request{Schema: schema, ID: fmt.Sprint(b.sequence), Operation: op, Selection: s, PreviewToken: token, Confirmed: op == "apply" || op == "activate"}
+	req := request{Schema: schema, ID: fmt.Sprint(b.sequence), Operation: op, Selection: s, PreviewToken: token, Confirmed: op == "apply" || op == "activate" || op == "runtime-approve" || op == "project-apply"}
 	data, err := json.Marshal(req)
 	if err != nil || len(data) >= maxMessage {
 		return r, errors.New("setup choices are too large")
@@ -151,6 +167,11 @@ func (b *processBridge) Call(op string, s *selection, token string) (result, err
 		if err == nil {
 			err = validateDiscovery(r.Discover)
 		}
+	case "check-update":
+		err = decodeStrict(resp.Data, &r.Update)
+		if err == nil {
+			err = validateUpdate(r.Update)
+		}
 	case "preview":
 		var d struct {
 			Text  string `json:"text"`
@@ -161,7 +182,7 @@ func (b *processBridge) Call(op string, s *selection, token string) (result, err
 		if d.Token == "" || d.Text == "" {
 			err = errors.New("missing preview")
 		}
-	case "apply", "activate", "decline":
+	case "apply", "activate", "decline", "runtime-preview", "runtime-approve", "project-preview", "project-apply", "project-decline":
 		var d struct {
 			Text        string            `json:"text"`
 			Token       string            `json:"previewToken,omitempty"`
@@ -170,10 +191,9 @@ func (b *processBridge) Call(op string, s *selection, token string) (result, err
 		}
 		err = decodeStrict(resp.Data, &d)
 		r.Text, r.Token, r.Status = d.Text, d.Token, d.Status
-		validStatus := (op == "apply" && (d.Status == "previews_only" || d.Status == "activation_review" || d.Status == "activation_blocked")) ||
-			(op == "activate" && (d.Status == "activation_verified" || d.Status == "activation_failed" || d.Status == "activation_partial")) ||
-			(op == "decline" && d.Status == "activation_declined")
-		if !validStatus || d.Text == "" || (d.Status == "activation_review" && d.Token == "") || (d.Status != "activation_review" && d.Token != "") {
+		validStatus := validOperationStatus(op, d.Status)
+		review := d.Status == "activation_review" || d.Status == "runtime_review" || d.Status == "project_review"
+		if !validStatus || d.Text == "" || (review && d.Token == "") || (!review && d.Token != "") {
 			err = errors.New("invalid activation result")
 		}
 	default:
@@ -184,7 +204,47 @@ func (b *processBridge) Call(op string, s *selection, token string) (result, err
 	}
 	return r, nil
 }
+func validOperationStatus(op, status string) bool {
+	switch op {
+	case "apply":
+		return status == "previews_only" || status == "activation_review" || status == "activation_blocked"
+	case "activate":
+		return status == "activation_verified" || status == "activation_failed" || status == "activation_partial"
+	case "decline":
+		return status == "activation_declined"
+	case "runtime-preview":
+		return status == "runtime_review" || status == "runtime_blocked"
+	case "runtime-approve":
+		return status == "runtime_upgrade_approved"
+	case "project-preview":
+		return status == "project_review" || status == "project_blocked" || status == "project_current"
+	case "project-apply":
+		return status == "project_verified" || status == "project_partial" || status == "project_failed"
+	case "project-decline":
+		return status == "project_declined"
+	}
+	return false
+}
+func validateUpdate(d updateStatus) error {
+	switch d.Status {
+	case "current", "available", "unavailable", "pending", "unsupported", "development":
+	default:
+		return errors.New("invalid update status")
+	}
+	if d.Text == "" || d.CurrentVersion == "" || (d.CanUpgrade && d.Status != "available") || (d.Status == "available" && d.LatestVersion == "") {
+		return errors.New("incomplete update status")
+	}
+	return nil
+}
 func validateDiscovery(d discovery) error {
+	switch d.Project.Status {
+	case "none", "managed", "legacy", "blocked":
+	default:
+		return errors.New("invalid project status")
+	}
+	if d.Version == "" || d.Project.Text == "" || (d.Project.CanUpdate && (d.Project.Status == "none" || d.Project.Status == "blocked")) {
+		return errors.New("incomplete discovery")
+	}
 	s := d.Defaults
 	if s.Edition != "coding" && s.Edition != "memory" && s.Edition != "full" {
 		return errors.New("invalid edition")

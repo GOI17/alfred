@@ -100,5 +100,7 @@ test("published runtime policy includes the activation implementation and its sa
   const policy = JSON.parse(readFileSync(new URL("../packaging/runtime/allowlist.json", import.meta.url)));
   assert.ok(policy.includes.includes("scripts/setup/activation.mjs"));
   assert.ok(policy.includes.includes("scripts/setup/bridge.mjs"));
+  assert.ok(policy.includes.includes("scripts/setup/integration.mjs"));
+  assert.ok(policy.includes.includes("scripts/setup/releases.mjs"));
   assert.ok(policy.includes.includes("packages/codex-adapter/src/**/*.js"));
 });

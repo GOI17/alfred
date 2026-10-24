@@ -59,7 +59,7 @@ if (process.argv.includes("--archive-only")) {
       return connect.apply(this, input);
     };
   `);
-  const env = { PATH: [blockedBin, dirname(process.execPath), "/usr/bin", "/bin"].join(delimiter), HOME: home, TMPDIR: temporary, ALFRED_MEMORY_REGISTRY: join(home, "registry.sqlite"), ALFRED_DISTRIBUTION: "homebrew", ALFRED_INSTALL_TUI_BACKEND: "node", ALFRED_SMOKE_DENIED_NETWORK: deniedNetwork, NODE_OPTIONS: `--import=${pathToFileURL(networkGuard).href}`, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_TERMINAL_PROMPT: "0" };
+  const env = { PATH: [blockedBin, dirname(process.execPath), "/usr/bin", "/bin"].join(delimiter), HOME: home, TMPDIR: temporary, ALFRED_MEMORY_REGISTRY: join(home, "registry.sqlite"), ALFRED_DISTRIBUTION: "homebrew", ALFRED_INSTALL_TUI_BACKEND: "node", ALFRED_SETUP_CHECK_UPDATES: "0", ALFRED_SMOKE_DENIED_NETWORK: deniedNetwork, NODE_OPTIONS: `--import=${pathToFileURL(networkGuard).href}`, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_TERMINAL_PROMPT: "0" };
   const server = createServer((request, response) => {
     if (request.headers.authorization || request.headers.cookie) { response.writeHead(403).end(); return; }
     response.writeHead(200, { "Content-Type": "application/gzip" }); response.end(archive);
@@ -123,7 +123,7 @@ try:
         if not sent:
             for query in (b"\x1b]10;?", b"\x1b]11;?", b"\x1b[6n"):
                 assert query not in output, "Native setup issued a blocking startup query: " + repr(query)
-        if not sent and all(text in output for text in (b"Alfred setup", b"Coding", b"Enter next")):
+        if not sent and all(text in output for text in (b"Alfred setup", b"Continue setup", b"Enter")):
             first_menu_ms = (time.monotonic() - started) * 1000
             os.write(fd, b"\x03")
             sent = True
@@ -164,7 +164,8 @@ finally:
     mkdirSync(activationWorkspace);
     const activationSmoke = run(["--input-type=module", "-e", `
       import assert from 'node:assert/strict';
-      import { existsSync } from 'node:fs';
+      import { existsSync, readFileSync, writeFileSync, readdirSync, unlinkSync } from 'node:fs';
+      import { createHash } from 'node:crypto';
       import { join } from 'node:path';
       import { pathToFileURL } from 'node:url';
       const runtime = ${JSON.stringify(runtime)};
@@ -181,7 +182,40 @@ finally:
       for (const path of ['.agents/skills/alfred/SKILL.md', '.codex/agents/developer.toml', '.opencode/skills/alfred/SKILL.md', '.opencode/commands/alfred.md']) assert.ok(existsSync(path), path);
       assert.equal(existsSync(join(runtime, '.agents')), false);
       assert.equal(installed.data.traceEvents[0].provider_calls, 0);
-      console.log('Packaged two-stage harness activation verified');
+      const receipt = '.alfred/setup/installation.json';
+      assert.ok(existsSync(receipt), 'Initial activation must record an installation receipt');
+      // Recreate the pre-receipt1.0.1 layout, with an actual older agent body.
+      // All changes are confined to this owned fixture; runtime bytes stay intact.
+      const target = '.codex/agents/developer.toml';
+      const expected = readFileSync(target, 'utf8');
+      const older = expected + String.fromCharCode(10) + '# Prior installed release behavior' + String.fromCharCode(10);
+      writeFileSync(target, older);
+      const generation = readdirSync('.alfred/setup/previews')[0];
+      for (const name of ['codex-install', 'codex-cli-install', 'codex-app-install']) {
+        const dir = join('.alfred/setup/previews', generation, name);
+        const manifestPath = join(dir, 'activation-manifest.json');
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        const artifact = manifest.files.find(file => file.target === target);
+        writeFileSync(join(dir, artifact.source), older);
+        artifact.sha256 = createHash('sha256').update(older).digest('hex');
+        writeFileSync(manifestPath, JSON.stringify(manifest));
+      }
+      unlinkSync(receipt);
+      const upgrade = createSession({ installRoot: runtime });
+      const discovered = await upgrade({ schema, id: 'discover-update', operation: 'discover' });
+      assert.equal(discovered.data.project.status, 'legacy', JSON.stringify(discovered));
+      const saved = discovered.data.defaults;
+      const check = await upgrade({ schema, id: 'check-update', operation: 'check-update' });
+      assert.equal(check.data.canUpgrade, false, 'Offline smoke must never request Brew');
+      const review = await upgrade({ schema, id: 'review-update', operation: 'project-preview', selection: saved });
+      assert.equal(review.data.status, 'project_review', JSON.stringify(review));
+      const updated = await upgrade({ schema, id: 'apply-update', operation: 'project-apply', selection: saved, previewToken: review.data.previewToken, confirmed: true });
+      assert.equal(updated.data.status, 'project_verified', JSON.stringify(updated));
+      assert.equal(readFileSync(target, 'utf8'), expected);
+      assert.equal(JSON.parse(readFileSync(receipt)).integrationVersion, discovered.data.version);
+      const again = await upgrade({ schema, id: 'current-update', operation: 'project-preview', selection: saved });
+      assert.equal(again.data.status, 'project_current', JSON.stringify(again));
+      console.log('Packaged two-stage activation, legacy migration and project update verified');
     `], activationWorkspace);
     process.stdout.write(activationSmoke);
     const shared = join(temporary, "instructions.json"), playbook = join(temporary, "playbook.txt");
@@ -282,7 +316,7 @@ finally:
     const stopped = await Promise.race([serviceClosed, delay(5000).then(() => null)]);
     assert.equal(stopped?.code, 0, "Packaged HTTP server did not shut down cleanly");
     service = null;
-    process.stdout.write(`${JSON.stringify({ status: "pass", verification: "anonymous-local-http,archive-integrity,relocated-wrapper,CLI,managed-runtime-project-isolation,native-Go-setup-PTY-cancel,guided-setup-preview,packaged-reviewed-harness-activation,SQLite,MCP-stdio-CRUD,live-HTTP,dependencies,coding-previews", version: checked.manifest.version, sha256: sha256(archive), public_github_install: "pending-publication-approval", external_network_attempts: 0, provider_calls: 0 })}\n`);
+    process.stdout.write(`${JSON.stringify({ status: "pass", verification: "anonymous-local-http,archive-integrity,relocated-wrapper,CLI,managed-runtime-project-isolation,native-Go-setup-PTY-cancel,guided-setup-preview,packaged-reviewed-harness-activation,legacy-project-update,SQLite,MCP-stdio-CRUD,live-HTTP,dependencies,coding-previews", version: checked.manifest.version, sha256: sha256(archive), public_github_install: "pending-publication-approval", external_network_attempts: 0, provider_calls: 0 })}\n`);
   } finally {
     if (service) { service.kill("SIGKILL"); await serviceClosed; }
     await new Promise((done) => server.close(done));

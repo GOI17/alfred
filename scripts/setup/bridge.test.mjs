@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, existsSync, writeFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -123,4 +123,44 @@ test("cancellation during refresh prevents apply and all later subprocesses", as
   const applied = await session(request("b", "apply", { selection, confirmed: true, previewToken: preview.data.previewToken }));
   assert.equal(applied.error.code, "cancelled"); assert.equal(applies, 0);
   assert.equal((await session(request("c", "preview", { selection }))).error.code, "cancelled"); assert.equal(calls, 2);
+});
+
+
+test("update discovery is local, explicit check is advisory, runtime approval is one-use", async t => {
+  const f=fixture(t);let checks=0,handoffs=0;
+  const session=createSession({cwd:f.project,env:f.env,check:async()=>{checks++;return {status:"available",text:"Alfred update available",currentVersion:"1.0.1",latestVersion:"1.1.0",canUpgrade:true};},handoff:()=>{handoffs++;}});
+  const d=await session(request("d","discover"));assert.equal(d.data.project.status,"none");assert.equal(checks,0);assert.equal(handoffs,0);
+  assert.deepEqual(readdirSync(f.project),[]);
+  const checked=await session(request("c","check-update"));assert.equal(checked.data.status,"available");assert.equal(checks,1);
+  const review=await session(request("r","runtime-preview",{selection}));assert.equal(review.data.status,"runtime_review");assert.equal(handoffs,0);
+  assert.equal((await session(request("bad","runtime-approve",{selection,previewToken:review.data.previewToken}))).error.code,"consent_required");
+  assert.equal(handoffs,0);
+  const again=await session(request("r2","runtime-preview",{selection}));
+  const approved=await session(request("a","runtime-approve",{selection,previewToken:again.data.previewToken,confirmed:true}));assert.equal(approved.data.status,"runtime_upgrade_approved");assert.equal(handoffs,1);
+  assert.equal((await session(request("replay","runtime-approve",{selection,previewToken:again.data.previewToken,confirmed:true}))).error.code,"consent_required");assert.equal(handoffs,1);
+});
+
+test("saved integration updates through the real bridge without running the suite installer again", async t => {
+  const f=fixture(t), selected={...selection,harnesses:["codex-cli","opencode"]};
+  const first=createSession({cwd:f.project,env:f.env});
+  const p=await first(request("p","preview",{selection:selected}));
+  const a=await first(request("a","apply",{selection:selected,previewToken:p.data.previewToken,confirmed:true}));
+  const installed=await first(request("i","activate",{selection:selected,previewToken:a.data.previewToken,confirmed:true}));assert.equal(installed.data.status,"activation_verified");
+  const receipt=join(f.project,".alfred/setup/installation.json"), previous=JSON.parse(readFileSync(receipt));previous.integrationVersion="0.0.1";writeFileSync(receipt,JSON.stringify(previous));
+  let installers=0, checkStatus="current";
+  const updated=createSession({cwd:f.project,env:{...f.env,ALFRED_SETUP_RESUME:"1"},check:async()=>({status:checkStatus,text:"Advisory version check",currentVersion:"1.0.1",latestVersion:"1.0.1",canUpgrade:false}),execute:async()=>{installers++;throw new Error("must not run installer");}});
+  const d=await updated(request("d","discover"));assert.equal(d.data.resume,true);assert.equal(d.data.project.canUpdate,true);assert.deepEqual(d.data.defaults.harnesses,["opencode","codex-cli"]);assert.equal(d.data.defaults.name,"test");
+  const saved=d.data.defaults;
+  const review=await updated(request("r","project-preview",{selection:saved}));assert.equal(review.data.status,"project_review",JSON.stringify(review));
+  assert.equal((await updated(request("check-after-review","check-update"))).data.status,"current");
+  assert.equal((await updated(request("deny","project-decline",{selection:saved,previewToken:review.data.previewToken}))).data.status,"project_declined");
+  assert.equal(JSON.parse(readFileSync(receipt)).integrationVersion,"0.0.1");
+  assert.equal((await updated(request("check-before-review","check-update"))).data.status,"current");
+  const again=await updated(request("r2","project-preview",{selection:saved}));
+  checkStatus="unavailable";
+  assert.equal((await updated(request("check-after-second-review","check-update"))).data.status,"unavailable");
+  const applied=await updated(request("u","project-apply",{selection:saved,previewToken:again.data.previewToken,confirmed:true}));assert.equal(applied.data.status,"project_verified",JSON.stringify(applied));
+  assert.equal(installers,0);assert.equal(JSON.parse(readFileSync(receipt)).integrationVersion,d.data.version);
+  const noop=await updated(request("n","project-preview",{selection:saved}));assert.equal(noop.data.status,"project_current",JSON.stringify(noop));
+  assert.equal((await updated(request("replay","project-apply",{selection:saved,previewToken:again.data.previewToken,confirmed:true}))).error.code,"consent_required");
 });
