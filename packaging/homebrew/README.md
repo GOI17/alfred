@@ -3,8 +3,10 @@
 ## Availability
 
 The public canonical tap `GOI17/homebrew-alfred` publishes the versioned runtime.
-Version 1.0.0 includes the Go setup UI; issue #234 adds its separate reviewed
-harness activation step in the next release. Do not assume a source change has
+Version 1.0.1 includes reviewed harness activation. Issue #237 adds startup
+version discovery and approved CLI/project updates in the next release. Existing
+1.0.1 users bootstrap that feature once through `brew update` and
+`brew upgrade GOI17/alfred/alfred` after publication. Do not assume a source change has
 updated an installed package. Never replace historical release assets.
 
 ## Public installation
@@ -29,7 +31,12 @@ confirmation installs only its enumerated Codex/OpenCode files, preserving exist
 settings or rejecting conflicts. A verified result still requires a new harness
 session. Declining leaves previews only; Pi is not activated by this flow.
 Source and packaged setup reuse an existing installation with `--no-clone`.
-No runtime compiler/download is used. Missing or mismatched native executables
+No runtime compiler is used. Initial preparation uses installed files; only an
+explicitly reviewed Homebrew upgrade downloads a new runtime. The launcher
+verifies the installed version and relaunches the new executable before reviewing
+project updates. Saved harness choices and managed artifact baselines avoid
+repeating setup. The stable-release check is bounded and advisory; an offline
+project update remains available. `ALFRED_SETUP_CHECK_UPDATES=0` skips that check. Missing or mismatched native executables
 fail clearly; explicit flags and `--legacy-ui` retain deterministic compatibility.
 Homebrew requires Node but does not require Go. Optional Transformers remain
 unbundled; keyword search stays available. Model assignments remain user-owned.
@@ -135,7 +142,8 @@ from the exact stable tag without this flag, binding source and builder to the
 same validated revision. Never relabel a local candidate as a historical release.
 
 The verifier exercises actual packaged entrypoints with isolated HOME/project
-fixtures, including setup previews, Memory/MCP dependencies and managed text
+fixtures, including setup previews, initial activation, legacy integration migration and
+actual managed artifact updates, Memory/MCP dependencies and managed text
 loading. `--archive-only` checks structure/checksums only and is not a substitute
 for those runtime checks. Retain the candidate directory and its checksums for
 review; do not upload it or change the tap as part of a local build.

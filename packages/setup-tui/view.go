@@ -141,6 +141,47 @@ func (m model) View() string {
 		body = append(body, "Working…  Ctrl+C cancels")
 	} else {
 		switch m.screen {
+		case startScreen:
+			status := "Checking for updates…"
+			if !m.checking {
+				switch m.update.Status {
+				case "available":
+					status = "New version: " + safeText(m.update.LatestVersion)
+				case "current":
+					status = "CLI is up to date"
+				case "pending":
+					status = "New version pending in Brew"
+				case "unsupported":
+					status = "Manual CLI upgrade required"
+					if m.update.LatestVersion != "" {
+						status = "Latest: " + safeText(m.update.LatestVersion) + " (manual)"
+					}
+				case "development":
+					status = "Development CLI; no downgrade"
+				default:
+					status = "Update check unavailable"
+				}
+			}
+			body = append(body, truncate(status, width))
+			if m.height >= 20 {
+				body = append(body, "")
+				for _, text := range []string{m.update.Text, m.installedProject.Text} {
+					details := wrap(text, width)
+					body = append(body, details[:min(2, len(details))]...)
+				}
+				body = append(body, "")
+			}
+			for i, option := range m.options() {
+				prefix := "  "
+				if i == m.cursor {
+					prefix = "❯ "
+				}
+				line := truncate(prefix+option, width)
+				if i == m.cursor {
+					line = focusStyle.Render(line)
+				}
+				body = append(body, line)
+			}
 		case nameScreen, pathScreen:
 			if m.screen == pathScreen && m.packaged {
 				body = append(body, wrap(m.selection.Path, width)...)
@@ -157,11 +198,17 @@ func (m model) View() string {
 			if m.screen == pathScreen && m.height >= 20 {
 				body = append(body, "", truncate("Project: "+safeText(m.project), width))
 			}
+		case updateConfirmScreen:
+			text := "Apply only the reviewed project changes."
+			if m.updateMode == "runtime" {
+				text = "Upgrade Alfred through Homebrew."
+			}
+			body = append(body, truncate(text, width), "", focusStyle.Render("y Update · n Back"))
 		case activationConfirmScreen:
 			body = append(body, truncate("Install only reviewed files into this project.", width), "", focusStyle.Render("y Install · n Keep previews"))
 		case confirmScreen:
 			body = append(body, truncate("Only the reviewed changes will be applied.", width), "", focusStyle.Render("y Prepare · n Back"))
-		case previewScreen, activationPreviewScreen, resultScreen, errorScreen:
+		case previewScreen, activationPreviewScreen, updatePreviewScreen, resultScreen, errorScreen:
 			all := m.outputLines()
 			end := min(len(all), m.offset+m.bodyHeight())
 			body = append(body, all[m.offset:end]...)
@@ -208,8 +255,10 @@ func (m model) View() string {
 		help = "Enter next · Esc back · Ctrl+C cancel"
 	case harnessScreen:
 		help = "↑/↓ choose · Space select · Enter next · Esc back"
-	case previewScreen, activationPreviewScreen:
+	case previewScreen, activationPreviewScreen, updatePreviewScreen:
 		help = "↑/↓ scroll · Enter review · Esc back · q quit"
+	case updateConfirmScreen:
+		help = "y update · n/Esc back · Ctrl+C cancel"
 	case activationConfirmScreen:
 		help = "y install · n/Esc keep previews · Ctrl+C cancel"
 	case confirmScreen:
@@ -224,8 +273,10 @@ func (m model) View() string {
 			help = "Enter next · Esc back · ^C cancel"
 		case harnessScreen:
 			help = "↑↓ · Space select · Enter · Esc"
-		case previewScreen, activationPreviewScreen:
+		case previewScreen, activationPreviewScreen, updatePreviewScreen:
 			help = "↑↓ scroll · Enter · Esc back · q"
+		case updateConfirmScreen:
+			help = "y update · n/Esc back · ^C"
 		case activationConfirmScreen:
 			help = "y install · n/Esc decline · ^C"
 		case confirmScreen:

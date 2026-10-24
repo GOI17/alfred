@@ -14,10 +14,12 @@ import (
 type fakeBackend struct {
 	calls      []string
 	selections []selection
+	tokens     []string
 }
 
 func (b *fakeBackend) Call(op string, s *selection, token string) (result, error) {
 	b.calls = append(b.calls, op)
+	b.tokens = append(b.tokens, token)
 	if s != nil {
 		b.selections = append(b.selections, *s)
 	}
@@ -151,7 +153,7 @@ func TestGlobalCancellationAndSmallTerminal(t *testing.T) {
 }
 func TestSnapshotBounds(t *testing.T) {
 	for _, size := range [][2]int{{80, 24}, {40, 12}, {30, 10}} {
-		for s := editionScreen; s <= errorScreen; s++ {
+		for s := startScreen; s <= errorScreen; s++ {
 			m := readyModel()
 			m.width = size[0]
 			m.height = size[1]
@@ -362,6 +364,7 @@ func TestConfirmationsKeepBothChoicesVisibleAtMinimumSize(t *testing.T) {
 	}{
 		{confirmScreen, "y Prepare", "n Back"},
 		{activationConfirmScreen, "y Install", "n Keep previews"},
+		{updateConfirmScreen, "y Update", "n Back"},
 	} {
 		m := readyModel()
 		m.width, m.height = 30, 10
@@ -372,6 +375,243 @@ func TestConfirmationsKeepBothChoicesVisibleAtMinimumSize(t *testing.T) {
 		}
 		if len(strings.Split(view, "\n")) > m.height {
 			t.Fatalf("screen %d overflowed minimum terminal height", tc.screen)
+		}
+	}
+}
+
+func discoveredModel(project projectStatus, resume bool) (model, tea.Cmd) {
+	m := readyModel()
+	d := discovery{Version: "1.1.0", Defaults: m.selection, Project: project, Resume: resume, Packaged: true}
+	next, cmd := m.Update(replyMsg{operation: "discover", result: result{Discover: d}})
+	return next.(model), cmd
+}
+func TestStartupRendersBeforeCheckAndContinueStaysAvailable(t *testing.T) {
+	m, check := discoveredModel(projectStatus{Status: "managed", Version: "1.0.1", Text: "Project integration can be updated.", CanUpdate: true}, false)
+	if m.screen != startScreen || m.busy || !m.checking || check == nil {
+		t.Fatal("discovery waited for network or skipped startup")
+	}
+	if m.cursor != 1 || !strings.Contains(m.View(), "1.1.0") || !strings.Contains(m.View(), "1.0.1") {
+		t.Fatal("missing independent versions or safe default")
+	}
+	// Update must wait for the bounded check to choose the combined upgrade path.
+	m.cursor = 0
+	waiting, cmd := key(m, "enter")
+	if cmd != nil || waiting.screen != startScreen {
+		t.Fatal("started project-only update before version check")
+	}
+	m.cursor = 1
+	m, cmd = key(m, "enter")
+	if cmd != nil || m.screen != editionScreen {
+		t.Fatal("network check blocked Continue")
+	}
+	check()
+	b := m.backend.(*fakeBackend)
+	if len(b.calls) != 1 || b.calls[0] != "check-update" || len(b.selections) != 0 {
+		t.Fatal("check carried installation choices", b.calls)
+	}
+	next, cmd := m.Update(replyMsg{operation: "check-update", result: result{Update: updateStatus{Status: "available", CurrentVersion: "1.1.0", LatestVersion: "1.2.0", CanUpgrade: true}}})
+	m = next.(model)
+	if cmd != nil || m.screen != editionScreen || m.checking {
+		t.Fatal("late check interrupted setup")
+	}
+	m, _ = key(m, "esc")
+	if m.screen != startScreen || m.cursor != 1 {
+		t.Fatal("cannot return safely to update menu")
+	}
+}
+func TestLateUpdateCheckCannotReleaseOperationOrReplaceConsent(t *testing.T) {
+	for _, checkError := range []error{nil, errors.New("offline")} {
+		m := readyModel()
+		m.screen, m.busy, m.checking = updateConfirmScreen, true, true
+		m.token, m.output, m.updateMode = "reviewed", "Exact files", "project"
+		next, cmd := m.Update(replyMsg{operation: "check-update", result: result{Update: updateStatus{Status: "current"}}, err: checkError})
+		m = next.(model)
+		if cmd != nil || !m.busy || m.token != "reviewed" || m.output != "Exact files" || m.screen != updateConfirmScreen || m.failure {
+			t.Fatal("background check changed active operation")
+		}
+		_, cmd = key(m, "y")
+		if cmd != nil {
+			t.Fatal("late response enabled duplicate consent")
+		}
+	}
+}
+func TestProjectUpdateAvailableWhenCLIIsCurrentOrOffline(t *testing.T) {
+	for _, state := range []string{"current", "unavailable", "unsupported", "pending"} {
+		m, _ := discoveredModel(projectStatus{Status: "managed", Version: "1.0.1", CanUpdate: true}, false)
+		m.checking = false
+		m.update = updateStatus{Status: state}
+		m.updateSelection.Harnesses = []string{"codex-cli"}
+		m.selection.Harnesses = []string{"pi"} // Unsubmitted wizard edits are not update choices.
+		m.cursor = 0
+		m, cmd := key(m, "enter")
+		if cmd == nil || !m.busy || m.updateMode != "project" {
+			t.Fatal("local update unavailable", state)
+		}
+		cmd()
+		b := m.backend.(*fakeBackend)
+		if len(b.calls) != 1 || b.calls[0] != "project-preview" || b.selections[0].Harnesses[0] != "codex-cli" {
+			t.Fatal(b.calls, b.selections)
+		}
+	}
+}
+func TestRuntimeUpgradeHasSeparateReviewAndSingleApproval(t *testing.T) {
+	m, _ := discoveredModel(projectStatus{Status: "managed", CanUpdate: true}, false)
+	m.checking = false
+	m.update = updateStatus{Status: "available", CanUpgrade: true}
+	m.cursor = 0
+	m, cmd := key(m, "enter")
+	if cmd == nil {
+		t.Fatal("missing runtime preview")
+	}
+	cmd()
+	b := m.backend.(*fakeBackend)
+	if len(b.calls) != 1 || b.calls[0] != "runtime-preview" {
+		t.Fatal(b.calls)
+	}
+	next, _ := m.Update(replyMsg{operation: "runtime-preview", result: result{Status: "runtime_review", Text: "Upgrade 1.1.0 to 1.2.0", Token: "runtime-review"}})
+	m = next.(model)
+	for i := 0; i < 20; i++ {
+		m, cmd = key(m, "enter")
+		if cmd != nil {
+			t.Fatal("Enter authorized upgrade")
+		}
+	}
+	if m.screen != updateConfirmScreen || modelExitCode(m) != 0 {
+		t.Fatal("upgrade before confirmation")
+	}
+	for _, input := range []string{"yes", "yy", "y\r"} {
+		m, cmd = key(m, input)
+		if cmd != nil {
+			t.Fatal("pasted approval accepted")
+		}
+	}
+	m, cmd = key(m, "y")
+	if cmd == nil || !m.busy || m.token != "" {
+		t.Fatal("missing one-use approval")
+	}
+	cmd()
+	if b.calls[1] != "runtime-approve" || b.tokens[1] != "runtime-review" {
+		t.Fatal(b.calls, b.tokens)
+	}
+	_, cmd = key(m, "y")
+	if cmd != nil {
+		t.Fatal("repeated upgrade")
+	}
+	next, cmd = m.Update(replyMsg{operation: "runtime-approve", result: result{Status: "runtime_upgrade_approved"}})
+	m = next.(model)
+	if !m.quit || cmd == nil || modelExitCode(m) != runtimeUpgradeExitCode {
+		t.Fatal("launcher handoff not requested")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("terminal UI did not quit before Brew")
+	}
+}
+func TestUpdateDeclineNeverSignalsRuntimeUpgrade(t *testing.T) {
+	for _, mode := range []string{"runtime", "project"} {
+		for _, input := range []string{"n", "esc"} {
+			m := readyModel()
+			m.screen, m.updateMode, m.token = updateConfirmScreen, mode, "reviewed"
+			m, cmd := key(m, input)
+			if m.token != "" || modelExitCode(m) != 0 {
+				t.Fatal("decline kept consent")
+			}
+			if mode == "runtime" {
+				if cmd != nil || m.screen != startScreen {
+					t.Fatal("runtime decline executed something")
+				}
+			} else {
+				if cmd == nil {
+					t.Fatal("project decline not recorded")
+				}
+				cmd()
+				if got := m.backend.(*fakeBackend).calls; len(got) != 1 || got[0] != "project-decline" {
+					t.Fatal(got)
+				}
+				next, _ := m.Update(replyMsg{operation: "project-decline", result: result{Status: "project_declined"}})
+				if next.(model).screen != startScreen {
+					t.Fatal("decline did not return to choices")
+				}
+			}
+		}
+	}
+}
+func TestResumeOnlyPreviewsProjectAndChecksVersion(t *testing.T) {
+	m, cmd := discoveredModel(projectStatus{Status: "managed", CanUpdate: true}, true)
+	if cmd == nil || !m.busy || m.updateMode != "project" || m.token != "" {
+		t.Fatal("bad resume state")
+	}
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok || len(batch) != 2 {
+		t.Fatal("resume did not schedule independent check and preview")
+	}
+	for _, call := range batch {
+		call()
+	}
+	calls := m.backend.(*fakeBackend).calls
+	if len(calls) != 2 || calls[0] != "check-update" || calls[1] != "project-preview" {
+		t.Fatal("resume applied files", calls)
+	}
+	for _, canUpdate := range []bool{false} {
+		m, cmd = discoveredModel(projectStatus{Status: "blocked", CanUpdate: canUpdate}, true)
+		if m.screen != startScreen || m.busy || cmd == nil {
+			t.Fatal("blocked resume bypassed start")
+		}
+	}
+}
+func TestProjectCompletionAndPartialFailureRemainDistinct(t *testing.T) {
+	for _, status := range []string{"project_verified", "project_partial", "project_failed"} {
+		m := readyModel()
+		m.runtimeVersion = "1.2.0"
+		m.installedProject.Version = "1.1.0"
+		next, _ := m.Update(replyMsg{operation: "project-apply", result: result{Status: status, Text: "Project result"}})
+		m = next.(model)
+		if m.screen != resultScreen {
+			t.Fatal("project result missing")
+		}
+		if status == "project_verified" {
+			if m.failure || m.installedProject.Version != "1.2.0" || !strings.Contains(m.subtitle(), "new session") {
+				t.Fatal("verified state missing")
+			}
+		} else if !m.failure || m.installedProject.Version != "1.1.0" || modelExitCode(m) != 1 {
+			t.Fatal("partial update advanced integration version")
+		}
+	}
+}
+func TestCancelledStartupIgnoresLateUpgradeReply(t *testing.T) {
+	m, _ := discoveredModel(projectStatus{Status: "managed", CanUpdate: true}, false)
+	m, _ = key(m, "ctrl+c")
+	for _, reply := range []replyMsg{
+		{operation: "check-update", result: result{Update: updateStatus{Status: "available", CanUpgrade: true}}},
+		{operation: "runtime-approve", result: result{Status: "runtime_upgrade_approved"}},
+	} {
+		next, cmd := m.Update(reply)
+		m = next.(model)
+		if !m.quit || cmd != nil || m.runtimeUpgrade || modelExitCode(m) != 0 {
+			t.Fatal("late response resumed cancelled update")
+		}
+	}
+}
+func TestStartupMinimumScreenShowsVersionsAndChoices(t *testing.T) {
+	for _, state := range []string{"available", "current", "unavailable", "pending", "unsupported", "development"} {
+		m, _ := discoveredModel(projectStatus{Status: "managed", Version: "1.0.1", Text: "Saved project", CanUpdate: true}, false)
+		m.width, m.height, m.checking = 30, 10, false
+		m.update = updateStatus{Status: state, LatestVersion: "1.2.0", CanUpgrade: state == "available"}
+		view := m.View()
+		for _, text := range []string{"CLI 1.1.0", "Project 1.0.1", "Update", "Continue setup"} {
+			if !strings.Contains(view, text) {
+				t.Fatalf("%s hid %s: %q", state, text, view)
+			}
+		}
+		if state == "available" && !strings.Contains(view, "1.2.0") {
+			t.Fatal("available version hidden")
+		}
+		if len(strings.Split(view, "\n")) > 10 {
+			t.Fatal("startup overflowed height")
+		}
+		for _, line := range strings.Split(view, "\n") {
+			if lipgloss.Width(line) > 30 {
+				t.Fatal("startup overflowed width")
+			}
 		}
 	}
 }

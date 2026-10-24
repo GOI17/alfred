@@ -4,7 +4,11 @@ Keyboard-first setup using Bubble Tea **0.25.0** and Lip Gloss **0.9.1**,
 with Wave's spacious Darcula presentation. See [NOTICE](NOTICE) for attribution
 and [THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt) for linked module notices.
 
-Run `alfred setup` from the project you want to configure. Choose Coding,
+Run `alfred setup` from the project you want to configure. Its first screen shows
+the installed CLI and project integration versions. A bounded release check runs
+while Continue setup and cancellation remain available. Update waits for this
+check, then offers the applicable CLI and/or project action. Choose Continue
+setup for an initial configuration, then choose Coding,
 Memory or Full, select coding tools, choose memory settings when applicable,
 and review the setup name, installation location and runtime profiles.
 The shared packaged installation location is read-only; it is distinct from
@@ -33,6 +37,28 @@ The screen adapts to 80×24 and 40×12. Below 30×10 it asks for a larger termin
 and allows cancellation, but no confirmation. Long previews scroll; names and
 paths remain editable even when wider than the viewport. External output is
 sanitized for terminal escapes and invisible direction controls.
+
+## Updating an existing setup
+
+Update reuses the saved harness selection. A Homebrew review names the current
+and proposed stable versions; an explicit `y` returns control to the Node
+launcher. It runs fixed Brew commands, checks the new executable's actual version,
+and relaunches it from the original project. The old runtime never performs the
+project update after Brew. The new session opens an integration preview; another
+explicit confirmation is required before its files change.
+
+The integration receipt stores managed baselines under
+`.alfred/setup/installation.json`. Matching legacy 1.0.1 previews can establish a
+baseline only after review. Personalized or missing managed files, ambiguous
+previews, unsafe paths and retired artifacts stop the update with a conflict.
+Unrelated Codex instruction text and OpenCode settings are preserved. An attempt
+journal permits a failed update to be reviewed again without accepting edits made
+after the failure. A partially updated project never claims the final version.
+
+`ALFRED_SETUP_CHECK_UPDATES=0` disables the remote check, useful offline and in
+isolated tests. Explicit flags, legacy UI and noninteractive execution keep their
+local behavior. Source installations display available releases but do not run
+Homebrew automatically. They may update the project from their current runtime.
 
 ## Build and checks
 
@@ -63,7 +89,11 @@ For direct development, use a real terminal and the trusted absolute paths:
 
 The frontend starts one child with argv, never shell evaluation. Its private
 stdin/stdout carry `alfred.setup/v1` JSONL; terminal rendering uses stderr.
-`discover` supplies defaults, `preview` supplies actual text and an opaque
+`discover` supplies local defaults/project state; `check-update` separately
+checks release availability. `runtime-preview`/`runtime-approve` authorize the
+launcher handoff (UI exit20). `project-preview`/`project-apply` reuse the saved
+installation and have their own one-use confirmation; `project-decline` drops it.
+`preview` supplies actual initial-setup text and an opaque
 session token, and `apply` requires the same selection, token and explicit
 confirmation. Successful preparation returns an `activation_review` and a new
 one-use token. `activate` needs its own explicit confirmation; `decline` consumes

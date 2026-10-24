@@ -9,6 +9,8 @@
     "scripts/tui/install-pathfinder.mjs",
     "scripts/setup/bridge.mjs",
     "scripts/setup/activation.mjs",
+    "scripts/setup/integration.mjs",
+    "scripts/setup/releases.mjs",
     "packages/setup-tui/go.mod",
     "packages/setup-tui/go.sum",
     "packages/setup-tui/THIRD-PARTY-LICENSES.txt",
