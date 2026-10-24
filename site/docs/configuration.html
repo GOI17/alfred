@@ -19,7 +19,7 @@
         <a href="/alfred/#pillars">Pillars</a>
         <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
-        <a href="/alfred/memory/">Memory Console</a>
+        <a href="/alfred/memory/">Memory</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
       </nav>
       <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
@@ -32,6 +32,8 @@
       <a href="/alfred/docs/index.html">Overview</a>
       <a href="/alfred/docs/install.html">Install Alfred</a>
       <a href="/alfred/docs/configuration.html" class="active">Configuration</a>
+      <a href="/alfred/docs/components.html">Product capabilities</a>
+      <a href="/alfred/docs/workspace.html">Workspace</a>
       <h6>Concepts</h6>
       <a href="/alfred/docs/architecture.html">Architecture</a>
       <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
@@ -58,7 +60,10 @@
         model assignment lives in <code>~/.alfred/models.json</code>.
       </p>
 
-      <h2 id="init">Initialize a workspace</h2>
+      <h2 id="components">Capability preferences</h2>
+      <p>Releases with the composition layer record approved Workspace, Memory, and Agent Harness selection in <code>.alfred/setup/components.json</code>. Preview and discovery leave it untouched. Managed harness files retain their separate <code>.alfred/setup/installation.json</code> receipt, compatible with 1.1.0.</p>
+      <p>Each capability owns its state and configuration. Workspace uses its own external data directory; a Memory filesystem workspace binding is a separate tenant-access concept. Choosing components does not connect their services or credentials. See <a href="/alfred/docs/components.html">Product capabilities</a>.</p>
+      <h2 id="init">Initialize project configuration</h2>
       <p>From your project root:</p>
       <div class="terminal">
         <div class="terminal-bar">
@@ -69,7 +74,7 @@
 </pre>
       </div>
       <p>
-        The TUI previews suite config, model defaults, and harness artifacts
+        The TUI previews suite config and selected harness artifacts
         before writing. It only applies files after explicit approval.
       </p>
 
@@ -92,7 +97,7 @@
   },
 
   <span class="s">"memory"</span>: {
-    <span class="s">"hosting"</span>: <span class="s">"coding"</span>,
+    <span class="s">"hosting"</span>: <span class="s">"local"</span>,
     <span class="s">"store"</span>: <span class="s">"sqlite"</span>,
     <span class="s">"path"</span>: <span class="s">"~/.alfred/tenants/my-project.sqlite"</span>
   },
@@ -114,10 +119,7 @@
       <h2 id="model">Model assignment</h2>
       <p>
         <strong>You own your model.</strong> Alfred does not hardcode a
-        provider or model name in agent specs. The installer previews
-        <code>~/.alfred/models.json</code> with per-agent primary models and a
-        global fallback chain. Individual agents may also define fallbacks, but
-        the current installer-generated defaults use the global chain.
+        provider or model name in agent specs. Setup does not create or modify <code>~/.alfred/models.json</code>. Assign primary models and fallback chains separately through runtime configuration; the example below is illustrative, not a setup-generated default.
       </p>
       <div class="terminal">
         <div class="terminal-bar">

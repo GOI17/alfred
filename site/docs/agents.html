@@ -19,7 +19,7 @@
         <a href="/alfred/#pillars">Pillars</a>
         <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
-        <a href="/alfred/memory/">Memory Console</a>
+        <a href="/alfred/memory/">Memory</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
       </nav>
       <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
@@ -32,6 +32,8 @@
       <a href="/alfred/docs/index.html">Overview</a>
       <a href="/alfred/docs/install.html">Install Alfred</a>
       <a href="/alfred/docs/configuration.html">Configuration</a>
+      <a href="/alfred/docs/components.html">Product capabilities</a>
+      <a href="/alfred/docs/workspace.html">Workspace</a>
       <h6>Concepts</h6>
       <a href="/alfred/docs/architecture.html">Architecture</a>
       <a href="/alfred/docs/agents.html" class="active">Agents &amp; subagents</a>
@@ -53,12 +55,13 @@
     <main class="docs-main">
       <h1>Agents &amp; subagents</h1>
       <p class="doc-lead">
-        Alfred ships with one <strong>primary</strong> agent and five
+        Agent Harness ships with one <strong>primary</strong> agent and five
         <strong>subagents</strong>. Each has a single responsibility, a
         declared mode, and a deterministic scope. Source-of-truth lives
         in <code>.ai/agents/</code>.
       </p>
 
+      <p>Agent Harness runs independently of Workspace and Memory. An explicitly configured persistence capability is optional; instructions do not assume a particular provider or start a sibling service. The product namespace is <code>alfred harness</code>, with standalone <code>alfred-agent-harness</code>, in the release after 1.1.0. Existing global command aliases remain available.</p>
       <h2 id="panel">The panel</h2>
 
       <h3 id="orchestrator">orchestrator <span style="color:var(--fg-3);font-weight:500">— primary</span></h3>

@@ -5,15 +5,15 @@
   "description": "Alfred handles the operational burden so humans focus on decisions.",
   "packageManager": "pnpm@10.0.0",
   "scripts": {
-    "alfred": "node packages/memory-server/scripts/alfred.mjs",
+    "alfred": "node packages/cli/scripts/alfred.mjs",
     "memory:test": "cd packages/memory && npm test",
     "memory:check": "cd packages/memory && npm run check",
     "server:test": "cd packages/memory-server && npm test",
     "server:check": "cd packages/memory-server && npm run check && node --check src/migrate/sqlite-migrator.js",
     "chatgpt:test": "cd packages/chatgpt-adapter && npm test && cd ../memory-openapi && npm test",
     "chatgpt:check": "cd packages/chatgpt-adapter && npm run check && cd ../memory-openapi && npm run check",
-    "test": "node --test scripts/native-git-worktrees.test.mjs && npm run core:test && npm run runtime:test && npm run setup:test && npm run profile-manager:test && npm run skill-manager:test && npm run memory:test && npm run memory-client:test && npm run memory-mcp:test && npm run server:test && npm run chatgpt:test && npm run opencode:test && npm run codex:test && npm run installer-tui:test && npm run homebrew:test && node scripts/validate-policies.mjs && npm run validate:suite-installer && node scripts/validate-release-0.4.1.mjs && npm run validate:release-automation",
-    "check": "node --check scripts/native-git-worktrees.test.mjs && npm run core:check && npm run runtime:check && npm run setup:check && npm run profile-manager:check && npm run skill-manager:check && npm run memory:check && npm run memory-client:check && npm run memory-mcp:check && npm run server:check && npm run chatgpt:check && npm run opencode:check && npm run codex:check && npm run installer-tui:check && node --check scripts/generate-homebrew-formula.mjs && node --check scripts/validate-release-automation.mjs && node --check scripts/build-runtime.mjs && node --check scripts/runtime-archive.mjs && node --check scripts/verify-runtime.mjs && node --check scripts/publish-runtime-assets.mjs",
+    "test": "npm run product:test && node --test scripts/native-git-worktrees.test.mjs && npm run core:test && npm run runtime:test && npm run setup:test && npm run profile-manager:test && npm run skill-manager:test && npm run memory:test && npm run memory-client:test && npm run memory-mcp:test && npm run server:test && npm run chatgpt:test && npm run opencode:test && npm run codex:test && npm run installer-tui:test && npm run homebrew:test && node scripts/validate-policies.mjs && npm run validate:suite-installer && node scripts/validate-release-0.4.1.mjs && npm run validate:release-automation",
+    "check": "npm run product:check && node --check scripts/native-git-worktrees.test.mjs && npm run core:check && npm run runtime:check && npm run setup:check && npm run profile-manager:check && npm run skill-manager:check && npm run memory:check && npm run memory-client:check && npm run memory-mcp:check && npm run server:check && npm run chatgpt:check && npm run opencode:check && npm run codex:check && npm run installer-tui:check && node --check scripts/generate-homebrew-formula.mjs && node --check scripts/validate-release-automation.mjs && node --check scripts/build-runtime.mjs && node --check scripts/runtime-archive.mjs && node --check scripts/verify-runtime.mjs && node --check scripts/publish-runtime-assets.mjs",
     "validate:phase1": "node scripts/validate-history.mjs phase1",
     "validate:phase2": "node scripts/validate-history.mjs phase2",
     "validate:phase3": "node scripts/validate-history.mjs phase3",
@@ -66,6 +66,9 @@
     "build:setup-tui": "node scripts/build-setup-tui.mjs",
     "setup-tui:test": "cd packages/setup-tui && go test ./...",
     "skill-manager:test": "cd packages/skill-manager && npm test",
-    "skill-manager:check": "cd packages/skill-manager && npm run check"
+    "skill-manager:check": "cd packages/skill-manager && npm run check",
+    "product:test": "node --test scripts/product-boundaries.test.mjs",
+    "product:check": "node --check packages/cli/scripts/alfred.mjs && node --check packages/memory-server/scripts/memory.mjs && node --check packages/agent-harness/scripts/cli.mjs && node --check packages/cli/src/components.mjs && node --check packages/cli/scripts/setup.mjs",
+    "workspace:build": "node scripts/build-workspace.mjs"
   }
 }

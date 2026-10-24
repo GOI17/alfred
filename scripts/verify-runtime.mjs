@@ -78,7 +78,7 @@ if (process.argv.includes("--archive-only")) {
       assert.equal(result.status, 0, `Runtime smoke failed: ${args.slice(0, 2).join(" ")}\n${result.stderr}`);
       return result.stdout;
     };
-    const cli = join(runtime, "packages/memory-server/scripts/alfred.mjs");
+    const cli = join(runtime, "packages/cli/scripts/alfred.mjs");
     const wrapper = join(temporary, "bin with spaces", "alfred");
     const shellQuote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
     atomic(wrapper, `#!/bin/sh\nALFRED_DISTRIBUTION=homebrew exec ${shellQuote(process.execPath)} ${shellQuote(cli)} "$@"\n`, 0o755);
@@ -218,6 +218,61 @@ finally:
       console.log('Packaged two-stage activation, legacy migration and project update verified');
     `], activationWorkspace);
     process.stdout.write(activationSmoke);
+    const withoutPackages = (names, verify) => {
+      const moved = [];
+      try {
+        for (const name of names) {
+          const source = join(runtime, 'packages', name), hidden = join(temporary, `absent-${name}`);
+          renameSync(source, hidden); moved.push([source, hidden]);
+        }
+        return verify();
+      } finally { for (const [source, hidden] of moved.reverse()) renameSync(hidden, source); }
+    };
+    // Exercise the actual compiled server and shipped frontend without either peer.
+    withoutPackages(['memory-server', 'memory', 'memory-client', 'memory-mcp', 'agent-harness'], () => {
+      assert.match(run([cli, 'workspace', '--help']), /Workspace/);
+      process.stdout.write(run(['--input-type=module', '-e', `
+        import assert from 'node:assert/strict';
+        import { pathToFileURL } from 'node:url';
+        const { startWorkspace } = await import(pathToFileURL(${JSON.stringify(join(runtime, 'packages/workspace/dist/server/server/index.js'))}));
+        const { verifyWorkspaceNative } = await import(pathToFileURL(${JSON.stringify(join(runtime, 'scripts/verify-workspace-native.mjs'))}));
+        const running = await startWorkspace({ env: { ...process.env,
+          ALFRED_WORKSPACE_HOST: '127.0.0.1', ALFRED_WORKSPACE_PORT: '0',
+          ALFRED_WORKSPACE_DATA_DIR: ${JSON.stringify(join(temporary, 'workspace state'))},
+          ALFRED_WORKSPACE_ACCESS_TOKEN: 'packaged-workspace-fixture',
+        } });
+        try {
+          const page = await fetch(running.address, { signal: AbortSignal.timeout(5000) });
+          assert.equal(page.status, 200);
+          const html = await page.text();
+          const asset = html.match(/src="([^" ]+\\.js)"/)?.[1];
+          assert.ok(asset, 'Packaged frontend has no JavaScript asset');
+          const script = await fetch(new URL(asset, running.address), { signal: AbortSignal.timeout(5000) });
+          assert.equal(script.status, 200); assert.ok((await script.text()).length > 1000);
+          assert.equal((await fetch(running.address + '/api/state')).status, 401);
+          await verifyWorkspaceNative(${JSON.stringify(join(runtime, 'node_modules'))}, process.env);
+          console.log('Packaged Workspace web, assets and native PTY verified without Memory or Agent Harness');
+        } finally { await running.stop(); }
+      `], workspace, { ORCA_BACKGROUND_LAUNCH: '1' }));
+    });
+    withoutPackages(['workspace', 'memory-server', 'agent-harness'], () => {
+      assert.equal(run([cli, 'version']).trim(), `alfred ${checked.manifest.version}`);
+      assert.match(run([cli, '--help']), /Usage: alfred/);
+    });
+    const ptyPath = join(runtime, 'node_modules/node-pty'), absentPty = join(temporary, 'absent-node-pty');
+    renameSync(ptyPath, absentPty);
+    try {
+      withoutPackages(['workspace', 'agent-harness'], () => {
+        assert.equal(JSON.parse(run([cli, 'memory', 'init', '--profile=coding', '--name=standalone-memory', '--non-interactive'])).ok, true);
+        assert.match(run([cli, 'memory', 'list']), /standalone-memory/);
+        assert.match(run([join(runtime, 'packages/memory-server/scripts/memory.mjs'), 'version']), /^alfred-memory /);
+      });
+      withoutPackages(['workspace', 'memory-server', 'memory', 'memory-client', 'memory-mcp'], () => {
+        const skills = JSON.parse(run([cli, 'harness', 'skills', 'list', '--cwd', workspace, '--scope', 'project', '--json']));
+        assert.equal(skills.status, 'ok'); assert.equal(skills.provider_calls, 0);
+        assert.match(run([join(runtime, 'packages/agent-harness/scripts/cli.mjs'), '--help']), /Agent Harness/);
+      });
+    } finally { renameSync(absentPty, ptyPath); }
     const shared = join(temporary, "instructions.json"), playbook = join(temporary, "playbook.txt");
     atomic(playbook, Buffer.from("Reviewed shared instructions\n"));
     atomic(shared, Buffer.from(JSON.stringify({ version: 1, instructions: [{ id: "direct", action: "load", scope: "project", disposition: "execute", option: "playbook" }], options: [{ id: "playbook", action: "load", scope: "project", contract: "read-text-v1", source: playbook, digest: sha256(readFileSync(playbook)) }] })));
@@ -316,7 +371,7 @@ finally:
     const stopped = await Promise.race([serviceClosed, delay(5000).then(() => null)]);
     assert.equal(stopped?.code, 0, "Packaged HTTP server did not shut down cleanly");
     service = null;
-    process.stdout.write(`${JSON.stringify({ status: "pass", verification: "anonymous-local-http,archive-integrity,relocated-wrapper,CLI,managed-runtime-project-isolation,native-Go-setup-PTY-cancel,guided-setup-preview,packaged-reviewed-harness-activation,legacy-project-update,SQLite,MCP-stdio-CRUD,live-HTTP,dependencies,coding-previews", version: checked.manifest.version, sha256: sha256(archive), public_github_install: "pending-publication-approval", external_network_attempts: 0, provider_calls: 0 })}\n`);
+    process.stdout.write(`${JSON.stringify({ status: "pass", verification: "anonymous-local-http,archive-integrity,relocated-wrapper,CLI,managed-runtime-project-isolation,native-Go-setup-PTY-cancel,guided-setup-preview,packaged-reviewed-harness-activation,legacy-project-update,SQLite,MCP-stdio-CRUD,live-HTTP,dependencies,coding-previews,independent-capabilities,Workspace-web-assets,native-Workspace-PTY", version: checked.manifest.version, sha256: sha256(archive), public_github_install: "pending-publication-approval", external_network_attempts: 0, provider_calls: 0 })}\n`);
   } finally {
     if (service) { service.kill("SIGKILL"); await serviceClosed; }
     await new Promise((done) => server.close(done));

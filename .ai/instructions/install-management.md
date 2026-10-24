@@ -27,8 +27,9 @@ Provide deterministic, reproducible instructions for Alfred installation, update
 ### Mode 0: Human-First Suite Install
 
 Use for humans installing Alfred itself. The public canonical tap distributes
-versioned runtime releases. The two-stage Go activation flow in issue #234 must
-be released before it is available to an already-installed 1.0.0 user.
+versioned runtime releases. Release 1.1.0 includes the two-stage Go activation
+flow and reviewed CLI/project updates. Workspace requires a subsequent release
+that includes its package; check the installed version and runtime availability.
 
 ```sh
 brew install GOI17/alfred/alfred
@@ -56,6 +57,36 @@ setup cannot prove that a running session loaded them. Pi remains preview-only.
 `--apply` in automation still authorizes preparation only; package installation
 is not live configuration approval. Model selection remains user-owned.
 
+### Selecting product capabilities
+
+Workspace, Memory, and Agent Harness are independently selectable in setup. The
+product CLI accepts `alfred setup --components=workspace,memory,harness` and all
+seven nonempty combinations. The corresponding public entrypoints are
+`alfred workspace`, `alfred memory`, and `alfred harness`, with standalone
+`alfred-workspace`, `alfred-memory`, and `alfred-agent-harness` executables.
+These entrypoints require a release that includes the product composition layer;
+1.1.0 users retain the existing global aliases until upgrading.
+
+Historical edition mappings are stable: `coding` → Agent Harness, `memory` →
+Memory, and `full` → Agent Harness + Memory. Updating an older installation never
+adds Workspace automatically. The user selects Workspace explicitly.
+
+Approved Apply alone writes `.alfred/setup/components.json`
+(`alfred.setup.components/v1`). Preview and discovery do not write preferences.
+The separate `.alfred/setup/installation.json` integration receipt remains
+`alfred.setup.installation/v1`, compatible with 1.1.0. Component preferences do
+not establish harness activation or erase a recorded harness selection used by
+Update. Project updates can still refresh that integration after selecting
+Workspace alone.
+
+Selection prepares capabilities; it does not start peer services, create tenants,
+propagate credentials, configure MCP, or choose a session runtime. Optional
+connections use explicit public contracts and separate caller configuration.
+Workspace state remains external to the installed package. Memory's filesystem
+workspace bindings, IDs, and tables do not refer to the Workspace application
+and are not renamed or migrated by selection. Memory HTTP remains loopback-only.
+See `docs/product-capabilities.md` and `docs/workspace-migration.md`.
+
 ### Updating a configured project
 
 The interactive setup entry screen reports CLI and project integration versions.
@@ -74,15 +105,15 @@ and do not claim the final integration version. Retry Update, not the questionna
 Release lookup is bounded, credential-free and visible. Offline/failed checks
 leave the setup menu usable; `ALFRED_SETUP_CHECK_UPDATES=0` disables lookup.
 Explicit flags and legacy/noninteractive paths do not add network checks. The
-first release containing this feature must be installed once through Homebrew by
-users on 1.0.1; subsequent releases can be offered inside setup.
+1.1.0 release or later must be installed once through Homebrew by users on 1.0.1;
+subsequent releases can be offered inside setup.
 
-For each project's managed requests, run `alfred runtime init --instructions
-/absolute/path/to/shared/instructions.json` from that project, then `alfred
-runtime status`. This separate initialization writes project-local
+For each project's managed requests, run `alfred harness runtime init --instructions
+/absolute/path/to/shared/instructions.json` from that project, then `alfred harness
+runtime status` (the existing `alfred runtime` alias remains supported). This separate initialization writes project-local
 `.alfred/runtime/` state and grants; it does not create Memory tenants or API
 keys, change the shared package, or transfer consent between worktrees. Memory
-continues to use `alfred init`. Alfred instructions take precedence; global
+uses `alfred memory init` (the existing `alfred init` alias remains supported). Alfred instructions take precedence; global
 options are considered only after confirmed absence, with `Permitir`, `Permitir
 siempre` (exact project/option/content/action/scope), or `Cancelar`.
 
@@ -99,9 +130,10 @@ procedure and the remaining activation checks.
 
 The bootstrap alternative remains
 `curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh`.
-Run it without advanced flags so the TUI can explain edition, harness, runtime
-profiles, Memory setup, name, and preview/apply. Use `--edition`, `--name`,
-`--harness`, and `--apply` only for automation after decisions are known.
+Run it without advanced flags so the TUI can explain capability selection,
+harnesses, runtime profiles, Memory setup, name, and preview/apply. Use
+`--components` (or legacy `--edition`), `--name`, `--harness`, and `--apply` only
+for automation after decisions are known.
 
 ### Mode 1: Agent-Driven Harness Artifact Install
 

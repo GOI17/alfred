@@ -10,7 +10,7 @@ export const receiptPath = ".alfred/setup/installation.json";
 export const journalPath = ".alfred/setup/update-attempt.json";
 const ids = ["codex-cli", "codex-app", "opencode"];
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
-const savedSelection = ({path, ...selection}) => selection;
+const savedSelection = ({path, components, ...selection}) => selection;
 const newerStable = (installed, target) => { try { return compareStableVersions(installed,target)>0; } catch { return false; } };
 const plain = v => v !== null && typeof v === "object" && !Array.isArray(v);
 const own = (v,k) => Object.hasOwn(v,k);

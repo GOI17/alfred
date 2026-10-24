@@ -199,7 +199,7 @@ try:
             if stage == 0 and b"Continue setup" in raw and b"Checking" in raw:
                 os.write(fd, b"\r" if mode == "continue" else b"\x03")
                 stage = 1
-            if mode == "continue" and stage == 1 and b"What should Alfred" in raw and b"Coding" in raw:
+            if mode == "continue" and stage == 1 and b"What should Alfred" in raw and b"Agent Harness" in raw:
                 os.write(fd, b"\x03")
                 stage = 2
         else:

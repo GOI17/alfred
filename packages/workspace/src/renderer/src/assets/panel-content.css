@@ -1,0 +1,147 @@
+.pane-content {
+  min-width: 0;
+}
+
+/* Keep every flex ancestor bounded so its content can scroll internally. */
+.tool-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tool-workspace-upper {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tool-chat-area {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tool-side-dock {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 38%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--border);
+}
+
+.terminal-dock {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 35%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+}
+
+.tool-workspace[data-maximized='terminal'] > .terminal-dock,
+.tool-workspace[data-maximized='browser'] .tool-side-dock,
+.tool-workspace[data-maximized='git'] .tool-side-dock {
+  flex: 1;
+}
+
+.tool-dock-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 0;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+}
+
+.tool-dock-actions {
+  display: flex;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.tool-tabs {
+  display: flex;
+  flex-shrink: 0;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.tool-dock-heading > .tool-tabs {
+  flex: 1;
+}
+
+.terminal-tab {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tool-tabs button {
+  white-space: nowrap;
+}
+
+.tool-tabs button[role='tab'],
+.tool-tabs > button {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 7px 10px;
+  font-size: var(--text-xs);
+}
+
+.tool-tabs button[aria-selected='true'],
+.tool-tabs > button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--primary);
+}
+
+.tool-workspace [hidden] {
+  display: none !important;
+}
+
+.chat-panel,
+.terminal-panel,
+.browser-panel,
+.git-panel {
+  min-height: 0;
+}
+
+.chat-panel > .messages,
+.git-content,
+.diff-view {
+  min-height: 0;
+}
+
+/* Large drafts and queues must not push the message scroller off screen. */
+.chat-panel > .composer-wrap {
+  max-height: 55%;
+  overflow-y: auto;
+}
+
+@media (max-width: 700px) {
+  .pane-content[data-mobile-active='false'] {
+    display: none;
+  }
+
+  .tool-workspace-upper {
+    flex-direction: column;
+  }
+
+  .tool-side-dock {
+    flex-basis: 40%;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+}

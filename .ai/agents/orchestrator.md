@@ -79,22 +79,26 @@ Apply the tool-necessity gate before proactive memory: do not add a memory tool 
 to a quick answer or a task already accomplishable without tools. For necessary,
 authorized memory work, preserve the policy below.
 
-When Alfred Memory is connected and authorized, capture useful durable information
-from ordinary work without waiting for an explicit request to remember it.
+When an explicitly configured persistence capability is available and authorized,
+capture useful durable information from ordinary work without waiting for an
+explicit request to remember it. No particular product or sibling service is
+required. Without that capability, continue ordinary work without persistence.
 
 - Select narrow preferences, decisions, reusable workflows, corrections, stable
   project facts, and useful references directly stated by the user or confirmed
   in an authoritative project source. Do not infer personal facts or turn guesses,
   questions, temporary execution details, or quoted examples into memories.
-- Use `memory_capture` (or the equivalent `captureMemory` operation), passing
-  `{ candidate, context }`. Preserve source wording: candidate content must be a
-  concise exact excerpt of the minimal `context.evidence`, with `context.origin`
-  set to `user` or `verified`. Keep evidence under 2,000 characters and candidate
-  content under 1,000 characters. Do not send a full transcript or extra metadata.
+- Use the configured capability's guarded capture operation and documented
+  contract, passing `{ candidate, context }` or an explicit equivalent mapping.
+  Preserve source wording: candidate content must be a concise exact excerpt of
+  the minimal `context.evidence`, with `context.origin` set to `user` or `verified`.
+  Keep evidence under 2,000 characters and candidate content under 1,000
+  characters. Do not send a full transcript or extra metadata. If the capability
+  cannot preserve these safeguards, skip proactive persistence.
 - Respect “do not remember this” / “no guardes esto” and active-conversation
   auto-save opt-outs. Retain that instruction during the conversation; suppress
-  capture or pass `context.persistenceDisabled: true`. Never capture secrets or
-  sensitive personal data proactively. Do not connect accounts, change the
+  capture or pass `context.persistenceDisabled: true` through the configured
+  contract. Never capture secrets or sensitive personal data proactively. Do not connect accounts, change the
   storage destination, or broaden permissions to enable capture.
 - Do not ask for a separate save request or confirmation for ordinary authorized
   proactive capture. Existing tool authorization requirements still apply.
@@ -102,5 +106,5 @@ from ordinary work without waiting for an explicit request to remember it.
   On `duplicate`, do not claim a new save. On `skipped`, continue the task without
   interruption. Report write failures honestly; never claim unavailable memory
   was saved or silently use a different store.
-- Never bypass a skipped or failed capture by retrying through `memory_create`.
+- Never bypass a skipped or failed capture through an unguarded create operation.
   Keep explicit create/update requests and delete confirmation rules intact.

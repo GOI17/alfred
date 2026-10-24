@@ -2,12 +2,12 @@
 
 ## Availability
 
-The public canonical tap `GOI17/homebrew-alfred` publishes the versioned runtime.
-Version 1.0.1 includes reviewed harness activation. Issue #237 adds startup
-version discovery and approved CLI/project updates in the next release. Existing
-1.0.1 users bootstrap that feature once through `brew update` and
-`brew upgrade GOI17/alfred/alfred` after publication. Do not assume a source change has
-updated an installed package. Never replace historical release assets.
+The canonical tap `GOI17/homebrew-alfred` publishes versioned runtime assets.
+Alfred 1.1.0 already includes startup version discovery and reviewed CLI/project
+updates. This migration prepares independent Workspace, Memory and Agent Harness
+packages for the next release. It does not update an installed 1.1.0 package.
+Workspace distribution is gated on the new native PTY and runtime checks.
+Never replace historical release assets.
 
 ## Public installation
 
@@ -20,7 +20,13 @@ alfred setup
 The fully qualified formula avoids the unrelated Alfred macOS application cask.
 Public installation uses release asset URLs and requires no GitHub credentials.
 Homebrew supplies Node; the archive supplies the selected runtime and its locked
-production npm dependencies. Users do not run npm install in the installed tree.
+production npm dependencies. Users do not run npm install in the installed tree. The next release exposes
+`alfred workspace`, `alfred memory` and `alfred harness`, plus standalone
+`alfred-workspace`, `alfred-memory` and `alfred-agent-harness` binaries.
+The product entrypoint belongs to `packages/cli`; it imports only the requested
+capability. Optional peers are not started by loading another package.
+Workspace starts with `alfred workspace serve` and accepts `--host`, `--port`
+and `--data-dir`; its default state is outside Homebrew under the user's HOME.
 
 Homebrew installs a shared runtime, not project state or live harness config.
 Interactive `alfred setup` uses bundled Go/Bubble Tea0.25.0
@@ -92,7 +98,10 @@ instructions; it is not an opaque native binary.
    `release-homebrew-tap.yml` with that tag.
 2. The workflow verifies the stable tag, package version and exact checked-out
    commit. It stages only locked production dependencies outside the checkout,
-   builds the runtime, runs its verifier and checks formula syntax.
+   builds Workspace assets with the locked build toolchain, assembles both native
+   Linux PTY artifacts with the pinned Darwin prebuilds, builds the runtime, runs
+   its verifier and checks formula syntax. The PR runtime gate runs the archive
+   on Darwin/Linux x64/arm64; the native producers also execute real PTYs.
 3. `publish-runtime-assets.mjs` requires an existing public, non-draft, stable
    Alfred release. It compares every existing candidate asset before uploading
    missing ones. Identical retries are accepted; different existing bytes fail
@@ -121,6 +130,13 @@ source worktree with Node 24, matching the release CI toolchain:
 runtime_stage="$(mktemp -d "${TMPDIR:-/tmp}/alfred-runtime-build.XXXXXX")"
 source_root="$(pwd -P)"
 source_revision="$(git rev-parse HEAD)"
+# Obtain both successful Linux artifacts for this exact commit and lock.
+native_artifacts="/absolute/path/to/reviewed-native-artifacts"
+mkdir -p "$runtime_stage/build"
+cp packaging/runtime/package.json packaging/runtime/package-lock.json "$runtime_stage/build/"
+npm ci --prefix "$runtime_stage/build" --include=dev --ignore-scripts --no-audit --no-fund
+node scripts/build-workspace.mjs --dependencies "$runtime_stage/build/node_modules"
+# Build the Go setup binaries separately as described above.
 mkdir -p "$runtime_stage/deps"
 cp packaging/runtime/package.json packaging/runtime/package-lock.json "$runtime_stage/deps/"
 npm ci --prefix "$runtime_stage/deps" --omit=dev --ignore-scripts --no-audit --no-fund
@@ -129,6 +145,7 @@ node scripts/build-runtime.mjs \
   --source-revision "$source_revision" \
   --builder-revision "$source_revision" \
   --dependencies "$runtime_stage/deps/node_modules" \
+  --workspace-native "$native_artifacts" \
   --output "$runtime_stage/assets" \
   --exploratory
 node scripts/verify-runtime.mjs "$runtime_stage/assets"
@@ -144,7 +161,12 @@ same validated revision. Never relabel a local candidate as a historical release
 The verifier exercises actual packaged entrypoints with isolated HOME/project
 fixtures, including setup previews, initial activation, legacy integration migration and
 actual managed artifact updates, Memory/MCP dependencies and managed text
-loading. `--archive-only` checks structure/checksums only and is not a substitute
+loading. It also starts compiled Workspace from a relocated installation without
+its peers, fetches the actual web asset, spawns a real PTY, and checks standalone
+Memory and Agent Harness operations with Workspace absent. See the
+[native artifact contract](../runtime/README.md). Chromium/WebKit downloads are
+opt-in; general startup and terminal use do not require those browsers.
+`--archive-only` checks structure/checksums only and is not a substitute
 for those runtime checks. Retain the candidate directory and its checksums for
 review; do not upload it or change the tap as part of a local build.
 

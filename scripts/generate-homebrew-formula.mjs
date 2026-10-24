@@ -94,7 +94,7 @@ export function renderFormula(options) {
 # frozen_string_literal: true
 
 class Alfred < Formula
-  desc "Agent operations runtime for coding harnesses"
+  desc "Workspace, memory and agent harness runtime"
   homepage "https://alfred.alfredlabs.org"
 ${sourceStanza(options)}
 
@@ -107,8 +107,18 @@ ${sourceStanza(options)}
 
     (bin/"alfred").write <<~SH
       #!/bin/sh
-      ALFRED_DISTRIBUTION=homebrew exec "#{formula_opt_bin("node")}/node" "#{libexec}/packages/memory-server/scripts/alfred.mjs" "$@"
+      ALFRED_DISTRIBUTION=homebrew exec "#{formula_opt_bin("node")}/node" "#{libexec}/packages/cli/scripts/alfred.mjs" "$@"
     SH
+    {
+      "alfred-workspace" => "workspace/scripts/cli.mjs",
+      "alfred-memory" => "memory-server/scripts/memory.mjs",
+      "alfred-agent-harness" => "agent-harness/scripts/cli.mjs",
+    }.each do |command, entrypoint|
+      (bin/command).write <<~SH
+        #!/bin/sh
+        ALFRED_DISTRIBUTION=homebrew exec "#{formula_opt_bin("node")}/node" "#{libexec}/packages/#{entrypoint}" "$@"
+      SH
+    end
   end
 
   def caveats
@@ -125,6 +135,8 @@ ${sourceStanza(options)}
     output = shell_output("#{bin}/alfred setup --edition=coding --name=brew-test --harness=none")
     assert_match "ALFRED SUITE INSTALL PREVIEW", output
     assert_match "Provider calls: 0", output
+    assert_match "Workspace", shell_output("#{bin}/alfred-workspace --help")
+    system Formula["node"].opt_bin/"node", libexec/"scripts/verify-workspace-native.mjs", libexec/"node_modules"
   end
 end
 `;

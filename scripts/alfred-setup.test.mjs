@@ -26,13 +26,17 @@ function runSetup(extraEnv = {}) {
   return { home, result };
 }
 
-test("exposes setup in the main CLI help", () => {
-  const result = spawnSync(process.execPath, [cli, "--help"], {
-    cwd: root,
-    encoding: "utf8"
-  });
-  assert.equal(result.status, 0);
-  assert.match(result.stderr, /setup\s+Configure Alfred/);
+test("neutral CLI and legacy shim expose identical product setup help on stdout", () => {
+  const results = [join(root, "packages/cli/scripts/alfred.mjs"), cli].map(entry =>
+    spawnSync(process.execPath, [entry, "--help"], { cwd: root, encoding: "utf8" }));
+  for (const result of results) {
+    assert.equal(result.status, 0);
+    assert.equal(result.stderr, "");
+    assert.match(result.stdout, /Usage: alfred <capability> <command>/);
+    for (const capability of ["workspace", "memory", "harness"]) assert.match(result.stdout, new RegExp(`^  ${capability}\\s+`, "m"));
+    assert.match(result.stdout, /setup\s+Choose capabilities and review product updates/);
+  }
+  assert.equal(results[0].stdout, results[1].stdout);
 });
 
 test("previews source setup without writing the user home", () => {

@@ -49,7 +49,7 @@ usage() {
   cat <<'USAGE'
 
 Flags:
-  --edition=<coding|memory|full>  Suite edition to plan/install. Default: coding.
+  --edition=<coding|memory|full|workspace>  Suite edition to plan/install. Default: coding.
   --component=<id>                Install one component. Repeatable. Overrides edition list in the plan.
   --name=<name>                   Human-readable install/context name. Default: default.
   --path=<dir>                    Install repo path when --apply is used. Default: ~/.alfred/installs/<name>.
@@ -933,12 +933,12 @@ for boolean_value in "$APPLY" "$SKIP_PROFILE_MANAGER" "$TUI_USED"; do
 done
 
 case "$EDITION" in
-  coding|memory|full) ;;
-  *) err "Unknown edition: $EDITION (use coding, memory, or full)" ;;
+  coding|memory|full|workspace) ;;
+  *) err "Unknown edition: $EDITION (use coding, memory, full, or workspace)" ;;
 esac
 
 case "$EDITION" in
-  coding) MEMORY_SETUP="not-needed-for-coding-edition" ;;
+  coding|workspace) MEMORY_SETUP="not-needed-for-coding-edition" ;;
   memory|full)
     if [ "$MEMORY_SETUP" = "not-selected" ]; then MEMORY_SETUP="decide-later"; fi
     case "$MEMORY_SETUP" in
@@ -953,6 +953,9 @@ case "$EDITION" in
   memory|full) MEMORY_CLI_ARG=" --memory=$MEMORY_SETUP" ;;
 esac
 
+case "$EDITION" in
+  memory|workspace) HARNESS="none"; SKIP_PROFILE_MANAGER=true; PROFILE_STRATEGY="not-selected" ;;
+esac
 SELECTED_HARNESSES="$(normalize_harness_selection "$HARNESS")"
 
 case "$NAME" in
@@ -1021,6 +1024,7 @@ edition_components() {
     return 0
   fi
   case "$EDITION:$SKIP_PROFILE_MANAGER" in
+    workspace:*) printf 'workspace' ;;
     coding:true) printf 'core,agents,skills,opencode-adapter,codex-adapter,evals' ;;
     coding:*) printf 'core,agents,skills,profile-manager,opencode-adapter,codex-adapter,evals' ;;
     memory:*) printf 'memory,memory-server,memory-client,memory-mcp,memory-openapi,chatgpt-adapter,anthropic-adapter,gemini-adapter,console,console-web' ;;
@@ -1034,7 +1038,7 @@ COMPONENT_PLAN="$(edition_components)"
 DISPLAY_PROFILE_STRATEGY="$PROFILE_STRATEGY"
 DISPLAY_MEMORY_SETUP="$MEMORY_SETUP"
 if [ "$PROFILE_STRATEGY" = "not-needed-for-memory-edition" ]; then DISPLAY_PROFILE_STRATEGY="Not included in Memory edition"; fi
-if [ "$MEMORY_SETUP" = "not-needed-for-coding-edition" ]; then DISPLAY_MEMORY_SETUP="Not included in Coding edition"; fi
+if [ "$MEMORY_SETUP" = "not-needed-for-coding-edition" ]; then DISPLAY_MEMORY_SETUP="Not selected"; fi
 
 print_memory_consequence() {
   case "$MEMORY_SETUP" in
@@ -1082,6 +1086,19 @@ print_expected_preview_locations() {
 }
 
 print_handoff_explanation() {
+  if [ "$EDITION" = "workspace" ]; then
+    cat <<EOFWORKSPACE
+
+Workspace is ready to run independently:
+  alfred workspace serve
+  alfred-workspace serve
+
+Workspace starts only when you run its server. Its data remains in ~/.alfred-workspace.
+Project: $SOURCE_PROJECT_PATH
+Trace after apply: $HOME/.alfred/observability/install-trace.json
+EOFWORKSPACE
+    return 0
+  fi
   cat <<EOFHANDOFF
 
 Where files go and why:
@@ -1232,6 +1249,10 @@ EOFHANDOFF
 
 run_final_handoff() {
   write_handoff_summary
+  if [ "$EDITION" = "workspace" ]; then
+    print_handoff_explanation
+    return 0
+  fi
   if [ "$TUI_USED" = true ] || [ -n "${ALFRED_INSTALL_HANDOFF_INPUT:-}" ]; then
     clear_for_guided_handoff
     print_compact_final_handoff
@@ -1289,7 +1310,7 @@ What the Memory choice changes:
 $(print_memory_consequence)
 
 What Runtime Profiles changes:
-  $(if [ "$PROFILE_STRATEGY" = "runtime-profiles" ]; then printf 'Initializes shared profiles/ and private profiles.local/ under ~/.alfred/runtime-profiles; activation remains a separate preview/approval step.'; elif [ "$PROFILE_STRATEGY" = "decide-later" ]; then printf 'Does not include or initialize the profile switching layer; harness configuration remains manual.'; else printf 'Runtime Profiles are not included in this edition.'; fi)
+  $(if [ "$PROFILE_STRATEGY" = "runtime-profiles" ]; then printf 'Initializes shared profiles/ and private profiles.local/ under ~/.alfred/runtime-profiles; activation remains a separate preview/approval step.'; elif [ "$PROFILE_STRATEGY" = "decide-later" ]; then printf 'Does not include or initialize the profile switching layer; harness configuration remains manual.'; else printf 'Runtime Profiles are not selected.'; fi)
 
 Safety:
   - This installer does not install Pi by default.
@@ -1449,7 +1470,7 @@ cat > "$TRACE_TMP" <<EOFTRACE
 EOFTRACE
 mv "$TRACE_TMP" "$TRACE_FILE"
 
-if [ "$TUI_USED" != true ]; then
+if [ "$TUI_USED" != true ] && [ "$EDITION" != "workspace" ]; then
   cat <<EOFDONE
 
 ==============================================================

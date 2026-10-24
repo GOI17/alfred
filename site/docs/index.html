@@ -22,7 +22,7 @@
         <a href="/alfred/#pillars">Pillars</a>
         <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html" style="color:var(--fg)">Docs</a>
-        <a href="/alfred/memory/">Memory Console</a>
+        <a href="/alfred/memory/">Memory</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
       </nav>
       <a class="nav-cta" href="/alfred/docs/install.html">Install &rarr;</a>
@@ -37,6 +37,8 @@
       <a href="/alfred/docs/install.html">Install Alfred</a>
       <a href="/alfred/docs/configuration.html">Configuration</a>
 
+      <a href="/alfred/docs/components.html">Product capabilities</a>
+      <a href="/alfred/docs/workspace.html">Workspace</a>
       <h6>Concepts</h6>
       <a href="/alfred/docs/architecture.html">Architecture</a>
       <a href="/alfred/docs/agents.html">Agents &amp; subagents</a>
@@ -60,43 +62,17 @@
     <!-- ============= MAIN ============= -->
     <main class="docs-main">
       <h1>Alfred documentation</h1>
-      <p class="doc-lead">
-        Everything you need to install Alfred, configure a workspace, design
-        agents and skills, and run a regression suite that catches prompt
-        drift before it ships.
-      </p>
-
+      <p class="doc-lead">Alfred offers Workspace, Memory, and Agent Harness. Start with one capability, or configure explicit connections between them.</p>
       <h2 id="what">What is Alfred?</h2>
-      <p>
-        Alfred is a local-first <strong>agent operations runtime</strong>.
-        It does not write your agents for you. It does not pick your model.
-        It does, however, handle everything around the agent that
-        humans and teams keep reinventing: permission policy, eval gating,
-        harness portability, skill loading, trace events, and baseline
-        comparison.
-      </p>
-      <p>
-        The runtime is split into a <strong>harness-agnostic core</strong>
-        (<code>packages/core</code>) and a family of <strong>adapters</strong>
-        that compile the same source-of-truth into each runtime's dialect.
-        opencode, Codex, and Pi have executable adapter previews. Claude,
-        VSCode, Kiro, and external AI surfaces are covered by compatibility
-        contracts or Memory integrations.
-      </p>
-
-      <div class="doc-callout">
-        <strong>New here?</strong> Start with
-        <a href="/alfred/docs/install.html">Install Alfred</a> &rarr; you'll be running
-        the eval suite in under five minutes. Then read
-        <a href="/alfred/docs/architecture.html">Architecture</a> to understand why it
-        is shaped the way it is.
-      </div>
+      <p>Workspace provides projects, conversations, files, terminals, and local tools. Memory provides persistent knowledge through a local service. Agent Harness operates agents, skills, policies, profiles, and integration with external coding harnesses.</p>
+      <p>Each capability has its own lifecycle and state. The shared CLI composes commands; selecting multiple capabilities does not connect their services or credentials. Agent Harness retains its harness-agnostic core and adapters, while Workspace and Memory own separate domains.</p>
+      <div class="doc-callout"><strong>New here?</strong> Read <a href="/alfred/docs/components.html">Product capabilities</a>, then <a href="/alfred/docs/install.html">Install Alfred</a>. Workspace is available in source and require a release after 1.1.0; source changes do not update an installed package.</div>
 
       <h2 id="quick-paths">Pick a path</h2>
 
       <h3 id="path-install">I just want to install it</h3>
       <p>
-        Install the versioned package from the private Homebrew tap, or use the
+        Install the versioned package from the public Homebrew tap, or use the
         existing <code>curl | sh</code> bootstrap. No manual git clone. The
         installer detects your active harness, generates a preview, and waits
         for human approval before writing harness config.
@@ -108,7 +84,7 @@
         The guided installer previews project config while leaving model
         assignment to runtime or standalone reconfiguration. It never creates
         or modifies <code>~/.alfred/models.json</code>. From there you can set
-        permission policy, register tenants, and wire skills.
+        permission policy and skills for Agent Harness, or configure tenants when using Memory. Workspace state and runtime connections remain separate.
       </p>
       <p><a href="/alfred/docs/configuration.html">See the configuration reference &rarr;</a></p>
 
@@ -146,7 +122,7 @@
 
       <h2 id="next">Where to go next</h2>
       <ul>
-        <li><a href="/alfred/docs/install.html">Install Alfred</a> &mdash; the one-liner.</li>
+        <li><a href="/alfred/docs/components.html">Product capabilities</a> &mdash; choose independent capabilities and explicit connections.</li>
         <li><a href="/alfred/docs/install.html">Install Alfred</a> &mdash; guided TUI with preview-first setup.</li>
         <li><a href="/alfred/docs/architecture.html">Architecture</a> &mdash; why it is shaped this way.</li>
         <li><a href="/alfred/docs/agents.html">Agents &amp; subagents</a> &mdash; the six-agent panel.</li>

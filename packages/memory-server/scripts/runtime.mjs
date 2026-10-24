@@ -1,1 +1,2 @@
-export { run } from "../../../scripts/runtime/cli.mjs";
+// Deprecated composition path. Standalone Memory does not import this shim.
+export { run } from "../../agent-harness/scripts/runtime.mjs";

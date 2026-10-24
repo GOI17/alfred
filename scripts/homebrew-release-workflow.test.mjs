@@ -227,3 +227,32 @@ test("anonymous byte verification must succeed before workflow can update the ta
   const f = assetsFixture(t);
   await assert.rejects(f.publish({ download: async () => Buffer.from("unexpected CDN response") }), /Anonymous verification failed/);
 });
+
+
+test('Workspace release stages locked assets and architecture-specific native artifacts before packaging', () => {
+  const native = readFileSync(resolve(root, '.github/workflows/workspace-native.yml'), 'utf8');
+  const validation = readFileSync(resolve(root, '.github/workflows/homebrew.yml'), 'utf8');
+  const workspace = readFileSync(resolve(root, '.github/workflows/workspace.yml'), 'utf8');
+  assert.match(workflow, /needs: workspace-native/);
+  assert.match(workflow, /--workspace-native "\$RUNNER_TEMP\/alfred-workspace-native"/);
+  assert.match(workflow, /node scripts\/build-workspace\.mjs --dependencies/);
+  assert.ok(workflow.indexOf('node scripts/build-workspace.mjs') < workflow.indexOf('node scripts/build-runtime.mjs'));
+  assert.match(native, /ubuntu-22\.04-arm/);
+  assert.match(native, /ubuntu-22\.04\n/);
+  assert.match(native, /npm ci .*--include=dev --ignore-scripts/);
+  assert.match(native, /node scripts\/build-workspace-native\.mjs/);
+  assert.match(native, /persist-credentials: false/);
+  assert.match(validation, /os: \[ubuntu-22\.04, ubuntu-22\.04-arm, macos-15-intel, macos-15\]/);
+  assert.match(workspace, /pnpm install --frozen-lockfile --ignore-scripts/);
+  const install = workspace.indexOf('pnpm install --frozen-lockfile --ignore-scripts');
+  const prepare = workspace.indexOf('node packages/workspace/scripts/prepare-pty.mjs');
+  const terminal = workspace.indexOf('node scripts/verify-workspace-native.mjs');
+  const tests = workspace.indexOf('pnpm --filter @alfred-labs/workspace test');
+  assert.ok(install >= 0 && install < prepare && prepare < terminal && terminal < tests, 'Fresh CI dependencies must prepare and execute the native PTY before testing');
+  assert.doesNotMatch(workspace, /pnpm rebuild|--ignore-scripts=false/);
+  assert.match(workspace, /playwright install chromium webkit/);
+  assert.match(workspace, /exec playwright test/);
+  assert.match(workspace, /workspace test:chat/);
+  assert.match(workspace, /workspace-test-network-guard\.mjs/);
+  assert.doesNotMatch(native, /continue-on-error/);
+});

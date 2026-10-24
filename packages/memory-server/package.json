@@ -4,12 +4,13 @@
   "version": "0.3.0",
   "type": "module",
   "bin": {
-    "alfred": "./scripts/alfred.mjs"
+    "alfred-memory": "./scripts/memory.mjs"
   },
   "exports": {
     ".": "./src/index.js",
     "./server": "./src/server.js",
-    "./registry": "./src/registry/store-factory.js"
+    "./registry": "./src/registry/store-factory.js",
+    "./cli": "./scripts/memory.mjs"
   },
   "dependencies": {
     "@alfred-labs/memory-mcp": "workspace:*",

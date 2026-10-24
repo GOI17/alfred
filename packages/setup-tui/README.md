@@ -8,13 +8,14 @@ Run `alfred setup` from the project you want to configure. Its first screen show
 the installed CLI and project integration versions. A bounded release check runs
 while Continue setup and cancellation remain available. Update waits for this
 check, then offers the applicable CLI and/or project action. Choose Continue
-setup for an initial configuration, then choose Coding,
-Memory or Full, select coding tools, choose memory settings when applicable,
+setup for an initial configuration, then independently select Workspace, Memory,
+and/or Agent Harness, select coding tools when using Agent Harness, choose Memory
+settings when applicable,
 and review the setup name, installation location and runtime profiles.
 The shared packaged installation location is read-only; it is distinct from
 the current project. The UI does not create managed-runtime consent grants.
 
-Menus use arrows or j/k; Space toggles coding tools. Text fields preserve
+Menus use arrows or j/k; Space toggles capabilities and coding tools. Text fields preserve
 literal j/k/q, support Unicode, arrows, Home/End, Backspace/Delete and Ctrl+U.
 Esc goes back and retains edits. Ctrl+C cancels from every screen; q closes
 menus and result screens. Cancellation after apply starts can leave partial
@@ -37,6 +38,30 @@ The screen adapts to 80×24 and 40×12. Below 30×10 it asks for a larger termin
 and allows cancellation, but no confirmation. Long previews scroll; names and
 paths remain editable even when wider than the viewport. External output is
 sanitized for terminal escapes and invisible direction controls.
+
+## Independent capabilities and compatibility
+
+All seven nonempty combinations of Workspace, Memory, and Agent Harness are
+supported. The explicit CLI selection is
+`alfred setup --components=workspace,memory,harness`. Historical editions remain
+compatible: `coding` maps to Agent Harness, `memory` to Memory, and `full` to
+Agent Harness + Memory. Updating an existing installation never adds Workspace
+implicitly. Release 1.1.0 does not include Workspace; these choices require a
+later release that includes it, or the corresponding source build.
+
+Only approved Apply writes product preferences to
+`.alfred/setup/components.json` (`alfred.setup.components/v1`). Discovery and
+preview do not write the preference file. The managed harness receipt remains
+separate at `.alfred/setup/installation.json` (`alfred.setup.installation/v1`),
+compatible with 1.1.0. The backend retains integration defaults separately, so
+Update can refresh recorded harness files even after a Workspace-only selection.
+Preference state does not prove that a harness has loaded its integration.
+
+Selecting capabilities does not connect services, propagate credentials, create
+Memory tenants, configure MCP, or install a Workspace session adapter. Memory
+remains a local loopback service; its filesystem workspace bindings are distinct
+from the Workspace application. Optional connections require explicit public
+contracts and caller configuration. See [product capabilities](../../docs/product-capabilities.md).
 
 ## Updating an existing setup
 

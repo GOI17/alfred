@@ -29,11 +29,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  workspace-native:
+    if: inputs.tag != '' || (github.event_name == 'release' && github.event.release.prerelease == false && github.event.release.draft == false)
+    uses: ./.github/workflows/workspace-native.yml
+    with:
+      ref: ${{ github.event.release.tag_name || inputs.tag }}
+
   publish:
+    needs: workspace-native
     # A reusable workflow retains its caller event (normally push), so gate on its input.
     if: inputs.tag != '' || (github.event_name == 'release' && github.event.release.prerelease == false && github.event.release.draft == false)
     runs-on: macos-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout the immutable Alfred release
         uses: actions/checkout@v6
@@ -92,6 +99,17 @@ jobs:
           (cd packages/setup-tui && go mod download && go mod verify && go test ./...)
           node scripts/build-setup-tui.mjs
           node --test scripts/build-setup-tui.test.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: workspace-native-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/alfred-workspace-native
+      - name: Build Workspace with the locked isolated toolchain
+        run: |
+          mkdir -p "$RUNNER_TEMP/alfred-workspace-build"
+          cp packaging/runtime/package{,-lock}.json "$RUNNER_TEMP/alfred-workspace-build/"
+          (cd "$RUNNER_TEMP/alfred-workspace-build" && npm ci --prefix "$RUNNER_TEMP/alfred-workspace-build" --include=dev --ignore-scripts --no-audit --no-fund --workspaces=false)
+          node scripts/build-workspace.mjs --dependencies "$RUNNER_TEMP/alfred-workspace-build/node_modules"
       - name: Prepare locked production dependencies outside the source tree
         run: |
           set -euo pipefail
@@ -107,6 +125,7 @@ jobs:
           node scripts/build-runtime.mjs --root "$GITHUB_WORKSPACE" \
             --source-revision "$REVISION" --builder-revision "$REVISION" \
             --dependencies "$RUNNER_TEMP/alfred-runtime-deps/node_modules" \
+            --workspace-native "$RUNNER_TEMP/alfred-workspace-native" \
             --output "$RUNNER_TEMP/alfred-runtime-assets"
           node scripts/verify-runtime.mjs "$RUNNER_TEMP/alfred-runtime-assets"
           ruby -c "$RUNNER_TEMP/alfred-runtime-assets/alfred.rb"

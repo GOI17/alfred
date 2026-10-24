@@ -9,6 +9,12 @@ on:
       - "packaging/homebrew/**"
       - "packaging/runtime/**"
       - "scripts/build-runtime.mjs"
+      - "scripts/*workspace*"
+      - "packages/cli/**"
+      - "packages/agent-harness/**"
+      - "packages/workspace/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/workspace-native.yml"
       - "scripts/build-setup-tui*"
       - "scripts/setup/**"
       - "packages/setup-tui/**"
@@ -35,6 +41,12 @@ on:
       - "packaging/homebrew/**"
       - "packaging/runtime/**"
       - "scripts/build-runtime.mjs"
+      - "scripts/*workspace*"
+      - "packages/cli/**"
+      - "packages/agent-harness/**"
+      - "packages/workspace/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/workspace-native.yml"
       - "scripts/build-setup-tui*"
       - "scripts/setup/**"
       - "packages/setup-tui/**"
@@ -59,6 +71,11 @@ permissions:
   contents: read
 
 jobs:
+  workspace-native:
+    uses: ./.github/workflows/workspace-native.yml
+    with:
+      ref: ${{ github.sha }}
+
   validate:
     runs-on: macos-latest
     steps:
@@ -86,11 +103,12 @@ jobs:
           brew style alfred/preflight/alfred
 
   verify-runtime:
+    needs: workspace-native
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-22.04, ubuntu-22.04-arm, macos-15-intel, macos-15]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
         with:
@@ -111,6 +129,17 @@ jobs:
           (cd packages/setup-tui && go mod download && go mod verify && go test ./...)
           node scripts/build-setup-tui.mjs
           node --test scripts/build-setup-tui.test.mjs
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: workspace-native-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/alfred-workspace-native
+      - name: Build Workspace with the locked isolated toolchain
+        run: |
+          mkdir -p "$RUNNER_TEMP/alfred-workspace-build"
+          cp packaging/runtime/package{,-lock}.json "$RUNNER_TEMP/alfred-workspace-build/"
+          (cd "$RUNNER_TEMP/alfred-workspace-build" && npm ci --prefix "$RUNNER_TEMP/alfred-workspace-build" --include=dev --ignore-scripts --no-audit --no-fund --workspaces=false)
+          node scripts/build-workspace.mjs --dependencies "$RUNNER_TEMP/alfred-workspace-build/node_modules"
       - name: Prepare isolated locked production dependencies
         run: |
           mkdir -p "$RUNNER_TEMP/alfred-runtime-deps"
@@ -122,5 +151,6 @@ jobs:
           node scripts/build-runtime.mjs --root "$GITHUB_WORKSPACE" \
             --source-revision "$REVISION" --builder-revision "$REVISION" \
             --dependencies "$RUNNER_TEMP/alfred-runtime-deps/node_modules" \
+            --workspace-native "$RUNNER_TEMP/alfred-workspace-native" \
             --output "$RUNNER_TEMP/alfred-runtime-candidate" --exploratory
           node scripts/verify-runtime.mjs "$RUNNER_TEMP/alfred-runtime-candidate"

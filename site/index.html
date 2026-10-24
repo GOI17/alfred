@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Alfred — Agent operations runtime for coding harnesses</title>
-  <meta name="description" content="Alfred is a local-first, harness-agnostic operations system for designing, testing, evaluating, securing, and porting agents, subagents, and skills across AI coding harnesses." />
+  <title>Alfred — Workspace, Memory, and Agent Harness</title>
+  <meta name="description" content="Alfred offers Workspace, Memory, and Agent Harness: three local-first capabilities, usable independently or explicitly connected through public contracts." />
   <link rel="stylesheet" href="/alfred/assets/styles.css" />
   <link rel="icon" type="image/svg+xml" href="/alfred/assets/favicon.svg" />
 </head>
@@ -18,12 +18,12 @@
         <span class="brand-tag">Alfred labs</span>
       </a>
       <nav class="nav-links" aria-label="Primary">
-        <a href="/alfred/#problem">Problem</a>
+        <a href="/alfred/#capabilities">Capabilities</a>
         <a href="/alfred/#pillars">Pillars</a>
         <a href="/alfred/#architecture">Architecture</a>
         <a href="/alfred/#harnesses">Harnesses</a>
         <a href="/alfred/docs/index.html">Docs</a>
-        <a href="/alfred/memory/">Memory Console</a>
+        <a href="/alfred/memory/">Memory</a>
         <a href="https://github.com/GOI17/alfred" rel="noopener">GitHub</a>
       </nav>
       <a class="nav-cta" href="/alfred/docs/index.html">Get started &rarr;</a>
@@ -33,13 +33,12 @@
   <!-- ==================== HERO ==================== -->
   <section class="hero">
     <div class="hero-inner">
-      <span class="eyebrow" id="release-eyebrow">latest release · runtime profiles · suite installer</span>
-      <h1>The operations runtime for <span class="grad">AI coding agents</span>.</h1>
+      <span class="eyebrow" id="release-eyebrow">Workspace · Memory · Agent Harness</span>
+      <h1>Your workspace, memory, and <span class="grad">agent operations</span>.</h1>
       <p class="lead">
         Alfred handles the operational burden so humans focus on decisions.
-        Design, test, evaluate, secure, and port agents, subagents, and skills
-        across AI coding harnesses — now with runtime profiles, smart per-agent
-        model assignment, worktree-aware installs, and local-first context compaction.
+        Workspace, Memory, and Agent Harness belong to one product.
+        Use each independently, or connect them explicitly when your workflow needs it.
       </p>
       <div class="hero-cta">
         <a class="btn primary" href="/alfred/docs/index.html">Read the docs &rarr;</a>
@@ -50,29 +49,22 @@
       <div class="terminal" aria-label="Install Alfred">
         <div class="terminal-bar">
           <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="title">~/projects/alfred-workspace — zsh</span>
+          <span class="title">~/projects/my-project — zsh</span>
         </div>
-<pre><span class="c">$ curl -fsSL https://raw.githubusercontent.com/GOI17/alfred/main/install.sh | sh</span>
+<pre><span class="c"># Install the published runtime</span>
+<span class="f">brew</span> install GOI17/alfred/alfred
+<span class="f">alfred</span> version
+<span class="f">alfred</span> setup
 
-============================================================
- ALFRED SUITE INSTALLER
-============================================================
-Edition        <span class="k">coding</span> / memory / full
-Harnesses      <span class="k">opencode</span> [installed] · codex-cli [installed] · pi [installed]
-Profiles       <span class="k">runtime profiles</span> / decide later
-Target path    <span class="k">~/.alfred/installs/default</span>
-
-Preview:
-  + core, agents, skills, profile-manager, adapters, evals
-  + .ai/generated/opencode-install <span class="c">(harness preview)</span>
-
-No files have been written yet.
-Apply safe suite install steps now? <span class="p">[y/N]</span>
+<span class="c"># In the release that includes Workspace:</span>
+<span class="f">alfred</span> setup --components=workspace,memory,harness
+<span class="c"># Preview, review, then approve the selected configuration.</span>
+<span class="c"># Selection does not connect services or credentials.</span>
 </pre>
       </div>
 
       <div class="uses">
-        <p class="uses-label">Runs locally against your favorite harness</p>
+        <p class="uses-label">Agent Harness supports integration with coding harnesses</p>
         <div class="uses-row">
           <span>opencode</span>
           <span>Pi</span>
@@ -82,6 +74,18 @@ Apply safe suite install steps now? <span class="p">[y/N]</span>
           <span>Kiro</span>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section class="block" id="capabilities">
+    <div class="container">
+      <div class="section-head"><h2>Three capabilities. Choose what you need.</h2><p>Each owns its configuration, state, and lifecycle. The product CLI brings their commands together; connections remain explicit.</p></div>
+      <div class="problem-grid">
+        <article class="problem"><span class="tag">Workspace</span><h3>Projects, conversations, and tools</h3><p>Work with files, terminals, and local tools in one application. Configure a session runtime through an explicit public adapter.</p><a href="/alfred/docs/workspace.html">Explore Workspace &rarr;</a></article>
+        <article class="problem"><span class="tag">Memory</span><h3>Knowledge that persists</h3><p>Keep decisions and useful context in a local service with tenant access, API, MCP, and its own console.</p><a href="/alfred/docs/memory.html">Explore Memory &rarr;</a></article>
+        <article class="problem"><span class="tag">Agent Harness</span><h3>Agent operations across harnesses</h3><p>Manage agents, skills, permissions, runtime profiles, evaluations, and integrations with coding harnesses.</p><a href="/alfred/docs/agents.html">Explore Agent Harness &rarr;</a></article>
+      </div>
+      <p>Workspace is available in source and requires a release after 1.1.0. Check <a href="/alfred/docs/install.html">release availability</a> before using its new commands in an installed runtime.</p>
     </div>
   </section>
 
@@ -161,7 +165,7 @@ Apply safe suite install steps now? <span class="p">[y/N]</span>
   <section class="block" id="pillars">
     <div class="container">
       <div class="section-head">
-        <h2>Eight pillars, one runtime</h2>
+        <h2>The Agent Harness foundation</h2>
         <p>
           Alfred is opinionated about the operational layer and quiet about
           everything else. Bring your own model, your own harness, your own
@@ -274,9 +278,9 @@ Apply safe suite install steps now? <span class="p">[y/N]</span>
   <section class="block" id="architecture">
     <div class="container">
       <div class="section-head">
-        <h2>One core. Many adapters. Zero leaks.</h2>
+        <h2>Agent Harness: one core, explicit adapters.</h2>
         <p>
-          The <code>packages/core</code> boundary is enforced by the build
+          Within Agent Harness, the <code>packages/core</code> boundary is enforced by the build
           itself. Adapters depend on core; core does not know adapters exist.
           Runtime profiles sit beside adapters, so machine-specific activation
           never leaks into agent definitions.
@@ -287,7 +291,7 @@ Apply safe suite install steps now? <span class="p">[y/N]</span>
         <div>
           <h3>Six agents, one coordinator</h3>
           <p>
-            Alfred ships with one primary agent (the orchestrator) and a
+            Agent Harness ships with one primary agent (the orchestrator) and a
             panel of subagents. Each has a single responsibility, an explicit
             mode, and a deterministic scope.
           </p>
@@ -338,7 +342,7 @@ Apply safe suite install steps now? <span class="p">[y/N]</span>
       <div class="section-head">
         <h2>Two profiles. Same agent. No manual config surgery.</h2>
         <p>
-          Alfred includes <code>packages/profile-manager</code>: shared profile
+          Agent Harness includes <code>packages/profile-manager</code>: shared profile
           defaults, private machine overlays, secret scanning, local capability
           checks, and approval-gated activation into
           <code>~/.config/&lt;agent&gt;</code>.
@@ -444,7 +448,7 @@ Apply profile activation now? <span class="p">[y/N]</span></pre>
     <div class="container">
       <h2>Stop rewriting agents. Start operating them.</h2>
       <p>
-        Open the guided installer, choose the edition/harness/profile strategy with
+        Open the guided installer, choose the capabilities and any harness configuration with
         explanations, or read the architecture overview before you commit.
       </p>
       <div class="hero-cta">
@@ -460,14 +464,16 @@ Apply profile activation now? <span class="p">[y/N]</span></pre>
       <div class="footer-col">
         <h5>Alfred</h5>
         <p style="margin:0;color:var(--fg-3);font-size:14px;max-width:280px">
-          Local-first, harness-agnostic agent operations.
-          Open source under the MIT license.
+          Workspace, Memory, and Agent Harness.
+          Independent capabilities with explicit connections.
         </p>
       </div>
       <div class="footer-col">
-        <h5>Apps</h5>
+        <h5>Capabilities</h5>
         <ul>
-          <li><a href="/alfred/memory/">Memory Console</a></li>
+          <li><a href="/alfred/docs/workspace.html">Workspace</a></li>
+          <li><a href="/alfred/memory/">Memory</a></li>
+          <li><a href="/alfred/docs/agents.html">Agent Harness</a></li>
         </ul>
       </div>
       <div class="footer-col">
@@ -518,7 +524,7 @@ Apply profile activation now? <span class="p">[y/N]</span></pre>
         .then((response) => (response.ok ? response.json() : []))
         .then((tags) => {
           const tag = Array.isArray(tags) && tags[0] && tags[0].name;
-          if (tag) el.textContent = `${tag} · runtime profiles · suite installer`;
+          if (tag) el.textContent = `${tag} · Workspace · Memory · Agent Harness`;
         })
         .catch(() => {
           // Keep the static fallback; the page must remain useful offline.

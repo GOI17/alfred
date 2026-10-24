@@ -8,7 +8,13 @@ Tagline: Alfred handles the operational burden so humans focus on decisions.
 
 ## Purpose
 
-Alfred is a model-readable agent operations system. It manages operational burden for AI coding workflows:
+Alfred is a local-first product with three independent capabilities: Workspace for projects, conversations, and local tools; Memory for persistent knowledge; and Agent Harness for operating agents, subagents, and skills across coding harnesses. Use each capability on its own, or connect them explicitly through public contracts.
+
+The product CLI is the explicit composition root. Capability implementations do
+not depend on each other or assume a peer service exists. See
+[Product capabilities](011-product-capabilities.md) for the package boundaries.
+
+Agent Harness manages operational burden for AI coding workflows:
 
 - routing
 - delegation

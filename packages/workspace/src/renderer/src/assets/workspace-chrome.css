@@ -1,0 +1,255 @@
+.workspace-sidebar-container {
+  display: contents;
+}
+
+.desktop-sidebar-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.workspace-header.workspace-header-unified {
+  flex-shrink: 0;
+  padding-inline: 14px;
+  gap: 10px;
+}
+
+.workspace-heading-context {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding-block: 6px;
+}
+
+.workspace-header-unified .workspace-breadcrumb {
+  font-size: 10px;
+}
+
+.workspace-header-unified .conversation-title {
+  max-width: 100%;
+}
+
+.workspace-header-unified .panel-tools {
+  flex-shrink: 0;
+}
+
+/* One column measured against each chat panel, not the viewport or scroller.
+   Symmetric scrollbar gutters keep its center aligned with the composer. */
+.chat-panel {
+  container-type: inline-size;
+  --chat-column-width: 850px;
+  --chat-gutter: clamp(16px, 4cqi, 50px);
+}
+
+.chat-panel > .messages {
+  padding-inline: 0;
+  scrollbar-gutter: stable both-edges;
+}
+
+.chat-panel > .composer-wrap {
+  padding-inline: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.chat-panel > .messages > :is(.message, .chat-welcome, .agent-progress, .approval-card),
+.chat-panel > .composer-wrap > * {
+  width: min(var(--chat-column-width), calc(100cqi - 2 * var(--chat-gutter)));
+  max-width: 100%;
+  min-width: 0;
+  margin-inline: auto;
+}
+
+.messages > .agent-progress,
+.messages > .approval-card {
+  margin-block: 15px;
+}
+
+.messages > .approval-card {
+  overflow-wrap: anywhere;
+}
+
+.approval-card .approval-actions {
+  flex-wrap: wrap;
+}
+
+/* Loading feedback and draft attachments use the textarea's inner inset. */
+.chat-panel .composer > .attachment-list {
+  padding: 12px 18px 0;
+}
+
+.chat-panel .composer > p[role='status'] {
+  margin: 0;
+  padding: 0 18px 12px;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+/* One shared surface for the textarea and footer; the outer wrap stays clear.
+   Do not clip overflow here: the model dropdown extends beyond the composer. */
+.chat-panel .composer {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.chat-panel .composer:focus-within {
+  border-color: var(--success);
+}
+
+.chat-panel .composer .textarea {
+  display: block;
+  background: transparent;
+  border: 0;
+  border-radius: 14px 14px 0 0;
+}
+
+.chat-panel .composer .composer-footer {
+  background: transparent;
+  border-radius: 0 0 14px 14px;
+}
+
+.chat-panel .composer.composer-dragging {
+  background: var(--accent);
+  border-color: var(--success);
+}
+
+@media (min-width: 701px) {
+  .workspace-sidebar-container {
+    --sidebar-width: 254px;
+    display: block;
+    position: relative;
+    flex: 0 0 auto;
+    width: var(--sidebar-width);
+    min-height: 0;
+    z-index: 40;
+    transition: width 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .workspace-sidebar-container > .sidebar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--sidebar-width);
+    background: var(--sidebar);
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+    transform: translateX(0);
+    visibility: visible;
+    transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s, box-shadow 280ms;
+  }
+
+  /* Docked panes share a straight seam; rounded facing corners leave a
+     visible notch between the space color and the workspace surface. */
+  .app-shell[data-sidebar-collapsed='false'] .workspace-sidebar-container > .sidebar {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .app-shell[data-sidebar-collapsed='false'] > .main-workspace {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+
+  .app-shell[data-sidebar-collapsed='true'] .workspace-sidebar-container {
+    width: 9px;
+  }
+
+  .app-shell[data-sidebar-collapsed='true'] .workspace-sidebar-container > .sidebar {
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1) 120ms,
+      visibility 0s 400ms, box-shadow 280ms;
+  }
+}
+
+@media (min-width: 701px) and (max-width: 1020px) {
+  .workspace-sidebar-container {
+    --sidebar-width: 220px;
+  }
+}
+
+/* The collapsed container remains a narrow hover target. Its revealed child
+   extends over the workspace, so previewing never resizes the chat. Keep the
+   preview open while keyboard focus is inside it. */
+@media (min-width: 701px) and (hover: hover) and (pointer: fine) {
+  .app-shell[data-sidebar-collapsed='true'] .workspace-sidebar-container:hover > .sidebar,
+  .app-shell[data-sidebar-collapsed='true'] .workspace-sidebar-container:focus-within > .sidebar {
+    transform: translateX(0);
+    visibility: visible;
+    box-shadow: 12px 0 32px var(--overlay);
+    transition-delay: 0s;
+  }
+}
+
+@media (max-width: 700px) {
+  .desktop-sidebar-toggle {
+    display: none;
+  }
+
+  .sidebar {
+    transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .main-workspace {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .workspace-header.workspace-header-unified {
+    padding-inline: 8px;
+    gap: 5px;
+  }
+
+  .workspace-header-unified .panel-tools {
+    gap: 0;
+  }
+
+  .workspace-header-unified .panel-tools .button-small {
+    padding-inline: 7px;
+  }
+
+  .workspace-header-unified .workspace-breadcrumb {
+    gap: 4px;
+  }
+
+  .chat-panel {
+    --chat-gutter: 17px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-sidebar-container,
+  .workspace-sidebar-container > .sidebar {
+    transition: none;
+  }
+}
+
+/* Keep draft growth bounded and leave the action row reachable. */
+.chat-panel .composer .textarea {
+  max-height: min(240px, 30dvh);
+  overflow-y: auto;
+}
+@media (max-width: 700px) {
+  .chat-panel { --chat-gutter: 8px; }
+  .chat-panel > .composer-wrap { max-height: 65%; padding-bottom: 6px; }
+  .chat-panel .composer .textarea {
+    padding: 10px 12px 4px;
+    font-size: 16px;
+    line-height: 1.5;
+    max-height: min(160px, 25dvh);
+  }
+  .chat-panel .composer .composer-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 6px; padding: 4px 8px 8px; }
+  .composer-footer .attachment-controls {
+    display: contents;
+  }
+  .composer-footer .model-picker-trigger { width: 100%; max-width: 190px; justify-content: space-between; }
+  .composer-footer .context-indicator { flex-wrap: nowrap; min-width: 0; grid-column: 1 / -1; }
+  .composer-footer .context-indicator meter { flex-shrink: 0; }
+  .composer-footer .attachment-controls > .context-control:last-child { grid-column: 1; grid-row: 3; justify-self: start; min-width: 0; }
+  .composer-footer .queue-send-actions { grid-column: 2; grid-row: 3; flex-wrap: nowrap; gap: 6px; }
+  .composer-footer .queue-send-actions > button { width: 44px; height: 44px; }
+  .composer-footer .attachment-controls > .context-control:last-child { max-width: 100%; }
+  .composer-footer .attachment-controls > .context-control:last-child > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}

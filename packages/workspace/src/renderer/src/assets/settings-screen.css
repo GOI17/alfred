@@ -1,0 +1,30 @@
+.settings-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow-y: auto;
+  background: var(--background, #fafbf7);
+  color: var(--foreground, #293b30);
+  padding: max(20px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+}
+.settings-screen-header { max-width: 1100px; margin: 0 auto 24px; }
+.settings-screen-header h1 { margin: 18px 0 0; }
+.settings-screen-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 36px; max-width: 1100px; margin: auto; }
+.settings-screen-nav { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.settings-screen-content { min-width: 0; max-width: 760px; overflow-wrap: anywhere; }
+.settings-screen-content h2 { margin-top: 0; }
+.settings-screen-content p { line-height: 1.6; }
+.settings-screen-content form { display: grid; gap: 16px; }
+.settings-screen-content form > label { display: grid; gap: 8px; }
+.settings-screen-content input:not([type='checkbox']), .settings-screen-content select { width: 100%; min-width: 0; box-sizing: border-box; }
+.settings-screen-content fieldset { min-width: 0; margin: 20px 0; padding: 16px; border: 1px solid var(--border, #dce3d6); border-radius: 12px; }
+.settings-screen-content textarea { max-width: 100%; }
+.settings-screen-content .dialog-actions { flex-wrap: wrap; }
+.notification-settings { margin-top: 24px; padding-top: 8px; border-top: 1px solid var(--border); }
+@media (max-width: 700px) {
+  .settings-screen { padding-inline: 16px; }
+  .settings-screen-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .settings-screen-nav { flex-direction: row; flex-wrap: wrap; }
+  .settings-screen-nav button { min-height: 44px; flex: 1; }
+  .settings-screen-content fieldset { padding: 12px; }
+}
