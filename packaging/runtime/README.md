@@ -78,3 +78,14 @@ produce identical bytes. Generated binaries and archives are never committed.
 
 This migration is source work for a future release. It does not update existing
 Alfred 1.1.0 installations or justify replacing historical release assets.
+
+## Coordinated product release versions
+
+Release Please updates `packages/cli`, `packages/agent-harness`,
+`packages/workspace` and `packages/memory-server` package versions through JSON
+`$.version` entries in the same root release. Each standalone CLI continues to
+read its own metadata; no capability imports a peer to determine its version.
+The initial imported versions remain unchanged during migration. Generated
+release PRs and publication require all four versions to equal the root version,
+using `ALFRED_VALIDATE_RELEASE_CANDIDATE=1 npm run validate:release-automation`.
+Internal package versions are not included in this coordinated public contract.

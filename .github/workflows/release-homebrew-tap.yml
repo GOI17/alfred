@@ -83,6 +83,7 @@ jobs:
 
       - name: Validate Alfred Homebrew packaging
         run: |
+          ALFRED_VALIDATE_RELEASE_CANDIDATE=1 npm run validate:release-automation
           npm run homebrew:test
           npm run validate:homebrew
 

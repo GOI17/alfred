@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { publicReleasePackages, validatePublicPackageVersions } from "./release-package-versions.mjs";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -33,6 +34,9 @@ assert.equal(config["include-component-in-tag"], false);
 assert.equal(config["bump-patch-for-minor-pre-major"], true);
 assert.equal(config["pull-request-title-pattern"], "chore(main): release ${version}");
 const extraFiles = config.packages?.["."]?.["extra-files"] ?? [];
+validatePublicPackageVersions(extraFiles, version, process.env.ALFRED_VALIDATE_RELEASE_CANDIDATE === "1"
+  ? Object.fromEntries(publicReleasePackages.map(name => [name, json(`packages/${name}/package.json`)]))
+  : undefined);
 assert.ok(extraFiles.some((entry) => entry.type === "generic" && entry.path === "install.sh"));
 assert.ok(extraFiles.some((entry) => entry.type === "json" && entry.path === ".ai/gpt/alfred-memory-gpt.json" && entry.jsonpath === "$.metadata.version"));
 assert.ok(extraFiles.some((entry) => entry.type === "yaml" && entry.path === "packages/memory-openapi/openapi.yaml" && entry.jsonpath === "$.info.version"));

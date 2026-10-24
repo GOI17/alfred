@@ -57,7 +57,7 @@ jobs:
           node-version: "24"
       - name: Validate generated release candidate
         run: |
-          npm run validate:release-automation
+          ALFRED_VALIDATE_RELEASE_CANDIDATE=1 npm run validate:release-automation
           npm run homebrew:test
           npm run validate:homebrew
 

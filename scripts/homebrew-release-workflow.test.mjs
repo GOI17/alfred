@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { publicReleasePackages, validatePublicPackageVersions } from "./release-package-versions.mjs";
 import { buildRuntime } from "./build-runtime.mjs";
 import { publishAssets, readCandidate } from "./publish-runtime-assets.mjs";
 import { join, resolve } from "node:path";
@@ -256,4 +257,36 @@ test('Workspace release stages locked assets and architecture-specific native ar
   assert.match(workspace, /workspace test:chat/);
   assert.match(workspace, /workspace-test-network-guard\.mjs/);
   assert.doesNotMatch(native, /continue-on-error/);
+});
+
+
+test("one product release updates all four public package versions and rejects stale metadata", t => {
+  const extras = releasePleaseConfig.packages["."]["extra-files"];
+  const expected = ["cli", "agent-harness", "workspace", "memory-server"];
+  assert.deepEqual(publicReleasePackages, expected);
+  validatePublicPackageVersions(extras, "2.3.4");
+  const fixture = mkdtempSync(join(tmpdir(), "alfred-public-versions-"));
+  t.after(() => rmSync(fixture, { recursive: true, force: true }));
+  const version = "2.3.4", packages = {};
+  writeFileSync(join(fixture, "package.json"), JSON.stringify({ version }));
+  for (const name of expected) {
+    const update = extras.find(entry => entry.path === `packages/${name}/package.json`);
+    // Apply the configured JSON $.version update while preserving package identity.
+    packages[name] = { ...JSON.parse(readFileSync(join(root, update.path))), version };
+    const scripts = join(fixture, "packages", name, "scripts");
+    mkdirSync(scripts, { recursive: true });
+    writeFileSync(join(fixture, update.path), JSON.stringify(packages[name]));
+    const filename = name === "cli" ? "alfred.mjs" : name === "memory-server" ? "memory.mjs" : "cli.mjs";
+    writeFileSync(join(scripts, filename), readFileSync(join(root, "packages", name, "scripts", filename)));
+    const result = spawnSync(process.execPath, [join(scripts, filename), "version"], { encoding: "utf8", cwd: fixture });
+    assert.equal(result.status, 0, result.stderr);
+    const binary = name === "cli" ? "alfred" : name === "memory-server" ? "alfred-memory" : `alfred-${name}`;
+    assert.equal(result.stdout.trim(), `${binary} ${version}`);
+  }
+  validatePublicPackageVersions(extras, version, packages);
+  for (const name of expected) {
+    assert.throws(() => validatePublicPackageVersions(extras, version, { ...packages, [name]: { ...packages[name], version: "1.1.0" } }), /Public package release version mismatch/);
+    assert.throws(() => validatePublicPackageVersions(extras.filter(entry => entry.path !== `packages/${name}/package.json`), version), /Release must update/);
+  }
+  for (const text of [workflow, releasePleaseWorkflow]) assert.match(text, /ALFRED_VALIDATE_RELEASE_CANDIDATE=1 npm run validate:release-automation/);
 });
