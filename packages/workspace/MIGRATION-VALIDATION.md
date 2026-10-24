@@ -53,3 +53,29 @@ commit/tree. The source repository and its history were preserved.
 
 Cross-platform native PTY archives, the universal runtime and Homebrew validation
 belong to the distribution task; this report does not claim those checks passed.
+
+## CI follow-up: notification navigation after reload
+
+[CI job 120815346245](https://github.com/GOI17/alfred/actions/runs/40074661140/job/120815346245)
+exposed two intermittent phone failures while reopening Settings after reload.
+The original source helper called `isVisible()` before `/api/state` finished:
+it skipped opening the mobile sidebar, then waited for a hidden Settings button.
+The same helper is present in the pinned source commit. No production UI or
+authentication behavior caused this test failure.
+
+A regression holds `/api/state` until the settings helper starts while the
+loading screen is visible. Before the fix, it reproduces the exact Settings
+click timeout. Waiting for `.app-shell` before inspecting the navigation fixes
+that race without sleeps, retries, relaxed assertions or added skips.
+
+Follow-up validation used the CI network guard and isolated HOME:
+
+- Delayed-state phone regression: failed before the fix; passed five consecutive
+  runs after it.
+- Entire notification suite: 16 desktop/phone cases passed, including the two
+  previously failing flows and the new regression on both viewports.
+- TypeScript and ESLint for the changed test passed; zero external network
+  attempts were recorded.
+
+This follow-up changes only the notification test/helper and this provenance
+record. The original snapshot manifest and 25-error lint baseline are unchanged.

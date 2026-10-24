@@ -57,6 +57,8 @@ async function login(page: Page) {
   await expect(page.locator('.app-shell')).toBeVisible()
 }
 async function settings(page: Page) {
+  // Reload can finish before /api/state restores the navigation controls.
+  await expect(page.locator('.app-shell')).toBeVisible()
   const opener = page.getByRole('button', { name: 'Open spaces', exact: true })
   if (await opener.isVisible()) await opener.click()
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
@@ -136,4 +138,33 @@ test('unsupported browsers show availability in Settings without an invitation',
   await expect(page.getByRole('button', { name: 'Enable notifications', exact: true })).toBeDisabled()
   await expect(page.getByText(/Requires HTTPS and a browser with Web Push/)).toBeVisible()
   await expect(page.getByRole('dialog')).toHaveCount(0)
+})
+
+test('opens Interface settings after a delayed workspace restore', async ({ page }) => {
+  const requests = await notifications(page)
+  await login(page)
+  await page.getByRole('dialog', { name: 'Enable notifications?' }).getByRole('button', { name: 'Not now', exact: true }).click()
+  let restore!: () => void
+  let restoring!: () => void
+  const held = new Promise<void>((resolve) => { restore = resolve })
+  const intercepted = new Promise<void>((resolve) => { restoring = resolve })
+  await page.route('**/api/state', async (route) => {
+    restoring()
+    await held
+    await route.continue()
+  })
+  try {
+    await page.reload()
+    await intercepted
+    await expect(page.locator('.loading-screen')).toBeVisible()
+    const opening = settings(page)
+    // Complete a browser round trip while state is held: the helper has begun
+    // before the navigation controls exist, as on a slower CI runner.
+    expect(await page.evaluate(() => !!document.querySelector('.loading-screen'))).toBe(true)
+    restore()
+    await opening
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Enable notifications', exact: true })).toBeEnabled()
+    expect(requests).toEqual([])
+  } finally { restore() }
 })

@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
+import { downloadSmokeArchive } from "./runtime-smoke-download.mjs";
 import { buildRuntime, createTar, sha256, writeAssetAtomic } from "./build-runtime.mjs";
 import { nativeDependencyIdentity } from "./workspace-native-artifacts.mjs";
 import { renderFormula } from "./generate-homebrew-formula.mjs";
@@ -247,4 +248,24 @@ test('Workspace native provenance rejects stale lock, revision, wrong architectu
   rmSync(join(dir,'pty.node'));
   symlinkSync(join(f.options.workspaceNative,'linux-x64/pty.node'),join(dir,'pty.node'));
   assert.throws(f.build,/Invalid native artifact input/);
+});
+
+
+test("runtime smoke verifies a slow complete archive body and still rejects stalls and corruption", async t => {
+  const payload = Buffer.from("complete runtime archive fixture");
+  const server = createServer((request, response) => {
+    response.writeHead(200, { "content-type": "application/gzip" });
+    if (request.url === "/stall") { response.write("partial"); return; }
+    if (request.url === "/corrupt") { response.end("changed bytes"); return; }
+    response.write(payload.subarray(0, 4));
+    // Reproduce the old five-second body abort on a slow/loaded Intel runner.
+    const timer = setTimeout(() => response.end(payload.subarray(4)), 5500);
+    response.once("close", () => clearTimeout(timer));
+  });
+  await new Promise((done, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", done); });
+  t.after(async () => { server.closeAllConnections(); await new Promise(done => server.close(done)); });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  assert.deepEqual(await downloadSmokeArchive(`${origin}/slow`, sha256(payload)), payload);
+  await assert.rejects(downloadSmokeArchive(`${origin}/stall`, sha256(payload), 20), /archive transfer failed \(20ms deadline\)/);
+  await assert.rejects(downloadSmokeArchive(`${origin}/corrupt`, sha256(payload)), /archive transfer checksum/);
 });

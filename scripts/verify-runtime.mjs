@@ -7,6 +7,7 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
+import { downloadSmokeArchive } from "./runtime-smoke-download.mjs";
 import { inspectRuntime } from "./runtime-archive.mjs";
 import { sha256 } from "./build-runtime.mjs";
 import { renderFormula } from "./generate-homebrew-formula.mjs";
@@ -67,10 +68,8 @@ if (process.argv.includes("--archive-only")) {
   let service = null, serviceClosed = null, serviceStderr = "";
   await new Promise((done, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", done); });
   try {
-    const response = await fetch(`http://127.0.0.1:${server.address().port}/${names[0]}`, { signal: AbortSignal.timeout(5000) });
-    assert.equal(response.status, 200);
-    const downloaded = Buffer.from(await response.arrayBuffer());
-    assert.equal(sha256(downloaded), sha256(archive));
+    process.stdout.write(`Runtime smoke: verifying loopback archive transfer (${archive.length} bytes)\n`);
+    const downloaded = await downloadSmokeArchive(`http://127.0.0.1:${server.address().port}/${names[0]}`, sha256(archive));
     const { files } = inspectRuntime(downloaded, manifestBytes);
     for (const [path, file] of files) atomic(join(runtime, path), file.bytes, file.mode);
     const run = (args, cwd = workspace, extraEnv = {}) => {

@@ -45,6 +45,10 @@ claim about the original source.
   remain active. Chat/UI cases share a real test session so the suite does not exhaust the
   unchanged production login limiter; QR/login cases still start unauthenticated. Additional CLI/package tests exercise lazy
   standalone entrypoints and serving a built package with peer products absent.
+- The original notification settings helper checked mobile navigation visibility
+  before workspace restoration completed after reload. It now waits for the app
+  shell before choosing the sidebar action. A delayed-state regression retains
+  the real UI flow and authentication assertions without timing sleeps or skips.
 
 Generated build outputs, test reports, local state and dependency links remain
 ignored. Native PTY distribution and monorepo-wide locks are reviewed separately
