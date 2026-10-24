@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/GOI17/alfred/compare/v1.1.0...v1.2.0) (2026-10-24)
+
+
+### Features
+
+* offer Workspace, Memory and Agent Harness independently ([#241](https://github.com/GOI17/alfred/issues/241)) ([354f13b](https://github.com/GOI17/alfred/commit/354f13b7280a58c44eb14e5d5645e23fe5169b25))
+
 ## [1.1.0](https://github.com/GOI17/alfred/compare/v1.0.1...v1.1.0) (2026-10-24)
 
 
