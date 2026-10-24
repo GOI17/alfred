@@ -243,6 +243,7 @@ test('Workspace release stages locked assets and architecture-specific native ar
   assert.match(native, /node scripts\/build-workspace-native\.mjs/);
   assert.match(native, /persist-credentials: false/);
   assert.match(validation, /os: \[ubuntu-22\.04, ubuntu-22\.04-arm, macos-15-intel, macos-15\]/);
+  assert.doesNotMatch(workspace.split('    steps:')[0], /runner\./, 'Job-level env cannot reference the runner context');
   assert.match(workspace, /pnpm install --frozen-lockfile --ignore-scripts/);
   const install = workspace.indexOf('pnpm install --frozen-lockfile --ignore-scripts');
   const prepare = workspace.indexOf('node packages/workspace/scripts/prepare-pty.mjs');

@@ -110,8 +110,8 @@ ${sourceStanza(options)}
       ALFRED_DISTRIBUTION=homebrew exec "#{formula_opt_bin("node")}/node" "#{libexec}/packages/cli/scripts/alfred.mjs" "$@"
     SH
     {
-      "alfred-workspace" => "workspace/scripts/cli.mjs",
-      "alfred-memory" => "memory-server/scripts/memory.mjs",
+      "alfred-workspace"     => "workspace/scripts/cli.mjs",
+      "alfred-memory"        => "memory-server/scripts/memory.mjs",
       "alfred-agent-harness" => "agent-harness/scripts/cli.mjs",
     }.each do |command, entrypoint|
       (bin/command).write <<~SH
@@ -136,7 +136,7 @@ ${sourceStanza(options)}
     assert_match "ALFRED SUITE INSTALL PREVIEW", output
     assert_match "Provider calls: 0", output
     assert_match "Workspace", shell_output("#{bin}/alfred-workspace --help")
-    system Formula["node"].opt_bin/"node", libexec/"scripts/verify-workspace-native.mjs", libexec/"node_modules"
+    system formula_opt_bin("node")/"node", libexec/"scripts/verify-workspace-native.mjs", libexec/"node_modules"
   end
 end
 `;

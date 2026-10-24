@@ -27,7 +27,6 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/workspace-browsers
       ORCA_BACKGROUND_LAUNCH: "1"
     steps:
       - uses: actions/checkout@v6
@@ -48,8 +47,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/workspace-pty-home"
           HOME="$RUNNER_TEMP/workspace-pty-home" node scripts/verify-workspace-native.mjs "$GITHUB_WORKSPACE/packages/workspace/node_modules"
       - name: Explicitly stage test browsers
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/workspace-browsers
         run: pnpm --filter @alfred-labs/workspace exec playwright install chromium webkit
       - name: Check, build and test Workspace in fixtures without provider access
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/workspace-browsers
         run: |
           mkdir -p "$RUNNER_TEMP/workspace-home"
           export HOME="$RUNNER_TEMP/workspace-home"
