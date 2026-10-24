@@ -2,6 +2,7 @@ import { readdirSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { randomBytes } from "node:crypto";
+import { compareStableVersions } from "./releases.mjs";
 import { hash, fail, stat, checked, identity, file, snapshot, atomic, allowed, required, parseJSON, writePreviewManifest } from "./activation.mjs";
 import { mergePrimaryInstructions, PRIMARY_BEGIN, PRIMARY_END } from "../../packages/codex-adapter/src/primary-instructions.js";
 
@@ -10,6 +11,7 @@ export const journalPath = ".alfred/setup/update-attempt.json";
 const ids = ["codex-cli", "codex-app", "opencode"];
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
 const savedSelection = ({path, ...selection}) => selection;
+const newerStable = (installed, target) => { try { return compareStableVersions(installed,target)>0; } catch { return false; } };
 const plain = v => v !== null && typeof v === "object" && !Array.isArray(v);
 const own = (v,k) => Object.hasOwn(v,k);
 function block(text) {
@@ -125,7 +127,7 @@ function legacyReceipt(projectRoot) {
       }
       if(!intact) continue;
       const harnesses=h==="opencode"?["opencode"]:["codex-cli","codex-app"].filter(id=>stat(checked(projectRoot,`.alfred/setup/previews/${name}/${id}-install/activation-manifest.json`)));
-      if(!harnesses.length) fail("Cannot recover Codex CLI/app selection from the legacy preview. Preserve its original setup evidence.");
+      if(!harnesses.length) continue; // Update-only previews are not evidence of a legacy CLI/app selection.
       const candidate={files,harnesses}, existing=candidates.get(h);
       if(existing && !same(existing.files,files)) fail(`Ambiguous legacy ${h} installation evidence.`);
       candidates.set(h,{files,harnesses:[...new Set([...(existing?.harnesses??[]),...harnesses])].sort()});
@@ -139,7 +141,7 @@ function legacyReceipt(projectRoot) {
 export function inspectIntegration(projectRoot,version) {
   try {
     identity(projectRoot);
-    const receipt=readReceipt(projectRoot), legacy=receipt?null:legacyReceipt(projectRoot), state=receipt??legacy;
+    const receipt=readReceipt(projectRoot), legacy=receipt?null:recoverLegacy(projectRoot)??legacyReceipt(projectRoot), state=receipt??legacy;
     if(!state) return {status:"none",version:"",text:"Project integration: not installed by setup",canUpdate:false};
     return {status:receipt?"managed":"legacy",version:state.integrationVersion,text:`Project integration: ${state.integrationVersion}${receipt?.integrationVersion===version?" · current runtime":" · review update"}`,canUpdate:true,harnesses:state.harnesses,selection:state.selection};
   } catch(e) { return {status:"blocked",version:"",text:`Project integration blocked: ${e.code?.startsWith("E")?"cannot read installation evidence":e.message}`,canUpdate:false}; }
@@ -197,20 +199,43 @@ function mergeConfig(current,base,generated) {
   for(const prior of old.values()) { if(!same(get(value,prior.path),prior.value)) fail(`Customized retired setting: ${prior.path.join(".")}`); set(value,prior.path,undefined); }
   return {content:JSON.stringify(value,null,2)+"\n",base:next};
 }
-function journal(projectRoot,baseHash) {
+function readAttempt(projectRoot) {
   const raw=file(projectRoot,journalPath); if(raw.content===null) return null;
   let j;try{j=JSON.parse(raw.content);}catch{fail("Invalid update recovery journal.");}
-  if(j.schema!=="alfred.setup.attempt/v1" || j.project!==projectRoot || !Array.isArray(j.entries) || j.entries.length>512) fail("Update recovery evidence changed; preserve and resolve it before retrying.");
-  for(const e of j.entries) { validateRecord(e.record); if(e.target!==e.record.target || !/^[a-f0-9]{64}$/.test(e.after) || e.before!==null && !/^[a-f0-9]{64}$/.test(e.before)) fail("Invalid update recovery artifact."); }
+  if(j.schema!=="alfred.setup.attempt/v1" || j.project!==projectRoot || j.humanApproval!==true || !/^[a-f0-9]{64}$/.test(j.finalReceiptHash) || !/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/.test(j.version??"") || !Array.isArray(j.entries) || j.entries.length>512) fail("Update recovery evidence changed; preserve and resolve it before retrying.");
+  const seen=new Set();
+  for(const e of j.entries) {
+    validateRecord(e.record);
+    if(e.target!==e.record.target || seen.has(e.target) || !/^[a-f0-9]{64}$/.test(e.after) || e.before!==null && !/^[a-f0-9]{64}$/.test(e.before) || e.record.kind==="file" && e.record.installedHash!==e.after) fail("Invalid update recovery artifact.");
+    seen.add(e.target);
+  }
+  validateReceipt(j.baseInstallation,projectRoot);
+  if(j.baseInstallation.files.some(e=>!seen.has(e.target))) fail("Incomplete update recovery baseline.");
+  return j;
+}
+function recoverLegacy(projectRoot) {
+  const j=readAttempt(projectRoot);
+  if(!j) return null;
+  if(j.baseReceiptHash!==null || j.baseInstallation.integrationVersion!=="legacy") fail("The recorded installation receipt is missing; restore it before retrying the update.");
+  for(const e of j.entries) {
+    const observed=file(projectRoot,e.target), actual=observed.digest;
+    if(actual===e.after && !matches(e.record,observed.content)) fail(`Recovery baseline does not match the approved output: ${e.target}`);
+    if(actual!==e.before && actual!==e.after) fail(`File changed after the approved update attempt: ${e.target}`);
+  }
+  return j.baseInstallation;
+}
+function journal(projectRoot,baseHash) {
+  const j=readAttempt(projectRoot); if(!j) return null;
   if(j.finalReceiptHash === baseHash) return null;
   if(j.baseReceiptHash !== baseHash) fail("Update receipt changed since the recovery attempt.");
   return j;
 }
 export function buildIntegrationPlan({projectRoot,previewRoot,version,selection}) {
-  const project=identity(projectRoot), preview=identity(previewRoot), receiptFile=file(projectRoot,receiptPath), base=readReceipt(projectRoot)??legacyReceipt(projectRoot);
+  const project=identity(projectRoot), preview=identity(previewRoot), receiptFile=file(projectRoot,receiptPath), base=readReceipt(projectRoot)??recoverLegacy(projectRoot)??legacyReceipt(projectRoot);
   if(!base) fail("No verified installation evidence. Complete initial setup once before using project updates.");
   if(!same([...selection.harnesses].filter(h=>ids.includes(h)).sort(),[...base.harnesses].sort())) fail("Saved harness selection changed. Reopen setup to review this project.");
   const recovery=journal(projectRoot,receiptFile.digest), journalFile=file(projectRoot,journalPath), previous=new Map(base.files.map(e=>[e.target,e])), entries=[];
+  for(const installed of [base.integrationVersion,recovery?.version]) if(newerStable(installed,version)) fail(`This project requires Alfred ${installed} or newer. Upgrade the CLI before updating its integration.`);
   const dependencies=[{path:receiptPath,...snapshot(receiptFile)},{path:journalPath,...snapshot(journalFile)},{path:"AGENTS.override.md",...snapshot(file(projectRoot,"AGENTS.override.md"))},{path:"opencode.jsonc",...snapshot(file(projectRoot,"opencode.jsonc"))}];
   for(const harness of [...new Set(base.harnesses.map(h=>h.startsWith("codex-")?"codex":h))]) for(const generated of readArtifacts(previewRoot,harness)) {
     const target=currentTarget(projectRoot,generated), before=file(projectRoot,target), original=previous.get(target); previous.delete(target);
@@ -240,7 +265,7 @@ export function buildIntegrationPlan({projectRoot,previewRoot,version,selection}
   entries.sort((a,b)=>a.target.localeCompare(b.target));
   const nextReceipt={schema:"alfred.setup.installation/v1",project:projectRoot,runtimeVersion:version,integrationVersion:version,harnesses:base.harnesses,selection:savedSelection(selection),files:entries.map(e=>e.record)};
   const current=receiptFile.content!==null && base.integrationVersion===version && entries.every(e=>e.action==="unchanged") && same(base.files,nextReceipt.files);
-  const plan={project,preview,version,selection,entries,dependencies,receipt:nextReceipt,adopting:receiptFile.content===null,baseReceiptHash:receiptFile.digest,current};
+  const plan={project,preview,version,selection,entries,dependencies,baseInstallation:{...base,selection:savedSelection(selection)},receipt:nextReceipt,adopting:receiptFile.content===null,baseReceiptHash:receiptFile.digest,current};
   return {...plan,digest:hash(JSON.stringify(plan))};
 }
 export function describeIntegration(plan) {
@@ -252,7 +277,7 @@ export function applyIntegration(plan,{signal,write=atomic}={}) {
     if(signal?.aborted) fail("Update cancelled.");
     const fresh=buildIntegrationPlan({projectRoot:plan.project.root,previewRoot:plan.preview.root,version:plan.version,selection:plan.selection});
     if(fresh.digest!==plan.digest) fail("Update plan changed; review it again.");
-    const attempt={schema:"alfred.setup.attempt/v1",project:plan.project.root,baseReceiptHash:plan.baseReceiptHash,finalReceiptHash:hash(JSON.stringify(plan.receipt,null,2)+"\n"),version:plan.version,entries:plan.entries.map(e=>({target:e.target,before:e.before.digest,after:e.sha256,record:e.record}))};
+    const attempt={schema:"alfred.setup.attempt/v1",project:plan.project.root,humanApproval:true,baseInstallation:plan.baseInstallation,baseReceiptHash:plan.baseReceiptHash,finalReceiptHash:hash(JSON.stringify(plan.receipt,null,2)+"\n"),version:plan.version,entries:plan.entries.map(e=>({target:e.target,before:e.before.digest,after:e.sha256,record:e.record}))};
     writeState(plan.project.root,journalPath,attempt,write);
     for(const e of plan.entries) {
       if(signal?.aborted) fail("Update cancelled.");
@@ -263,6 +288,8 @@ export function applyIntegration(plan,{signal,write=atomic}={}) {
       write(target,e.content,e.before.mode??0o644);written.push(e.target);
     }
     for(const e of plan.entries) if(file(plan.project.root,e.target).digest!==e.sha256) fail(`Verification failed: ${e.target}`);
+    if(file(plan.project.root,receiptPath).digest!==plan.baseReceiptHash) fail("Installation receipt changed during update; preserve the other session's state.");
+    if(file(plan.project.root,journalPath).digest!==hash(JSON.stringify(attempt,null,2)+"\n")) fail("Update recovery journal changed during application; review both attempts before retrying.");
     writeState(plan.project.root,receiptPath,plan.receipt,write);
     return {status:"project_verified",written,text:`Project integration ${plan.version} verified. ${written.length} files updated.\nYour saved harness choices were reused. Start a NEW harness session.`};
   } catch(e) {

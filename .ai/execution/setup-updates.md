@@ -39,4 +39,6 @@ Schema remains alfred.setup/v1. Discovery adds project status/version/text/canUp
 - packages/memory-server/scripts/setup.mjs
 - packages/setup-tui/
 
-Local validation: setup63/63, Homebrew42/42 and adapter chat-skill3/3 pass; installer validation including PTY, syntax and installation-policy validation pass. Go execution and full archive smoke remain CI gates.
+Local validation: setup68/68, Homebrew42/42 and adapter chat-skill3/3 pass; installer validation including PTY, syntax and installation-policy validation pass. Go execution and full archive smoke remain CI gates.
+
+Review regressions: approved legacy baseline/selection survives partial writes and failed receipt persistence; later edits remain conflicts. Advisory release checks preserve a pending project approval in either request order. Final receipt/journal snapshots protect concurrent state, and an older stable CLI cannot downgrade recorded or partially applied integration versions.

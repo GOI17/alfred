@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync, mkdirSync, cpSync, unlinkSync, symlinkSync, chmodSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, cpSync, unlinkSync, symlinkSync, chmodSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fixture, generate, put } from "./activation-fixture.mjs";
 import { buildActivationPlan, activatePlan, hash, atomic } from "./activation.mjs";
@@ -95,4 +95,61 @@ test("retired artifacts report conflict and never mark the integration complete"
   r.files.push({harness:"codex",target:".agents/skills/old-skill/SKILL.md",kind:"file",installedHash:hash("old"),generatedHash:hash("old")});put(join(f.projectRoot,".agents/skills/old-skill/SKILL.md"),"old");writeFileSync(path,JSON.stringify(r));
   assert.throws(()=>buildIntegrationPlan(options),/Retired managed artifacts/);
   assert.equal(JSON.parse(readFileSync(path)).integrationVersion,"1.0.1");
+});
+
+
+test("legacy partial and receipt-write failures retain approved baseline and saved harnesses for retry",t=>{
+  for(const failure of ["artifact","receipt"]) {
+    const f=initial(t,{legacy:true}), options=next(f);
+    const result=applyIntegration(buildIntegrationPlan(options),{write:(p,c,m)=>{
+      if(failure==="artifact" && p.includes("/.opencode/skills/") || failure==="receipt" && p.endsWith("installation.json"))throw new Error("injected legacy failure");
+      atomic(p,c,m);
+    }});
+    assert.equal(result.status,"project_partial",result.text);assert.equal(existsSync(join(f.projectRoot,receiptPath)),false);
+    const state=inspectIntegration(f.projectRoot,options.version);
+    assert.equal(state.status,"legacy",state.text);assert.equal(state.canUpdate,true);assert.deepEqual(state.harnesses,selection.harnesses);assert.equal(state.selection.name,"saved");
+    const retried=applyIntegration(buildIntegrationPlan(options));assert.equal(retried.status,"project_verified",retried.text);
+    assert.equal(JSON.parse(readFileSync(join(f.projectRoot,receiptPath))).integrationVersion,options.version);
+  }
+});
+test("legacy recovery never adopts edits made after the approved partial attempt",t=>{
+  const f=initial(t,{legacy:true}), options=next(f);
+  applyIntegration(buildIntegrationPlan(options),{write:(p,c,m)=>{if(p.endsWith("installation.json"))throw new Error("injected");atomic(p,c,m);}});
+  const target=join(f.projectRoot,".codex/agents/developer.toml");put(target,"new user customization after failed receipt");
+  const state=inspectIntegration(f.projectRoot,options.version);assert.equal(state.status,"blocked");assert.match(state.text,/changed after/);
+  assert.throws(()=>buildIntegrationPlan(options),/changed after/);
+  assert.equal(readFileSync(target,"utf8"),"new user customization after failed receipt");
+});
+test("legacy version-only adoption ignores unselected update previews and preview-only projects remain uninstalled",t=>{
+  const f=initial(t,{legacy:true}), previewRoot=join(f.projectRoot,".alfred/setup/previews/same-artifacts");
+  generate(previewRoot,"codex");generate(previewRoot,"opencode");
+  const options={projectRoot:f.projectRoot,previewRoot,version:"1.1.0",selection:f.selection};
+  assert.equal(inspectIntegration(f.projectRoot,"1.1.0").status,"legacy");
+  const plan=buildIntegrationPlan(options);assert.ok(plan.entries.every(e=>e.action==="unchanged"));
+  assert.equal(applyIntegration(plan).status,"project_verified");
+  const prepared=fixture(t);generate(prepared.previewRoot,"codex");generate(prepared.previewRoot,"opencode");
+  assert.equal(inspectIntegration(prepared.projectRoot,"1.1.0").status,"none");
+});
+
+
+test("a concurrent receipt change is preserved instead of overwritten at final commit",t=>{
+  const f=initial(t), options=next(f), receipt=join(f.projectRoot,receiptPath);
+  const other=JSON.parse(readFileSync(receipt));other.integrationVersion="9.0.0";
+  let changed=false;
+  const result=applyIntegration(buildIntegrationPlan(options),{write:(p,c,m)=>{
+    atomic(p,c,m);
+    if(!changed && p.includes("/.codex/agents/")){changed=true;atomic(receipt,JSON.stringify(other),0o600);}
+  }});
+  assert.equal(result.status,"project_partial");assert.match(result.text,/receipt changed/);
+  assert.equal(JSON.parse(readFileSync(receipt)).integrationVersion,"9.0.0");
+});
+
+
+test("an older CLI cannot downgrade a recorded or partially applied stable integration",t=>{
+  const f=initial(t), options=next(f), receipt=join(f.projectRoot,receiptPath), r=JSON.parse(readFileSync(receipt));
+  r.integrationVersion="2.0.0";writeFileSync(receipt,JSON.stringify(r));
+  assert.throws(()=>buildIntegrationPlan(options),/Upgrade the CLI/);
+  const legacy=initial(t,{legacy:true}), newer=next(legacy);
+  applyIntegration(buildIntegrationPlan(newer),{write:(p,c,m)=>{if(p.endsWith("installation.json"))throw new Error("injected");atomic(p,c,m);}});
+  assert.throws(()=>buildIntegrationPlan({...newer,version:"1.0.1"}),/Upgrade the CLI/);
 });

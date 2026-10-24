@@ -100,7 +100,9 @@ export function createSession({ installRoot = root, cwd = process.cwd(), env = p
       }
       if (request.operation === "check-update") {
         keys(request, ["schema", "id", "operation"]);
-        updateApproval = null;
+        // Release metadata does not change an already reviewed project plan.
+        // Resume can enqueue check-update and project-preview in either order.
+        if (updateApproval?.kind === "runtime") updateApproval = null;
         release = await check({ currentVersion: version, packaged, env, signal });
         notCancelled();
         return { schema, id, ok: true, data: { ...release, text: safeText(release.text) } };
