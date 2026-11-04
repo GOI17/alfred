@@ -79,3 +79,53 @@ it('requires authentication for location previews and rejects projects that are 
   const project = await service.addProject(folder)
   expect((await app.inject({ url: `/api/projects/${project.id}/worktrees/location`, headers })).statusCode).toBe(400)
 })
+
+
+it('changes the current conversation folder locally, retaining history and identity', async () => {
+  const { app, service, project, repository, root, headers } = await setup()
+  const conversation = await service.addConversation(project.id, repository)
+  const folder = join(repository, 'nested folder')
+  await mkdir(folder)
+  const url = `/api/conversations/${conversation.id}/messages`
+  const send = (text: string) => app.inject({ method: 'POST', url, headers, payload: { text, provider: 'openai' } })
+  expect((await send('/cd "nested folder"')).statusCode).toBe(200)
+  expect(service.conversation(conversation.id).workspacePath).toBe(folder)
+  expect(service.conversation(conversation.id).projectId).toBe(project.id)
+  expect(service.conversation(conversation.id).messages).toHaveLength(1)
+  expect((await send('/cd ..')).statusCode).toBe(200)
+  expect(service.conversation(conversation.id).workspacePath).toBe(repository)
+  const other = join(root, 'other folder')
+  await mkdir(other)
+  expect((await send(`/cd ${other}`)).statusCode).toBe(200)
+  expect(service.conversation(conversation.id).workspacePath).toBe(other)
+  expect(service.conversation(conversation.id).messages).toHaveLength(3)
+  expect(service.state().conversations).toHaveLength(1)
+  for (const text of ['/cd', '/cd missing', `/cd ${join(repository, 'hello.txt')}`]) {
+    expect((await send(text)).statusCode).toBe(400)
+    expect(service.conversation(conversation.id).workspacePath).toBe(other)
+    expect(service.conversation(conversation.id).messages).toHaveLength(3)
+  }
+})
+
+
+it('completes cd paths with directories only, relative to the current conversation', async () => {
+  const { app, service, project, repository, headers } = await setup()
+  const conversation = await service.addConversation(project.id, repository)
+  await mkdir(join(repository, 'nested folder', 'child'), { recursive: true })
+  const url = `/api/conversations/${conversation.id}/directories`
+  expect((await app.inject(url)).statusCode).toBe(401)
+  const suggest = async (query: string) => {
+    const response = await app.inject({ url: `${url}?query=${encodeURIComponent(query)}`, headers })
+    expect(response.statusCode, response.body).toBe(200)
+    return response.json().files
+  }
+  expect(await suggest('nest')).toEqual(['nested folder/'])
+  expect(await suggest('"nested folder/')).toEqual(['nested folder/child/'])
+  expect(await suggest(join(repository, 'nest'))).toEqual([join(repository, 'nested folder') + '/'])
+  expect(await suggest(`~/${relative(homedir(), repository)}/nest`)).toEqual([`~/${relative(homedir(), repository)}/nested folder/`])
+  expect(await suggest('hello')).toEqual([])
+  await service.changeDirectory(conversation.id, 'nested folder')
+  expect(await suggest('')).toEqual(['child/'])
+  expect(await suggest('../nest')).toEqual(['../nested folder/'])
+  expect(service.conversation(conversation.id).messages).toHaveLength(1)
+})

@@ -1,5 +1,5 @@
 import { lstat, realpath, stat } from 'node:fs/promises'
-import { basename, isAbsolute, join, resolve } from 'node:path'
+import { basename, isAbsolute, join, resolve, relative, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { runProcess } from '../shared/child-process/run-process.js'
@@ -58,7 +58,11 @@ export async function listWorktrees(project: Project): Promise<Worktree[]> {
 }
 export async function verifyWorkspace(project: Project, path: string) {
   const canonical = await realpath(path)
-  if (!(await listWorktrees(project)).some((tree) => tree.path === canonical))
+  if (!(await stat(canonical)).isDirectory()) throw new Error('Select a folder.')
+  if (!(await listWorktrees(project)).some((tree) => {
+    const child = relative(tree.path, canonical)
+    return child === '' || (!isAbsolute(child) && child !== '..' && !child.startsWith(`..${sep}`))
+  }))
     throw new Error('The workspace no longer belongs to this project.')
   return canonical
 }

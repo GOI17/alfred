@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
-import { realpath } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
+import { homedir } from 'node:os'
+import { realpath, readdir, stat } from 'node:fs/promises'
 import { panes, type Conversation, type Layout, type PublicState } from '../shared/contracts.js'
 import { Store } from './store.js'
 import type { SessionPort } from './session-port.js'
@@ -108,6 +109,67 @@ export class WorkspaceService {
         db.conversations.push(conversation)
       })
       return conversation
+    })
+  }
+  async directorySuggestions(id: string, input: string) {
+    const conversation = this.conversation(id)
+    let query = input
+    if (query.startsWith('"') || query.startsWith("'")) {
+      const quote = query[0]
+      query = query.slice(1)
+      if (query.endsWith(quote)) query = query.slice(0, -1)
+    }
+    if (query.includes('\0')) throw new Error('Invalid folder path.')
+    if (query === '~') query = '~/'
+    const separator = process.platform === 'win32' ? /[\\/]/ : /\//
+    const split = Math.max(...Array.from(query, (char, index) => separator.test(char) ? index : -1), -1)
+    const prefix = query.slice(0, split + 1)
+    const partial = query.slice(split + 1).toLowerCase()
+    const expanded = /^~[\\/]/.test(prefix) ? join(homedir(), prefix.slice(2)) : prefix
+    const directory = resolve(conversation.workspacePath, expanded || '.')
+    const entries = await readdir(directory, { withFileTypes: true })
+    const files: string[] = []
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (!entry.name.toLowerCase().startsWith(partial)) continue
+      if (entry.name.startsWith('.') && !partial.startsWith('.')) continue
+      if (!entry.isDirectory()) {
+        if (!entry.isSymbolicLink()) continue
+        try { if (!(await stat(join(directory, entry.name))).isDirectory()) continue } catch { continue }
+      }
+      files.push(prefix + entry.name + '/')
+      if (files.length > 100) break
+    }
+    return { files: files.slice(0, 100), truncated: files.length > 100 }
+  }
+  async changeDirectory(id: string, input: string) {
+    return this.mutate(async () => {
+      const before = this.conversation(id)
+      if (this.chat.isRunning(id) || before.queue?.length)
+        throw new Error('Stop the agent and clear queued messages before changing folders.')
+      let target = input.trim()
+      if ((target.startsWith('"') && target.endsWith('"')) || (target.startsWith("'") && target.endsWith("'")))
+        target = target.slice(1, -1)
+      if (!target || target.includes('\0')) throw new Error('Usage: /cd <folder>')
+      const expanded = target === '~' ? homedir() : /^~[\\/]/.test(target) ? join(homedir(), target.slice(2)) : target
+      const path = await realpath(resolve(before.workspacePath, expanded))
+      const inspected = await git.inspectProject(path)
+      const project = this.store.get().projects.find((item) => item.path === inspected.path) || inspected
+      await git.verifyWorkspace(project, path)
+      // Validate everything before closing tools or persisting the new workspace.
+      if (this.chat.isRunning(id) || this.conversation(id).queue?.length)
+        throw new Error('Stop the agent and clear queued messages before changing folders.')
+      await this.dispose(before)
+      const resetTools = (layout: Layout): Layout => layout.type === 'split'
+        ? { ...layout, children: [resetTools(layout.children[0]), resetTools(layout.children[1])] }
+        : layout.kind === 'chat' ? layout : { ...layout, id: randomUUID() }
+      await this.store.update((db) => {
+        const current = db.conversations.find((item) => item.id === id)!
+        if (!db.projects.some((item) => item.id === project.id)) db.projects.push(project)
+        current.projectId = project.id
+        current.workspacePath = path
+        current.layout = resetTools(current.layout)
+        current.messages.push({ id: randomUUID(), role: 'assistant', text: `Working directory: ${path}`, createdAt: new Date().toISOString(), notes: [] })
+      })
     })
   }
   private async dispose(conversation: Conversation) {

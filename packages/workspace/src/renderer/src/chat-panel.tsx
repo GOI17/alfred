@@ -128,7 +128,7 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
   }
   async function send() {
     if ((!text.trim() && !attachments.length) || readingLock.current || sendLock.current || queueAction) return
-    if (!configured) { settings(); return }
+    if (!configured && !/^\/cd(?:\s|$)/.test(text.trim())) { settings(); return }
     composer.current?.querySelector('textarea')?.focus({ preventScroll: true })
     sendLock.current = true; setSending(true); setError(''); follow.current = true; scrollToLatest()
     try {

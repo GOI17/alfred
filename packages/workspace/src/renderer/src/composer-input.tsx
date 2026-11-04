@@ -25,6 +25,7 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
     }, (error) => setHarnessError(errorMessage(error)), 15000)
   }, [conversationId, harness?.id])
   const commands = [
+    { name: '/cd', description: t('Change this conversation’s folder', 'Cambiar la carpeta de esta conversación'), text: '/cd ' },
     { name: '/explore', description: t('Explore the project', 'Explorar el proyecto'), text: t('Explore this project and explain its structure.', 'Explora este proyecto y explica su estructura.') },
     { name: '/plan', description: t('Prepare a plan', 'Preparar un plan'), text: t('Help me plan the following feature: ', 'Ayúdame a planear la siguiente funcionalidad: ') },
     { name: '/review', description: t('Review code', 'Revisar código'), text: t('Review the code and suggest improvements: ', 'Revisa el código y sugiere mejoras: ') },
@@ -51,8 +52,9 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
   const [result, setResult] = useState<{ key: string; files: string[]; truncated?: boolean; error?: string }>({ key: '', files: [] })
   const match = /(?:^|\s)([@/])([^\s@/]*)$/.exec(value.slice(0, caret))
   const fileMatch = /(?:^|\s)@([^\s@]*)$/.exec(value.slice(0, caret))
-  const marker = fileMatch ? '@' : match?.[1]
-  const query = fileMatch ? fileMatch[1] : match?.[2] || ''
+  const directoryMatch = /^\/cd[ \t]+([^\n]*)$/.exec(value.slice(0, caret))
+  const marker = directoryMatch ? 'directory' : fileMatch ? '@' : match?.[1]
+  const query = directoryMatch ? directoryMatch[1] : fileMatch ? fileMatch[1] : match?.[2] || ''
   const open = focused && !dismissed && !sending && !!marker
   const [position, setPosition] = useState({ left: 0, bottom: 0, width: 0, maxHeight: 260 })
   useLayoutEffect(() => {
@@ -74,34 +76,38 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
       observer.disconnect()
     }
   }, [open])
-  const key = `${conversationId}:${query}`
+  const key = `${conversationId}:${marker}:${query}`
   useEffect(() => {
-    if (!open || marker !== '@') return
+    if (!open || (marker !== '@' && marker !== 'directory')) return
     const controller = new AbortController()
     const timer = setTimeout(() => {
-      void api<{ files: string[]; truncated: boolean }>(`/conversations/${conversationId}/files?query=${encodeURIComponent(query)}`, undefined, undefined, controller.signal)
+      void api<{ files: string[]; truncated: boolean }>(`/conversations/${conversationId}/${marker === 'directory' ? 'directories' : 'files'}?query=${encodeURIComponent(query)}`, undefined, undefined, controller.signal)
         .then((data) => { if (!controller.signal.aborted) setResult({ key, ...data }) })
         .catch((error) => { if (!controller.signal.aborted) setResult({ key, files: [], error: errorMessage(error) }) })
     }, 180)
     return () => { clearTimeout(timer); controller.abort() }
   }, [open, marker, query, conversationId, key])
-  const items = marker === '@'
+  const items = marker === 'directory'
+    ? (result.key === key ? result.files : []).map((path) => ({ name: path, description: t('Folder', 'Carpeta'), text: path }))
+    : marker === '@'
     ? (result.key === key ? result.files : []).map((path) => ({ name: path, description: t('Workspace file', 'Archivo del espacio'), text: `@${JSON.stringify(path)} ` }))
     : commands.filter((command) => command.name.toLowerCase().includes(query.toLowerCase()))
   const active = Math.min(selected, Math.max(0, items.length - 1))
   function choose(index: number) {
     const item = items[index]
     if (!item) return
-    const start = caret - query.length - 1
+    const start = caret - query.length - (marker === 'directory' ? 0 : 1)
     onChange(value.slice(0, start) + item.text + value.slice(caret))
-    setDismissed(true)
+    setCaret(start + item.text.length)
+    setSelected(0)
+    setDismissed(!(marker === '/' && item.name === '/cd'))
     if (item.name === '/settings' && marker === '/') { settings(); return }
     requestAnimationFrame(() => {
       input.current?.focus()
       input.current?.setSelectionRange(start + item.text.length, start + item.text.length)
     })
   }
-  const listLabel = marker === '@' ? t('Project files', 'Archivos del proyecto') : t('Commands', 'Comandos')
+  const listLabel = marker === 'directory' ? t('Folders', 'Carpetas') : marker === '@' ? t('Project files', 'Archivos del proyecto') : t('Commands', 'Comandos')
   return <div style={{ position: 'relative' }}>
     {open && createPortal(<div style={{ position: 'fixed', ...position, boxSizing: 'border-box', zIndex: 1000, overflowY: 'auto', background: 'var(--surface)', color: 'var(--foreground)', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
       <div>{listLabel} · {t('↑ ↓ select · Enter accept · Esc close', '↑ ↓ seleccionar · Enter aceptar · Esc cerrar')}</div>
@@ -113,8 +119,8 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
           <strong>{item.name}</strong> <small>{item.description}</small>
         </button>)}
       </div>
-      {!items.length && <p role="status">{marker === '@' && result.key !== key ? t('Searching files…', 'Buscando archivos…') : result.key === key && marker === '@' && result.error ? result.error : t('No matches.', 'Sin coincidencias.')}</p>}
-      {marker === '@' && result.key === key && result.truncated && <small>{t('List truncated; type a path to narrow the search.', 'Lista truncada; escribe una ruta para acotar la búsqueda.')}</small>}
+      {!items.length && <p role="status">{(marker === '@' || marker === 'directory') && result.key !== key ? t('Searching paths…', 'Buscando rutas…') : result.key === key && (marker === '@' || marker === 'directory') && result.error ? result.error : t('No matches.', 'Sin coincidencias.')}</p>}
+      {(marker === '@' || marker === 'directory') && result.key === key && result.truncated && <small>{t('List truncated; type a path to narrow the search.', 'Lista truncada; escribe una ruta para acotar la búsqueda.')}</small>}
     </div>, document.body)}
     <textarea ref={input} className="textarea" aria-label={t('Message for Alfred', 'Mensaje para Alfred')} value={value} readOnly={sending} aria-busy={sending}
       aria-autocomplete="list" aria-controls={open ? id : undefined} aria-expanded={open} aria-activedescendant={open && items.length ? `${id}-${active}` : undefined}
@@ -124,6 +130,9 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
       onChange={(event) => { onChange(event.target.value); setCaret(event.target.selectionStart); setDismissed(false); setSelected(0) }}
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing) return
+        if (event.key === 'Tab' && open && items.length && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+          event.preventDefault(); choose(active); return
+        }
         if (event.key === 'Tab') {
           const element = event.currentTarget
           const start = element.selectionStart

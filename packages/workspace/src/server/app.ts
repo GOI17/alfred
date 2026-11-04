@@ -89,6 +89,10 @@ export async function createApp(options: {
     const root = await service.workspace(service.conversation(id(request.params)))
     return listWorkspaceFiles(root, query)
   })
+  app.get('/api/conversations/:id/directories', async (request) => {
+    const { query } = z.object({ query: z.string().max(4096).default('') }).parse(request.query)
+    return service.directorySuggestions(id(request.params), query)
+  })
   app.get('/api/state', async () => service.state())
   app.get('/api/connection', async (request) => {
     const address = app.server.address()
@@ -210,8 +214,15 @@ export async function createApp(options: {
       .refine((body) => body.text.length > 0 || body.attachments.length > 0)
       .parse(request.body)
     const conversation = service.conversation(id(request.params))
-    await service.workspace(conversation)
-    await service.chat.start(conversation.id, body.text, body.provider, body.attachments, body.mode)
+    if (/^\/cd(?:\s|$)/.test(body.text)) {
+      if (body.attachments.length) throw new Error('/cd does not accept attachments.')
+      await service.changeDirectory(conversation.id, body.text.slice(3))
+      return { ok: true }
+    }
+    await service.mutate(async () => {
+      await service.workspace(service.conversation(conversation.id))
+      await service.chat.start(conversation.id, body.text, body.provider, body.attachments, body.mode)
+    })
     return { ok: true }
   })
   app.post('/api/conversations/:id/queue/remove', async (request) => {
@@ -221,8 +232,10 @@ export async function createApp(options: {
   })
   app.post('/api/conversations/:id/queue/resume', async (request) => {
     const conversation = service.conversation(id(request.params))
-    await service.workspace(conversation)
-    await service.chat.resume(conversation.id)
+    await service.mutate(async () => {
+      await service.workspace(service.conversation(conversation.id))
+      await service.chat.resume(conversation.id)
+    })
     return { ok: true }
   })
   app.post('/api/conversations/:id/compact', async (request) => {
