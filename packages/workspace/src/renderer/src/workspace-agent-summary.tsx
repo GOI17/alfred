@@ -3,20 +3,31 @@ import { createPortal } from 'react-dom'
 import type { Conversation, PublicState } from '../../shared/contracts'
 import { ProviderLogo } from './components/provider-logo'
 import { useUI } from './ui-preferences'
+import { hasUnseenCompletion } from './agent-completion'
 
-export function WorkspaceAgentSummary({ state, connected, projectId, workspacePath, label, children, dock = false }: {
-  state: PublicState; connected: boolean; projectId: string; workspacePath?: string; label: string; children: ReactNode; dock?: boolean
+export function WorkspaceAgentSummary({ state, connected, projectId, workspacePath, label, children, selectConversation, dock = false }: {
+  state: PublicState; connected: boolean; projectId: string; workspacePath?: string; label: string; children: ReactNode; selectConversation: (id: string) => void; dock?: boolean
 }) {
   const { t } = useUI()
   const id = useId()
   const anchor = useRef<HTMLDivElement>(null)
   const popup = useRef<HTMLDivElement>(null)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [open, setOpen] = useState(false)
+  function cancelClose() { clearTimeout(closeTimer.current) }
+  function show() { cancelClose(); setOpen(true) }
+  function dismiss() { cancelClose(); setOpen(false) }
+  function scheduleClose() {
+    cancelClose()
+    closeTimer.current = setTimeout(() => {
+      if (!anchor.current?.contains(document.activeElement) && !popup.current?.contains(document.activeElement)) setOpen(false)
+    }, 200)
+  }
+  useEffect(() => () => clearTimeout(closeTimer.current), [])
   const status = (chat: Conversation) => {
     if (!connected) return 'offline'
     const current = state.agents[chat.id]?.status || 'idle'
-    const lastMessage = chat.messages.at(-1)
-    if (current === 'idle' && lastMessage?.role === 'assistant' && !lastMessage.consumptionIncomplete) return 'finished'
+    if (current === 'idle' && hasUnseenCompletion(chat)) return 'finished'
     return current
   }
   const chats = state.conversations.filter((chat) => {
@@ -41,27 +52,39 @@ export function WorkspaceAgentSummary({ state, connected, projectId, workspacePa
   }, [open, dock, summary, chats.length])
   useEffect(() => {
     if (!open) return
-    const dismiss = () => setOpen(false)
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss() }
-    window.addEventListener('resize', dismiss)
-    window.addEventListener('scroll', dismiss, true)
+    const close = () => { clearTimeout(closeTimer.current); setOpen(false) }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      if (popup.current?.contains(document.activeElement)) anchor.current?.querySelector('button')?.focus()
+      close()
+    }
+    const scroll = (event: Event) => { if (!(event.target instanceof Node) || !popup.current?.contains(event.target)) close() }
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !anchor.current?.contains(event.target) && !popup.current?.contains(event.target)) close()
+    }
+    window.addEventListener('resize', close)
+    window.addEventListener('scroll', scroll, true)
     window.addEventListener('keydown', escape)
-    return () => { window.removeEventListener('resize', dismiss); window.removeEventListener('scroll', dismiss, true); window.removeEventListener('keydown', escape) }
+    window.addEventListener('pointerdown', outside)
+    return () => { window.removeEventListener('resize', close); window.removeEventListener('scroll', scroll, true); window.removeEventListener('keydown', escape); window.removeEventListener('pointerdown', outside) }
   }, [open])
-  return <div ref={anchor} className="workspace-agent-anchor" data-dock={dock} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onClick={() => setOpen(false)}>
+  return <div ref={anchor} className="workspace-agent-anchor" data-dock={dock} onMouseEnter={show} onMouseLeave={scheduleClose} onFocus={show} onBlur={scheduleClose} onClick={dismiss} onKeyDown={(event) => {
+    if (event.key === 'ArrowDown' && open && !popup.current?.contains(event.target as Node)) {
+      event.preventDefault(); event.stopPropagation(); popup.current?.querySelector('button')?.focus()
+    }
+  }}>
     {children}
     <span className="workspace-agent-badge" data-status={!connected ? 'offline' : waiting ? 'waiting' : running ? 'running' : 'idle'} aria-label={summary} title={summary}>
       {!connected ? '—' : chats.length}
     </span>
-    {open && createPortal(<div id={id} ref={popup} className="workspace-agent-preview" role="tooltip">
+    {open && createPortal(<div id={id} ref={popup} className="workspace-agent-preview" role="region" aria-label={label} onMouseEnter={show} onMouseLeave={scheduleClose}>
       <strong>{label}</strong><p>{summary}</p>
-      {connected && !sorted.length && <p>{t('No working, waiting for action or finished agents.', 'No hay agentes trabajando, esperando acción o finalizados.')}</p>}
-      {sorted.slice(0, 6).map((chat) => <div className="workspace-agent-preview-row" key={chat.id}>
+      {connected && !sorted.length && <p>{t('No working, waiting for action or unread finished agents.', 'No hay agentes trabajando, esperando acción o finalizados sin ver.')}</p>}
+      {sorted.map((chat) => <button type="button" className="workspace-agent-preview-row" key={chat.id} onClick={(event) => { event.stopPropagation(); dismiss(); selectConversation(chat.id) }}>
         <ProviderLogo provider={chat.lastProvider} />
         <div><span>{chat.title}</span><small>{labels[status(chat)]}</small></div>
         <span className="status-dot" data-status={status(chat)} />
-      </div>)}
-      {sorted.length > 6 && <p>{t('And', 'Y')} {sorted.length - 6} {t('more agents', 'agentes más')}</p>}
+      </button>)}
     </div>, document.body)}
   </div>
 }

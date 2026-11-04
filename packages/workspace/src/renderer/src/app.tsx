@@ -172,9 +172,12 @@ export function App() {
         close={() => setMobileOpen(false)} selectProject={selectSpace}
         selectWorkspace={(path) => { setWorkspacePath(path); setConversationId(state.conversations.find((item) => item.projectId === projectId && item.workspacePath === path)?.id || '') }}
         selectConversation={(id) => {
-          if (floatingIds.length) setFloatingIds((current) => [...current.filter((item) => item !== id), id])
-          else setConversationId(id)
-          setMobileOpen(false)
+          const item = state.conversations.find((chat) => chat.id === id)
+          if (!item) return
+          if (floatingIds.length && item.projectId === projectId && item.workspacePath === workspacePath) {
+            setFloatingIds((current) => [...current.filter((chatId) => chatId !== id), id])
+            setMobileOpen(false)
+          } else openConversation(item)
         }} addProject={addProject} addConversation={() => void newConversation()}
         addWorktree={() => setDialog('worktree')} settings={() => { setMobileOpen(false); setDialog('settings') }}
         removeProject={() => { if (project) setConfirmation({ title: `${t('Remove', 'Eliminar')} ${project.name}`, description: t('Its conversations will be removed from Alfred and its sessions closed. The folder, files, and worktrees will remain on disk.', 'Se eliminarán sus conversaciones de Alfred y se cerrarán sus sesiones. La carpeta, los archivos y los worktrees permanecerán en el disco.'), perform: async () => { await api(`/projects/${project.id}`, undefined, 'DELETE'); await refresh() } }) }}
