@@ -390,3 +390,46 @@ it.each(['reject', 'hang'])('releases the run when tool cleanup will %s and allo
   expect(service.conversation(conversation.id).queue).toEqual([])
   expect(service.state().agents[conversation.id]?.status).toBe('idle')
 }, 15000)
+
+for (const uncertain of [false, true]) it(`recovers persisted execution safely (uncertain=${uncertain})`, async () => {
+  const model = new MockLanguageModelV4({ doStream: async () => ({ stream: new ReadableStream({ start(controller) {
+    controller.enqueue({ type: 'text-start', id: 'reply' })
+    controller.enqueue({ type: 'text-delta', id: 'reply', delta: 'Recovered.' })
+    controller.enqueue({ type: 'text-end', id: 'reply' })
+    controller.enqueue({ type: 'finish', finishReason: { unified: 'stop', raw: 'stop' }, usage })
+    controller.close()
+  } }) }) })
+  const { service, conversation, root } = await setup(model)
+  await service.store.update((db) => {
+    db.conversations[0].execution = { provider: 'openai', uncertain,
+      messages: JSON.stringify([{ role: 'user', content: 'Finish the task' }]),
+      partial: { id: randomUUID(), role: 'assistant', text: '', notes: [], createdAt: new Date().toISOString() } }
+  })
+  expect(service.state().conversations[0]).not.toHaveProperty('execution')
+  const restarted = await WorkspaceService.open(join(root, 'data'), model)
+  cleanup.push(() => restarted.close())
+  await restarted.adapter.legacyBindings!.recover()
+  await expect.poll(() => restarted.chat.isRunning(conversation.id)).toBe(false)
+  if (uncertain) {
+    expect(model.doStreamCalls).toHaveLength(0)
+    expect(restarted.conversation(conversation.id).queuePaused).toBe(true)
+    expect(restarted.state().agents[conversation.id].status).toBe('error')
+  } else {
+    expect(model.doStreamCalls).toHaveLength(1)
+    expect(restarted.conversation(conversation.id).messages.at(-1)?.text).toBe('Recovered.')
+    expect(restarted.conversation(conversation.id).execution).toBeUndefined()
+  }
+})
+
+it('never recovers explicitly stopped work', async () => {
+  const model = new MockLanguageModelV4()
+  const { service, conversation } = await setup(model)
+  await service.store.update((db) => { db.conversations[0].execution = {
+    provider: 'openai', uncertain: false, messages: '[]',
+    partial: { id: randomUUID(), role: 'assistant', text: '', notes: [], createdAt: new Date().toISOString() },
+  } })
+  await service.chat.stop(conversation.id)
+  await service.adapter.legacyBindings!.recover()
+  expect(model.doStreamCalls).toHaveLength(0)
+  expect(service.conversation(conversation.id).execution).toBeUndefined()
+})

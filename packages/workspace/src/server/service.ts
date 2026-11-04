@@ -47,7 +47,7 @@ export class WorkspaceService {
     return {
       worktreeVersion: this.worktreeVersion,
       projects: data.projects,
-      conversations: data.conversations.map((item) => ({
+      conversations: data.conversations.map(({ execution: _execution, ...item }) => ({
         ...item,
         messages: partials[item.id] ? [...item.messages.filter((message) => message.id !== partials[item.id].id), partials[item.id]] : item.messages,
       })),

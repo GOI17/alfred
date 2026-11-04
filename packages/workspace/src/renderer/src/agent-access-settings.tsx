@@ -33,13 +33,13 @@ export function AgentAccessSettings({ conversationId }: { conversationId: string
       setError(`Invalid configuration: ${errorMessage(error)}`)
       return
     }
-    if (!window.confirm('Save agent access?\n\nThe current run will stop and the queue will pause without undoing completed actions. Terminal and MCP can access the host or external services; they are not sandboxed to the workspace. A stdio MCP starts a process even during tool discovery. Only authorize trusted servers.\n\nIn Full access, enabled terminal and authorized MCP servers connect and execute without prompting, including ask permissions. Explicit blocks are respected. Permissions persist for this conversation until revoked.')) return
+    if (!window.confirm('Save agent access?\n\nThe current step will finish safely, then pending work will resume automatically with the new access. Explicitly stopped work stays paused. Completed actions are not undone. Terminal and MCP can access the host or external services; they are not sandboxed to the workspace. A stdio MCP starts a process even during tool discovery. Only authorize trusted servers.\n\nIn Full access, enabled terminal and authorized MCP servers connect and execute without prompting, including ask permissions. Explicit blocks are respected. Permissions persist for this conversation until revoked.')) return
     setSaving(true)
     try {
       await api(`/conversations/${conversationId}/agent-access`, { access: next, confirmed: true }, 'PUT')
       setAccess(next)
       setServers(JSON.stringify(next.servers, null, 2))
-      setNotice('Access saved. The queue remains paused. MCP servers will connect when the next agent run starts.')
+      setNotice('Access saved. Pending work resumes automatically unless explicitly paused or blocked by an uncertain tool outcome. MCP connection approvals still apply.')
     } catch (error) { setError(errorMessage(error)) }
     finally { setSaving(false) }
   }
@@ -61,7 +61,7 @@ export function AgentAccessSettings({ conversationId }: { conversationId: string
       <p>Permissions: <code>blocked</code>, <code>ask</code> or <code>allow</code>. Server permissions are inherited; <code>tools</code> allows overrides by tool name. A blocked server always remains blocked.</p>
       <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify([{ id: 'my-server', transport: { type: 'http', url: 'http://localhost:3000/mcp' }, permission: 'ask', tools: { restricted_tool: 'blocked' } }], null, 2)}</pre>
       <p>To revoke access, uncheck terminal, block the server, or remove it from the list and save. Connections close when the run completes or stops; their status and errors appear in chat notes.</p>
-      <Button type="button" onClick={() => void save()} disabled={saving}>{saving ? 'Stopping and saving…' : 'Stop and save access'}</Button>
+      <Button type="button" onClick={() => void save()} disabled={saving}>{saving ? 'Applying access…' : 'Save access and continue'}</Button>
     </fieldset>}
     {notice && <p role="status">{notice}</p>}
     {error && <p role="alert" className="error-text">{error}</p>}

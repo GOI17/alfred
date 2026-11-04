@@ -68,6 +68,7 @@ export async function createApp(options: {
   revealFileRoutes(app, service)
   projectSelection(app, service, options.pickFolder)
   await configureAgentAccess(app, service, options.directory, harnesses)
+  app.addHook('onReady', async () => { await service.adapter.legacyBindings?.recover() })
   app.setErrorHandler((error, _request, reply) => {
     const message =
       error instanceof ZodError
