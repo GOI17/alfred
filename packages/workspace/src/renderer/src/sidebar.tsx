@@ -101,7 +101,7 @@ export function Sidebar({ state, project, conversation, worktrees, workspacePath
             <summary title={workspacePath}><GitBranch size={14} /><span>{activeWorkspace?.branch || (workspacePath === project.path ? t('Main', 'Principal') : t('Active workspace', 'Espacio activo'))}</span><ChevronDown size={14} /></summary>
             <div className="workspace-list" role="group" aria-label={t('Workspaces', 'Espacios de trabajo')}>
               {worktrees.map((tree) => <div key={tree.path} className="workspace-row" data-active={workspacePath === tree.path}>
-                <WorkspaceAgentSummary state={state} connected={connected} projectId={project.id} workspacePath={tree.path} label={tree.branch}>
+                <WorkspaceAgentSummary state={state} connected={connected} projectId={project.id} workspacePath={tree.path} label={tree.branch} selectConversation={selectConversation}>
                   <button aria-pressed={workspacePath === tree.path} onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); selectWorkspace(tree.path) }}><GitBranch size={14} /><span>{tree.branch}</span>{tree.main && <span className="tiny-label">{t('main', 'principal')}</span>}</button>
                 </WorkspaceAgentSummary>
                 {!tree.main && tree.path !== project.path && <Button variant="ghost" size="icon" aria-label={`${t('Delete worktree', 'Eliminar worktree')} ${tree.branch}`} onClick={() => removeWorktree(tree.path)}><X size={13} /></Button>}
@@ -130,7 +130,7 @@ export function Sidebar({ state, project, conversation, worktrees, workspacePath
       {!connected && <p className="sidebar-connection" role="status">{t('Reconnecting…', 'Reconectando…')}</p>}
       <div className="space-dock">
         <nav className="space-switcher" aria-label={t('Spaces', 'Espacios')}>
-          {state.projects.map((item, index) => <WorkspaceAgentSummary key={item.id} state={state} connected={connected} projectId={item.id} label={item.name} dock>
+          {state.projects.map((item, index) => <WorkspaceAgentSummary key={item.id} state={state} connected={connected} projectId={item.id} label={item.name} selectConversation={selectConversation} dock>
             <button className="space-icon" data-active={project?.id === item.id} aria-pressed={project?.id === item.id} aria-label={item.name} onClick={() => { if (project?.id !== item.id) selectProject(item.id) }} onKeyDown={(event) => {
               const next = event.key === 'ArrowRight' ? (index + 1) % state.projects.length : event.key === 'ArrowLeft' ? (index - 1 + state.projects.length) % state.projects.length : event.key === 'Home' ? 0 : event.key === 'End' ? state.projects.length - 1 : undefined
               if (next !== undefined) { event.preventDefault(); event.currentTarget.closest('nav')?.querySelectorAll<HTMLButtonElement>('button')[next]?.focus() }
