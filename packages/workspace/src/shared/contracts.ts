@@ -75,6 +75,11 @@ export const conversationSchema = z.object({
   subagents: z.array(harnessProjectionSchema).max(10).optional(),
   queue: z.array(queuedMessageSchema).max(20).optional(),
   queuePaused: z.boolean().optional(),
+  // Private runtime checkpoint; omitted from public state.
+  execution: z.object({
+    provider: providerId, messages: z.string(), partial: messageSchema,
+    uncertain: z.boolean(),
+  }).optional(),
   compaction: z.object({
     summary: z.string(), throughMessageId: z.string().uuid(), createdAt: z.string(),
     reduction: z.union([z.literal(30), z.literal(50), z.literal(70)]),

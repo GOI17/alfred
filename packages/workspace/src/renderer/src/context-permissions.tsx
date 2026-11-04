@@ -78,13 +78,12 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
     catch (error) { setCompactError(errorMessage(error)) }
     finally { compactLock.current = false; setCompacting(false) }
   }
-  async function change(value: PermissionMode, stopFirst = false) {
+  async function change(value: PermissionMode, confirmedChange = false) {
     if (lock.current || value === mode) return
-    if (busy && !stopFirst) { setPending(value); setError(''); return }
+    if (busy && !confirmedChange) { setPending(value); setError(''); return }
     if (value === 'full-access' && !window.confirm(t('Enable Full access for this conversation?\n\nThe agent can create and overwrite workspace files without approval, including when processing the queue. Enabled terminal and authorized MCP tools can run automatically, including ask permissions. Explicit blocks are respected. Terminal and MCP are not sandboxed to the workspace. Stopping does not undo completed actions.\n\nThis permission persists across reloads until you change it.', '¿Activar acceso completo para esta conversación?\n\nEl agente puede crear y reemplazar archivos sin aprobación, incluso al procesar la cola. Terminal habilitada y herramientas MCP autorizadas pueden ejecutarse automáticamente, incluidos permisos de consulta. Se respetan los bloqueos explícitos. Terminal y MCP no están aislados al workspace. Detener no deshace acciones completadas.\n\nEste permiso persiste al recargar hasta que lo cambies.'))) return
     lock.current = true; setSaving(true); setError('')
     try {
-      if (stopFirst) await api(`/conversations/${conversation.id}/stop`, {})
       await api(`/conversations/${conversation.id}/permissions`, { mode: value, confirmed: value === 'full-access' }, 'PUT')
       setPending(null)
     } catch (error) { setError(errorMessage(error)) }
@@ -117,8 +116,8 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
       </fieldset>
       {mode === 'full-access' && <p role="status">{t('Full access active: authorized operations run automatically. Stopping does not undo completed changes.', 'Acceso completo activo: las operaciones autorizadas se ejecutan automáticamente. Detener no deshace cambios completados.')}</p>}
       <p>{t('Saved per conversation and applied to queued messages. Does not change manual terminal, browser, or Git controls.', 'Guardado por conversación y aplicado a mensajes en cola. No cambia los controles manuales de terminal, navegador o Git.')}</p>
-      {busy && !pending && <p role="status">{t('Select another permission to stop the agent and change it.', 'Selecciona otro permiso para detener el agente y cambiarlo.')}</p>}
-      {pending && pending !== mode && <div><p role="status">{t('Switch to', 'Cambiar a')} <strong>{permissionLabel(pending)}</strong>: {t('the run will stop, pending approval will be rejected, and the queue will pause. Completed writes will not be undone and work will not resume automatically.', 'la ejecución se detendrá, la aprobación pendiente se rechazará y la cola se pausará. Las escrituras completadas no se desharán ni se reanudará el trabajo automáticamente.')}</p><Button type="button" disabled={saving} onClick={() => void change(pending, true)}>{t('Stop and change permissions', 'Detener y cambiar permisos')}</Button><Button type="button" variant="secondary" disabled={saving} onClick={() => setPending(null)}>{t('Cancel', 'Cancelar')}</Button></div>}
+      {busy && !pending && <p role="status">{t('Select another permission to apply it and continue automatically.', 'Selecciona otro permiso para aplicarlo y continuar automáticamente.')}</p>}
+      {pending && pending !== mode && <div><p role="status">{t('Switch to', 'Cambiar a')} <strong>{permissionLabel(pending)}</strong>: {t('the current step will finish safely, pending approval will be rejected, and work will resume automatically with the new permissions. Completed actions will not be undone.', 'el paso actual terminará de forma segura, la aprobación pendiente se rechazará y el trabajo continuará automáticamente con los nuevos permisos. Las acciones completadas no se desharán.')}</p><Button type="button" disabled={saving} onClick={() => void change(pending, true)}>{t('Apply and continue', 'Aplicar y continuar')}</Button><Button type="button" variant="secondary" disabled={saving} onClick={() => setPending(null)}>{t('Cancel', 'Cancelar')}</Button></div>}
       {saving && <p role="status">{t('Saving permissions…', 'Guardando permisos…')}</p>}
       {error && <p role="alert" className="error-text">{error}</p>}
       <p>{t('Configure terminal and MCP servers in Settings → Terminal and MCP.', 'Configura terminal y servidores MCP en Ajustes → Terminal y MCP.')}</p>

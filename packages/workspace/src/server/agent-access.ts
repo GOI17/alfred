@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { agentAccessSchema, defaultAgentAccess, type AgentAccess } from '../shared/agent-access.js'
+import { agentAccessSchema, defaultAgentAccess, mcpServerSchema, type AgentAccess } from '../shared/agent-access.js'
 import type { PermissionMode } from '../shared/contracts.js'
 import type { WorkspaceService } from './service.js'
 import { executeAgentCommand } from './agent-terminal.js'
@@ -18,6 +18,7 @@ import type { HarnessMcpTransport } from './harness-mcp.js'
 export interface CapabilityRequest {
   id: string; root: string; mode: PermissionMode; signal: AbortSignal
   approve: (title: string, content: string) => Promise<boolean>
+  restart?: () => void
   note: (message: string) => void
 }
 export interface Capabilities { tools: ToolSet; close: () => Promise<void> }
@@ -32,6 +33,20 @@ export async function configureAgentAccess(app: FastifyInstance, service: Worksp
   const connectionGrants = new Map<string, Set<string>>()
   let tail: Promise<unknown> = Promise.resolve()
   const conversationId = (params: unknown) => z.object({ id: z.string().uuid() }).parse(params).id
+  const save = (id: string, access: AgentAccess) => {
+    const operation = tail.then(async () => {
+      service.conversation(id)
+      const next = { ...settings, [id]: access }
+      const temporary = `${path}.${randomUUID()}.tmp`
+      await writeFile(temporary, JSON.stringify(next), { mode: 0o600 })
+      await rename(temporary, path)
+      settings = next
+      connectionGrants.delete(id)
+    })
+    tail = operation.catch(() => {})
+    return operation
+  }
+  const rejected = new Map<string, Set<string>>()
   app.get('/api/conversations/:id/agent-access', async (request) => {
     const id = conversationId(request.params)
     service.conversation(id)
@@ -45,23 +60,10 @@ export async function configureAgentAccess(app: FastifyInstance, service: Worksp
       if (!harnesses) throw new Error('Harness discovery is unavailable.')
       await harnesses.mcp(await service.workspace(service.conversation(id)), server.transport)
     }
-    // Stop before revocation/update: pending approvals and in-flight tools are cancelled.
-    await service.chat.stop(id)
-    const operation = tail.then(async () => {
-      service.conversation(id)
-      if (service.chat.isRunning(id)) throw new Error('The agent restarted. Stop it and try again.')
-      const next = { ...settings, [id]: body.access }
-      const temporary = `${path}.${randomUUID()}.tmp`
-      await writeFile(temporary, JSON.stringify(next), { mode: 0o600 })
-      await rename(temporary, path)
-      settings = next
-      connectionGrants.delete(id)
-    })
-    tail = operation.catch(() => {})
-    await operation
+    await bindings.reconfigure(id, () => save(id, body.access))
     return { ok: true }
   })
-  bindings.capabilities = async ({ id, root, mode, signal, approve, note }): Promise<Capabilities> => {
+  bindings.capabilities = async ({ id, root, mode, signal, approve, note, restart }): Promise<Capabilities> => {
     const access = structuredClone(settings[id] || defaultAgentAccess())
     const tools: ToolSet = {}
     const clients: Client[] = []
@@ -70,6 +72,34 @@ export async function configureAgentAccess(app: FastifyInstance, service: Worksp
     signal.addEventListener('abort', abort, { once: true })
     const finish = async () => { signal.removeEventListener('abort', abort); await close() }
     if (mode === 'read-only') return { tools, close: finish }
+    tools.request_access = tool({
+      description: 'Request explicit user consent to enable terminal or an MCP server for this conversation. Supply the exact MCP connection configuration; never invent one. Approval enables access, not blanket execution permission. Do not retry rejected requests.',
+      inputSchema: z.object({ capability: z.enum(['terminal', 'mcp']), reason: z.string().min(1).max(2000), server: mcpServerSchema.optional() }),
+      execute: async ({ capability, reason, server }) => {
+        signal.throwIfAborted()
+        const key = capability === 'terminal' ? 'terminal' : `mcp:${server?.id}`
+        if (rejected.get(id)?.has(key)) return { enabled: false, rejected: true }
+        const next = structuredClone(settings[id] || defaultAgentAccess())
+        if (capability === 'terminal' && next.terminal) return { enabled: true }
+        if (capability === 'mcp' && !server) return { enabled: false, error: 'Exact MCP server configuration required.' }
+        if (!await approve(`Enable ${capability === 'terminal' ? 'terminal access' : `MCP: ${server!.id}`}`, JSON.stringify({ reason, scope: 'This conversation', ...(server ? { server: { ...server, permission: 'ask' } } : {}) }, null, 2))) {
+          const denied = rejected.get(id) || new Set<string>()
+          denied.add(key); rejected.set(id, denied)
+          return { enabled: false, rejected: true }
+        }
+        signal.throwIfAborted()
+        if (capability === 'terminal') next.terminal = true
+        else {
+          const existing = next.servers.findIndex((item) => item.id === server!.id)
+          const approved = { ...server!, permission: 'ask' as const, tools: {} }
+          if (existing < 0) next.servers.push(approved)
+          else next.servers[existing] = approved
+        }
+        await save(id, agentAccessSchema.parse(next))
+        restart?.()
+        return { enabled: true, message: 'Access authorized. Continue with refreshed tools; execution permissions still apply.' }
+      },
+    })
     if (access.terminal) tools.execute_command = tool({
       description: 'Run a command on the host from the workspace. It is not sandboxed. Do not access secrets. No automatic retries. Use non-interactive commands.',
       inputSchema: z.object({ command: z.string().trim().min(1).max(8000), timeoutMs: z.number().int().min(100).max(120000).default(60000) }),

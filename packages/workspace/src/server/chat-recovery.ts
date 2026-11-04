@@ -22,6 +22,7 @@ export async function generateWithRecovery(options: {
   text: (text: string) => void
   tool: (name: string) => void
   usage?: (usage: LanguageModelUsage) => void | Promise<void>
+  checkpoint?: (messages: ModelMessage[]) => Promise<void>
   retry: (notice: string) => void
 }) {
   let messages = [...options.messages]
@@ -39,9 +40,9 @@ export async function generateWithRecovery(options: {
     try {
       const output = streamText({
         model: options.model, messages, system: options.system, tools: options.tools,
-        abortSignal: options.signal, stopWhen: stepCountIs(12),
+        abortSignal: options.signal, stopWhen: [stepCountIs(12), () => options.signal.aborted],
         maxOutputTokens: 8192, maxRetries: 0, providerOptions: { openai: { store: false } },
-        onStepFinish: async ({ response, usage }) => { completed = [...response.messages]; await options.usage?.(usage) },
+        onStepFinish: async ({ response, usage }) => { completed = [...response.messages]; await options.usage?.(usage); await options.checkpoint?.([...messages, ...completed]) },
       })
       for await (const part of output.fullStream) {
         if (part.type === 'text-delta') {

@@ -122,3 +122,46 @@ it('remembers MCP connection consent per conversation and invalidates it on sett
     await app.close(); await service.close(); await rm(directory, { recursive: true, force: true })
   }
 })
+
+for (const capability of ['terminal', 'mcp'] as const) for (const accepted of [true, false]) it(`requests ${capability} consent and refreshes only after approval (${accepted})`, async () => {
+  const { default: Fastify } = await import('fastify')
+  const { configureAgentAccess } = await import('../src/server/agent-access.js')
+  const { WorkspaceService } = await import('../src/server/service.js')
+  const { mkdtemp, rm } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { randomUUID } = await import('node:crypto')
+  const directory = await mkdtemp(join(tmpdir(), 'alfred-consent-test-'))
+  const app = Fastify()
+  const service = await WorkspaceService.open(directory)
+  const id = randomUUID()
+  vi.spyOn(service, 'conversation').mockImplementation(() => ({ id }) as ReturnType<typeof service.conversation>)
+  const approve = vi.fn(async () => accepted)
+  const restart = vi.fn()
+  try {
+    await configureAgentAccess(app, service, directory)
+    const request = { id, root: directory, mode: 'full-access' as const, signal: new AbortController().signal, approve, restart, note: () => {} }
+    const initial = await service.adapter.legacyBindings!.capabilities!(request)
+    expect(initial.tools.execute_command).toBeUndefined()
+    const execute = initial.tools.request_access.execute!
+    await execute({ capability, reason: 'Run project tests', ...(capability === 'mcp' ? { server: { ...server, permission: 'allow', tools: { dangerous: 'allow' } } } : {}) }, { toolCallId: 'consent', messages: [], context: {}  })
+    expect(approve).toHaveBeenCalledTimes(1)
+    expect(restart).toHaveBeenCalledTimes(accepted ? 1 : 0)
+    const access = await app.inject({ method: 'GET', url: `/api/conversations/${id}/agent-access` })
+    if (capability === 'mcp') {
+      expect(access.json().servers).toEqual(accepted ? [{ ...server, tools: {} }] : [])
+      await initial.close()
+      return
+    }
+    expect(access.json().terminal).toBe(accepted)
+    const refreshed = await service.adapter.legacyBindings!.capabilities!(request)
+    expect(!!refreshed.tools.execute_command).toBe(accepted)
+    if (!accepted) {
+      await refreshed.tools.request_access.execute!({ capability: 'terminal', reason: 'Retry' }, { toolCallId: 'retry', messages: [], context: {}  })
+      expect(approve).toHaveBeenCalledTimes(1)
+    }
+    await initial.close(); await refreshed.close()
+  } finally {
+    await app.close(); await service.close(); await rm(directory, { recursive: true, force: true })
+  }
+})
