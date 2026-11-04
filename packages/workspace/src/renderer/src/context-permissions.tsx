@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import * as Dialog from '@radix-ui/react-dialog'
 import { ShieldCheck, X } from 'lucide-react'
 import type { Conversation, PermissionMode, ProviderId, PublicState } from '../../shared/contracts'
-import { latestContextUsage, contextRemaining, conversationConsumption } from '../../shared/context-usage'
+import { latestContextUsage, contextUsedTokens, contextRemaining, conversationConsumption, compactTokenCount, compactedTextEstimate } from '../../shared/context-usage'
 import { api, errorMessage } from './api'
 import { Button } from './components/ui/button'
 import { useUI } from './ui-preferences'
@@ -62,10 +62,11 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
   const consumption = conversationConsumption(conversation)
   const format = (value: number) => value.toLocaleString(language)
   const consumptionLabel = consumption.incomplete && consumption.total === 0 ? t('Unavailable', 'No disponible') : `${format(consumption.total)} tokens${consumption.incomplete ? t(' (partial)', ' (parcial)') : ''}`
-  const used = usage?.inputTokens
+  const estimate = usage ? undefined : compactedTextEstimate(conversation)
+  const used = usage ? contextUsedTokens(usage) : estimate
   const remaining = usage ? contextRemaining(usage) : undefined
   const percentage = used !== undefined && usage?.limit && usage.limit > 0 ? Math.round(used / usage.limit * 100) : undefined
-  const ringValue = percentage === undefined ? 0 : Math.max(0, Math.min(100, percentage))
+  const tokenLabel = used === undefined ? '—' : `${estimate === undefined ? '' : '≈'}${compactTokenCount(used)}`
   const contextLabel = used === undefined ? '—' : usage?.limit === undefined ? `${format(used)} tokens` : `${format(used)} / ${format(usage.limit)} tokens`
   const permissionLabel = (value: PermissionMode) => value === 'read-only' ? t('Read only', 'Solo lectura') : value === 'full-access' ? t('Full access', 'Acceso completo') : t('Ask for approval', 'Solicitar aprobación')
   async function compact(reduction: 30 | 50 | 70) {
@@ -90,11 +91,12 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
     finally { lock.current = false; setSaving(false) }
   }
   return <>
-    <Control label={`${t('Context', 'Contexto')}: ${percentage === undefined ? '—' : `${percentage}%`}`} icon={<svg className="context-ring" viewBox="0 0 32 32" aria-hidden="true" data-level={percentage === undefined ? 'unknown' : percentage >= 90 ? 'danger' : percentage >= 70 ? 'warning' : 'normal'}><circle className="context-ring-track" cx="16" cy="16" r="12" fill="none" strokeWidth="3" /><circle className="context-ring-value" cx="16" cy="16" r="12" fill="none" strokeWidth="3" pathLength="100" strokeDasharray={`${ringValue} 100`} strokeLinecap={ringValue ? 'round' : 'butt'} /></svg>}>
-      <p><strong>{t('Context', 'Contexto')}:</strong> {contextLabel}</p>
-      {percentage === undefined && <p>{t('Percentage unavailable until both input usage and the model limit are known.', 'Porcentaje no disponible hasta conocer el uso de entrada y el límite del modelo.')}</p>}
+    <Control label={`${t('Context', 'Contexto')}: ${tokenLabel} tokens`} icon={<div className="context-token-count" aria-hidden="true"><strong>{tokenLabel}</strong><span className="context-progress-track"><span style={{ width: `${Math.min(100, Math.max(0, percentage ?? 0))}%` }} /></span><small>{percentage === undefined ? '—' : `${percentage}%`}</small></div>}>
+      <p><strong>{t('Context', 'Contexto')}:</strong> {estimate === undefined ? '' : '≈'}{contextLabel}</p>
+      {percentage !== undefined && <><progress className="context-progress" aria-label={t('Context usage', 'Uso de contexto')} max={100} value={Math.min(100, percentage)} /><p>{percentage}% {t('used', 'usado')}</p></>}
+      {percentage === undefined && <p>{t('Percentage unavailable until both context usage and the model limit are known.', 'Porcentaje no disponible hasta conocer el uso de contexto y el límite del modelo.')}</p>}
       {remaining !== undefined && <p>{t('Remaining at last measurement', 'Disponible en la última medición')}: {format(remaining)} tokens.</p>}
-      <p>{t('Context is the last measured input, not a live count. After compaction it is measured again on the next request.', 'El contexto es la última entrada medida, no un contador en vivo. Tras compactar se mide nuevamente en la siguiente solicitud.')}</p>
+      <p>{t('Context is input + output from the last measured model call. SDK totals include cache and reasoning once. After compaction, ≈ indicates a text-only estimate (characters / 4), excluding instructions, tools and attachments, until the next runtime measurement.', 'El contexto es entrada + salida de la última llamada medida al modelo. Los totales del SDK incluyen caché y razonamiento una sola vez. Tras compactar, ≈ indica una estimación del texto (caracteres / 4), sin instrucciones, herramientas ni adjuntos, hasta la siguiente medición del runtime.')}</p>
       <p><strong>{t('Total consumed', 'Consumo acumulado')}:</strong> {consumptionLabel}</p>
       <p>{t('Recorded input + output across calls, including continuations and compaction. Cached input is counted once per call. This is not remaining context or subscription quota.', 'Entrada + salida registradas entre llamadas, incluidas continuaciones y compactación. La entrada en caché se cuenta una vez por llamada. No es el contexto disponible ni la cuota de suscripción.')}</p>
       {consumption.incomplete && <p role="status">{t('Historical usage is incomplete; missing calls cannot be reconstructed.', 'El consumo histórico es incompleto; las llamadas faltantes no pueden reconstruirse.')}</p>}

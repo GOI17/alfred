@@ -1,11 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { FolderPlus, GitBranch, Plus, Settings2, X, PanelLeftClose, ChevronDown, Pin } from 'lucide-react'
 import type { Conversation, Project, PublicState, Worktree } from '../../shared/contracts'
 import { Button } from './components/ui/button'
 import { ProviderLogo } from './components/provider-logo'
 import { ProjectActions } from './components/project-actions'
+import { WorkspaceAgentSummary } from './workspace-agent-summary'
 import { useUI } from './ui-preferences'
+import { SidebarResizer } from './sidebar-resizer'
 import './assets/spaces.css'
 
 const spaceColors = ['#203e30', '#253b59', '#50334f', '#51402c', '#29494c']
@@ -33,34 +34,6 @@ export function Sidebar({ state, project, conversation, worktrees, workspacePath
   removeConversation: (id: string) => void; removeWorktree: (path: string) => void; settings: () => void; close: () => void
 }) {
   const { t } = useUI()
-  const [dockTooltip, setDockTooltip] = useState<{ label: string; x: number; y: number } | null>(null)
-  const dockTooltipRef = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const element = dockTooltipRef.current
-    if (!element || !dockTooltip) return
-    const width = element.getBoundingClientRect().width
-    const left = Math.max(8, Math.min(window.innerWidth - width - 8, dockTooltip.x - width / 2))
-    element.style.left = `${left}px`
-  }, [dockTooltip])
-  function showDockTooltip(target: EventTarget) {
-    if (!(target instanceof Element)) return
-    const button = target.closest<HTMLButtonElement>('.space-icon')
-    if (!button) { setDockTooltip(null); return }
-    const rect = button.getBoundingClientRect()
-    setDockTooltip({ label: button.getAttribute('aria-label') || '', x: rect.left + rect.width / 2, y: rect.top - 10 })
-  }
-  useEffect(() => {
-    const dismiss = () => setDockTooltip(null)
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss() }
-    window.addEventListener('resize', dismiss)
-    window.addEventListener('scroll', dismiss, true)
-    window.addEventListener('keydown', escape)
-    return () => {
-      window.removeEventListener('resize', dismiss)
-      window.removeEventListener('scroll', dismiss, true)
-      window.removeEventListener('keydown', escape)
-    }
-  }, [])
   const conversationList = useRef<HTMLElement>(null)
   useEffect(() => {
     const list = conversationList.current
@@ -128,7 +101,9 @@ export function Sidebar({ state, project, conversation, worktrees, workspacePath
             <summary title={workspacePath}><GitBranch size={14} /><span>{activeWorkspace?.branch || (workspacePath === project.path ? t('Main', 'Principal') : t('Active workspace', 'Espacio activo'))}</span><ChevronDown size={14} /></summary>
             <div className="workspace-list" role="group" aria-label={t('Workspaces', 'Espacios de trabajo')}>
               {worktrees.map((tree) => <div key={tree.path} className="workspace-row" data-active={workspacePath === tree.path}>
-                <button aria-pressed={workspacePath === tree.path} onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); selectWorkspace(tree.path) }} title={tree.path}><GitBranch size={14} /><span>{tree.branch}</span>{tree.main && <span className="tiny-label">{t('main', 'principal')}</span>}</button>
+                <WorkspaceAgentSummary state={state} connected={connected} projectId={project.id} workspacePath={tree.path} label={tree.branch}>
+                  <button aria-pressed={workspacePath === tree.path} onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); selectWorkspace(tree.path) }}><GitBranch size={14} /><span>{tree.branch}</span>{tree.main && <span className="tiny-label">{t('main', 'principal')}</span>}</button>
+                </WorkspaceAgentSummary>
                 {!tree.main && tree.path !== project.path && <Button variant="ghost" size="icon" aria-label={`${t('Delete worktree', 'Eliminar worktree')} ${tree.branch}`} onClick={() => removeWorktree(tree.path)}><X size={13} /></Button>}
               </div>)}
               {project.kind === 'git' && <button className="sidebar-text-button" onClick={addWorktree}><Plus size={14} />{t('New worktree', 'Nuevo worktree')}</button>}
@@ -153,20 +128,21 @@ export function Sidebar({ state, project, conversation, worktrees, workspacePath
         </> : <button className="project-item" onClick={addProject}><FolderPlus size={18} /><span>{t('Your first space', 'Tu primer espacio')}</span></button>}
       </div>
       {!connected && <p className="sidebar-connection" role="status">{t('Reconnecting…', 'Reconectando…')}</p>}
-      <div className="space-dock" onMouseOver={(event) => showDockTooltip(event.target)} onMouseLeave={() => setDockTooltip(null)} onFocus={(event) => showDockTooltip(event.target)} onBlur={() => setDockTooltip(null)} onClick={() => setDockTooltip(null)}>
+      <div className="space-dock">
         <nav className="space-switcher" aria-label={t('Spaces', 'Espacios')}>
-          {state.projects.map((item, index) => <button key={item.id} className="space-icon" data-active={project?.id === item.id} aria-pressed={project?.id === item.id} aria-label={item.name} onClick={() => { if (project?.id !== item.id) selectProject(item.id) }} onKeyDown={(event) => {
-            const next = event.key === 'ArrowRight' ? (index + 1) % state.projects.length : event.key === 'ArrowLeft' ? (index - 1 + state.projects.length) % state.projects.length : event.key === 'Home' ? 0 : event.key === 'End' ? state.projects.length - 1 : undefined
-            if (next !== undefined) { event.preventDefault(); event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('button')[next]?.focus() }
-          }}>
-            <span aria-hidden="true" style={{ fontSize: 22 }}>{spaceSymbols[spaceIndex(item.id) % spaceSymbols.length]}</span>
-            <span className="space-initial" aria-hidden="true">{item.name.slice(0, 1).toUpperCase()}</span>
-            {connected && state.conversations.some((chat) => chat.projectId === item.id && state.agents[chat.id]?.status === 'running') && <span className="status-dot" data-status="running" />}
-          </button>)}
+          {state.projects.map((item, index) => <WorkspaceAgentSummary key={item.id} state={state} connected={connected} projectId={item.id} label={item.name} dock>
+            <button className="space-icon" data-active={project?.id === item.id} aria-pressed={project?.id === item.id} aria-label={item.name} onClick={() => { if (project?.id !== item.id) selectProject(item.id) }} onKeyDown={(event) => {
+              const next = event.key === 'ArrowRight' ? (index + 1) % state.projects.length : event.key === 'ArrowLeft' ? (index - 1 + state.projects.length) % state.projects.length : event.key === 'Home' ? 0 : event.key === 'End' ? state.projects.length - 1 : undefined
+              if (next !== undefined) { event.preventDefault(); event.currentTarget.closest('nav')?.querySelectorAll<HTMLButtonElement>('button')[next]?.focus() }
+            }}>
+              <span aria-hidden="true" style={{ fontSize: 22 }}>{spaceSymbols[spaceIndex(item.id) % spaceSymbols.length]}</span>
+              <span className="space-initial" aria-hidden="true">{item.name.slice(0, 1).toUpperCase()}</span>
+            </button>
+          </WorkspaceAgentSummary>)}
         </nav>
-        <button className="space-icon space-add" onClick={addProject} aria-label={t('Add space', 'Agregar espacio')}><Plus size={22} /></button>
+        <button className="space-icon space-add" onClick={addProject} aria-label={t('Add space', 'Agregar espacio')} title={t('Add space', 'Agregar espacio')}><Plus size={22} /></button>
       </div>
     </aside>
-    {dockTooltip && createPortal(<div ref={dockTooltipRef} className="space-dock-tooltip" role="tooltip" style={{ left: dockTooltip.x, top: dockTooltip.y }}>{dockTooltip.label}</div>, document.body)}
+    <SidebarResizer />
   </>
 }

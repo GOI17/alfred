@@ -253,3 +253,37 @@
   .composer-footer .attachment-controls > .context-control:last-child { max-width: 100%; }
   .composer-footer .attachment-controls > .context-control:last-child > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+
+.sidebar-resizer { display: none; }
+@media (min-width: 701px) {
+  .app-shell[data-sidebar-collapsed='false'] .sidebar-resizer {
+    display: block;
+    position: absolute;
+    inset: 0 -4px 0 auto;
+    width: 8px;
+    z-index: 1;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+  }
+  .sidebar-resizer::after {
+    content: '';
+    position: absolute;
+    inset: 0 3px;
+    background: transparent;
+  }
+  .sidebar-resizer:hover::after,
+  .sidebar-resizer:focus-visible::after,
+  .workspace-sidebar-container[data-resizing='true'] .sidebar-resizer::after {
+    background: var(--success);
+  }
+  .sidebar-resizer:focus-visible { outline: 2px solid var(--success); outline-offset: -2px; }
+  .workspace-sidebar-container[data-resizing='true'] { transition: none; }
+  .app-shell:has(.workspace-sidebar-container[data-resizing='true']) {
+    cursor: col-resize;
+    user-select: none;
+  }
+  .app-shell:has(.workspace-sidebar-container[data-resizing='true']) iframe {
+    pointer-events: none;
+  }
+}
