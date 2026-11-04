@@ -37,19 +37,35 @@
 .space-icon:hover { background: var(--sidebar-active); color: var(--sidebar-foreground); }
 .space-icon[data-active='true'] { background: #ffffff17; color: #fff; }
 .space-icon[data-active='true']::after { content: ''; position: absolute; bottom: 2px; width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
-.space-dock-tooltip { position: fixed; transform: translateY(-100%); width: max-content; max-width: min(240px, calc(100vw - 16px)); overflow-wrap: anywhere; padding: 9px 12px; background: var(--surface); color: var(--foreground); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; z-index: 1000; pointer-events: none; box-shadow: 0 6px 20px var(--overlay); }
 .space-add { margin-left: auto; }
 .space-initial { position: absolute; right: 3px; bottom: 6px; font-size: 8px; font-weight: 700; line-height: 1; }
-.space-icon .status-dot { position: absolute; top: 3px; right: 3px; }
 .space-overview-trigger { display: flex; align-items: center; flex: 1; min-width: 0; padding: 10px 0; font-weight: 600; }
 .space-overview-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-agent-anchor { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; }
+.workspace-agent-anchor[data-dock='true'] { flex: 0 0 auto; }
+.workspace-agent-anchor > button:not(.space-icon) { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; min-height: 36px; padding: 7px 42px 7px 9px; border: 0; border-radius: var(--radius-sm); background: transparent; color: inherit; font-size: var(--text-xs); text-align: left; }
+.workspace-agent-anchor > button:not(.space-icon):hover { background: var(--sidebar-active); }
+.workspace-agent-anchor > button > span:not(.tiny-label) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-agent-badge { position: absolute; right: 6px; pointer-events: none; min-width: 18px; padding: 2px 4px; border-radius: 6px; background: #ffffff18; color: var(--sidebar-muted); font-size: 10px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.workspace-agent-anchor[data-dock='true'] .workspace-agent-badge { top: 0; right: 0; font-size: 9px; min-width: 15px; padding: 1px 3px; }
+.workspace-agent-badge[data-status='running'] { background: #b9f5d0; color: #17462a; }
+.workspace-agent-badge[data-status='waiting'] { background: #ffe2a2; color: #624100; }
+.workspace-agent-badge[data-status='error'] { background: #ffc4bd; color: #741f16; }
+.workspace-agent-preview { position: fixed; width: 300px; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow: hidden; overflow-wrap: anywhere; padding: 14px; background: var(--surface); color: var(--foreground); border: 1px solid var(--border); border-radius: 12px; font-size: 12px; z-index: 1000; pointer-events: none; box-shadow: 0 6px 20px var(--overlay); }
+.workspace-agent-preview > strong { display: block; font-size: 14px; }
+.workspace-agent-preview > p { margin: 6px 0; opacity: .75; }
+.workspace-agent-preview-row { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-top: 1px solid var(--border); }
+.workspace-agent-preview-row > div { flex: 1; min-width: 0; }
+.workspace-agent-preview-row > div > span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-agent-preview-row small { display: block; margin-top: 3px; opacity: .75; }
+.workspace-agent-preview-row > svg, .workspace-agent-preview-row > .status-dot { flex-shrink: 0; }
 @media (hover: hover) and (pointer: fine) {
   .sidebar .conversation-row > .button { opacity: 0; pointer-events: none; }
   .sidebar .conversation-row:hover > .button, .sidebar .conversation-row:focus-within > .button { opacity: 1; pointer-events: auto; }
 }
 @media (pointer: coarse) {
   .sidebar .button-icon, .project-actions > summary { width: 44px; height: 44px; }
-  .workspace-picker > summary, .sidebar .workspace-row > button:first-child, .sidebar .conversation-row > button:first-child, .sidebar .sidebar-text-button { min-height: 44px; }
+  .workspace-picker > summary, .sidebar .workspace-row > button:first-child, .sidebar .workspace-agent-anchor > button, .sidebar .conversation-row > button:first-child, .sidebar .sidebar-text-button { min-height: 44px; }
   .space-icon { width: 44px; height: 44px; flex-basis: 44px; }
 }
 @media (prefers-reduced-motion: reduce) { .space-content { animation: none; } .sidebar, .space-icon { transition: none; } }

@@ -245,13 +245,13 @@ it('does not forward provider error bodies or reflected credentials to the brows
   expect(providerError(error)).toContain('authorization')
 })
 
-it.each([30, 50, 70] as const)('compacts %s percent manually without deleting history or resetting consumption', async (reduction) => {
+it.each(([30, 50, 70] as const).flatMap((reduction) => (['openai', 'chatgpt'] as const).map((provider) => ({ reduction, provider }))))('compacts $reduction percent with $provider without deleting history', async ({ reduction, provider }) => {
   const model = new MockLanguageModelV4({
     doGenerate: async () => ({ content: [{ type: 'text', text: 'Keep the original requirements. Work is pending.' }],
       finishReason: { unified: 'stop', raw: 'stop' }, usage, warnings: [] }),
     doStream: async () => ({ stream: new ReadableStream({ start(controller) {
       controller.enqueue({ type: 'text-start', id: 'reply' })
-      controller.enqueue({ type: 'text-delta', id: 'reply', delta: 'Continued.' })
+      controller.enqueue({ type: 'text-delta', id: 'reply', delta: 'Keep the original requirements. Work is pending.' })
       controller.enqueue({ type: 'text-end', id: 'reply' })
       controller.enqueue({ type: 'finish', finishReason: { unified: 'stop', raw: 'stop' }, usage })
       controller.close()
@@ -266,16 +266,24 @@ it.each([30, 50, 70] as const)('compacts %s percent manually without deleting hi
     }))
   })
   const before = service.conversation(conversation.id)
-  await service.chat.compact(conversation.id, 'openai', reduction)
+  await service.chat.compact(conversation.id, provider, reduction)
   const after = service.conversation(conversation.id)
   expect(after.messages).toEqual(before.messages)
   expect(after.compaction?.throughMessageId).toBe(before.messages[3].id)
   expect(after.compaction?.reduction).toBe(reduction)
   expect(conversationConsumption(after)).toEqual({ total: 32, incomplete: false })
-  expect(model.doGenerateCalls[0].tools).toBeUndefined()
+  const request = provider === 'chatgpt' ? model.doStreamCalls[0] : model.doGenerateCalls[0]
+  expect(request.tools).toBeUndefined()
+  expect(request.providerOptions).toMatchObject({ openai: { store: false } })
+  if (provider === 'chatgpt') {
+    expect(model.doGenerateCalls).toHaveLength(0)
+    expect(request.maxOutputTokens).toBeUndefined()
+  } else {
+    expect(request.maxOutputTokens).toBeGreaterThan(0)
+  }
   await service.chat.start(conversation.id, 'Continue', 'openai')
   await expect.poll(() => service.state().agents[conversation.id]?.status).toBe('idle')
-  const prompt = JSON.stringify(model.doStreamCalls[0].prompt)
+  const prompt = JSON.stringify(model.doStreamCalls.at(-1)!.prompt)
   expect(prompt).toContain('Keep the original requirements')
   expect(prompt).toContain('Recent 4')
   expect(prompt).not.toContain('Old detail 0')
