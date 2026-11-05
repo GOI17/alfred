@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/GOI17/alfred/compare/v1.4.0...v1.4.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **workspace:** open linked files in viewer and recover expired authentication ([587c767](https://github.com/GOI17/alfred/commit/587c76762bb85d0a08d1e860a39e7f70a6c39147))
+
 ## [1.4.0](https://github.com/GOI17/alfred/compare/v1.3.0...v1.4.0) (2026-11-05)
 
 
