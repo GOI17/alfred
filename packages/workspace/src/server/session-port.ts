@@ -18,6 +18,7 @@ export interface SessionPort {
   decide(id: string, approvalId: string, accepted: boolean): void
   setPermission(id: string, mode: PermissionMode): Promise<void>
   setHarness(id: string, selection: HarnessSelection | undefined): Promise<void>
+  regenerateTitle?(id: string): Promise<void>
   compact(id: string, provider: ProviderId, reduction: 30 | 50 | 70): Promise<void>
   stopProvider(provider: ProviderId): Promise<void>
   close(): Promise<void>

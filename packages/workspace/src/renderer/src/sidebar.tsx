@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { FolderPlus, GitBranch, Plus, Settings2, X, PanelLeftClose, ChevronDown, Pin } from 'lucide-react'
+import { FolderPlus, GitBranch, Plus, Settings2, X, PanelLeftClose, ChevronDown, Check, Pin } from 'lucide-react'
 import type { Conversation, Project, PublicState, Worktree } from '../../shared/contracts'
 import { Button } from './components/ui/button'
 import { ProviderLogo } from './components/provider-logo'
@@ -34,6 +34,15 @@ export function Sidebar({ state, project, conversation, worktrees, workspacePath
   removeConversation: (id: string) => void; removeWorktree: (path: string) => void; settings: () => void; close: () => void
 }) {
   const { t } = useUI()
+  const workspacePicker = useRef<HTMLDetailsElement>(null)
+  useEffect(() => {
+    const dismiss = (event: PointerEvent) => {
+      const picker = workspacePicker.current
+      if (picker?.open && event.target instanceof Node && !picker.contains(event.target)) picker.open = false
+    }
+    document.addEventListener('pointerdown', dismiss)
+    return () => document.removeEventListener('pointerdown', dismiss)
+  }, [])
   const conversationList = useRef<HTMLElement>(null)
   useEffect(() => {
     const list = conversationList.current
@@ -97,12 +106,18 @@ export function Sidebar({ state, project, conversation, worktrees, workspacePath
       <div className="space-content" key={project?.id || 'empty'}>
         {project ? <>
           <div className="project-heading"><div className="space-overview-trigger" title={project.name}><span>{project.name}</span></div><ProjectActions removeProject={removeProject} /></div>
-          <details className="workspace-picker" key={`${project.id}:${workspacePath}`}>
-            <summary title={workspacePath}><GitBranch size={14} /><span>{activeWorkspace?.branch || (workspacePath === project.path ? t('Main', 'Principal') : t('Active workspace', 'Espacio activo'))}</span><ChevronDown size={14} /></summary>
+          <details ref={workspacePicker} className="workspace-picker" key={`${project.id}:${workspacePath}`} onKeyDown={(event) => {
+            if (event.key === 'Escape' && event.currentTarget.open) {
+              event.stopPropagation()
+              event.currentTarget.open = false
+              event.currentTarget.querySelector('summary')?.focus()
+            }
+          }}>
+            <summary title={workspacePath} aria-label={`${t('Worktree', 'Worktree')}: ${activeWorkspace?.branch || workspacePath}`}><GitBranch size={14} /><span>{activeWorkspace?.branch || (workspacePath === project.path ? t('Main', 'Principal') : t('Active workspace', 'Espacio activo'))}</span><small className="workspace-picker-count">{worktrees.length}</small><ChevronDown size={14} /></summary>
             <div className="workspace-list" role="group" aria-label={t('Workspaces', 'Espacios de trabajo')}>
               {worktrees.map((tree) => <div key={tree.path} className="workspace-row" data-active={workspacePath === tree.path}>
                 <WorkspaceAgentSummary state={state} connected={connected} projectId={project.id} workspacePath={tree.path} label={tree.branch} selectConversation={selectConversation}>
-                  <button aria-pressed={workspacePath === tree.path} onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); selectWorkspace(tree.path) }}><GitBranch size={14} /><span>{tree.branch}</span>{tree.main && <span className="tiny-label">{t('main', 'principal')}</span>}</button>
+                  <button aria-pressed={workspacePath === tree.path} onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); selectWorkspace(tree.path) }}><span className="workspace-selection-mark" aria-hidden="true">{workspacePath === tree.path ? <Check size={14} /> : <GitBranch size={14} />}</span><span>{tree.branch}</span>{tree.main && <span className="tiny-label">{t('main', 'principal')}</span>}</button>
                 </WorkspaceAgentSummary>
                 {!tree.main && tree.path !== project.path && <Button variant="ghost" size="icon" aria-label={`${t('Delete worktree', 'Eliminar worktree')} ${tree.branch}`} onClick={() => removeWorktree(tree.path)}><X size={13} /></Button>}
               </div>)}

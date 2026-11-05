@@ -238,6 +238,11 @@ export async function createApp(options: {
     })
     return { ok: true }
   })
+  app.post('/api/conversations/:id/title/regenerate', async (request) => {
+    if (!service.chat.regenerateTitle) throw new Error('This runtime does not support title regeneration.')
+    await service.chat.regenerateTitle(id(request.params))
+    return { ok: true }
+  })
   app.post('/api/conversations/:id/compact', async (request) => {
     const body = z.object({ provider: providerId, reduction: z.union([z.literal(30), z.literal(50), z.literal(70)]) }).parse(request.body)
     await service.chat.compact(id(request.params), body.provider, body.reduction)

@@ -18,15 +18,14 @@
 .context-indicator { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: var(--text-xs); color: var(--muted); }
 .context-indicator meter { width: 64px; height: 12px; }
 
-/* Numeric context stays visible on mobile, where descriptive labels are hidden. */
-.context-token-count { font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.chat-panel .composer-footer button.context-control:has(.context-token-count) { width: auto; min-width: 44px; flex: 0 0 auto; padding-inline: 8px; }
+/* Compact context ring; token details remain in the accessible trigger and dialog. */
+.context-token-count { position: relative; display: inline-grid; place-items: center; width: 36px; height: 36px; flex: 0 0 36px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.context-token-count svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke-width: 3; }
+.context-ring-track { stroke: currentColor; opacity: .18; }
+.context-ring-value { stroke: currentColor; stroke-linecap: round; transition: stroke-dashoffset 180ms ease; }
+.context-token-count small { font-size: 9px; font-weight: 600; line-height: 1; }
+.context-token-count[data-unknown="true"] .context-ring-track { stroke-dasharray: 3 3; }
+.chat-panel .composer-footer button.context-control:has(.context-token-count) { width: 44px; min-width: 44px; min-height: 44px; flex: 0 0 auto; justify-content: center; padding: 4px; }
 .chat-panel .composer-footer button.context-control:has(.context-token-count) > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-
-/* Keep context occupancy visible in the compact mobile composer too. */
-.context-token-count { display: inline-flex; align-items: center; gap: 5px; }
-.context-token-count strong { font-weight: 500; }
-.context-token-count small { font-size: 10px; }
-.context-progress-track { display: block; width: 32px; height: 4px; overflow: hidden; border-radius: 4px; background: var(--surface-muted); border: 1px solid currentColor; }
-.context-progress-track > span { display: block; height: 100%; background: currentColor; }
 .context-progress { width: 100%; height: 8px; accent-color: var(--accent, currentColor); }
+@media (prefers-reduced-motion: reduce) { .context-ring-value { transition: none; } }

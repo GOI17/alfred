@@ -21,11 +21,17 @@
 .project-actions > button { margin-left: auto; white-space: nowrap; }
 .project-actions > summary:hover, .workspace-picker > summary:hover { background: var(--sidebar-active); }
 .project-actions > summary:focus-visible, .workspace-picker > summary:focus-visible { outline: 2px solid var(--sidebar-foreground); outline-offset: -2px; }
-.workspace-picker { margin-bottom: 20px; }
+.workspace-picker { margin-bottom: 20px; border: 1px solid var(--sidebar-border); border-radius: var(--radius-sm); }
 .workspace-picker > summary { min-height: 36px; padding: 7px 9px; gap: 8px; font-size: var(--text-xs); color: var(--sidebar-muted); }
+.workspace-picker > summary > svg { flex-shrink: 0; }
+.workspace-picker-count { flex-shrink: 0; font-size: 10px; font-variant-numeric: tabular-nums; opacity: .7; }
 .workspace-picker > summary > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-picker[open] > summary > svg:last-child { transform: rotate(180deg); }
-.workspace-picker .workspace-list { padding: 2px 0 6px; }
+.workspace-picker .workspace-list { margin: 0 4px 4px; padding: 4px 0 0; border-top: 1px solid var(--sidebar-border); max-height: min(280px, 32dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.workspace-picker .workspace-row[data-active='true'] { background: var(--sidebar-active); }
+.workspace-picker .workspace-selection-mark { display: inline-flex; flex: 0 0 14px; }
+.workspace-picker .workspace-row button:focus-visible, .workspace-picker .sidebar-text-button:focus-visible { outline: 2px solid var(--sidebar-foreground); outline-offset: -2px; }
+.workspace-picker .sidebar-text-button { width: 100%; margin-top: 4px; border-top: 1px solid var(--sidebar-border); }
 .sidebar .new-conversation { width: 100%; min-height: 42px; margin-bottom: 22px; }
 .sidebar .spaces-heading { padding: 0 9px; letter-spacing: .04em; min-height: 32px; }
 .sidebar .conversation-row { min-height: 40px; }
