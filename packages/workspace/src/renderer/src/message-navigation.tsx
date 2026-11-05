@@ -30,6 +30,13 @@ export const MessageNavigation = memo(function MessageNavigation({ messages, scr
     const nodes = body.querySelectorAll<HTMLElement>(selector)
     const update = () => {
       frame = 0
+      // Lazy bodies above the destination may resize after the initial jump.
+      // Keep the requested anchor until the user takes over scrolling.
+      const target = destination.current?.node
+      if (target?.isConnected) {
+        const delta = target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 24
+        if (Math.abs(delta) > 1) viewport.scrollTop += delta
+      }
       const top = viewport.getBoundingClientRect().top + 32
       let index = nodes.length ? 0 : -1
       // Messages are vertically ordered; avoid measuring the whole history on scroll.
@@ -44,9 +51,16 @@ export const MessageNavigation = memo(function MessageNavigation({ messages, scr
     }
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update) }
     viewport.addEventListener('scroll', schedule, { passive: true })
+    const release = () => { clearDestination(); schedule() }
+    const inputs = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const
+    for (const input of inputs) viewport.addEventListener(input, release, { passive: true })
     const observer = new ResizeObserver(schedule)
     observer.observe(viewport); observer.observe(body); schedule()
-    return () => { viewport.removeEventListener('scroll', schedule); observer.disconnect(); cancelAnimationFrame(frame) }
+    return () => {
+      viewport.removeEventListener('scroll', schedule)
+      for (const input of inputs) viewport.removeEventListener(input, release)
+      observer.disconnect(); cancelAnimationFrame(frame)
+    }
   }, [messages.length, scroller, content])
   useLayoutEffect(() => {
     const dismiss = () => setPreview(null)

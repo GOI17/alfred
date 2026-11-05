@@ -94,6 +94,12 @@ test('message index has all messages, focus previews and a measured context ring
     await expect(page.getByRole('tooltip')).toHaveCount(0)
     await rail.getByRole('button').nth(2).click()
     await expect(rail.getByRole('button').nth(2)).toHaveAttribute('aria-current', 'location')
+    // Simulate delayed Markdown/image layout above the revealed destination.
+    await page.locator('.message-slot').first().evaluate(node => { node.style.paddingTop = '320px' })
+    await expect.poll(() => page.locator('.message-slot').nth(2).evaluate(node =>
+      Math.abs(node.getBoundingClientRect().top - node.closest('.messages')!.getBoundingClientRect().top - 24)
+    )).toBeLessThan(2)
+    await expect(rail.getByRole('button').nth(2)).toHaveAttribute('aria-current', 'location')
   }
   await expect(page.getByRole('button', { name: /^Context: .* tokens · 38% used$/ })).toBeVisible()
   await expect(page.locator('.context-ring-value')).toHaveAttribute('stroke-dashoffset', '62')
