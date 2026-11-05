@@ -8,9 +8,10 @@ import { liveRefresh } from './live-refresh'
 type Props = {
   conversationId: string; value: string; onChange: (value: string) => void
   sending: boolean; busy: boolean; onSend: () => void; settings: () => void
+  history?: string[]
   harness?: HarnessSelection
 }
-export function ComposerInput({ conversationId, value, onChange, sending, busy, onSend, settings, harness }: Props) {
+export function ComposerInput({ conversationId, value, onChange, sending, busy, onSend, settings, harness, history = [] }: Props) {
   const { t } = useUI()
   const [harnessResources, setHarnessResources] = useState<{ conversation: string; harness: string; resources: HarnessResource[] }>()
   const [harnessError, setHarnessError] = useState('')
@@ -32,6 +33,8 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
     { name: '/settings', description: t('Open settings', 'Abrir ajustes'), text: '' },
     ...(harnessResources?.conversation === conversationId && harnessResources.harness === harness?.id ? harnessResources.resources.map((resource) => ({ name: resource.invocation!, description: resource.description, text: resource.invocation + ' ' })) : []),
   ]
+  const historyCursor = useRef<{ entries: string[]; index: number; draft: string; value: string } | null>(null)
+  useEffect(() => { historyCursor.current = null }, [conversationId, sending])
   const input = useRef<HTMLTextAreaElement>(null)
   useLayoutEffect(() => {
     const element = input.current
@@ -153,6 +156,32 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
             event.preventDefault(); setSelected(items.length ? (active + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length : 0); return
           }
           if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (items.length) choose(active); return }
+        }
+        if (!sending && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey &&
+          (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+          const element = event.currentTarget
+          const up = event.key === 'ArrowUp'
+          if (element.selectionStart === element.selectionEnd &&
+            (!value.includes('\n') || element.selectionStart === (up ? 0 : value.length))) {
+            // Snapshot entries so live conversation updates cannot move the cursor.
+            if (historyCursor.current?.value !== value) historyCursor.current = null
+            let cursor = historyCursor.current
+            if (!cursor && up && history.length) {
+              cursor = { entries: [...history], index: history.length, draft: value, value }
+              historyCursor.current = cursor
+            }
+            if (cursor) {
+              event.preventDefault()
+              cursor.index = Math.max(0, Math.min(cursor.entries.length, cursor.index + (up ? -1 : 1)))
+              const next = cursor.entries[cursor.index] ?? cursor.draft
+              cursor.value = next
+              onChange(next)
+              const position = up ? 0 : next.length
+              setCaret(position); setDismissed(true)
+              if (cursor.index === cursor.entries.length) historyCursor.current = null
+              requestAnimationFrame(() => element.setSelectionRange(position, position))
+            }
+          }
         }
         if (event.key === 'Enter' && !event.shiftKey && !matchMedia('(pointer: coarse)').matches) { event.preventDefault(); onSend() }
       }} />

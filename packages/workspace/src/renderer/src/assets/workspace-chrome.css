@@ -355,3 +355,19 @@
   .workspace-chat-actions .chat-column-title:not([hidden]),
   .workspace-chat-actions .chat-column-picker { width: 40px; height: 40px; }
 }
+
+/* The branch breadcrumb is the single worktree selector. */
+.workspace-header-unified:has(.breadcrumb-worktree-picker[open]) { overflow: visible; z-index: 50; }
+.breadcrumb-worktree-picker.workspace-picker { position: relative; min-width: 0; margin: 0; border: 0; }
+.breadcrumb-worktree-picker.workspace-picker > summary { min-height: 28px; padding: 3px 5px; font-size: inherit; gap: 5px; }
+.breadcrumb-worktree-picker.workspace-picker .workspace-list {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+  width: min(320px, 70vw); margin: 0; padding: 6px;
+  background: var(--sidebar); border: 1px solid var(--sidebar-border);
+  border-radius: var(--radius-sm); box-shadow: 0 8px 24px var(--overlay);
+  max-height: min(360px, 60dvh);
+}
+@media (max-width: 700px) {
+  .breadcrumb-worktree-picker.workspace-picker > summary { min-height: 44px; }
+  .breadcrumb-worktree-picker.workspace-picker .workspace-list { position: fixed; left: 12px; top: 70px; width: calc(100vw - 24px); }
+}

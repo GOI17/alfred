@@ -204,7 +204,7 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
         {!!attachments.length && <div className="attachment-list" aria-label={t('Pending attachments', 'Adjuntos pendientes')}>
           {attachments.map((file, index) => <span className="attachment-chip" key={index}><Paperclip size={14} /><span title={file.name}>{file.name}</span><button type="button" disabled={sending || reading} aria-label={`${t('Remove', 'Quitar')} ${file.name}`} onClick={() => setAttachments((current) => current.filter((_, i) => i !== index))}><X size={14} /></button></span>)}
         </div>}
-        <ComposerInput conversationId={conversation.id} harness={conversation.harness} value={text} onChange={setText} sending={sending} busy={busy} onSend={() => void send()} settings={settings} />
+        <ComposerInput history={[...conversation.messages.filter((message) => message.role === 'user'), ...queue].map((message) => message.text).filter((text) => text.trim())} conversationId={conversation.id} harness={conversation.harness} value={text} onChange={setText} sending={sending} busy={busy} onSend={() => void send()} settings={settings} />
         <div className="composer-footer">
           <div className="attachment-controls">
             <input ref={fileInput} type="file" multiple hidden onChange={(event) => { void addFiles(Array.from(event.target.files || [])); event.target.value = '' }} />

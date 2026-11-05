@@ -11,6 +11,7 @@ import { liveRefresh } from './live-refresh'
 import { useWorkspace } from './use-workspace'
 import { panelId } from './panel-id'
 import { Sidebar } from './sidebar'
+import { WorktreePicker } from './worktree-picker'
 import { PanelLayout, type ToolKind, type ToolVisibility } from './panel-layout'
 import { WorktreeDialog, SettingsDialog } from './project-dialogs'
 import { useProjectSelection } from './use-project-selection'
@@ -184,9 +185,8 @@ export function App() {
   if (!authenticated || !state) return <Login connected={refresh} />
   return <NotificationPreferences><div className="app-shell" data-sidebar-collapsed={sidebarCollapsed}>
     <div id="workspace-sidebar" className="workspace-sidebar-container">
-      <Sidebar state={state} project={project} conversation={(floatingIds.length ? state.conversations.find((item) => item.id === focusedChatId && item.projectId === projectId && item.workspacePath === workspacePath) : undefined) || conversation} worktrees={worktrees} workspacePath={workspacePath} connected={connected} mobileOpen={mobileOpen}
+      <Sidebar state={state} project={project} conversation={(floatingIds.length ? state.conversations.find((item) => item.id === focusedChatId && item.projectId === projectId && item.workspacePath === workspacePath) : undefined) || conversation} workspacePath={workspacePath} connected={connected} mobileOpen={mobileOpen}
         close={() => setMobileOpen(false)} selectProject={selectSpace}
-        selectWorkspace={(path) => { setWorkspacePath(path); setConversationId(state.conversations.find((item) => item.projectId === projectId && item.workspacePath === path)?.id || '') }}
         selectConversation={(id) => {
           const item = state.conversations.find((chat) => chat.id === id)
           if (!item) return
@@ -195,10 +195,9 @@ export function App() {
             setMobileOpen(false)
           } else openConversation(item)
         }} addProject={addProject} addConversation={() => void newConversation()}
-        addWorktree={() => setDialog('worktree')} settings={() => { setMobileOpen(false); setDialog('settings') }}
+        settings={() => { setMobileOpen(false); setDialog('settings') }}
         removeProject={() => { if (project) setConfirmation({ title: `${t('Remove', 'Eliminar')} ${project.name}`, description: t('Its conversations will be removed from Alfred and its sessions closed. The folder, files, and worktrees will remain on disk.', 'Se eliminarán sus conversaciones de Alfred y se cerrarán sus sesiones. La carpeta, los archivos y los worktrees permanecerán en el disco.'), perform: async () => { await api(`/projects/${project.id}`, undefined, 'DELETE'); await refresh() } }) }}
         removeConversation={(id) => setConfirmation({ title: t('Delete conversation', 'Eliminar conversación'), description: t('This conversation history will be deleted and its panels and sessions closed.', 'Se eliminará el historial de esta conversación y se cerrarán sus paneles y sesiones.'), perform: async () => { await api(`/conversations/${id}`, undefined, 'DELETE'); await refresh() } })}
-        removeWorktree={(path) => setConfirmation({ title: t('Delete worktree', 'Eliminar worktree'), description: t('Git will delete this worktree folder and Alfred will close its conversations. The operation will be rejected if there are uncommitted changes. The branch will be preserved.', 'Git eliminará esta carpeta de worktree y Alfred cerrará sus conversaciones. Se rechazará la operación si hay cambios sin commit. Se conservará la rama.'), perform: async () => { await api(`/projects/${projectId}/worktrees`, { path }, 'DELETE'); setTreeVersion((value) => value + 1); await refresh() } })}
       />
     </div>
     <main className="main-workspace">
@@ -206,7 +205,18 @@ export function App() {
         <span className="desktop-sidebar-toggle"><Button variant="ghost" size="icon" aria-controls="workspace-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} title={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</Button></span>
         <span className="mobile-only"><Button variant="ghost" size="icon" aria-label={t('Open spaces', 'Abrir espacios')} aria-controls="workspace-sidebar" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu size={19} /></Button></span>
         <div className="workspace-heading-context">
-          <div className="workspace-breadcrumb"><span className="breadcrumb-project" title={project?.name}>{project?.name || t('Welcome to Alfred', 'Bienvenido a Alfred')}</span>{project && <><span className="breadcrumb-slash">/</span><GitBranch size={13} /><span className="breadcrumb-branch" title={workspacePath}>{worktrees.find((tree) => tree.path === workspacePath)?.branch || t('Workspace', 'Espacio')}</span></>}</div>
+          <div className="workspace-breadcrumb"><span className="breadcrumb-project" title={project?.name}>{project?.name || t('Welcome to Alfred', 'Bienvenido a Alfred')}</span>{project && <><span className="breadcrumb-slash">/</span><WorktreePicker key={`${project.id}:${workspacePath}`} state={state} project={project} worktrees={worktrees} workspacePath={workspacePath} connected={connected}
+        selectWorkspace={(path) => { setWorkspacePath(path); setConversationId(state.conversations.find((item) => item.projectId === projectId && item.workspacePath === path)?.id || '') }}
+        selectConversation={(id) => {
+          const item = state.conversations.find((chat) => chat.id === id)
+          if (!item) return
+          if (floatingIds.length && item.projectId === projectId && item.workspacePath === workspacePath) {
+            setFloatingIds((current) => [...current.filter((chatId) => chatId !== id), id])
+            setMobileOpen(false)
+          } else openConversation(item)
+        }}
+        removeWorktree={(path) => setConfirmation({ title: t('Delete worktree', 'Eliminar worktree'), description: t('Git will delete this worktree folder and Alfred will close its conversations. The operation will be rejected if there are uncommitted changes. The branch will be preserved.', 'Git eliminará esta carpeta de worktree y Alfred cerrará sus conversaciones. Se rechazará la operación si hay cambios sin commit. Se conservará la rama.'), perform: async () => { await api(`/projects/${projectId}/worktrees`, { path }, 'DELETE'); setTreeVersion((value) => value + 1); await refresh() } })}
+          addWorktree={() => setDialog('worktree')} /></>}</div>
           {headerConversation && <div className="conversation-title" aria-busy={regeneratingTitle}><span title={headerConversation.title}>{headerConversation.title}</span><Button variant="ghost" size="icon" disabled={regeneratingTitle || !connected || !headerConversation.messages.length || !headerConversation.lastProvider || state.agents[headerConversation.id]?.status === 'running' || state.agents[headerConversation.id]?.status === 'waiting'} onClick={() => void regenerateTitle()} aria-label={regeneratingTitle ? t('Regenerating title…', 'Regenerando título…') : t('Regenerate title with recent context', 'Regenerar título con el contexto reciente')} title={t('Regenerate using the last provider used in this conversation (consumes tokens)', 'Regenerar con el último proveedor usado en esta conversación (consume tokens)')}><RefreshCw size={14} /></Button></div>}
         </div>
         <div className="workspace-chat-actions" ref={setChatHeaderTarget} />
