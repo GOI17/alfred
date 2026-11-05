@@ -1,10 +1,13 @@
 import { layoutKey, point, pointMap, stringList, usePersistentLayout } from './use-persistent-layout'
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react'
-import { Columns2, PanelTop, X, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react'
+import { Columns2, PanelTop, X, ChevronLeft, ChevronRight, ExternalLink, Move } from 'lucide-react'
 import type { Conversation } from '../../shared/contracts'
 import { Button } from './components/ui/button'
 import { useUI } from './ui-preferences'
 import './assets/chat-deck.css'
+
+export const ChatHeaderTarget = createContext<HTMLElement | null>(null)
 
 /** Layout is persisted per workspace. Closing a column never deletes a conversation. */
 export function ChatDeck({ conversation, conversations, render, floatingIds, setFloatingIds, onActiveChatChange }: {
@@ -16,6 +19,8 @@ export function ChatDeck({ conversation, conversations, render, floatingIds, set
   render: (conversation: Conversation) => ReactNode
 }) {
   const { t } = useUI()
+  const headerTarget = useContext(ChatHeaderTarget)
+  const inHeader = (content: ReactNode) => headerTarget ? createPortal(content, headerTarget) : content
   const [popupBlocked, setPopupBlocked] = useState<string | null>(null)
   const key = (part: string) => layoutKey(conversation.projectId, conversation.workspacePath, part)
   const [ids, setIds] = usePersistentLayout<string[]>(key('columns'), [], stringList)
@@ -70,11 +75,16 @@ export function ChatDeck({ conversation, conversations, render, floatingIds, set
     popup?.focus()
   }
   function reveal(id: string) {
+    if (floating.length) {
+      if (!floating.includes(id)) setFloating((current) => [...current, id])
+      const position = positionFor(id)
+      setCamera({ x: 24 - position.x, y: 24 - position.y })
+    }
     setFocused(id)
     requestAnimationFrame(() => {
       const column = Array.from(root.current?.querySelectorAll<HTMLElement>('[data-chat-column]') || []).find((item) => item.dataset.chatColumn === id)
       column?.scrollIntoView({ block: 'nearest', inline: 'center' })
-      column?.querySelector<HTMLElement>('.chat-column-title')?.focus()
+      column?.focus({ preventScroll: true })
     })
   }
   function move(id: string, x: number, y: number) {
@@ -88,7 +98,8 @@ export function ChatDeck({ conversation, conversations, render, floatingIds, set
   }
 
   return <div className="chat-deck" ref={root}>
-    {!floating.length && <div className="chat-deck-toolbar" aria-label={t('Chat layout', 'Disposición de chats')}>
+    {inHeader(<div className="chat-deck-toolbar" aria-label={t('Chat layout', 'Disposición de chats')}>
+      <label className="chat-column-picker" title={t('Add chat column', 'Agregar columna de chat')}>
       <Columns2 size={16} aria-hidden="true" />
       <select disabled={!available.some((item) => !ids.includes(item.id))} aria-label={t('Add chat column', 'Agregar columna de chat')} value="" onChange={(event) => {
         const id = event.target.value
@@ -97,13 +108,13 @@ export function ChatDeck({ conversation, conversations, render, floatingIds, set
       }}>
         <option value="">{t('Add chat column…', 'Agregar columna de chat…')}</option>
         {available.filter((item) => !ids.includes(item.id)).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-      </select>
+      </select></label>
       {chats.length > 1 && <div className="chat-deck-navigation">
-      <Button variant="ghost" size="icon" aria-label={t('Previous chat', 'Chat anterior')} disabled={chats.length < 2} onClick={() => reveal(chats[(chats.findIndex((item) => item.id === active) + chats.length - 1) % chats.length].id)}><ChevronLeft size={16} /></Button>
-      <Button variant="ghost" size="icon" aria-label={t('Next chat', 'Chat siguiente')} disabled={chats.length < 2} onClick={() => reveal(chats[(chats.findIndex((item) => item.id === active) + 1) % chats.length].id)}><ChevronRight size={16} /></Button>
+      <Button variant="ghost" size="icon" title={t('Previous chat', 'Chat anterior')} aria-label={t('Previous chat', 'Chat anterior')} disabled={chats.length < 2} onClick={() => reveal(chats[(chats.findIndex((item) => item.id === active) + chats.length - 1) % chats.length].id)}><ChevronLeft size={16} /></Button>
+      <Button variant="ghost" size="icon" title={t('Next chat', 'Chat siguiente')} aria-label={t('Next chat', 'Chat siguiente')} disabled={chats.length < 2} onClick={() => reveal(chats[(chats.findIndex((item) => item.id === active) + 1) % chats.length].id)}><ChevronRight size={16} /></Button>
       <span className="chat-deck-count">{chats.findIndex((item) => item.id === active) + 1} / {chats.length}</span>
       </div>}
-    </div>}
+    </div>)}
     {floating.length > 0 && <div className="chat-canvas-controls">
       <span>{t('Drag the background to pan', 'Arrastra el fondo para recorrer el lienzo')}</span>
       <Button variant="ghost" onClick={centerChat}>{t('Return to active chat', 'Volver al chat activo')}</Button>
@@ -130,9 +141,9 @@ export function ChatDeck({ conversation, conversations, render, floatingIds, set
       }}
       onPointerUp={() => { pan.current = null }} onPointerCancel={() => { pan.current = null }} onLostPointerCapture={() => { pan.current = null }}>
 
-      {chats.map((chat) => <section key={chat.id} className="chat-column" data-chat-column={chat.id} data-floating={floating.includes(chat.id)} data-focused={active === chat.id} aria-label={chat.title} style={floating.includes(chat.id) ? { width: sizes[chat.id]?.x, height: sizes[chat.id]?.y, left: positionFor(chat.id).x + camera.x, top: positionFor(chat.id).y + camera.y, zIndex: active === chat.id ? 6 + floating.length : 5 + floating.indexOf(chat.id) } : undefined} onPointerDownCapture={() => setFocused(chat.id)} onFocusCapture={() => setFocused(chat.id)}>
-        <div className="chat-column-heading">
-          <button className="chat-column-title" title={floating.includes(chat.id) ? t('Drag to move; use arrow keys to reposition', 'Arrastra para mover; usa las flechas para reposicionar') : chat.title} onPointerDown={(event) => {
+      {chats.map((chat) => <section key={chat.id} className="chat-column" tabIndex={-1} data-chat-column={chat.id} data-floating={floating.includes(chat.id)} data-focused={active === chat.id} aria-label={chat.title} style={floating.includes(chat.id) ? { width: sizes[chat.id]?.x, height: sizes[chat.id]?.y, left: positionFor(chat.id).x + camera.x, top: positionFor(chat.id).y + camera.y, zIndex: active === chat.id ? 6 + floating.length : 5 + floating.indexOf(chat.id) } : undefined} onPointerDownCapture={() => setFocused(chat.id)} onFocusCapture={() => setFocused(chat.id)}>
+        {(!headerTarget || active === chat.id) && inHeader(<div className="chat-column-heading">
+          <button className="chat-column-title" hidden={!!headerTarget && !floating.includes(chat.id)} aria-label={t('Move active chat', 'Mover chat activo')} title={floating.includes(chat.id) ? t('Drag to move; use arrow keys to reposition', 'Arrastra para mover; usa las flechas para reposicionar') : chat.title} onPointerDown={(event) => {
             if (!floating.includes(chat.id) || event.button !== 0) return
             drag.current = { x: event.clientX, y: event.clientY, left: positionFor(chat.id).x, top: positionFor(chat.id).y }
             event.currentTarget.setPointerCapture(event.pointerId)
@@ -142,15 +153,15 @@ export function ChatDeck({ conversation, conversations, render, floatingIds, set
             if (!floating.includes(chat.id) || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
             event.preventDefault()
             move(chat.id, positionFor(chat.id).x + (event.key === 'ArrowLeft' ? -20 : event.key === 'ArrowRight' ? 20 : 0), positionFor(chat.id).y + (event.key === 'ArrowUp' ? -20 : event.key === 'ArrowDown' ? 20 : 0))
-          }}>{chat.title}</button>
+          }}>{headerTarget ? <Move size={16} /> : chat.title}</button>
           <Button variant="ghost" size="icon" aria-label={t('Open in separate window', 'Abrir en ventana independiente')} title={t('Open in separate window', 'Abrir en ventana independiente')} onClick={() => openWindow(chat.id)}><ExternalLink size={16} /></Button>
           <span className="chat-float-control"><Button variant="ghost" size="icon" aria-label={floating.includes(chat.id) ? t('Dock chat', 'Acoplar chat') : t('Float chat', 'Hacer flotante el chat')} title={floating.includes(chat.id) ? t('Dock chat', 'Acoplar chat') : t('Float chat', 'Hacer flotante el chat')} aria-pressed={floating.includes(chat.id)} onClick={() => { if (!floating.includes(chat.id)) move(chat.id, 24 - camera.x, 24 - camera.y); setFloating((current) => current.includes(chat.id) ? current.filter((id) => id !== chat.id) : [...current, chat.id]); setIds((current) => chat.id === conversation.id || current.includes(chat.id) ? current : [...current, chat.id]) }}><PanelTop size={15} /></Button></span>
-          {chat.id !== conversation.id && <Button variant="ghost" size="icon" aria-label={`${t('Close column', 'Cerrar columna')}: ${chat.title}`} onClick={() => {
+          {chat.id !== conversation.id && <Button variant="ghost" size="icon" title={t('Close column', 'Cerrar columna')} aria-label={`${t('Close column', 'Cerrar columna')}: ${chat.title}`} onClick={() => {
             setIds((current) => current.filter((id) => id !== chat.id))
             setFloating((current) => current.filter((id) => id !== chat.id))
             reveal(conversation.id)
           }}><X size={15} /></Button>}
-        </div>
+        </div>)}
         {popupBlocked === chat.id && <p role="alert" className="chat-window-error">{t('Allow pop-ups for Alfred and try again.', 'Permite las ventanas emergentes de Alfred y vuelve a intentarlo.')}</p>}
         <div className="chat-column-body">{render(chat)}</div>
       </section>)}

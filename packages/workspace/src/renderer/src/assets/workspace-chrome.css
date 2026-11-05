@@ -287,3 +287,71 @@
     pointer-events: none;
   }
 }
+
+/* Keep the title action reachable even when the title is truncated. */
+.workspace-header-unified .conversation-title { display: flex; align-items: center; gap: 6px; }
+.workspace-header-unified .conversation-title > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-header-unified .conversation-title > button { flex-shrink: 0; width: 30px; height: 30px; }
+.workspace-header-unified .conversation-title[aria-busy='true'] > button { opacity: .5; }
+
+/* Chat layout and active-column actions share the workspace's only header. */
+.workspace-chat-actions,
+.workspace-chat-actions .chat-deck-toolbar,
+.workspace-chat-actions .chat-column-heading {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+}
+.workspace-chat-actions:empty { display: none; }
+.workspace-chat-actions .chat-column-title:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  cursor: move;
+  touch-action: none;
+}
+.workspace-chat-actions .chat-column-title[hidden] { display: none; }
+.workspace-chat-actions .chat-deck-count { white-space: nowrap; font-size: 11px; }
+.workspace-chat-actions .chat-deck-navigation { gap: 0; }
+.workspace-header-unified .button-icon { width: 34px; height: 34px; }
+.chat-column-picker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+}
+.chat-column-picker:hover { background: var(--accent); }
+.chat-column-picker:has(select:focus-visible) { outline: 2px solid var(--primary); outline-offset: 2px; }
+.chat-column-picker:has(select:disabled) { opacity: .4; }
+.chat-column-picker select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.workspace-header-unified .workspace-heading-context { min-width: 110px; }
+@media (max-width: 1100px) {
+  .workspace-header.workspace-header-unified {
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .workspace-header-unified .workspace-heading-context { flex: 1 0 140px; max-width: 240px; }
+  .workspace-header-unified .button-icon,
+  .workspace-chat-actions .chat-column-title:not([hidden]),
+  .workspace-chat-actions .chat-column-picker { width: 40px; height: 40px; }
+}

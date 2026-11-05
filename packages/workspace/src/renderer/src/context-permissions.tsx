@@ -8,7 +8,7 @@ import { Button } from './components/ui/button'
 import { useUI } from './ui-preferences'
 import './assets/context-permissions.css'
 
-function Control({ label, icon, children }: { label: string; icon: ReactNode; children: ReactNode }) {
+function Control({ label, heading, icon, children }: { label: string; heading?: string; icon: ReactNode; children: ReactNode }) {
   const { t } = useUI()
   const [open, setOpen] = useState(false)
   const [mobile, setMobile] = useState(() => matchMedia('(max-width: 700px)').matches)
@@ -36,9 +36,8 @@ function Control({ label, icon, children }: { label: string; icon: ReactNode; ch
     <Dialog.Trigger asChild><button ref={trigger} type="button" className="context-control" title={label}>{icon}<span>{label}</span></button></Dialog.Trigger>
     <Dialog.Portal>
       {mobile && <Dialog.Overlay className="dialog-overlay" />}
-      <Dialog.Content className={`dialog-content context-dialog${mobile ? '' : ' context-dropdown'}`} style={mobile ? undefined : position}>
-        <div className="dialog-heading"><Dialog.Title>{label}</Dialog.Title><Dialog.Close asChild><Button type="button" variant="ghost" size="icon" aria-label={t('Close', 'Cerrar')}><X size={18} /></Button></Dialog.Close></div>
-        <Dialog.Description>{t('Information and controls for this conversation.', 'Información y controles de esta conversación.')}</Dialog.Description>
+      <Dialog.Content className={`dialog-content context-dialog${mobile ? '' : ' context-dropdown'}`} style={mobile ? undefined : position} aria-describedby={undefined}>
+        <div className="dialog-heading"><Dialog.Title>{heading || label}</Dialog.Title><Dialog.Close asChild><Button type="button" variant="ghost" size="icon" aria-label={t('Close', 'Cerrar')}><X size={18} /></Button></Dialog.Close></div>
         {children}
       </Dialog.Content>
     </Dialog.Portal>
@@ -90,37 +89,53 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
     finally { lock.current = false; setSaving(false) }
   }
   return <>
-    <Control label={`${t('Context', 'Contexto')}: ${tokenLabel} tokens`} icon={<div className="context-token-count" aria-hidden="true"><strong>{tokenLabel}</strong><span className="context-progress-track"><span style={{ width: `${Math.min(100, Math.max(0, percentage ?? 0))}%` }} /></span><small>{percentage === undefined ? '—' : `${percentage}%`}</small></div>}>
-      <p><strong>{t('Context', 'Contexto')}:</strong> {estimate === undefined ? '' : '≈'}{contextLabel}</p>
-      {percentage !== undefined && <><progress className="context-progress" aria-label={t('Context usage', 'Uso de contexto')} max={100} value={Math.min(100, percentage)} /><p>{percentage}% {t('used', 'usado')}</p></>}
-      {percentage === undefined && <p>{t('Percentage unavailable until both context usage and the model limit are known.', 'Porcentaje no disponible hasta conocer el uso de contexto y el límite del modelo.')}</p>}
-      {remaining !== undefined && <p>{t('Remaining at last measurement', 'Disponible en la última medición')}: {format(remaining)} tokens.</p>}
-      <p>{t('Context is input + output from the last measured model call. SDK totals include cache and reasoning once. After compaction, ≈ indicates a text-only estimate (characters / 4), excluding instructions, tools and attachments, until the next runtime measurement.', 'El contexto es entrada + salida de la última llamada medida al modelo. Los totales del SDK incluyen caché y razonamiento una sola vez. Tras compactar, ≈ indica una estimación del texto (caracteres / 4), sin instrucciones, herramientas ni adjuntos, hasta la siguiente medición del runtime.')}</p>
+    <Control heading={t('Context', 'Contexto')} label={`${t('Context', 'Contexto')}: ${tokenLabel} tokens · ${percentage === undefined ? t('Percentage unavailable', 'Porcentaje no disponible') : `${percentage}% ${t('used', 'usado')}`}`} icon={<div className="context-token-count" aria-hidden="true" data-unknown={percentage === undefined}>
+      <svg viewBox="0 0 40 40" focusable="false">
+        <circle className="context-ring-track" cx="20" cy="20" r="17" />
+        {percentage !== undefined && <circle className="context-ring-value" cx="20" cy="20" r="17" pathLength="100" strokeDasharray="100" strokeDashoffset={100 - Math.min(100, Math.max(0, percentage))} transform="rotate(-90 20 20)" />}
+      </svg>
+      <small>{percentage === undefined ? '—' : `${percentage}%`}</small>
+    </div>}>
+      <p><strong>{t('Used', 'Usado')}:</strong> {estimate === undefined ? '' : '≈'}{contextLabel}{percentage !== undefined && ` · ${percentage}%`}</p>
+      {percentage !== undefined && <progress className="context-progress" aria-label={t('Context usage', 'Uso de contexto')} max={100} value={Math.min(100, percentage)} />}
+      {percentage === undefined && <p>{t('Percentage unavailable.', 'Porcentaje no disponible.')}</p>}
+      {estimate !== undefined && <p>{t('≈ Text-only estimate.', '≈ Estimación solo del texto.')}</p>}
+      {remaining !== undefined && <p>{t('Available (last measurement)', 'Disponible (última medición)')}: {format(remaining)} tokens.</p>}
       <p><strong>{t('Total consumed', 'Consumo acumulado')}:</strong> {consumptionLabel}</p>
-      <p>{t('Recorded input + output across calls, including continuations and compaction. Cached input is counted once per call. This is not remaining context or subscription quota.', 'Entrada + salida registradas entre llamadas, incluidas continuaciones y compactación. La entrada en caché se cuenta una vez por llamada. No es el contexto disponible ni la cuota de suscripción.')}</p>
-      {consumption.incomplete && <p role="status">{t('Historical usage is incomplete; missing calls cannot be reconstructed.', 'El consumo histórico es incompleto; las llamadas faltantes no pueden reconstruirse.')}</p>}
       <fieldset disabled={busy || compacting || !!conversation.queue?.length || !model}>
-        <legend>{t('Compact context — target reduction', 'Compactar contexto — reducción deseada')}</legend>
+        <legend>{t('Reduce context', 'Reducir contexto')}</legend>
         {([30, 50, 70] as const).map((reduction) => <Button key={reduction} type="button" variant="secondary" onClick={() => void compact(reduction)}>{reduction}%</Button>)}
       </fieldset>
-      <p>{t('Manual, approximate reduction. Recent messages remain intact. Higher reductions lose more detail; visible history and total consumption are preserved.', 'Reducción manual y aproximada. Los mensajes recientes permanecen intactos. Una mayor reducción pierde más detalle; el historial visible y el consumo total se conservan.')}</p>
+      <p>{t('Approximate reduction. Uses tokens and may lose detail.', 'Reducción aproximada. Consume tokens y puede perder detalles.')}</p>
       {compacting && <p role="status">{t('Compacting context…', 'Compactando contexto…')}</p>}
       {compactError && <p role="alert" className="error-text">{compactError}</p>}
+      <details>
+        <summary>{t('Details', 'Detalles')}</summary>
+        <p>{t('Context is input + output from the last measured model call. SDK totals include cache and reasoning once. After compaction, ≈ indicates a text-only estimate (characters / 4), excluding instructions, tools and attachments, until the next runtime measurement.', 'El contexto es entrada + salida de la última llamada medida al modelo. Los totales del SDK incluyen caché y razonamiento una sola vez. Tras compactar, ≈ indica una estimación del texto (caracteres / 4), sin instrucciones, herramientas ni adjuntos, hasta la siguiente medición del runtime.')}</p>
+        {percentage === undefined && <p>{t('The percentage requires both context usage and the model limit.', 'El porcentaje requiere conocer el uso de contexto y el límite del modelo.')}</p>}
+        <p>{t('Recorded input + output across calls, including continuations and compaction. Cached input is counted once per call. This is not remaining context or subscription quota.', 'Entrada + salida registradas entre llamadas, incluidas continuaciones y compactación. La entrada en caché se cuenta una vez por llamada. No es el contexto disponible ni la cuota de suscripción.')}</p>
+        {consumption.incomplete && <p>{t('Historical usage is incomplete; missing calls cannot be reconstructed.', 'El consumo histórico es incompleto; las llamadas faltantes no pueden reconstruirse.')}</p>}
+        <p>{t('Recent messages remain intact. Higher reductions lose more detail; visible history and total consumption are preserved.', 'Los mensajes recientes permanecen intactos. Una mayor reducción pierde más detalle; el historial visible y el consumo total se conservan.')}</p>
+      </details>
     </Control>
-    <Control label={permissionLabel(mode)} icon={<ShieldCheck size={15} />}>
+    <Control heading={t('Permissions', 'Permisos')} label={permissionLabel(mode)} icon={<ShieldCheck size={15} />}>
       <fieldset className="permission-options" disabled={saving}>
         <legend>{t('Agent permissions', 'Permisos del agente')}</legend>
-        <label><input type="radio" name={`permission-${conversation.id}`} checked={mode === 'read-only'} onChange={() => void change('read-only')} />{permissionLabel('read-only')}<small>{t('Explore and respond, without file writes, terminal, or MCP.', 'Explorar y responder, sin escribir archivos, terminal ni MCP.')}</small></label>
-        <label><input type="radio" name={`permission-${conversation.id}`} checked={mode === 'approval'} onChange={() => void change('approval')} />{permissionLabel('approval')}<small>{t('Every write, command, or MCP execution requires explicit approval.', 'Cada escritura, comando o ejecución MCP requiere aprobación explícita.')}</small></label>
-        <label><input type="radio" name={`permission-${conversation.id}`} checked={mode === 'full-access'} onChange={() => void change('full-access')} />{permissionLabel('full-access')}<small>{t('Automatic writes. Terminal and MCP must be enabled separately; authorized tools run without prompting, including ask permissions. Explicit blocks are respected.', 'Escrituras automáticas. Terminal y MCP se habilitan por separado; las herramientas autorizadas se ejecutan sin preguntar, incluidos permisos de consulta. Se respetan los bloqueos explícitos.')}</small></label>
+        <label><input type="radio" name={`permission-${conversation.id}`} checked={mode === 'read-only'} onChange={() => void change('read-only')} />{permissionLabel('read-only')}<small>{t('No file writes, terminal, or MCP.', 'Sin escribir archivos, terminal ni MCP.')}</small></label>
+        <label><input type="radio" name={`permission-${conversation.id}`} checked={mode === 'approval'} onChange={() => void change('approval')} />{permissionLabel('approval')}<small>{t('Approve each write, command, or MCP action.', 'Aprueba cada escritura, comando o acción MCP.')}</small></label>
+        <label><input type="radio" name={`permission-${conversation.id}`} checked={mode === 'full-access'} onChange={() => void change('full-access')} />{permissionLabel('full-access')}<small>{t('Writes and authorized tools run without prompting. Terminal and MCP require separate access.', 'Escrituras y herramientas autorizadas sin preguntar. Terminal y MCP requieren acceso aparte.')}</small></label>
       </fieldset>
-      {mode === 'full-access' && <p role="status">{t('Full access active: authorized operations run automatically. Stopping does not undo completed changes.', 'Acceso completo activo: las operaciones autorizadas se ejecutan automáticamente. Detener no deshace cambios completados.')}</p>}
-      <p>{t('Saved per conversation and applied to queued messages. Does not change manual terminal, browser, or Git controls.', 'Guardado por conversación y aplicado a mensajes en cola. No cambia los controles manuales de terminal, navegador o Git.')}</p>
+      {mode === 'full-access' && <p role="status">{t('Automatic actions. Stopping does not undo changes.', 'Acciones automáticas. Detener no deshace cambios.')}</p>}
       {busy && !pending && <p role="status">{t('Select another permission to apply it and continue automatically.', 'Selecciona otro permiso para aplicarlo y continuar automáticamente.')}</p>}
       {pending && pending !== mode && <div><p role="status">{t('Switch to', 'Cambiar a')} <strong>{permissionLabel(pending)}</strong>: {t('the current step will finish safely, pending approval will be rejected, and work will resume automatically with the new permissions. Completed actions will not be undone.', 'el paso actual terminará de forma segura, la aprobación pendiente se rechazará y el trabajo continuará automáticamente con los nuevos permisos. Las acciones completadas no se desharán.')}</p><Button type="button" disabled={saving} onClick={() => void change(pending, true)}>{t('Apply and continue', 'Aplicar y continuar')}</Button><Button type="button" variant="secondary" disabled={saving} onClick={() => setPending(null)}>{t('Cancel', 'Cancelar')}</Button></div>}
       {saving && <p role="status">{t('Saving permissions…', 'Guardando permisos…')}</p>}
       {error && <p role="alert" className="error-text">{error}</p>}
-      <p>{t('Configure terminal and MCP servers in Settings → Terminal and MCP.', 'Configura terminal y servidores MCP en Ajustes → Terminal y MCP.')}</p>
+      <details>
+        <summary>{t('Details', 'Detalles')}</summary>
+        <p>{t('Saved per conversation, including queued messages, until you change it. Manual terminal, browser, and Git controls are unaffected.', 'Se guarda por conversación, incluidos los mensajes en cola, hasta que lo cambies. No afecta a los controles manuales de terminal, navegador y Git.')}</p>
+        <p>{t('Full access includes tools set to ask; explicit blocks are respected. Terminal and MCP are not sandboxed to the workspace.', 'El acceso completo incluye herramientas configuradas para preguntar; se respetan los bloqueos explícitos. Terminal y MCP no están aislados al workspace.')}</p>
+        <p>{t('Enable terminal and MCP in Settings → Terminal and MCP.', 'Habilita terminal y MCP en Ajustes → Terminal y MCP.')}</p>
+      </details>
     </Control>
   </>
 }

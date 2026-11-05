@@ -1,8 +1,9 @@
 import { layoutKey, stringList, usePersistentLayout } from './use-persistent-layout'
+import { ChatHeaderTarget } from './chat-deck'
 import { ActivityCenter } from './activity-center'
 import { NotificationPreferences } from './notification-preferences'
-import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react'
-import { ArrowUpRight, FolderPlus, GitBranch, Globe, Menu, MessageSquare, Plus, Smartphone, TerminalSquare, Columns2, Sparkles, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { RefreshCw, ArrowUpRight, FolderPlus, GitBranch, Globe, Menu, MessageSquare, Plus, Smartphone, TerminalSquare, Columns2, Sparkles, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import type { Conversation, Layout, Worktree } from '../../shared/contracts'
 import { panes } from '../../shared/contracts'
 import { api, errorMessage } from './api'
@@ -23,6 +24,9 @@ import './assets/workspace-chrome.css'
 export function App() {
   const { t } = useUI()
   const { state, authenticated, connected, refresh } = useWorkspace()
+  const [chatHeaderTarget, setChatHeaderTarget] = useState<HTMLDivElement | null>(null)
+  const titleLock = useRef(false)
+  const [regeneratingTitle, setRegeneratingTitle] = useState(false)
   const [mobile, setMobile] = useState(() => matchMedia('(max-width: 700px)').matches)
   useEffect(() => {
     const query = matchMedia('(max-width: 700px)')
@@ -62,6 +66,7 @@ export function App() {
   const [confirmation, setConfirmation] = useState<{ title: string; description: string; perform: () => Promise<void> }>()
   const project = state?.projects.find((item) => item.id === projectId)
   const conversation = state?.conversations.find((item) => item.id === conversationId && item.projectId === projectId && item.workspacePath === workspacePath)
+  const headerConversation = state?.conversations.find((item) => item.id === focusedChatId && item.projectId === projectId && item.workspacePath === workspacePath) || conversation
   useEffect(() => { localStorage.setItem('alfred.sidebarCollapsed', String(sidebarCollapsed)) }, [sidebarCollapsed])
   useEffect(() => {
     if (state && !state.projects.some((item) => item.id === projectId)) selectSpace(state.projects[0]?.id || '')
@@ -110,6 +115,17 @@ export function App() {
       const next = await api<Conversation>('/conversations', { projectId, workspacePath: path || project.path })
       await refresh(); setWorkspacePath(next.workspacePath); setConversationId(next.id); setActivePane(panes(next.layout)[0].id); setMobileOpen(false)
     })
+  }
+  async function regenerateTitle() {
+    if (!headerConversation || titleLock.current) return
+    titleLock.current = true
+    setRegeneratingTitle(true)
+    setError('')
+    try {
+      await api(`/conversations/${headerConversation.id}/title/regenerate`, {})
+      await refresh()
+    } catch (error) { setError(errorMessage(error)) }
+    finally { titleLock.current = false; setRegeneratingTitle(false) }
   }
   function updateLayout(layout: Layout) {
     if (conversation) void execute(async () => { await api(`/conversations/${conversation.id}/layout`, layout, 'PUT'); await refresh() })
@@ -191,8 +207,9 @@ export function App() {
         <span className="mobile-only"><Button variant="ghost" size="icon" aria-label={t('Open spaces', 'Abrir espacios')} aria-controls="workspace-sidebar" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu size={19} /></Button></span>
         <div className="workspace-heading-context">
           <div className="workspace-breadcrumb"><span className="breadcrumb-project" title={project?.name}>{project?.name || t('Welcome to Alfred', 'Bienvenido a Alfred')}</span>{project && <><span className="breadcrumb-slash">/</span><GitBranch size={13} /><span className="breadcrumb-branch" title={workspacePath}>{worktrees.find((tree) => tree.path === workspacePath)?.branch || t('Workspace', 'Espacio')}</span></>}</div>
-          {conversation && !floatingIds.length && <div className="conversation-title"><span title={conversation.title}>{conversation.title}</span></div>}
+          {headerConversation && <div className="conversation-title" aria-busy={regeneratingTitle}><span title={headerConversation.title}>{headerConversation.title}</span><Button variant="ghost" size="icon" disabled={regeneratingTitle || !connected || !headerConversation.messages.length || !headerConversation.lastProvider || state.agents[headerConversation.id]?.status === 'running' || state.agents[headerConversation.id]?.status === 'waiting'} onClick={() => void regenerateTitle()} aria-label={regeneratingTitle ? t('Regenerating title…', 'Regenerando título…') : t('Regenerate title with recent context', 'Regenerar título con el contexto reciente')} title={t('Regenerate using the last provider used in this conversation (consumes tokens)', 'Regenerar con el último proveedor usado en esta conversación (consume tokens)')}><RefreshCw size={14} /></Button></div>}
         </div>
+        <div className="workspace-chat-actions" ref={setChatHeaderTarget} />
         <div className="panel-tools">
           <ActivityCenter state={state} connected={connected} select={openConversation} />
           {conversation && (['terminal', 'browser', 'git'] as const).filter((kind) => !mobile || kind === 'git').map((kind) => {
@@ -200,15 +217,15 @@ export function App() {
             const Icon = kind === 'terminal' ? TerminalSquare : kind === 'browser' ? Globe : GitBranch
             const exists = panes(conversation.layout).some((pane) => pane.kind === kind)
             const shown = exists && tools.visible[kind]
-            return <Button key={kind} variant="ghost" size="small" disabled={busy || (!exists && panes(conversation.layout).length >= 8) || (kind === 'git' && project?.kind !== 'git')} onClick={() => toggleTool(kind)} aria-label={label} aria-pressed={shown} title={`${shown ? t('Hide', 'Ocultar') : t('Show', 'Mostrar')} ${label}`}><Icon size={15} /><span>{label}</span></Button>
+            return <Button key={kind} variant="ghost" size="icon" disabled={busy || (!exists && panes(conversation.layout).length >= 8) || (kind === 'git' && project?.kind !== 'git')} onClick={() => toggleTool(kind)} aria-label={label} aria-pressed={shown} title={`${shown ? t('Hide', 'Ocultar') : t('Show', 'Mostrar')} ${label}`}><Icon size={16} /></Button>
           })}
-          {canConnectPhone && <Button variant="ghost" size="small" onClick={() => setDialog('phone')} aria-label={phoneLabel} title={phoneLabel}><Smartphone size={17} /><span>{tunnel?.state === 'connected' && !tunnelError ? t('Connected', 'Conectado') : ''}</span></Button>}
+          {canConnectPhone && <Button variant="ghost" size="icon" onClick={() => setDialog('phone')} aria-label={phoneLabel} title={phoneLabel}><Smartphone size={17} /></Button>}
         </div>
       </header>
       {(error || worktreeError) && <div className="app-error" role="alert"><span>{error || worktreeError}</span><Button variant="ghost" size="small" onClick={() => { setError(''); setWorktreeError('') }}>{t('Close', 'Cerrar')}</Button></div>}
       {selecting && <div className="connection-banner" role="status">{t('Select a folder in the system dialog…', 'Selecciona una carpeta en el diálogo del sistema…')}</div>}
       {!connected && <div className="connection-banner" role="status">{t('Disconnected from the server. Agent status cannot be verified.', 'Desconectado del servidor. No se puede verificar el estado del agente.')}</div>}
-      {conversation ? <PanelLayout onActiveChatChange={setFocusedChatId} floatingIds={floatingIds} setFloatingIds={setFloatingIds} mobile={mobile} key={conversation.id} conversation={conversation} state={state} active={activePane} setActive={setActivePane} update={updateLayout} settings={() => setDialog('settings')} visible={tools.visible} toggle={toggleTool} maximized={tools.maximized && (!mobile || tools.maximized === 'git') && panes(conversation.layout).some((pane) => pane.kind === tools.maximized) ? tools.maximized : null} maximize={maximizeTool} addTerminal={() => addTool('terminal')} busy={busy} />
+      {conversation ? <ChatHeaderTarget.Provider value={chatHeaderTarget}><PanelLayout onActiveChatChange={setFocusedChatId} floatingIds={floatingIds} setFloatingIds={setFloatingIds} mobile={mobile} key={conversation.id} conversation={conversation} state={state} active={activePane} setActive={setActivePane} update={updateLayout} settings={() => setDialog('settings')} visible={tools.visible} toggle={toggleTool} maximized={tools.maximized && (!mobile || tools.maximized === 'git') && panes(conversation.layout).some((pane) => pane.kind === tools.maximized) ? tools.maximized : null} maximize={maximizeTool} addTerminal={() => addTool('terminal')} busy={busy} /></ChatHeaderTarget.Provider>
         : <div className="start-screen">
           <div className="start-orbit"><span className="brand-mark">a<span>·</span></span><span className="orbit-symbol orbit-one"><MessageSquare size={20} /></span><span className="orbit-symbol orbit-two"><GitBranch size={20} /></span><span className="orbit-symbol orbit-three"><TerminalSquare size={20} /></span></div>
           <p className="eyebrow">{t('LESS NOISE. MORE SPACE.', 'MENOS RUIDO. MÁS ESPACIO.')}</p><h1>{project ? t('Your next step starts here.', 'Tu siguiente paso empieza aquí.') : t('A place for your ideas.', 'Un lugar para tus ideas.')}</h1>
