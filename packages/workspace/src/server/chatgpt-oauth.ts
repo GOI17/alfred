@@ -35,7 +35,7 @@ export class ChatgptOAuth {
     private changed: () => void,
   ) {}
   state() {
-    const data = this.store.get()
+    const data = this.store.oauthState()
     return {
       accounts: data.chatgptAccounts.map((account) => ({
         id: account.id,

@@ -78,12 +78,14 @@
   top: 24px;
   bottom: 24px;
   width: 26px;
-  overflow: clip;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
 .message-navigation button {
   display: flex;
-  flex: 0 1 11px;
-  min-height: 0;
+  flex: 0 0 11px;
+  min-height: 11px;
   align-items: center;
   justify-content: flex-start;
   width: 24px;

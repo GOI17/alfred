@@ -1,6 +1,7 @@
+import { providerNames } from './provider-names'
 import { CopilotSettings } from './copilot-settings'
 import { useEffect, useState } from 'react'
-import type { Project, ProviderId, ApiProviderId, PublicState } from '../../shared/contracts'
+import type { Project, ApiProviderId, PublicState } from '../../shared/contracts'
 import { apiProviderId } from '../../shared/contracts'
 import { api, errorMessage } from './api'
 import { Button } from './components/ui/button'
@@ -62,9 +63,6 @@ export function WorktreeDialog({ project, onClose, onAdded }: {
       </div>
     </form>
   </Dialog>
-}
-export const providerNames: Record<ProviderId, string> = {
-  copilot: 'GitHub Copilot', opencode: 'OpenCode Zen', openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', chatgpt: 'ChatGPT',
 }
 const providerLinks: Record<ApiProviderId, string> = {
   copilot: 'https://github.com/settings/copilot',

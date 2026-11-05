@@ -80,6 +80,7 @@ export function workspaceTools(root: string, approve: (path: string, content: st
           throw new Error('The file changed during the operation. Read it again and propose the change.')
         checkStopped()
         await writeFile(target, content, { encoding: 'utf8', flag: before === undefined ? 'wx' : 'w' })
+        await invalidateWorkspaceFiles(root)
         return `File saved: ${path}`
       },
     }),
@@ -119,6 +120,7 @@ export function workspaceTools(root: string, approve: (path: string, content: st
             checkStopped()
             await writeFile(file.target, file.content, { encoding: 'utf8', flag: file.before === undefined ? 'wx' : 'w' })
             saved.push(file.path)
+            await invalidateWorkspaceFiles(root)
           } catch {
             return { saved, failed: file.path, notWritten: prepared.slice(saved.length).map((item) => item.path), error: 'The batch was not completed. Files listed in saved were saved; review pending files before retrying.' }
           }
@@ -139,26 +141,95 @@ async function fingerprint(path: string) {
   }
 }
 
-// Bounded traversal: never follow links or enter private/dependency directories.
-export async function listWorkspaceFiles(root: string, query = '') {
-  const files: string[] = []
-  const pending = ['.']
-  let visited = 0
-  let truncated = false
-  while (pending.length && visited < 500 && files.length < 100) {
-    const path = pending.shift()!
-    visited++
-    const entries = await readdir(await workspaceFile(root, path), { withFileTypes: true })
-    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      const name = path === '.' ? entry.name : `${path}/${entry.name}`
-      if (privatePath(name) || entry.isSymbolicLink()) continue
-      if (entry.isDirectory() && !['dist', 'build', 'coverage', '.next'].includes(entry.name)) {
-        if (pending.length < 1000 && name.split('/').length < 20) pending.push(name)
-        else truncated = true
+// Short-lived, bounded filename index. Never cache file contents or bypass
+// workspaceFile when opening a result. Expiration handles external git/editors.
+type FileIndex = { files: { path: string; search: string }[]; truncated: boolean; expires: number }
+const fileIndexes = new Map<string, FileIndex>()
+type IndexBuild = { controller: AbortController; promise: Promise<FileIndex>; readers: number }
+const indexBuilds = new Map<string, IndexBuild>()
+export async function invalidateWorkspaceFiles(root: string) {
+  const canonical = await realpath(root)
+  fileIndexes.delete(canonical)
+  // Existing readers may finish, but their obsolete build cannot refill the cache.
+  indexBuilds.delete(canonical)
+}
+async function buildIndex(canonical: string, signal: AbortSignal): Promise<FileIndex> {
+    const files: FileIndex['files'] = []
+    const pending = ['.']
+    let cursor = 0
+    let truncated = false
+    while (cursor < pending.length && cursor < 500 && files.length < 20_000) {
+      signal?.throwIfAborted()
+      const path = pending[cursor++]
+      let entries
+      try {
+        entries = await readdir(await workspaceFile(canonical, path), { withFileTypes: true })
+      } catch (error) {
+        // Directories may disappear during checkout. Never cache an unsafe path.
+        if (path === '.') throw error
+        continue
       }
-      if (entry.isFile() && name.toLowerCase().includes(query.toLowerCase())) files.push(name)
-      if (files.length >= 100) { truncated = true; break }
+      signal?.throwIfAborted()
+      for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+        const name = path === '.' ? entry.name : `${path}/${entry.name}`
+        if (privatePath(name) || entry.isSymbolicLink()) continue
+        if (entry.isDirectory() && !['dist', 'build', 'coverage', '.next'].includes(entry.name)) {
+          if (pending.length < 1500 && name.split('/').length < 20) pending.push(name)
+          else truncated = true
+        }
+        if (entry.isFile()) files.push({ path: name, search: name.toLowerCase() })
+        if (files.length >= 20_000) { truncated = true; break }
+      }
+    }
+    signal?.throwIfAborted()
+    return { files, truncated: truncated || cursor < pending.length, expires: Date.now() + 10_000 }
+}
+async function sharedIndex(canonical: string, signal?: AbortSignal): Promise<FileIndex> {
+  signal?.throwIfAborted()
+  let build = indexBuilds.get(canonical)
+  if (!build) {
+    const controller = new AbortController()
+    const created: IndexBuild = { controller, readers: 0, promise: undefined! }
+    created.promise = buildIndex(canonical, controller.signal).then(index => {
+      if (indexBuilds.get(canonical) === created && !controller.signal.aborted) {
+        fileIndexes.delete(canonical)
+        while (fileIndexes.size >= 8) fileIndexes.delete(fileIndexes.keys().next().value!)
+        fileIndexes.set(canonical, index)
+      }
+      return index
+    }).finally(() => {
+      if (indexBuilds.get(canonical) === created) indexBuilds.delete(canonical)
+    })
+    indexBuilds.set(canonical, created)
+    build = created
+  }
+  const current = build
+  current.readers++
+  try {
+    return await new Promise<FileIndex>((resolve, reject) => {
+      const aborted = () => reject(signal?.reason ?? new Error('Search canceled'))
+      signal?.addEventListener('abort', aborted, { once: true })
+      current.promise.then(resolve, reject).finally(() => signal?.removeEventListener('abort', aborted))
+    })
+  } finally {
+    if (--current.readers === 0) {
+      if (indexBuilds.get(canonical) === current) indexBuilds.delete(canonical)
+      current.controller.abort()
     }
   }
-  return { files, truncated: truncated || pending.length > 0 }
+}
+export async function listWorkspaceFiles(root: string, query = '', signal?: AbortSignal) {
+  signal?.throwIfAborted()
+  const canonical = await realpath(root)
+  signal?.throwIfAborted()
+  const cached = fileIndexes.get(canonical)
+  const index = cached && cached.expires > Date.now() ? cached : await sharedIndex(canonical, signal)
+  signal?.throwIfAborted()
+  const needle = query.toLowerCase()
+  const matches: string[] = []
+  for (const file of index.files) {
+    if (file.search.includes(needle)) matches.push(file.path)
+    if (matches.length > 100) break
+  }
+  return { files: matches.slice(0, 100), truncated: index.truncated || matches.length > 100 }
 }

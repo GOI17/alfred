@@ -1,6 +1,7 @@
 import { afterEach, expect, it } from 'vitest'
 import { MockLanguageModelV4 } from 'ai/test'
 import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import { WorkspaceService } from '../src/server/service.js'
 import { gitFixture } from './fixtures.js'
@@ -27,7 +28,7 @@ async function setup(text: string) {
     const current = db.conversations.find((item) => item.id === conversation.id)!
     current.title = 'Título anterior'
     current.lastProvider = 'openai'
-    current.messages = [{ id: 'recent', role: 'user', text: 'Ahora quiero regenerar el título con contexto reciente', createdAt: new Date().toISOString(), notes: [] }]
+    current.messages = [{ id: randomUUID(), role: 'user', text: 'Ahora quiero regenerar el título con contexto reciente', createdAt: new Date().toISOString(), notes: [] }]
   })
   return { service, conversation, model }
 }

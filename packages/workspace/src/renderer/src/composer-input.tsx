@@ -47,6 +47,8 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
     window.addEventListener('resize', resize)
     return () => window.removeEventListener('resize', resize)
   }, [value])
+  const suggestions = useRef<HTMLDivElement>(null)
+  const activeOption = useRef<HTMLButtonElement>(null)
   const id = useId()
   const [caret, setCaret] = useState(value.length)
   const [focused, setFocused] = useState(false)
@@ -96,6 +98,18 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
     ? (result.key === key ? result.files : []).map((path) => ({ name: path, description: t('Workspace file', 'Archivo del espacio'), text: `@${JSON.stringify(path)} ` }))
     : commands.filter((command) => command.name.toLowerCase().includes(query.toLowerCase()))
   const active = Math.min(selected, Math.max(0, items.length - 1))
+  useLayoutEffect(() => {
+    const container = suggestions.current
+    const option = activeOption.current
+    if (!open || !container || !option) return
+    // Scroll only the popup, never the chat or the page, and retain input focus.
+    const bounds = container.getBoundingClientRect()
+    const item = option.getBoundingClientRect()
+    const top = bounds.top + container.clientTop
+    const bottom = top + container.clientHeight
+    if (item.top < top) container.scrollTop -= top - item.top
+    else if (item.bottom > bottom) container.scrollTop += item.bottom - bottom
+  }, [open, active, key, items.length, position.maxHeight])
   function choose(index: number) {
     const item = items[index]
     if (!item) return
@@ -112,11 +126,11 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
   }
   const listLabel = marker === 'directory' ? t('Folders', 'Carpetas') : marker === '@' ? t('Project files', 'Archivos del proyecto') : t('Commands', 'Comandos')
   return <div style={{ position: 'relative' }}>
-    {open && createPortal(<div style={{ position: 'fixed', ...position, boxSizing: 'border-box', zIndex: 1000, overflowY: 'auto', background: 'var(--surface)', color: 'var(--foreground)', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
+    {open && createPortal(<div ref={suggestions} style={{ position: 'fixed', ...position, boxSizing: 'border-box', zIndex: 1000, overflowY: 'auto', background: 'var(--surface)', color: 'var(--foreground)', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
       <div>{listLabel} · {t('↑ ↓ select · Enter accept · Esc close', '↑ ↓ seleccionar · Enter aceptar · Esc cerrar')}</div>
       {marker === '/' && harness && harnessError && <p role="status">{t('Could not refresh harness commands.', 'No se pudieron actualizar los comandos del harness.')}</p>}
       <div id={id} role="listbox" aria-label={listLabel}>
-        {items.map((item, index) => <button id={`${id}-${index}`} key={item.name} type="button" role="option" aria-selected={active === index}
+        {items.map((item, index) => <button ref={active === index ? activeOption : undefined} id={`${id}-${index}`} key={item.name} type="button" role="option" aria-selected={active === index}
           style={{ display: 'block', width: '100%', textAlign: 'left', padding: 8, background: active === index ? 'var(--accent)' : 'transparent', color: 'inherit', border: 0 }}
           onMouseDown={(event) => event.preventDefault()} onClick={() => choose(index)}>
           <strong>{item.name}</strong> <small>{item.description}</small>

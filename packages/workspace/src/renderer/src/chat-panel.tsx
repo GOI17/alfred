@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { ArrowUp, Square, Sparkles, FileCheck2, Check, X, Paperclip } from 'lucide-react'
 import type { AgentState, Conversation, PublicState, ProviderId } from '../../shared/contracts'
 import { attachmentMediaType, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_TOTAL_ATTACHMENT_BYTES, type Attachment } from '../../shared/attachments'
@@ -7,6 +7,7 @@ import { Button } from './components/ui/button'
 import { ComposerInput } from './composer-input'
 import { ModelPicker } from './model-picker'
 import { SubagentsPanel } from './subagents-panel'
+import { VirtualMessage } from './virtual-message'
 import { MessageNavigation } from './message-navigation'
 import { ContextPermissions } from './context-permissions'
 import { useUI } from './ui-preferences'
@@ -18,6 +19,47 @@ import './assets/message-phases.css'
 const Markdown = lazy(() => import('./message-markdown'))
 type Props = { conversation: Conversation; state: PublicState; agent?: AgentState; settings: () => void }
 export function ChatPanel(props: Props) { return <ConversationChat key={props.conversation.id} {...props} /> }
+// Stable message references from incremental state updates skip historic Markdown work.
+const ChatMessage = memo(function ChatMessage({ message, conversationId, active }: {
+  message: Conversation['messages'][number]; conversationId: string; active: boolean
+}) {
+  const { t, language } = useUI()
+  return <article className="message" data-role={message.role}>
+            <div className="message-avatar">{message.role === 'user' ? t('You', 'Tú') : 'a·'}</div>
+            <div className="message-content">
+              <div className="message-heading">{message.role === 'user' ? t('You', 'Tú') : t('Assistant', 'Asistente')}<time>{new Date(message.createdAt).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}</time></div>
+              {!!message.attachments?.length && <div className="attachment-list" aria-label={t('Attachments', 'Adjuntos')}>
+                {message.attachments.map((file, index) => <a className="attachment-chip" key={index} download={file.name} href={`data:${file.mediaType};base64,${file.data}`} title={`${t('Download', 'Descargar')} ${file.name}`}><Paperclip size={14} /><span>{file.name}</span></a>)}
+              </div>}
+              {message.role === 'assistant' && message.segments?.length ? <div className="message-phases">
+                {message.segments.some((segment) => segment.kind === 'activity') && <details className="message-activity" open={active ? true : undefined}>
+                  <summary>{t('Activity', 'Actividad')}</summary>
+                  {message.segments.filter((segment) => segment.kind === 'activity').map((segment, index) => <div className="markdown message-phase" key={index}><Suspense fallback={<p>{segment.text}</p>}><Markdown conversationId={conversationId}>{segment.text}</Markdown></Suspense></div>)}
+                </details>}
+                {message.segments.filter((segment) => segment.kind !== 'activity').map((segment, index) => <section className="message-result" key={index}>
+                  <h3>{segment.kind === 'result' ? t('Result', 'Resultado') : active ? t('Response in progress', 'Respuesta en curso') : t('Partial response', 'Respuesta parcial')}</h3>
+                  <div className="markdown"><Suspense fallback={<p>{segment.text}</p>}><Markdown conversationId={conversationId}>{segment.text}</Markdown></Suspense></div>
+                </section>)}
+              </div> : <div className="markdown"><Suspense fallback={<p>{message.text}</p>}><Markdown conversationId={conversationId}>{message.text}</Markdown></Suspense></div>}
+              {message.notes.length > 0 && <details className="tool-notes"><summary>{t('Tool log and notices', 'Herramientas y avisos')} · {message.notes.length}</summary>{message.notes.map((note, index) => <p key={index}>{note}</p>)}</details>}
+            </div>
+          </article>
+})
+// Composer updates must not recreate the historic list or its children.
+const MessageList = memo(function MessageList({ messages, conversationId, busy, scroller }: {
+  messages: Conversation['messages']; conversationId: string; busy: boolean; scroller: RefObject<HTMLDivElement | null>
+}) {
+  return messages.map((message, index) => <MessageRow key={message.id} message={message} conversationId={conversationId}
+    active={busy && index === messages.length - 1} scroller={scroller} initial={index >= messages.length - 8} />)
+})
+const MessageRow = memo(function MessageRow({ message, conversationId, active, scroller, initial }: {
+  message: Conversation['messages'][number]; conversationId: string; active: boolean; scroller: RefObject<HTMLDivElement | null>; initial: boolean
+}) {
+  return <VirtualMessage id={message.id} role={message.role} scroller={scroller} initial={initial}>
+    <ChatMessage message={message} conversationId={conversationId} active={active} />
+  </VirtualMessage>
+})
+const emptyQueue: NonNullable<Conversation['queue']> = []
 function ApprovalCard({ approval, conversationId, onError }: {
   approval: NonNullable<AgentState['approval']>; conversationId: string; onError: (message: string) => void
 }) {
@@ -72,11 +114,25 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
   const sendLock = useRef(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const composer = useRef<HTMLFormElement>(null)
+  // Only request initial focus for empty conversations, never on message updates.
+  const initiallyEmpty = useRef(!conversation.messages.length && !conversation.queue?.length)
+  useEffect(() => {
+    if (!initiallyEmpty.current) return
+    const frame = requestAnimationFrame(() => {
+      // Do not steal focus from a dialog opened while the chat mounts.
+      if (document.querySelector('[role="dialog"]')) return
+      composer.current?.querySelector('textarea')?.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [])
   const messageContent = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const follow = useChatReading(conversation.id, scroller, messageContent)
+  const stopFollowing = useCallback(() => { follow.current = false }, [follow])
   const busy = agent?.status === 'running' || agent?.status === 'waiting'
-  const queue = conversation.queue || []
+  const queue = conversation.queue || emptyQueue
+  const history = useMemo(() => [...conversation.messages.filter(message => message.role === 'user'), ...queue]
+    .map(message => message.text).filter(text => text.trim()), [conversation.messages, queue])
   const configured = state.providers.some((item) => item.id === provider)
   const canSend = !sending && !reading && !queueAction && (!!text.trim() || !!attachments.length)
   useEffect(() => { try { sessionStorage.setItem(`alfred.draft.${conversation.id}`, text) } catch { /* Storage may be unavailable. */ } }, [conversation.id, text])
@@ -152,32 +208,13 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
             <p>{t('An idea, a problem, the next step.', 'Una idea, un problema, el siguiente paso.')}<br />{t('It all starts here, in your project.', 'Todo empieza aquí, en tu proyecto.')}</p>
             <div className="prompt-suggestions">{[t('Explore this project', 'Explora este proyecto'), t('Help me plan a feature', 'Ayúdame a planear una funcionalidad'), t('Review the code and suggest improvements', 'Revisa el código y sugiere mejoras')].map((prompt) => <button key={prompt} onClick={() => setText(prompt)}>{prompt}<span>↗</span></button>)}</div>
           </div>}
-          {conversation.messages.map((message) => <article key={message.id} className="message" data-role={message.role} data-message-id={message.id}>
-            <div className="message-avatar">{message.role === 'user' ? t('You', 'Tú') : 'a·'}</div>
-            <div className="message-content">
-              <div className="message-heading">{message.role === 'user' ? t('You', 'Tú') : t('Assistant', 'Asistente')}<time>{new Date(message.createdAt).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}</time></div>
-              {!!message.attachments?.length && <div className="attachment-list" aria-label={t('Attachments', 'Adjuntos')}>
-                {message.attachments.map((file, index) => <a className="attachment-chip" key={index} download={file.name} href={`data:${file.mediaType};base64,${file.data}`} title={`${t('Download', 'Descargar')} ${file.name}`}><Paperclip size={14} /><span>{file.name}</span></a>)}
-              </div>}
-              {message.role === 'assistant' && message.segments?.length ? <div className="message-phases">
-                {message.segments.some((segment) => segment.kind === 'activity') && <details className="message-activity" open={busy && message === conversation.messages.at(-1) ? true : undefined}>
-                  <summary>{t('Activity', 'Actividad')}</summary>
-                  {message.segments.filter((segment) => segment.kind === 'activity').map((segment, index) => <div className="markdown message-phase" key={index}><Suspense fallback={<p>{segment.text}</p>}><Markdown conversationId={conversation.id}>{segment.text}</Markdown></Suspense></div>)}
-                </details>}
-                {message.segments.filter((segment) => segment.kind !== 'activity').map((segment, index) => <section className="message-result" key={index}>
-                  <h3>{segment.kind === 'result' ? t('Result', 'Resultado') : busy && message === conversation.messages.at(-1) ? t('Response in progress', 'Respuesta en curso') : t('Partial response', 'Respuesta parcial')}</h3>
-                  <div className="markdown"><Suspense fallback={<p>{segment.text}</p>}><Markdown conversationId={conversation.id}>{segment.text}</Markdown></Suspense></div>
-                </section>)}
-              </div> : <div className="markdown"><Suspense fallback={<p>{message.text}</p>}><Markdown conversationId={conversation.id}>{message.text}</Markdown></Suspense></div>}
-              {message.notes.length > 0 && <details className="tool-notes"><summary>{t('Tool log and notices', 'Herramientas y avisos')} · {message.notes.length}</summary>{message.notes.map((note, index) => <p key={index}>{note}</p>)}</details>}
-            </div>
-          </article>)}
+          <MessageList messages={conversation.messages} conversationId={conversation.id} busy={busy} scroller={scroller} />
           <SubagentsPanel projections={conversation.subagents} />
           {agent?.status === 'running' && <div className="agent-progress"><span className="status-dot" data-status="running" />{t('Runtime is working…', 'El runtime está trabajando…')}</div>}
           {agent?.approval && <ApprovalCard key={agent.approval.id} approval={agent.approval} conversationId={conversation.id} onError={setError} />}
         </div>
       </div>
-      <MessageNavigation messages={conversation.messages} scroller={scroller} content={messageContent} onNavigate={() => { follow.current = false }} />
+      <MessageNavigation messages={conversation.messages} scroller={scroller} content={messageContent} onNavigate={stopFollowing} />
     </div>
     <div className="composer-wrap">
       {error && <p role="alert" className="error-text">{error}</p>}
@@ -204,7 +241,7 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
         {!!attachments.length && <div className="attachment-list" aria-label={t('Pending attachments', 'Adjuntos pendientes')}>
           {attachments.map((file, index) => <span className="attachment-chip" key={index}><Paperclip size={14} /><span title={file.name}>{file.name}</span><button type="button" disabled={sending || reading} aria-label={`${t('Remove', 'Quitar')} ${file.name}`} onClick={() => setAttachments((current) => current.filter((_, i) => i !== index))}><X size={14} /></button></span>)}
         </div>}
-        <ComposerInput history={[...conversation.messages.filter((message) => message.role === 'user'), ...queue].map((message) => message.text).filter((text) => text.trim())} conversationId={conversation.id} harness={conversation.harness} value={text} onChange={setText} sending={sending} busy={busy} onSend={() => void send()} settings={settings} />
+        <ComposerInput history={history} conversationId={conversation.id} harness={conversation.harness} value={text} onChange={setText} sending={sending} busy={busy} onSend={() => void send()} settings={settings} />
         <div className="composer-footer">
           <div className="attachment-controls">
             <input ref={fileInput} type="file" multiple hidden onChange={(event) => { void addFiles(Array.from(event.target.files || [])); event.target.value = '' }} />

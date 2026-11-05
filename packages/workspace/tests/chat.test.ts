@@ -51,14 +51,14 @@ it('streams native model text, persists it, and owns the agent state on the serv
     'Hola Alfred',
     'Una idea propia.',
   ])
-  expect(await readFile(join(root, 'data', 'workspace.json'), 'utf8')).toContain('Una idea propia.')
+  expect(JSON.stringify((await new Store(join(root, 'data')).open()).get())).toContain('Una idea propia.')
   expect(model.doStreamCalls[0].prompt.at(-1)?.role).toBe('user')
   const measured = service.state().conversations[0].messages.at(-1)?.contextUsage
   expect(measured).toMatchObject({ provider: 'openai', inputTokens: 1, outputTokens: 1 })
-  const savedUsage = JSON.parse(await readFile(join(root, 'data', 'workspace.json'), 'utf8')).conversations[0].messages.at(-1).contextUsage
+  const savedUsage = (await new Store(join(root, 'data')).open()).get().conversations[0].messages.at(-1)!.contextUsage
   expect(savedUsage).toEqual(measured)
-  const savedMessage = JSON.parse(await readFile(join(root, 'data', 'workspace.json'), 'utf8')).conversations[0].messages.at(-1)
-  expect(savedMessage.segments).toEqual([{ kind: 'result', text: 'Una idea propia.' }])
+  const savedMessage = (await new Store(join(root, 'data')).open()).get().conversations[0].messages.at(-1)
+  expect(savedMessage!.segments).toEqual([{ kind: 'result', text: 'Una idea propia.' }])
 })
 it('does not write until approval and handles multiple requested writes one at a time', async () => {
   let step = 0
@@ -147,8 +147,8 @@ it('queues concurrent turns and stopping cancels approval while persisting the p
   expect(service.state().agents[conversation.id]?.status).toBe('idle')
   expect(service.conversation(conversation.id).queuePaused).toBe(true)
   expect(await readFile(join(repository, 'hello.txt'), 'utf8')).toBe('hello\n')
-  const saved = JSON.parse(await readFile(join(root, 'data', 'workspace.json'), 'utf8'))
-  expect(saved.conversations[0].queue[0].text).toBe('Otro turno')
+  const saved = (await new Store(join(root, 'data')).open()).get()
+  expect(saved.conversations[0].queue![0].text).toBe('Otro turno')
   expect(saved.conversations[0].queuePaused).toBe(true)
   await service.chat.resume(conversation.id)
   await expect.poll(() => service.state().agents[conversation.id]?.status).toBe('waiting')

@@ -1,4 +1,4 @@
-import { lstat, realpath, stat } from 'node:fs/promises'
+import { lstat, readFile, realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, resolve, relative, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
@@ -92,7 +92,31 @@ export async function removeWorktree(project: Project, path: string) {
   const tree = (await listWorktrees(project)).find((item) => item.path === canonical)
   if (!tree || tree.main || tree.path === project.path)
     throw new Error('The main workspace cannot be deleted.')
-  await git(project.path, ['worktree', 'remove', '--', tree.path])
+  const actions: string[] = []
+  try {
+    // Only recover our known preparation locks, never arbitrary user locks.
+    if (tree.locked) {
+      const lockPath = (await git(tree.path, ['rev-parse', '--git-path', 'locked'])).stdout.trim()
+      const reason = (await readFile(resolve(tree.path, lockPath), 'utf8')).trim()
+      const match = /^orca-create-preparation:v1:([1-9]\d*):\1-[a-f0-9-]+$/.exec(reason)
+      if (!match) throw new Error(`Unrecognized worktree lock: ${reason}`)
+      const pid = Number(match[1])
+      if (!Number.isSafeInteger(pid) || pid > 2147483647) throw new Error('Invalid lock owner PID.')
+      let alive = true
+      try { process.kill(pid, 0) } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ESRCH') alive = false
+      }
+      if (alive) throw new Error(`Preparation process ${pid} is active or its status cannot be verified.`)
+      // Recheck the lock immediately before unlocking; never force removal.
+      if ((await readFile(resolve(tree.path, lockPath), 'utf8')).trim() !== reason)
+        throw new Error('The worktree lock changed during diagnosis.')
+      await git(project.path, ['worktree', 'unlock', '--', tree.path])
+      actions.push(`Unlocked stale preparation lock owned by exited process ${pid}.`)
+    }
+    await git(project.path, ['worktree', 'remove', '--', tree.path])
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\nRecovery: ${actions.join(' ') || 'No automatic changes made.'} Local files and branch were not forcibly deleted.`)
+  }
 }
 export async function history(path: string, skip = 0): Promise<GitHistory> {
   const [branch, status, head] = await Promise.all([

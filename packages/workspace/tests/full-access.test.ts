@@ -1,3 +1,4 @@
+import { Store } from '../src/server/store.js'
 import { afterEach, expect, it } from 'vitest'
 import { MockLanguageModelV4 } from 'ai/test'
 import { join } from 'node:path'
@@ -58,7 +59,7 @@ it('writes files and batches automatically in YOLO, persists the mode and restor
   expect(await readFile(join(files.repository, 'batch.txt'), 'utf8')).toBe('batch saved')
   await expect(readFile(join(files.repository, '../outside.txt'))).rejects.toThrow()
   await expect(readFile(join(files.repository, '.env'))).rejects.toThrow()
-  const saved = JSON.parse(await readFile(join(files.root, 'data', 'workspace.json'), 'utf8'))
+  const saved = (await new Store(join(files.root, 'data')).open()).get()
   expect(saved.conversations[0].permissionMode).toBe('full-access')
   await service.chat.setPermission(conversation.id, 'approval')
   await service.chat.start(conversation.id, 'Otro cambio', 'openai')

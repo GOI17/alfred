@@ -28,7 +28,14 @@ export function useChatReading(id: string, scroller: RefObject<HTMLDivElement | 
     }
     const save = () => {
       const top = viewport.getBoundingClientRect().top
-      const anchor = Array.from(body.querySelectorAll<HTMLElement>('[data-message-id]')).find((node) => node.getBoundingClientRect().bottom > top)
+      const nodes = body.querySelectorAll<HTMLElement>('[data-message-id]')
+      let low = 0, high = nodes.length
+      while (low < high) {
+        const middle = (low + high) >>> 1
+        if (nodes[middle].getBoundingClientRect().bottom <= top) low = middle + 1
+        else high = middle
+      }
+      const anchor = nodes[low]
       const value: Reading = { top: viewport.scrollTop, follow: restoring ? false : follow.current, anchor: anchor?.dataset.messageId, offset: anchor ? anchor.getBoundingClientRect().top - top : undefined }
       try { sessionStorage.setItem(key, JSON.stringify(value)) } catch { /* Reading remains usable without storage. */ }
     }

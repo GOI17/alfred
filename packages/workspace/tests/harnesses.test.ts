@@ -1,3 +1,4 @@
+import { Store } from '../src/server/store.js'
 import { afterEach, expect, it, vi } from 'vitest'
 import { chmod, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -190,8 +191,8 @@ it('uses selected instructions, commands and profiles in real chat turns, persis
   expect(JSON.stringify(call.tools)).toContain('read_harness_resource')
   expect(JSON.stringify(call.tools)).not.toContain('write_file')
   expect(JSON.stringify(call.tools)).not.toContain('execute_command')
-  const disk = JSON.parse(await readFile(join(f.root, 'data/workspace.json'), 'utf8'))
-  expect(disk.conversations[0].harness.agent).toBe(agent.id)
+  const disk = (await new Store(join(f.root, 'data')).open()).get()
+  expect(disk.conversations[0].harness!.agent).toBe(agent.id)
   expect(disk.conversations[0].messages[0].text).toBe('/opencode:check "API routes" tests')
 })
 

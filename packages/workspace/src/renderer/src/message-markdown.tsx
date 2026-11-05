@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Children, isValidElement, memo, useMemo, useEffect, useRef, useState, type ReactNode } from 'react'
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -19,11 +19,8 @@ function CodeBlock({ children }: { children?: ReactNode }) {
     clearTimeout(timer.current)
     timer.current = setTimeout(() => setStatus('Copy'), 2500)
   }
-  const [language, setLanguage] = useState('text')
-  useEffect(() => {
-    const name = content.current?.querySelector('code')?.className.match(/language-([^\s]+)/)?.[1]
-    setLanguage(name || 'text')
-  }, [children])
+  const code = Children.toArray(children).find(child => isValidElement<{ className?: string }>(child) && child.props.className?.includes('language-'))
+  const language = isValidElement<{ className?: string }>(code) ? code.props.className?.match(/language-([^\s]+)/)?.[1] || 'text' : 'text'
   return <section className="code-editor" aria-label="Code block">
     <header className="code-editor-toolbar"><span>{language}</span><button type="button" onClick={() => void copy()} aria-label="Copy code"><span aria-live="polite">{status}</span></button></header>
     <pre ref={content} tabIndex={0} aria-label="Code, horizontal scrolling">{children}</pre>
@@ -56,10 +53,11 @@ const components: Components = {
 }
 
 export default memo(function MessageMarkdown({ children, conversationId }: { children: string; conversationId?: string }) {
+  const linkedComponents = useMemo<Components>(() => ({ ...components,
+    a: ({ children, href }) => <FileLink href={href} conversationId={conversationId}>{children}</FileLink>,
+    img: ({ alt, src }) => <FileLink href={src} conversationId={conversationId}>{alt || 'View image'}</FileLink>,
+  }), [conversationId])
   return <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}
     urlTransform={(url, key, node) => ((node.tagName === 'a' && key === 'href') || (node.tagName === 'img' && key === 'src')) && localFilePath(url) ? url : defaultUrlTransform(url)}
-    components={{ ...components,
-      a: ({ children, href }) => <FileLink href={href} conversationId={conversationId}>{children}</FileLink>,
-      img: ({ alt, src }) => <FileLink href={src} conversationId={conversationId}>{alt || 'View image'}</FileLink>,
-    }} skipHtml>{children}</Markdown>
+    components={linkedComponents} skipHtml>{children}</Markdown>
 })

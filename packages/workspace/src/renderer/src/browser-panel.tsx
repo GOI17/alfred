@@ -7,9 +7,11 @@ import { Input } from './components/ui/input'
 export function BrowserPanel({
   conversationId,
   paneId,
+  active = true,
 }: {
   conversationId: string
   paneId: string
+  active?: boolean
 }) {
   const socket = useRef<WebSocket>(null),
     canvas = useRef<HTMLDivElement>(null),
@@ -26,7 +28,14 @@ export function BrowserPanel({
   const send = (value: unknown) => {
     if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify(value))
   }
+  const [pageVisible, setPageVisible] = useState(() => !document.hidden)
   useEffect(() => {
+    const update = () => setPageVisible(!document.hidden)
+    document.addEventListener('visibilitychange', update)
+    return () => document.removeEventListener('visibilitychange', update)
+  }, [])
+  useEffect(() => {
+    if (!active || !pageVisible) return
     let disposed = false,
       retry: ReturnType<typeof setTimeout> | undefined
     const resize = () => {
@@ -42,8 +51,9 @@ export function BrowserPanel({
       const current = new WebSocket(socketUrl(`/conversations/${conversationId}/browser/${paneId}`))
       socket.current = current
       current.binaryType = 'blob'
-      current.onopen = () => setOnline(true)
+      current.onopen = () => { if (!disposed) setOnline(true) }
       current.onmessage = (event) => {
+        if (disposed) return
         if (event.data instanceof Blob) {
           const next = URL.createObjectURL(event.data)
           if (image.current) image.current.src = next
@@ -64,6 +74,7 @@ export function BrowserPanel({
         }
       }
       current.onclose = (event) => {
+        if (disposed) return
         setOnline(false)
         if (!disposed && event.code !== 1011) retry = setTimeout(connect, 2000)
       }
@@ -75,10 +86,17 @@ export function BrowserPanel({
       disposed = true
       clearTimeout(retry)
       observer.disconnect()
-      socket.current?.close()
+      if (socket.current) {
+        socket.current.onopen = null
+        socket.current.onmessage = null
+        socket.current.onclose = null
+        socket.current.close()
+        socket.current = null
+      }
+      setOnline(false)
       URL.revokeObjectURL(frame.current)
     }
-  }, [conversationId, paneId])
+  }, [conversationId, paneId, active, pageVisible])
   useEffect(() => {
     if (url && url !== 'about:blank') setAddress(url)
   }, [url])

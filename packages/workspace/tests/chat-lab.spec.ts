@@ -101,3 +101,72 @@ test('reload during an active turn preserves one response and enables another su
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await completed(page, id, before + 2)
 })
+
+test('virtualized history mounts a bounded set and reveals navigation targets', async ({ page, isMobile }) => {
+  const initial = await state(page)
+  initial.conversations[0].messages = Array.from({ length: 500 }, (_, index) => ({
+    id: `synthetic-${index}`, role: index % 2 ? 'assistant' : 'user',
+    text: `Virtual history entry ${index}\n\n` + 'Synthetic content. '.repeat(80),
+    createdAt: new Date().toISOString(), notes: [],
+  }))
+  await page.route('**/api/state', route => route.fulfill({ json: initial }))
+  await page.route('**/api/events?*', route => route.fulfill({ contentType: 'text/event-stream', body: `id: 1\nevent: state\ndata: ${JSON.stringify(initial)}\n\n` }))
+  await page.reload()
+  await expect(page.locator('.message-slot')).toHaveCount(500)
+  await expect(page.locator('.message-slot').last().locator('article')).toBeVisible()
+  await expect.poll(() => page.locator('.message-slot article').count()).toBeLessThan(40)
+  if (isMobile) {
+    // Phone intentionally hides the desktop navigation rail.
+    await page.locator('.message-history > .messages').evaluate(element => { element.scrollTop = 0 })
+  } else {
+    await page.locator('.message-navigation button').first().click()
+  }
+  await expect(page.locator('.message-slot').first().locator('article')).toBeVisible()
+  await expect.poll(() => page.locator('.message-slot article').count()).toBeLessThan(40)
+  await page.reload()
+  await expect(page.locator('.message-slot').first().locator('article')).toBeVisible()
+})
+
+test('command palette focuses search and executes registered panel commands', async ({ page }) => {
+  await page.keyboard.press('Control+Shift+P')
+  const input = page.getByRole('combobox', { name: 'Search commands' })
+  await expect(input).toBeFocused()
+  await input.fill('View: Files')
+  await page.keyboard.press('Enter')
+  await expect(input).toHaveCount(0)
+  await expect(page.locator('.file-viewer')).toBeVisible()
+})
+
+
+test('file suggestions keep keyboard selection visible without moving focus', async ({ page }) => {
+  const files = Array.from({ length: 40 }, (_, index) => `src/file-${index}.ts`)
+  await page.route('**/api/conversations/*/files?*', route => route.fulfill({ json: { files, truncated: false } }))
+  const input = page.getByLabel('Message for Alfred')
+  await input.fill('@')
+  const list = page.getByRole('listbox', { name: 'Project files' })
+  await expect(list.getByRole('option')).toHaveCount(40)
+  async function visibleSelection(index: number) {
+    const option = list.getByRole('option').nth(index)
+    await expect(option).toHaveAttribute('aria-selected', 'true')
+    await expect.poll(() => option.evaluate(element => {
+      const popup = element.parentElement!.parentElement!
+      const bounds = popup.getBoundingClientRect()
+      const item = element.getBoundingClientRect()
+      const top = bounds.top + popup.clientTop
+      return item.top >= top - 1 && item.bottom <= top + popup.clientHeight + 1
+    })).toBe(true)
+    await expect(input).toBeFocused()
+  }
+  await visibleSelection(0)
+  await input.press('ArrowUp')
+  await visibleSelection(39)
+  await input.press('ArrowDown')
+  await visibleSelection(0)
+  for (let index = 1; index <= 15; index++) await input.press('ArrowDown')
+  await visibleSelection(15)
+  for (let index = 14; index >= 2; index--) await input.press('ArrowUp')
+  await visibleSelection(2)
+  await input.press('Enter')
+  await expect(input).toHaveValue('@"src/file-2.ts" ')
+  await expect(list).toHaveCount(0)
+})

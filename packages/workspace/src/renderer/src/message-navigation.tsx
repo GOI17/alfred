@@ -1,10 +1,10 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import { createPortal } from 'react-dom'
+import { memo, useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { createPortal, flushSync } from 'react-dom'
 import type { Conversation } from '../../shared/contracts'
 import { useUI } from './ui-preferences'
 
 type Props = { messages: Conversation['messages']; scroller: RefObject<HTMLDivElement | null>; content: RefObject<HTMLDivElement | null>; onNavigate: () => void }
-export function MessageNavigation({ messages, scroller, content, onNavigate }: Props) {
+export const MessageNavigation = memo(function MessageNavigation({ messages, scroller, content, onNavigate }: Props) {
   const { t } = useUI()
   const tooltipId = useId()
   const entries = messages.filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -22,17 +22,23 @@ export function MessageNavigation({ messages, scroller, content, onNavigate }: P
     destination.current = null
   }
   useEffect(() => () => clearDestination(), [])
-  const selector = '.message[data-role="user"], .message[data-role="assistant"]'
+  const selector = '.message-slot[data-role="user"], .message-slot[data-role="assistant"]'
   useLayoutEffect(() => {
     const viewport = scroller.current, body = content.current
     if (!viewport || !body) return
     let frame = 0
+    const nodes = body.querySelectorAll<HTMLElement>(selector)
     const update = () => {
       frame = 0
-      const nodes = body.querySelectorAll<HTMLElement>(selector)
       const top = viewport.getBoundingClientRect().top + 32
       let index = nodes.length ? 0 : -1
-      nodes.forEach((node, i) => { if (node.getBoundingClientRect().top <= top) index = i })
+      // Messages are vertically ordered; avoid measuring the whole history on scroll.
+      let low = 0, high = nodes.length - 1
+      while (low <= high) {
+        const middle = (low + high) >>> 1
+        if (nodes[middle].getBoundingClientRect().top <= top) { index = middle; low = middle + 1 }
+        else high = middle - 1
+      }
       if (viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 2) index = nodes.length - 1
       setActive(index)
     }
@@ -41,7 +47,7 @@ export function MessageNavigation({ messages, scroller, content, onNavigate }: P
     const observer = new ResizeObserver(schedule)
     observer.observe(viewport); observer.observe(body); schedule()
     return () => { viewport.removeEventListener('scroll', schedule); observer.disconnect(); cancelAnimationFrame(frame) }
-  }, [messages, scroller, content])
+  }, [messages.length, scroller, content])
   useLayoutEffect(() => {
     const dismiss = () => setPreview(null)
     // Scrolling message content does not move the fixed navigation rail.
@@ -76,6 +82,7 @@ export function MessageNavigation({ messages, scroller, content, onNavigate }: P
           onClick={() => {
             const viewport = scroller.current, target = content.current?.querySelectorAll<HTMLElement>(selector)[index]
             if (!viewport || !target) return
+            flushSync(() => target.dispatchEvent(new Event('reveal-message')))
             clearDestination()
             const tabIndex = target.getAttribute('tabindex')
             target.tabIndex = -1
@@ -90,4 +97,4 @@ export function MessageNavigation({ messages, scroller, content, onNavigate }: P
     </nav>
     {preview && createPortal(<div id={tooltipId} role="tooltip" className="message-preview" style={{ left: preview.left, top: preview.top }}>{preview.label}</div>, document.body)}
   </>
-}
+})

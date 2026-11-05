@@ -1,10 +1,11 @@
 import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { realpath, readdir, stat } from 'node:fs/promises'
 import { panes, type Conversation, type Layout, type PublicState } from '../shared/contracts.js'
 import { Store } from './store.js'
+import { StreamProjection } from './stream-projection.js'
 import type { SessionPort } from './session-port.js'
 import { createLegacySessionAdapter, type SessionAdapter, type SessionAdapterFactory } from './session-adapter.js'
 import { Vault, loadSecret } from './vault.js'
@@ -23,6 +24,7 @@ export class WorkspaceService {
   readonly chatgpt: ChatgptOAuth
   private mutations: Promise<unknown> = Promise.resolve()
   private worktreeVersion = 0
+  private streamProjection = new StreamProjection()
   private constructor(
     readonly store: Store,
     readonly vault: Vault,
@@ -41,36 +43,29 @@ export class WorkspaceService {
   changed() {
     this.events.emit('change')
   }
-  state(): PublicState {
-    const data = this.store.get()
+  state(): PublicState { return structuredClone(this.streamState()) }
+  // Internal immutable projection retains unchanged entities across commits.
+  // Mutable adapter values are copied separately.
+  streamState(): PublicState {
+    const data = this.store.publicProjection()
     const partials = this.chat.partials()
+    const wire = <T>(value: T): T => JSON.parse(JSON.stringify(value))
     return {
       worktreeVersion: this.worktreeVersion,
       projects: data.projects,
-      conversations: data.conversations.map(({ execution: _execution, ...item }) => ({
-        ...item,
-        messages: partials[item.id] ? [...item.messages.filter((message) => message.id !== partials[item.id].id), partials[item.id]] : item.messages,
-      })),
-      providers: [
-        ...data.providers.map(({ id, model }) => ({ id, model })),
-        ...data.chatgptAccounts
-          .filter(
-            (account) =>
-              account.id === data.activeChatgptAccount && account.encryptedTokens && account.model,
-          )
-          .map((account) => ({ id: 'chatgpt' as const, model: account.model })),
-      ],
-      agents: this.chat.states(),
-      chatgpt: this.chatgpt.state(),
+      conversations: this.streamProjection.conversations(data.conversations, partials),
+      providers: data.providers,
+      agents: wire(this.chat.states()),
+      chatgpt: wire(this.chatgpt.state()),
     }
   }
   project(id: string) {
-    const project = this.store.get().projects.find((item) => item.id === id)
+    const project = this.store.project(id)
     if (!project) throw new Error('Project not found.')
     return project
   }
   conversation(id: string) {
-    const item = this.store.get().conversations.find((item) => item.id === id)
+    const item = this.store.conversation(id)
     if (!item) throw new Error('Conversation not found.')
     return item
   }
@@ -204,7 +199,10 @@ export class WorkspaceService {
       const conversations = this.store
         .get()
         .conversations.filter(
-          (item) => item.projectId === projectId && item.workspacePath === canonical,
+          (item) => {
+            const child = relative(canonical, item.workspacePath)
+            return item.projectId === projectId && (child === '' || (!isAbsolute(child) && child !== '..' && !child.startsWith(`..${sep}`)))
+          },
         )
       if (conversations.some((item) => this.chat.isRunning(item.id)))
         throw new Error('Stop agents in this worktree before deleting it.')
@@ -266,5 +264,6 @@ export class WorkspaceService {
     await this.chat.close()
     this.terminals.close()
     await this.browsers.close()
+    await this.store.flush()
   }
 }

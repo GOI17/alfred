@@ -99,7 +99,7 @@ Alfred ejecuta estos prompts con su motor de chat. Los hooks, plugins y la orque
 ## Límites de esta base
 
 - Las sesiones de terminal y navegador sobreviven a desconexiones, pero no a un reinicio del servidor. Proyectos, conversaciones y disposición de paneles sí se conservan.
-- El navegador transmite imágenes aproximadamente dos veces por segundo. Incluye navegación, clics, teclado y desplazamiento; no implementa descargas, cargas de archivos, audio, permisos del navegador ni arrastre.
+- El navegador transmite frames de Chromium mediante CDP, con control de acumulación para clientes lentos. Incluye navegación, clics, teclado y desplazamiento; no implementa descargas, cargas de archivos, audio, permisos del navegador ni arrastre.
 - El chat conserva el historial visible, pero envía hasta los últimos 60 mensajes al modelo y admite hasta 12 pasos de herramientas por turno. No hay compactación automática ni gestión de presupuestos todavía.
 - Las operaciones de Git, archivos y terminal ocurren siempre en el host del servidor. No hay ejecución SSH desde el cliente ni administración de múltiples servidores.
 - Las pruebas de modelos y OAuth usan respuestas controladas y JWT firmados de prueba. No se han hecho llamadas de pago ni autorizado una cuenta real. La validación local se realizó en macOS; Windows y Linux requieren ejecutar la misma suite en esas plataformas.
@@ -136,3 +136,42 @@ Pulsa **Activar alertas** y concede permiso en cada dispositivo para recibir not
 Las pruebas de notificaciones simulan el proveedor push; la entrega real en un teléfono requiere una comprobación manual con permisos concedidos.
 
 La procedencia del snapshot y las adaptaciones están en [UPSTREAM.md](UPSTREAM.md).
+
+
+## Persistencia incremental y rendimiento
+
+El estado se sincroniza con un snapshot inicial y parches versionados; una reconexión
+recupera un snapshot si perdió revisiones. Durante el streaming se reutiliza el
+historial persistido y se proyectan las respuestas parciales, sin clonar toda la base
+por cada token. Los cuerpos de mensajes fuera de pantalla se desmontan; quedan
+anclas ligeras para navegación y restauración del scroll. La búsqueda nativa del
+navegador no encuentra texto de cuerpos desmontados.
+
+La persistencia utiliza `workspace.json` como checkpoint y `journal/` para las
+transacciones posteriores. Al acumular 128 transacciones se programa un checkpoint en segundo plano, con serialización por bloques; las nuevas escrituras continúan en el journal. El cierre espera las escrituras y el checkpoint pendiente. Una base anterior
+se lee sin conversión manual. **Para una copia de seguridad, detén el servidor y
+copia el directorio de datos completo; `workspace.json` solo ya no contiene todos
+los cambios recientes. No abras estos datos con una versión anterior que ignore
+el journal.** No elimines manualmente sus archivos: un hueco o una transacción
+inválida bloquea la carga para evitar pérdida silenciosa. La aplicación mantiene
+un único escritor por directorio; no ejecutes dos servidores sobre los mismos datos.
+
+La paleta usa comandos declarados y registros de los controles montados, en vez
+de recorrer todos los botones del documento. El registro respeta disponibilidad,
+deshabilitación y desmontaje; no pretende exponer controles de paneles sin montar.
+
+
+### Auditoría reproducible
+
+`pnpm --dir packages/workspace exec tsx scripts/performance-audit.ts` usa datos
+sintéticos en directorios temporales, sin credenciales ni proveedores. Compara
+100, 1.000 y 10.000 mensajes, incluidos 10.000 en una sola conversación; mide
+proyección, parches, recuperación y escrituras que cruzan un checkpoint.
+Los tiempos incluyen disco únicamente donde se indica. No equivalen a latencia
+end-to-end ni demuestran ausencia de fugas bajo carga sostenida.
+
+El índice de conversaciones y los historiales filtrados de streaming se reutilizan
+mientras sus referencias persistidas no cambien. Aún se copian arrays de referencias
+para construir el estado público; la lista conserva anclas por mensaje y algunos
+comandos siguen ligados a botones montados. Estas rutas no tienen coste constante
+con historiales arbitrariamente grandes.

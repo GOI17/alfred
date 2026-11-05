@@ -5,7 +5,7 @@ import type { ProviderId, PublicState } from '../../shared/contracts'
 import { apiProviderId } from '../../shared/contracts'
 import { api, errorMessage } from './api'
 import { Button } from './components/ui/button'
-import { providerNames } from './project-dialogs'
+import { providerNames } from './provider-names'
 import { useUI } from './ui-preferences'
 import './assets/model-picker.css'
 

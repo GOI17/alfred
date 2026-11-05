@@ -371,3 +371,79 @@
   .breadcrumb-worktree-picker.workspace-picker > summary { min-height: 44px; }
   .breadcrumb-worktree-picker.workspace-picker .workspace-list { position: fixed; left: 12px; top: 70px; width: calc(100vw - 24px); }
 }
+
+/* A compact right-hand tool rail, separate from conversation header actions. */
+.workspace-content-row {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.workspace-content-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.workspace-right-sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 0 0 48px;
+  gap: 12px;
+  padding: 10px 4px;
+  border-left: 1px solid var(--border);
+  background: var(--sidebar);
+  overflow-y: auto;
+}
+.right-sidebar-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.right-sidebar-phone { margin-top: auto; padding-top: 10px; }
+.workspace-right-sidebar .button-icon {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+}
+.workspace-right-sidebar .button-icon:hover,
+.workspace-right-sidebar .button-icon[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.workspace-right-sidebar .button-icon[aria-pressed='true']::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 9px;
+  bottom: 9px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--success);
+}
+.workspace-right-sidebar .button-icon[data-connected='true']::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+}
+.workspace-right-sidebar .button-icon:focus-visible {
+  outline: 2px solid var(--success);
+  outline-offset: 2px;
+}
+@media (max-width: 700px) {
+  .workspace-right-sidebar { flex-basis: 48px; padding: 6px 2px; }
+  .workspace-right-sidebar .button-icon { width: 44px; height: 44px; }
+  .workspace-right-sidebar .button-icon[aria-pressed='true']::before { left: -2px; }
+}

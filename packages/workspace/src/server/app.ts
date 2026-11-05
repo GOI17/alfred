@@ -1,3 +1,4 @@
+import { StateStream } from './state-stream.js'
 import type { SessionAdapterFactory } from './session-adapter.js'
 import { notificationRoutes } from './notifications.js'
 import { pwaRoutes } from './pwa.js'
@@ -7,6 +8,7 @@ import { subagentRoutes } from './subagents.js'
 import { harnessRoutes } from './harness-routes.js'
 import { HarnessRegistry } from './harness-runtime.js'
 import type { HarnessEnvironment } from './harness-discovery.js'
+import { viewerDirectory, viewerFile } from './file-viewer.js'
 import { listWorkspaceFiles } from './workspace-files.js'
 import Fastify from 'fastify'
 import { cloudflareRoutes, type TunnelConfig } from './cloudflare.js'
@@ -85,11 +87,23 @@ export async function createApp(options: {
       .send({ error: message })
   })
   const id = (params: unknown) => z.object({ id: z.string().uuid() }).parse(params).id
-  app.get('/api/conversations/:id/files', async (request) => {
+  app.get('/api/conversations/:id/files', async (request, reply) => {
     const { query } = z.object({ query: z.string().max(300).default('') }).parse(request.query)
     const root = await service.workspace(service.conversation(id(request.params)))
-    return listWorkspaceFiles(root, query)
+    const controller = new AbortController()
+    const abort = () => controller.abort()
+    reply.raw.on('close', abort)
+    try { return await listWorkspaceFiles(root, query, controller.signal) }
+    finally { reply.raw.off('close', abort) }
   })
+  for (const kind of ['tree', 'content'] as const) {
+    app.get(`/api/conversations/:id/viewer/${kind}`, async (request, reply) => {
+      const { path } = z.object({ path: z.string().max(4096).default('.') }).parse(request.query)
+      const root = await service.workspace(service.conversation(id(request.params)))
+      reply.header('Cache-Control', 'no-store')
+      return kind === 'tree' ? viewerDirectory(root, path) : viewerFile(root, path)
+    })
+  }
   app.get('/api/conversations/:id/directories', async (request) => {
     const { query } = z.object({ query: z.string().max(4096).default('') }).parse(request.query)
     return service.directorySuggestions(id(request.params), query)
@@ -109,7 +123,13 @@ export async function createApp(options: {
         : []
     return { shared, urls }
   })
+  const stateStream = new StateStream(() => service.streamState(), true)
+  const invalidateStream = () => stateStream.invalidate()
+  service.events.on('change', invalidateStream)
+  app.addHook('onClose', async () => { service.events.off('change', invalidateStream) })
   app.get('/api/events', (request, reply) => {
+    const incremental = (request.query as { incremental?: string }).incremental === '1'
+    let revision: number | undefined
     reply.hijack()
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -124,7 +144,9 @@ export async function createApp(options: {
       if (reply.raw.destroyed) return
       if (blocked) { pending = true; return }
       pending = false
-      blocked = !reply.raw.write(`event: state\ndata: ${JSON.stringify(service.state())}\n\n`)
+      const frame = stateStream.frame(incremental ? revision : undefined)
+      revision = frame.revision
+      blocked = !reply.raw.write(frame.data)
     }
     const drained = () => {
       blocked = false

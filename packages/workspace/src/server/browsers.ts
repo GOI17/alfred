@@ -1,4 +1,4 @@
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright'
+import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from 'playwright'
 import type { WebSocket } from 'ws'
 import { browserInput } from '../shared/contracts.js'
 
@@ -10,6 +10,11 @@ type Session = {
   timer: ReturnType<typeof setInterval>
   capturing: boolean
   queue: Promise<unknown>
+  streamQueue: Promise<void>
+  stream?: CDPSession
+  streamPage?: Page
+  closed: boolean
+  location?: string
 }
 export function browserUrl(input: string) {
   const value = input.trim()
@@ -43,17 +48,24 @@ export class Browsers {
       insecure: false,
       capturing: false,
       queue: Promise.resolve(),
-      timer: setInterval(() => void this.capture(session), 500),
+      streamQueue: Promise.resolve(),
+      closed: false,
+      // Only lightweight URL/title metadata is polled; images come from CDP.
+      timer: setInterval(() => void this.location(session), 500),
     }
+    this.watchContext(session, context)
     this.watch(session, page)
+    return session
+  }
+  private watchContext(session: Session, context: BrowserContext) {
     context.on('page', (popup) => {
       session.page = popup
       this.watch(session, popup)
+      void this.syncStream(session)
     })
-    return session
   }
   private watch(session: Session, page: Page) {
-    page.on('dialog', (dialog) => void dialog.dismiss())
+    page.on('dialog', (dialog) => void dialog.dismiss().catch(() => undefined))
     page.on('crash', () =>
       this.send(session, {
         type: 'error',
@@ -62,29 +74,75 @@ export class Browsers {
     )
   }
   private send(session: Session, value: unknown) {
+    const data = JSON.stringify(value)
     for (const socket of session.sockets)
-      if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(value))
+      if (socket.readyState === socket.OPEN && socket.bufferedAmount < 1_000_000)
+        socket.send(data)
   }
-  private async capture(session: Session) {
+  private async location(session: Session) {
     if (!session.sockets.size || session.capturing || session.page.isClosed()) return
     session.capturing = true
+    const page = session.page
     try {
-      const image = await session.page.screenshot({ type: 'jpeg', quality: 70, timeout: 4000 })
-      this.send(session, {
+      const value = {
         type: 'location',
-        url: session.page.url(),
-        title: await session.page.title(),
+        url: page.url(),
+        title: await page.title(),
         insecure: session.insecure,
-        ...session.page.viewportSize(),
-      })
-      for (const socket of session.sockets)
-        if (socket.readyState === socket.OPEN && socket.bufferedAmount < 1_000_000)
-          socket.send(image)
+        ...page.viewportSize(),
+      }
+      if (page !== session.page) return
+      const serialized = JSON.stringify(value)
+      if (serialized !== session.location) {
+        session.location = serialized
+        this.send(session, value)
+      }
     } catch {
-      /* Navigation can replace the frame while capturing. */
+      /* Navigation can replace the execution context. */
     } finally {
       session.capturing = false
     }
+  }
+  private syncStream(session: Session) {
+    session.streamQueue = session.streamQueue.then(async () => {
+      const page = session.page
+      const active = !session.closed && session.sockets.size > 0 && !page.isClosed()
+      if (active && session.stream && session.streamPage === page) return
+      const previous = session.stream
+      session.stream = undefined
+      session.streamPage = undefined
+      if (previous) await previous.detach().catch(() => undefined)
+      if (!active) return
+      const stream = await session.context.newCDPSession(page)
+      session.stream = stream
+      session.streamPage = page
+      stream.on('Page.screencastFrame', ({ data, sessionId }) => {
+        // Always acknowledge, including dropped frames: slow clients must not stall Chromium.
+        void stream.send('Page.screencastFrameAck', { sessionId }).catch(() => undefined)
+        if (session.closed || session.stream !== stream || session.page !== page) return
+        const image = Buffer.from(data, 'base64')
+        for (const socket of session.sockets)
+          if (socket.readyState === socket.OPEN && socket.bufferedAmount === 0)
+            socket.send(image)
+        void this.location(session)
+      })
+      try {
+        await stream.send('Page.startScreencast', {
+          format: 'jpeg', quality: 70, maxWidth: 1920, maxHeight: 1080, everyNthFrame: 1,
+        })
+      } catch (error) {
+        session.stream = undefined
+        session.streamPage = undefined
+        await stream.detach().catch(() => undefined)
+        throw error
+      }
+    }).catch((error) => {
+      if (!session.closed) this.send(session, {
+        type: 'error',
+        message: error instanceof Error ? error.message.slice(0, 600) : 'Could not stream the page.',
+      })
+    })
+    return session.streamQueue
   }
   async attach(id: string, socket: WebSocket) {
     let pending = this.sessions.get(id)
@@ -94,13 +152,47 @@ export class Browsers {
       pending.catch(() => this.sessions.delete(id))
     }
     const session = await pending
-    if (socket.readyState !== socket.OPEN) return
+    if (socket.readyState !== socket.OPEN || session.closed) return
     session.sockets.add(socket)
-    socket.on('close', () => session.sockets.delete(socket))
+    session.location = undefined
+    socket.on('close', () => {
+      session.sockets.delete(socket)
+      void this.syncStream(session)
+    })
+    const report = (error: unknown) => {
+      if (socket.readyState === socket.OPEN) socket.send(JSON.stringify({
+        type: 'error',
+        message: error instanceof Error ? error.message.slice(0, 600) : 'Could not open the page.',
+      }))
+    }
+    let scroll: { x: number; y: number } | undefined
     socket.on('message', (raw) => {
+      let message: ReturnType<typeof browserInput.parse>
+      try {
+        message = browserInput.parse(JSON.parse(raw.toString()))
+      } catch (error) {
+        report(error)
+        return
+      }
+      // Merge consecutive wheel events while the input queue is busy, preserving order.
+      if (message.type === 'scroll') {
+        if (scroll) {
+          scroll.x += message.x
+          scroll.y += message.y
+          return
+        }
+        const delta = { x: message.x, y: message.y }
+        scroll = delta
+        session.queue = session.queue.then(async () => {
+          if (scroll === delta) scroll = undefined
+          if (!session.closed) await session.page.mouse.wheel(delta.x, delta.y)
+        }).catch(report)
+        return
+      }
+      scroll = undefined
       session.queue = session.queue
         .then(async () => {
-          const message = browserInput.parse(JSON.parse(raw.toString()))
+          if (session.closed) return
           const page = session.page
           if (message.type === 'navigate') {
             const url = browserUrl(message.url)
@@ -117,40 +209,31 @@ export class Browsers {
               session.page = await context.newPage()
               session.insecure = message.insecure
               this.watch(session, session.page)
-              context.on('page', (popup) => {
-                session.page = popup
-                this.watch(session, popup)
-              })
+              this.watchContext(session, context)
+              await this.syncStream(session)
             }
-            await session.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 })
+            await session.page.goto(url, { waitUntil: 'commit', timeout: 20_000 })
           } else if (message.type === 'click') await page.mouse.click(message.x, message.y)
           else if (message.type === 'key') await page.keyboard.press(message.key)
           else if (message.type === 'text') await page.keyboard.insertText(message.text)
-          else if (message.type === 'scroll') await page.mouse.wheel(message.x, message.y)
           else if (message.type === 'resize')
             await page.setViewportSize({ width: message.width, height: message.height })
-          else if (message.type === 'back') await page.goBack({ waitUntil: 'domcontentloaded' })
+          else if (message.type === 'back') await page.goBack({ waitUntil: 'commit', timeout: 20_000 })
           else if (message.type === 'forward')
-            await page.goForward({ waitUntil: 'domcontentloaded' })
-          else await page.reload({ waitUntil: 'domcontentloaded' })
-          void this.capture(session)
+            await page.goForward({ waitUntil: 'commit', timeout: 20_000 })
+          else await page.reload({ waitUntil: 'commit', timeout: 20_000 })
+          void this.location(session)
         })
-        .catch(
-          (error) =>
-            socket.readyState === socket.OPEN &&
-            socket.send(
-              JSON.stringify({
-                type: 'error',
-                message:
-                  error instanceof Error
-                    ? error.message.slice(0, 600)
-                    : 'Could not open the page.',
-              }),
-            ),
-        )
+        .catch(report)
     })
-    void this.capture(session)
-    socket.send(JSON.stringify({ type: 'ready' }))
+    void this.location(session)
+    await this.syncStream(session)
+    // Seed reconnects and additional viewers even if the page is currently static.
+    try {
+      const image = await session.page.screenshot({ type: 'jpeg', quality: 70, timeout: 4000 })
+      if (socket.readyState === socket.OPEN && socket.bufferedAmount === 0) socket.send(image)
+    } catch { /* Navigation may interrupt this one-time seed frame. */ }
+    if (socket.readyState === socket.OPEN) socket.send(JSON.stringify({ type: 'ready' }))
   }
   async remove(id: string) {
     const pending = this.sessions.get(id)
@@ -158,8 +241,10 @@ export class Browsers {
     if (!pending) return
     const session = await pending.catch(() => undefined)
     if (!session) return
+    session.closed = true
     clearInterval(session.timer)
     for (const socket of session.sockets) socket.close()
+    await this.syncStream(session)
     await session.context.close()
   }
   async close() {

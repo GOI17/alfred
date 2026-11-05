@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { QRCodeSVG } from 'qrcode.react'
+import { useTunnelStatus, type TunnelStatus } from './use-tunnel-status'
+import { lazy, Suspense, useEffect, useState } from 'react'
+const QRCodeSVG = lazy(() => import('qrcode.react').then(module => ({ default: module.QRCodeSVG })))
 import { ArrowUpRight, ScanQrCode, Copy } from 'lucide-react'
 import { api, errorMessage } from './api'
 import { Button } from './components/ui/button'
@@ -7,7 +8,7 @@ import { Input } from './components/ui/input'
 import { Dialog } from './components/ui/dialog'
 import { useUI } from './ui-preferences'
 import { readConnectionCode } from './connection-code'
-import { ConnectionQrScanner } from './connection-qr-scanner'
+const ConnectionQrScanner = lazy(() => import('./connection-qr-scanner').then(module => ({ default: module.ConnectionQrScanner })))
 
 export function Login({ connected }: { connected: () => Promise<void> }) {
   const { t } = useUI()
@@ -102,41 +103,14 @@ export function Login({ connected }: { connected: () => Promise<void> }) {
             <ArrowUpRight size={16} />
           </Button>
         </form>
-        {scanning && <ConnectionQrScanner onClose={() => setScanning(false)} onError={(message) => { setScanning(false); setError(message) }} onRead={(value) => {
+        {scanning && <Suspense fallback={<p role="status">{t('Loading scanner…', 'Cargando escáner…')}</p>}><ConnectionQrScanner onClose={() => setScanning(false)} onError={(message) => { setScanning(false); setError(message) }} onRead={(value) => {
           setScanning(false)
           const parsed = parse(value, true)
           if (parsed) { setCode(parsed); setScanned(true); setCopied(false) }
-        }} />}
+        }} /></Suspense>}
       </div>
     </div>
   )
-}
-type TunnelStatus = {
-  state: 'disabled' | 'stopped' | 'connecting' | 'connected' | 'stopping' | 'error'
-  url?: string
-  error?: string
-}
-export function useTunnelStatus(enabled = true) {
-  const [tunnel, setTunnel] = useState<TunnelStatus>()
-  const [error, setError] = useState('')
-  useEffect(() => {
-    if (!enabled) return
-    const controller = new AbortController()
-    let timer: ReturnType<typeof setTimeout>
-    const refresh = async () => {
-      try {
-        const result = await api<TunnelStatus>('/connection/tunnel', undefined, 'GET', controller.signal)
-        if (!controller.signal.aborted) { setTunnel(result); setError('') }
-      } catch (error) {
-        if (!controller.signal.aborted) setError(errorMessage(error))
-      } finally {
-        if (!controller.signal.aborted) timer = setTimeout(() => void refresh(), 2000)
-      }
-    }
-    void refresh()
-    return () => { controller.abort(); clearTimeout(timer) }
-  }, [enabled])
-  return { tunnel, setTunnel, error, setError }
 }
 export function PhoneDialog({ onClose }: { onClose: () => void }) {
   const { t } = useUI()
@@ -183,7 +157,7 @@ export function PhoneDialog({ onClose }: { onClose: () => void }) {
             <section aria-label="Pair your phone" style={{ display: 'grid', justifyItems: 'center', gap: 12 }}>
               {pairing ? <>
                 <div style={{ background: '#fff', padding: 16, borderRadius: 12 }}>
-                  <QRCodeSVG value={pairing.url} size={208} marginSize={2} title="Scan to connect to Alfred" />
+                  <Suspense fallback={<div style={{ width: 208, height: 208 }} role="status">{t('Loading QR…', 'Cargando QR…')}</div>}><QRCodeSVG value={pairing.url} size={208} marginSize={2} title="Scan to connect to Alfred" /></Suspense>
                 </div>
                 <p className="field-note">{t('Installed Alfred? Open it from your Home Screen, tap Scan QR on the welcome screen, then Enter my workspace. This connects inside the installed app.', '¿Ya instalaste Alfred? Ábrelo desde la pantalla de inicio, pulsa Escanear QR en la pantalla de bienvenida y después Entrar a mi workspace. Así conectas dentro de la app instalada.')}</p>
                 <p className="field-note">{t('Scanning with the iPhone Camera opens the browser. You can copy the code there and paste it in Alfred instead. This QR expires in 5 minutes and works once. Do not share it.', 'Escanear con la Cámara del iPhone abre el navegador. Desde allí puedes copiar el código y pegarlo en Alfred. Este QR caduca a los 5 minutos y funciona una vez. No lo compartas.')}</p>

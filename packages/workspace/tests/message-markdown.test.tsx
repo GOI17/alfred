@@ -11,6 +11,7 @@ describe('message Markdown', () => {
     expect(html).toContain('code-editor-toolbar')
     expect(html).toContain('Copy code')
     expect(html).toContain('language-bash')
+    expect(html).toContain('<span>bash</span>')
     expect(html).toContain('hljs-string')
   })
   it('supports other languages and unknown or incomplete fences', () => {

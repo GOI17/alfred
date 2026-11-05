@@ -1,5 +1,5 @@
-import { afterEach, expect, it } from 'vitest'
-import { lstat, mkdir, readFile, rm, symlink } from 'node:fs/promises'
+import { afterEach, expect, it, vi } from 'vitest'
+import { lstat, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { homedir } from 'node:os'
 import { createApp } from '../src/server/app.js'
@@ -128,4 +128,52 @@ it('completes cd paths with directories only, relative to the current conversati
   expect(await suggest('')).toEqual(['child/'])
   expect(await suggest('../nest')).toEqual(['../nested folder/'])
   expect(service.conversation(conversation.id).messages).toHaveLength(1)
+})
+
+
+it('recovers an abandoned preparation lock without forcing deletion', async () => {
+  const { app, headers, url, git } = await setup()
+  const created = await app.inject({ method: 'POST', url, headers, payload: { branch: 'stale-lock' } })
+  const { path } = created.json()
+  await git('worktree', 'lock', '--reason', 'orca-create-preparation:v1:2147483647:2147483647-47c78fa4-ae97-41ab-927b-469f952280f5', path)
+  const kill = vi.spyOn(process, 'kill').mockImplementation(() => { throw Object.assign(new Error('exited'), { code: 'ESRCH' }) })
+  try {
+    const removed = await app.inject({ method: 'DELETE', url, headers, payload: { path } })
+    expect(removed.statusCode, removed.body).toBe(200)
+    expect(kill).toHaveBeenCalledWith(2147483647, 0)
+    await expect(lstat(path)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await git('branch', '--list', 'stale-lock')).toContain('stale-lock')
+  } finally { kill.mockRestore() }
+})
+
+it('preserves active and unknown locks and offers diagnostic errors', async () => {
+  const { app, headers, url, git } = await setup()
+  for (const [branch, reason] of [
+    ['active-lock', `orca-create-preparation:v1:${process.pid}:${process.pid}-47c78fa4-ae97-41ab-927b-469f952280f5`],
+    ['unknown-lock', 'user-owned lock'],
+  ]) {
+    const created = await app.inject({ method: 'POST', url, headers, payload: { branch } })
+    const { path } = created.json()
+    await git('worktree', 'lock', '--reason', reason, path)
+    const removed = await app.inject({ method: 'DELETE', url, headers, payload: { path } })
+    expect(removed.statusCode).toBe(400)
+    expect(removed.json().error).toContain('No automatic changes made')
+    expect((await app.inject({ url, headers })).json().find((tree: { path: string }) => tree.path === path).locked).toBe(true)
+    expect(await readFile(join(path, 'hello.txt'), 'utf8')).toBe('hello\n')
+  }
+})
+
+it('preserves modified and untracked files and conversations when removal fails', async () => {
+  const { app, service, project, headers, url } = await setup()
+  const created = await app.inject({ method: 'POST', url, headers, payload: { branch: 'dirty-tree' } })
+  const { path } = created.json()
+  const chat = await service.addConversation(project.id, path)
+  await writeFile(join(path, 'hello.txt'), 'local changes')
+  await writeFile(join(path, 'untracked.txt'), 'unsaved work')
+  const removed = await app.inject({ method: 'DELETE', url, headers, payload: { path } })
+  expect(removed.statusCode).toBe(400)
+  expect(removed.json().error).toContain('modified or untracked')
+  expect(await readFile(join(path, 'hello.txt'), 'utf8')).toBe('local changes')
+  expect(await readFile(join(path, 'untracked.txt'), 'utf8')).toBe('unsaved work')
+  expect(service.conversation(chat.id).workspacePath).toBe(path)
 })
