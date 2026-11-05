@@ -16,10 +16,6 @@ async function git(root: string, ...args: string[]) {
   expect(result.code, result.stderr).toBe(0)
   return result.stdout.trim()
 }
-async function sidebar(page: Page) {
-  const opener = page.getByRole('button', { name: 'Open spaces', exact: true })
-  if (await opener.isVisible() && await page.locator('.sidebar').getAttribute('data-open') !== 'true') await opener.click()
-}
 test.beforeEach(async ({ page }) => {
   await page.context().addCookies(cookies)
   const initial = await state(page)
@@ -38,7 +34,7 @@ test('external edits, diffs, commits and branch switches update without reloadin
   const root = (await state(page)).projects[0].path
   const original = await git(root, 'branch', '--show-current')
   const branch = `test/live-${randomUUID()}`, subject = `External commit ${randomUUID()}`
-  await page.locator('.panel-tools').getByRole('button', { name: 'Git', exact: true }).click()
+  await page.locator('.workspace-right-sidebar').getByRole('button', { name: 'Git', exact: true }).click()
   const panel = page.locator('.git-workbench')
   await panel.getByLabel('Commit message').fill('Keep this draft')
   await writeFile(join(root, 'hello.txt'), `first edit ${subject}\n`)
@@ -58,7 +54,6 @@ test('external edits, diffs, commits and branch switches update without reloadin
   try {
     await git(root, 'switch', '-c', branch)
     await expect(panel.locator('.git-repository-header')).toContainText(branch, { timeout: 8000 })
-    await sidebar(page)
     await expect(page.locator('.workspace-picker > summary')).toContainText(branch, { timeout: 8000 })
   } finally { await git(root, 'switch', original) }
 })
@@ -67,7 +62,6 @@ test('external worktree creation and deletion update the picker and recover the 
   const initial = await state(page), project = initial.projects[0]
   const branch = `test/tree-${randomUUID()}`, path = join(dirname(project.path), randomUUID())
   await page.getByLabel('Message for Alfred').fill('Main chat draft')
-  await sidebar(page)
   await page.locator('.workspace-picker > summary').click()
   await git(project.path, 'worktree', 'add', '-b', branch, path)
   await expect(page.locator('.workspace-row button').filter({ hasText: branch }).first()).toBeVisible({ timeout: 8000 })
@@ -82,7 +76,6 @@ test('external worktree creation and deletion update the picker and recover the 
   const close = page.locator('.sidebar').getByRole('button', { name: 'Close sidebar', exact: true })
   if (await close.isVisible()) await close.click()
   await expect(page.getByLabel('Message for Alfred')).toHaveValue('Main chat draft')
-  await sidebar(page)
   await page.locator('.workspace-picker > summary').click()
   await expect(page.locator('.workspace-row button').filter({ hasText: branch })).toHaveCount(0)
 })
@@ -94,7 +87,6 @@ test('worktree deletion from another client updates the current selection immedi
   expect(created.ok()).toBe(true)
   const { path } = await created.json()
   expect((await page.request.post('/api/conversations', { data: { projectId: project.id, workspacePath: path } })).ok()).toBe(true)
-  await sidebar(page)
   await page.locator('.workspace-picker > summary').click()
   await page.locator('.workspace-row button').filter({ hasText: branch }).first().click()
   await expect(page.locator('.workspace-picker > summary')).toContainText(branch)

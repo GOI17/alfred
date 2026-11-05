@@ -21,8 +21,6 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/')
 })
 async function openDialog(page: Page) {
-  const opener = page.getByRole('button', { name: 'Open spaces', exact: true })
-  if (await opener.isVisible()) await opener.click()
   await page.locator('.workspace-picker > summary').click()
   await page.getByRole('button', { name: 'New worktree', exact: true }).click()
   return page.getByRole('dialog', { name: 'New worktree', exact: true })

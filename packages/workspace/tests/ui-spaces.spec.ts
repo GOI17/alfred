@@ -37,7 +37,7 @@ test.beforeEach(async ({ page }) => {
   conversations.push({ ...conversations[0], id: 'ui-chat-extra', title: 'Second workspace chat' })
   const fixture = { ...base, projects, conversations, agents: {} }
   await page.route('**/api/state', (route) => route.fulfill({ json: fixture }))
-  await page.route('**/api/events', (route) => route.fulfill({ contentType: 'text/event-stream', body: `event: state\ndata: ${JSON.stringify(fixture)}\n\n` }))
+  await page.route('**/api/events?incremental=1', (route) => route.fulfill({ contentType: 'text/event-stream', body: `event: state\ndata: ${JSON.stringify(fixture)}\n\n` }))
   await page.route('**/api/projects/*/worktrees', (route) => route.fulfill({ json: [{ path: projects[0].path, branch: 'main', main: true }] }))
   await page.reload()
   await expect(page.getByLabel('Message for Alfred')).toBeVisible()
@@ -52,16 +52,24 @@ test('three spaces preserve drafts and reading; + invokes folder selection', asy
     await expect(rail).toBeHidden()
     await page.locator('.messages').evaluate(node => node.scrollTo(0, node.scrollHeight / 3))
   } else await rail.getByRole('button').nth(4).click()
-  const before = await page.locator('.messages').evaluate((node) => node.scrollTop)
+  // Virtual placeholders can change total height; preserve the reading anchor,
+  // not an absolute pixel offset through unmounted content.
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('alfred.reading.ui-chat-0') || 'null')?.follow)).toBe(false)
   await sidebar(page)
   await expect(page.locator('.space-switcher button')).toHaveCount(3)
   await page.getByRole('button', { name: 'Acme UI', exact: true }).click()
   await expect(page.getByLabel('Message for Alfred')).toHaveValue('')
+  const before = await page.evaluate(() => JSON.parse(sessionStorage.getItem('alfred.reading.ui-chat-0')!))
+  expect(before.follow).toBe(false)
   await page.getByLabel('Message for Alfred').fill('Draft for Acme')
   await sidebar(page)
   await page.getByRole('button', { name: 'Alfred UI', exact: true }).click()
   await expect(page.getByLabel('Message for Alfred')).toHaveValue('Draft for Alfred')
-  await expect.poll(async () => Math.abs(await page.locator('.messages').evaluate((node) => node.scrollTop) - before)).toBeLessThan(12)
+  await expect.poll(() => page.locator('.message-slot').evaluateAll((nodes, saved) => {
+    const anchor = nodes.find(node => (node as HTMLElement).dataset.messageId === saved.anchor)
+    const viewport = anchor?.closest('.messages')
+    return anchor && viewport ? Math.abs(anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top - saved.offset) : Infinity
+  }, before)).toBeLessThan(12)
   let selections = 0
   await page.route('**/api/projects/pick', async (route) => { selections++; await route.fulfill({ json: { project: null } }) })
   await sidebar(page)
@@ -77,7 +85,8 @@ test('message index has all messages, focus previews and a measured context ring
   if (testInfo.project.name === 'phone') {
     // The original mobile layout hides the desktop index, retaining all messages.
     await expect(rail).toBeHidden()
-    await expect(page.locator('.messages article')).toHaveCount(24)
+    await expect(page.locator('.messages .message-slot')).toHaveCount(24)
+    await expect(page.locator('.message-slot').last().locator('article')).toBeVisible()
   } else {
     await rail.getByRole('button').nth(2).focus()
     await expect(page.getByRole('tooltip')).toContainText('3 / 24 · You: Alfred UI message 3.')
@@ -86,11 +95,11 @@ test('message index has all messages, focus previews and a measured context ring
     await rail.getByRole('button').nth(2).click()
     await expect(rail.getByRole('button').nth(2)).toHaveAttribute('aria-current', 'location')
   }
-  await expect(page.getByRole('button', { name: 'Context: 38%', exact: true })).toBeVisible()
-  await expect(page.locator('.context-ring-value')).toHaveAttribute('stroke-dasharray', '38 100')
+  await expect(page.getByRole('button', { name: /^Context: .* tokens · 38% used$/ })).toBeVisible()
+  await expect(page.locator('.context-ring-value')).toHaveAttribute('stroke-dashoffset', '62')
   await sidebar(page)
   await page.getByRole('button', { name: 'Mobile UI', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Context: —', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Context: .*Percentage unavailable$/ })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
@@ -120,9 +129,9 @@ test('composer controls share geometry in both themes and narrow panes', async (
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => document.documentElement.dataset.theme = value, theme)
     const controls = page.locator('.composer-footer .context-control, .composer-footer .model-picker-trigger, .composer-footer .queue-send-actions > button')
-    const heights = await controls.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height))
+    const heights = await controls.evaluateAll((nodes) => nodes.map((node) => ({ height: node.getBoundingClientRect().height, ring: !!node.querySelector('.context-token-count') })))
     expect(heights.length).toBeGreaterThanOrEqual(6)
-    for (const height of heights) expect(height).toBe(expectedSize)
+    for (const { height, ring } of heights) expect(height).toBe(ring ? 44 : expectedSize)
     const overflow = await page.locator('.composer').evaluate((node) => node.scrollWidth > node.clientWidth)
     expect(overflow).toBe(false)
     await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeVisible()
@@ -139,8 +148,8 @@ test('chat utilities stay in a compact heading instead of a vertical action colu
     await page.evaluate((value) => document.documentElement.dataset.theme = value, theme)
     const action = page.getByRole('button', { name: 'Open in separate window', exact: true, includeHidden: true })
     if (testInfo.project.name === 'phone') {
-      await expect(action).toBeHidden()
-      await expect(page.locator('.chat-column-heading .chat-column-title')).toBeVisible()
+      await expect(action).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Move active chat', exact: true })).toHaveCount(0)
     } else {
       await expect(action).toBeVisible()
       await expect(page.locator('.chat-column-heading').getByRole('button', { name: 'Open in separate window', exact: true })).toHaveCount(1)
@@ -160,21 +169,23 @@ test('chat utilities stay in a compact heading instead of a vertical action colu
   }
 })
 
- test('floating mode hides workspace chrome and adds sidebar chats without duplicates', async ({ page }, testInfo) => {
+ test('floating mode preserves unified header and adds sidebar chats without duplicates', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === 'phone', 'Floating controls are desktop-only')
   await page.getByRole('button', { name: 'Float chat', exact: true }).click()
-  await expect(page.locator('.chat-deck-toolbar')).toHaveCount(0)
-  await expect(page.locator('.conversation-title')).toHaveCount(0)
+  await expect(page.locator('.workspace-chat-actions .chat-deck-toolbar')).toBeVisible()
+  await expect(page.locator('.conversation-title')).toBeVisible()
   await page.locator('.sidebar').getByTitle('Second workspace chat', { exact: true }).click()
   await expect(page.locator('[data-floating="true"]')).toHaveCount(2)
   await page.locator('.sidebar').getByTitle('Second workspace chat', { exact: true }).click()
   await expect(page.locator('[data-floating="true"]')).toHaveCount(2)
-  await page.locator('[data-chat-column="ui-chat-extra"]').getByRole('button', { name: 'Dock chat', exact: true }).click()
+  await expect(page.locator('[data-chat-column="ui-chat-extra"]')).toHaveAttribute('data-focused', 'true')
+  await page.getByRole('button', { name: 'Dock chat', exact: true }).click()
   await expect(page.locator('[data-floating="true"]')).toHaveCount(1)
   // The existing canvas shows only floating chats until the last one docks.
   await expect(page.locator('[data-chat-column="ui-chat-extra"]')).toHaveAttribute('data-floating', 'false')
   await expect(page.locator('[data-chat-column="ui-chat-extra"]')).toBeHidden()
-  await page.locator('[data-chat-column="ui-chat-0"]').getByRole('button', { name: 'Dock chat', exact: true }).click()
+  await page.locator('[data-chat-column="ui-chat-0"]').focus()
+  await page.getByRole('button', { name: 'Dock chat', exact: true }).click()
   await expect(page.locator('.chat-deck-toolbar')).toBeVisible()
   await expect(page.locator('[data-chat-column="ui-chat-extra"]')).toBeVisible()
   await expect(page.locator('[data-chat-column="ui-chat-0"]')).toBeVisible()

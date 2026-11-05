@@ -20,7 +20,7 @@ export function useChatReading(id: string, scroller: RefObject<HTMLDivElement | 
     const restore = () => {
       if (!restoring || !initial.current) return
       const saved = initial.current
-      const anchor = Array.from(body.querySelectorAll<HTMLElement>('[data-message-id]')).find((node) => node.dataset.messageId === saved.anchor)
+      const anchor = Array.from(body.querySelectorAll<HTMLElement>('.message-slot[data-message-id]')).find((node) => node.dataset.messageId === saved.anchor)
       viewport.scrollTop = anchor && Number.isFinite(saved.offset)
         ? viewport.scrollTop + anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top - (saved.offset || 0)
         : saved.top
@@ -28,7 +28,7 @@ export function useChatReading(id: string, scroller: RefObject<HTMLDivElement | 
     }
     const save = () => {
       const top = viewport.getBoundingClientRect().top
-      const nodes = body.querySelectorAll<HTMLElement>('[data-message-id]')
+      const nodes = body.querySelectorAll<HTMLElement>('.message-slot[data-message-id]')
       let low = 0, high = nodes.length
       while (low < high) {
         const middle = (low + high) >>> 1
