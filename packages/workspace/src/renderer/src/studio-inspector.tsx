@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Activity, Atom, ChevronRight, FileDiff, FileText, FolderOpen, Globe, Link2, MoreHorizontal, Orbit, PanelRightClose, PanelRightOpen, Plus, Shapes, Sparkles, Star } from 'lucide-react'
 import type { AgentState, Conversation, Project } from '../../shared/contracts'
 import { api, errorMessage } from './api'
+import { openWorkspaceFile } from './open-file'
 import { conversationResources, type ConversationResource } from './conversation-resources'
 import { HARNESS_STALE_MS } from './subagents-panel'
 import { useUI } from './ui-preferences'
@@ -46,7 +47,7 @@ export function StudioInspector({ conversation, agent, project, open, onToggle, 
     const content = <><Icon size={16} aria-hidden="true" /><span>{item.name}</span></>
     return item.kind === 'url'
       ? <a key={item.target} className="inspector-row inspector-resource" href={item.target} target="_blank" rel="noreferrer" title={item.target}>{content}</a>
-      : <button key={item.target} type="button" className="inspector-row inspector-resource" disabled={opening} onClick={() => void reveal(item.target)} title={item.target}>{content}</button>
+      : <button key={item.target} type="button" className="inspector-row inspector-resource" onClick={() => openWorkspaceFile(conversation.id, item.target)} title={item.target}>{content}</button>
   }
   return <aside className="studio-inspector" aria-label={t('Changes and activity', 'Cambios y actividad')}>
     <div className="studio-inspector-card">

@@ -2,7 +2,8 @@ import { Children, isValidElement, memo, useMemo, useEffect, useRef, useState, t
 import Markdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import { api, errorMessage } from './api'
+import { openWorkspaceFile } from './open-file'
+import { useUI } from './ui-preferences'
 import { localFilePath } from './local-file-path'
 import './assets/markdown.css'
 
@@ -28,22 +29,11 @@ function CodeBlock({ children }: { children?: ReactNode }) {
 }
 
 function FileLink({ href, children, conversationId }: { href?: string; children?: ReactNode; conversationId?: string }) {
-  const [error, setError] = useState('')
-  const [opening, setOpening] = useState(false)
-  const lock = useRef(false)
+  const { t } = useUI()
   const path = localFilePath(href || '')
   if (!path) return <a href={href} target="_blank" rel="noreferrer">{children}</a>
   if (!conversationId) return <span title={path}>{children}</span>
-  async function reveal() {
-    if (lock.current) return
-    lock.current = true
-    setOpening(true)
-    setError('')
-    try { await api(`/conversations/${conversationId}/files/reveal`, { path }) }
-    catch (error) { setError(errorMessage(error)) }
-    finally { lock.current = false; setOpening(false) }
-  }
-  return <><button type="button" title={`Show in file explorer on the server: ${path}`} disabled={opening} onClick={() => void reveal()} style={{ display: 'inline', padding: 0, minHeight: 0, border: 0, borderRadius: 0, background: 'transparent', color: 'inherit', font: 'inherit', textAlign: 'inherit', textDecoration: 'underline', textUnderlineOffset: '3px', cursor: 'pointer', overflowWrap: 'anywhere' }}>{children}</button>{error && <span role="alert" className="error-text"> {error}</span>}</>
+  return <button type="button" title={`${t('Open in Files', 'Abrir en Archivos')}: ${path}`} onClick={() => openWorkspaceFile(conversationId, path)} style={{ display: 'inline', padding: 0, minHeight: 0, border: 0, borderRadius: 0, background: 'transparent', color: 'inherit', font: 'inherit', textAlign: 'inherit', textDecoration: 'underline', textUnderlineOffset: '3px', cursor: 'pointer', overflowWrap: 'anywhere' }}>{children}</button>
 }
 
 const components: Components = {

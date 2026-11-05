@@ -207,12 +207,15 @@ export class ChatgptOAuth {
     for (const [key, value] of Object.entries(parameters)) url.searchParams.set(key, value)
     return { url: url.href }
   }
-  private async tokens(account: Account) {
+  private async tokens(account: Account, rejectedToken?: string) {
+    // Reload persisted credentials: a long-lived model must not retain an old token.
+    account = this.account(account.id)
     if (!account.encryptedTokens) throw new Error('Reconnect your ChatGPT account.')
-    const current = savedTokens.parse(JSON.parse(this.vault.decrypt(account.encryptedTokens)))
-    if (current.expiresAt > Date.now() + 60_000) return current
     const pending = this.refreshes.get(account.id)
     if (pending) return pending
+    const current = savedTokens.parse(JSON.parse(this.vault.decrypt(account.encryptedTokens)))
+    if (current.expiresAt > Date.now() + 60_000 && current.access_token !== rejectedToken)
+      return current
     const refresh = (async () => {
       if (!current.refresh_token)
         throw new Error('The ChatGPT session expired. Reconnect your account.')
@@ -241,12 +244,28 @@ export class ChatgptOAuth {
     this.refreshes.set(account.id, refresh)
     return refresh
   }
+  private async authenticatedFetch(accountId: string, request: Request) {
+    request.signal.throwIfAborted()
+    const tokens = await this.tokens(this.account(accountId))
+    const send = (accessToken: string) => {
+      request.signal.throwIfAborted()
+      const attempt = request.clone()
+      attempt.headers.set('Authorization', `Bearer ${accessToken}`)
+      return fetch(attempt)
+    }
+    const response = await send(tokens.access_token)
+    // Retry only a definitive authentication rejection, never a partial stream
+    // or an ambiguous network failure. This does not replay agent tools.
+    if (response.status !== 401) return response
+    await response.body?.cancel()
+    request.signal.throwIfAborted()
+    const renewed = await this.tokens(this.account(accountId), tokens.access_token)
+    return send(renewed.access_token)
+  }
   async models() {
-    const tokens = await this.tokens(this.account())
-    const response = await fetch(`${resource}/models`, {
-      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    const response = await this.authenticatedFetch(this.account().id, new Request(`${resource}/models`, {
       signal: AbortSignal.timeout(20_000),
-    })
+    }))
     if (!response.ok)
       throw new Error(
         'Could not load your account models. Check your connection or authorize ChatGPT again.',
@@ -286,7 +305,10 @@ export class ChatgptOAuth {
   async model(): Promise<LanguageModel> {
     const account = this.account()
     if (!account.model) throw new Error('Select a ChatGPT model in Settings.')
-    return createOpenAI({ apiKey: (await this.tokens(account)).access_token })(account.model)
+    return createOpenAI({
+      apiKey: (await this.tokens(account)).access_token,
+      fetch: (input, init) => this.authenticatedFetch(account.id, new Request(input, init)),
+    })(account.model)
   }
   async disconnect(id: string) {
     const account = this.account(id)

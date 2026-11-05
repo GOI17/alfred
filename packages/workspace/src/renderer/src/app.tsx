@@ -12,6 +12,7 @@ import { api, errorMessage } from './api'
 import { liveRefresh } from './live-refresh'
 import { useWorkspace } from './use-workspace'
 import { panelId } from './panel-id'
+import { onOpenWorkspaceFile, openWorkspaceFile } from './open-file'
 import { Sidebar } from './sidebar'
 import { WorktreePicker } from './worktree-picker'
 import { PanelLayout, type ToolKind, type ToolVisibility } from './panel-layout'
@@ -76,12 +77,21 @@ export function App() {
   const [fileSearchConversation, setFileSearchConversation] = useState('')
   const [fileRequest, setFileRequest] = useState<{ conversationId: string; path: string }>()
   const [filesConversation, setFilesConversation] = useState('')
+  useEffect(() => onOpenWorkspaceFile(request => {
+    if (!state?.conversations.some(item => item.id === request.conversationId)) return
+    setFileRequest(request)
+    setFilesConversation(request.conversationId)
+    setToolStates(previous => {
+      const current = previous[conversationId] || { visible: { terminal: false, browser: false, git: false }, maximized: null }
+      return { ...previous, [conversationId]: { visible: { ...current.visible, browser: false, git: false }, maximized: null } }
+    })
+  }), [state?.conversations, conversationId])
   const [toolStates, setToolStates] = useState<Record<string, { visible: ToolVisibility; maximized: ToolKind | null }>>({})
   const tools = toolStates[conversationId] || { visible: { terminal: false, browser: false, git: false }, maximized: null }
   const [confirmation, setConfirmation] = useState<{ title: string; description: string; perform: () => Promise<void> }>()
   const project = state?.projects.find((item) => item.id === projectId)
   const conversation = state?.conversations.find((item) => item.id === conversationId && item.projectId === projectId && item.workspacePath === workspacePath)
-  useEffect(() => { setFileSearchConversation('') }, [conversationId, workspacePath, projectId])
+  useEffect(() => { setFileSearchConversation(''); setFilesConversation('') }, [conversationId, workspacePath, projectId])
   const headerConversation = state?.conversations.find((item) => item.id === focusedChatId && item.projectId === projectId && item.workspacePath === workspacePath) || conversation
   useEffect(() => { localStorage.setItem('alfred.sidebarCollapsed', String(sidebarCollapsed)) }, [sidebarCollapsed])
   useEffect(() => {
@@ -344,7 +354,7 @@ export function App() {
           <div className="start-features"><span><Sparkles size={15} />{t('Native chat', 'Chat nativo')}</span><span><Columns2 size={15} />{t('Your own workspace', 'Tu propio espacio')}</span><span><Smartphone size={15} />{t('Wherever you are', 'Donde estés')}</span></div>
         </div>}
       </div>
-      {conversation && filesConversation === conversation.id && <Suspense fallback={<p>{t('Loading…', 'Cargando…')}</p>}><FileViewer key={conversation.id} conversationId={conversation.id} openFile={fileRequest?.conversationId === conversation.id ? fileRequest : undefined} close={() => setFilesConversation('')} /></Suspense>}
+      {state.conversations.some(item => item.id === filesConversation) && <Suspense fallback={<p>{t('Loading…', 'Cargando…')}</p>}><FileViewer key={filesConversation} conversationId={filesConversation} openFile={fileRequest?.conversationId === filesConversation ? fileRequest : undefined} close={() => setFilesConversation('')} /></Suspense>}
       {(conversation || canConnectPhone) && <aside className="workspace-right-sidebar" aria-label={t('Workspace tools', 'Herramientas del espacio')}>
         <div className="right-sidebar-tools">
           {conversation && <Button variant="ghost" size="icon" aria-label={t('Files', 'Archivos')} title={t('Files', 'Archivos')} aria-pressed={filesConversation === conversation.id} onClick={() => {
@@ -361,9 +371,7 @@ export function App() {
     </main>
     {paletteCommands && <CommandPalette commands={paletteCommands} close={() => setPaletteCommands(undefined)} />}
     {conversation && fileSearchConversation === conversation.id && <Suspense fallback={null}><FileSearch key={conversation.id} conversationId={conversation.id} close={() => setFileSearchConversation('')} select={path => {
-      setFileRequest({ conversationId: conversation.id, path })
-      setFilesConversation(conversation.id)
-      showTool('browser', false); showTool('git', false)
+      openWorkspaceFile(conversation.id, path)
       setFileSearchConversation('')
     }} /></Suspense>}
     {dialog === 'worktree' && project && <Suspense fallback={null}><WorktreeDialog project={project} onClose={() => setDialog(null)} onAdded={(path) => { setTreeVersion((value) => value + 1); setWorkspacePath(path); void newConversation(path) }} /></Suspense>}

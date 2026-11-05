@@ -47,3 +47,12 @@ test('caps directory listings at 500 entries', async () => {
   expect(listing.entries).toHaveLength(500)
   expect(listing.truncated).toBe(true)
 })
+
+test('opens absolute workspace links without bypassing path restrictions', async () => {
+  await writeFile(join(root, 'linked.ts'), 'export {}')
+  expect(await viewerFile(root, join(root, 'linked.ts'))).toEqual({ content: 'export {}' })
+  await expect(viewerFile(root, join(root, '.env'))).rejects.toThrow()
+  await expect(viewerFile(root, join(root, '..', 'outside.txt'))).rejects.toThrow()
+  await symlink(tmpdir(), join(root, 'outside'))
+  await expect(viewerFile(root, join(root, 'outside', 'file.txt'))).rejects.toThrow()
+})

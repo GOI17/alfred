@@ -1,5 +1,7 @@
 import { open, opendir } from 'node:fs/promises'
 import { constants } from 'node:fs'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { realpath } from 'node:fs/promises'
 import { workspaceFile } from './workspace-files.js'
 import { privatePath } from './workspace-path-policy.js'
 export async function viewerDirectory(root: string, path: string) {
@@ -14,6 +16,14 @@ export async function viewerDirectory(root: string, path: string) {
   return { entries, truncated }
 }
 export async function viewerFile(root: string, path: string) {
+  // Accept both the selected root spelling and its canonical spelling (e.g.
+  // /var versus /private/var on macOS). Do not resolve the requested file first:
+  // workspaceFile must still check private names, symlinks and hard links.
+  if (isAbsolute(path)) {
+    const selected = relative(resolve(root), path)
+    path = selected !== '..' && !selected.startsWith(`..${sep}`) && !isAbsolute(selected)
+      ? selected : relative(await realpath(root), path)
+  }
   const file = await open(await workspaceFile(root, path), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
   try {
     const info = await file.stat()
