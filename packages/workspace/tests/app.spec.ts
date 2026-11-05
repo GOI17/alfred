@@ -153,7 +153,7 @@ test('adds and removes an ordinary folder without deleting its files', async ({
       await page.getByRole('button', { name: 'Open spaces' }).click()
     await expect(page.getByRole('button', { name: 'plain folder', exact: true })).toBeVisible()
     if (testInfo.project.name === 'phone')
-      await page.getByRole('button', { name: 'Close sidebar', exact: true }).first().click()
+      await page.locator('.sidebar').getByRole('button', { name: 'Close sidebar', exact: true }).click()
     await page.locator('.workspace-picker > summary').click()
     await expect(page.getByRole('button', { name: 'New worktree' })).toHaveCount(0)
     await page.locator('.workspace-picker > summary').click()
