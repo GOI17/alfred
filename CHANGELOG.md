@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.3.0](https://github.com/GOI17/alfred/compare/v1.2.0...v1.3.0) (2026-11-04)
+
+
+### Features
+
+* **workspace:** add cd command with directory autocomplete ([f440663](https://github.com/GOI17/alfred/commit/f4406635b8e70f6c9d5dde397c72d0f872e0bbc5))
+* **workspace:** resume pending work and request capability access ([abf5077](https://github.com/GOI17/alfred/commit/abf507766a17adac5ef38d553e7e69661ae8915a))
+* **workspace:** run as daemon with stop and restart ([ab67f59](https://github.com/GOI17/alfred/commit/ab67f59be588c44796158a53d164172d27ddae8b))
+* **workspace:** sync sidebar, context usage and compaction improvements ([ed00597](https://github.com/GOI17/alfred/commit/ed00597af65dfc24b3e8cd3c9833fec7f38e8301))
+* **workspace:** sync sidebar, context usage and compaction improvements ([#243](https://github.com/GOI17/alfred/issues/243)) ([b0066b5](https://github.com/GOI17/alfred/commit/b0066b50cbde97241c54aefcaac691189e83cdd8))
+
+
+### Bug Fixes
+
+* **workspace:** filter agents by working waiting and finished status ([7e0286d](https://github.com/GOI17/alfred/commit/7e0286d188e8d4a880a75199c132217df4ca6437))
+* **workspace:** limit agent popovers to dock hover and prevent overlap ([5ca7c83](https://github.com/GOI17/alfred/commit/5ca7c834559ab4dd8fbdffa2874e9fafab7bf607))
+* **workspace:** navigate agent previews and dismiss seen completions ([c878316](https://github.com/GOI17/alfred/commit/c878316873648e1288ffec7d0da96c8aeb27a6d6))
+
 ## [1.2.0](https://github.com/GOI17/alfred/compare/v1.1.0...v1.2.0) (2026-10-24)
 
 
