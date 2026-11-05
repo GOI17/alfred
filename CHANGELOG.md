@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.4.0](https://github.com/GOI17/alfred/compare/v1.3.0...v1.4.0) (2026-11-05)
+
+
+### Features
+
+* **workspace:** add file tools and optimize chat streaming and persistence ([c65ea10](https://github.com/GOI17/alfred/commit/c65ea10684547d04becaef94549c4073bde5298f))
+* **workspace:** breadcrumb worktree picker and chat input history ([dde1f77](https://github.com/GOI17/alfred/commit/dde1f776121904d48a469abecda213c9c7dc7277))
+* **workspace:** refine UI controls and regenerate conversation titles ([6579637](https://github.com/GOI17/alfred/commit/6579637c08cab54b7d1ad0f6aeb222fa56cd069d))
+
+
+### Bug Fixes
+
+* **workspace:** anchor message navigation across lazy layout changes ([f510219](https://github.com/GOI17/alfred/commit/f51021900582e3abc83505a4b0536b59911f8de0))
+* **workspace:** restore virtual reading anchors and align UI regression tests ([a275863](https://github.com/GOI17/alfred/commit/a2758633e6150dd6227fd171bfa3a277ffc9ae7e))
+
 ## [1.3.0](https://github.com/GOI17/alfred/compare/v1.2.0...v1.3.0) (2026-11-04)
 
 
