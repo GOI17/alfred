@@ -75,11 +75,13 @@
   display: flex;
   flex-direction: column;
   inset-inline-start: 3px;
-  top: 24px;
-  bottom: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-height: min(280px, max(0px, calc(100% - 48px)));
   width: 26px;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   scrollbar-width: none;
 }
 .message-navigation button {

@@ -33,10 +33,20 @@ export function TerminalPanel({
     terminal.loadAddon(fit)
     terminal.open(container.current)
     let disposed = false,
+      wasVisible = false,
       retry: ReturnType<typeof setTimeout> | undefined
     const resize = () => {
-      if (container.current && container.current.clientWidth > 0) {
+      const visible = Boolean(
+        container.current &&
+          container.current.clientWidth > 0 &&
+          container.current.clientHeight > 0,
+      )
+      const becameVisible = visible && !wasVisible
+      wasVisible = visible
+      if (visible) {
         fit.fit()
+        // Focus only when opening or revealing this session, not on every resize.
+        if (becameVisible) terminal.focus()
         if (socket.current?.readyState === WebSocket.OPEN)
           socket.current.send(
             JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }),
