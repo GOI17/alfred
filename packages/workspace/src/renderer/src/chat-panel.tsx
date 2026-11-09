@@ -9,6 +9,7 @@ import { ModelPicker } from './model-picker'
 import { SubagentsPanel } from './subagents-panel'
 import { VirtualMessage } from './virtual-message'
 import { MessageNavigation } from './message-navigation'
+import { ChatQuotes } from './quote-selection'
 import { ContextPermissions } from './context-permissions'
 import { useUI } from './ui-preferences'
 import { useChatReading } from './use-chat-reading'
@@ -214,6 +215,10 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
           {agent?.approval && <ApprovalCard key={agent.approval.id} approval={agent.approval} conversationId={conversation.id} onError={setError} />}
         </div>
       </div>
+      <ChatQuotes scroller={scroller} disabled={sending} onNavigate={stopFollowing} onAdd={(quote) => {
+        setText(current => `${current}${current.trim() ? '\n\n' : ''}${quote}\n\n`)
+        composer.current?.querySelector('textarea')?.focus({ preventScroll: true })
+      }} />
       <MessageNavigation messages={conversation.messages} scroller={scroller} content={messageContent} onNavigate={stopFollowing} />
     </div>
     <div className="composer-wrap">

@@ -5,6 +5,7 @@ import rehypeHighlight from 'rehype-highlight'
 import { openWorkspaceFile } from './open-file'
 import { useUI } from './ui-preferences'
 import { localFilePath } from './local-file-path'
+import { QUOTE_PREFIX } from './chat-quotes'
 import './assets/markdown.css'
 
 function CodeBlock({ children }: { children?: ReactNode }) {
@@ -30,6 +31,7 @@ function CodeBlock({ children }: { children?: ReactNode }) {
 
 function FileLink({ href, children, conversationId }: { href?: string; children?: ReactNode; conversationId?: string }) {
   const { t } = useUI()
+  if (href?.startsWith(QUOTE_PREFIX)) return <a href={href}>{children}</a>
   const path = localFilePath(href || '')
   if (!path) return <a href={href} target="_blank" rel="noreferrer">{children}</a>
   if (!conversationId) return <span title={path}>{children}</span>
