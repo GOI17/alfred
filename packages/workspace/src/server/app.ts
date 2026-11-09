@@ -9,7 +9,7 @@ import { harnessRoutes } from './harness-routes.js'
 import { HarnessRegistry } from './harness-runtime.js'
 import type { HarnessEnvironment } from './harness-discovery.js'
 import { viewerDirectory, viewerFile } from './file-viewer.js'
-import { listWorkspaceFiles } from './workspace-files.js'
+import { externalFileRoutes } from './external-file-routes.js'
 import Fastify from 'fastify'
 import { cloudflareRoutes, type TunnelConfig } from './cloudflare.js'
 import websocket from '@fastify/websocket'
@@ -87,15 +87,7 @@ export async function createApp(options: {
       .send({ error: message })
   })
   const id = (params: unknown) => z.object({ id: z.string().uuid() }).parse(params).id
-  app.get('/api/conversations/:id/files', async (request, reply) => {
-    const { query } = z.object({ query: z.string().max(300).default('') }).parse(request.query)
-    const root = await service.workspace(service.conversation(id(request.params)))
-    const controller = new AbortController()
-    const abort = () => controller.abort()
-    reply.raw.on('close', abort)
-    try { return await listWorkspaceFiles(root, query, controller.signal) }
-    finally { reply.raw.off('close', abort) }
-  })
+  externalFileRoutes(app, service, options.pickFolder)
   for (const kind of ['tree', 'content'] as const) {
     app.get(`/api/conversations/:id/viewer/${kind}`, async (request, reply) => {
       const { path } = z.object({ path: z.string().max(4096).default('.') }).parse(request.query)

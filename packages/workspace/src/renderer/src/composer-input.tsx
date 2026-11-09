@@ -1,3 +1,4 @@
+import { ExternalFileAccess, type FileSuggestions } from './external-file-access'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api, errorMessage } from './api'
@@ -54,7 +55,9 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
   const [focused, setFocused] = useState(false)
   const [dismissed, setDismissed] = useState(false)
   const [selected, setSelected] = useState(0)
-  const [result, setResult] = useState<{ key: string; files: string[]; truncated?: boolean; error?: string }>({ key: '', files: [] })
+  const [result, setResult] = useState<FileSuggestions & { key: string; error?: string }>({ key: '', files: [] })
+  const [searchRevision, setSearchRevision] = useState(0)
+  const currentSearch = useRef('')
   const match = /(?:^|\s)([@/])([^\s@/]*)$/.exec(value.slice(0, caret))
   const fileMatch = /(?:^|\s)@([^\s@]*)$/.exec(value.slice(0, caret))
   const directoryMatch = /^\/cd[ \t]+([^\n]*)$/.exec(value.slice(0, caret))
@@ -82,16 +85,17 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
     }
   }, [open])
   const key = `${conversationId}:${marker}:${query}`
+  currentSearch.current = key
   useEffect(() => {
     if (!open || (marker !== '@' && marker !== 'directory')) return
     const controller = new AbortController()
     const timer = setTimeout(() => {
-      void api<{ files: string[]; truncated: boolean }>(`/conversations/${conversationId}/${marker === 'directory' ? 'directories' : 'files'}?query=${encodeURIComponent(query)}`, undefined, undefined, controller.signal)
+      void api<FileSuggestions>(`/conversations/${conversationId}/${marker === 'directory' ? 'directories' : 'files'}?query=${encodeURIComponent(query)}`, undefined, undefined, controller.signal)
         .then((data) => { if (!controller.signal.aborted) setResult({ key, ...data }) })
         .catch((error) => { if (!controller.signal.aborted) setResult({ key, files: [], error: errorMessage(error) }) })
     }, 180)
     return () => { clearTimeout(timer); controller.abort() }
-  }, [open, marker, query, conversationId, key])
+  }, [open, marker, query, conversationId, key, searchRevision])
   const items = marker === 'directory'
     ? (result.key === key ? result.files : []).map((path) => ({ name: path, description: t('Folder', 'Carpeta'), text: path }))
     : marker === '@'
@@ -126,7 +130,7 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
   }
   const listLabel = marker === 'directory' ? t('Folders', 'Carpetas') : marker === '@' ? t('Project files', 'Archivos del proyecto') : t('Commands', 'Comandos')
   return <div style={{ position: 'relative' }}>
-    {open && createPortal(<div ref={suggestions} style={{ position: 'fixed', ...position, boxSizing: 'border-box', zIndex: 1000, overflowY: 'auto', background: 'var(--surface)', color: 'var(--foreground)', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
+    {open && createPortal(<div ref={suggestions} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget) && event.relatedTarget !== input.current) { setFocused(false); setDismissed(true) } }} onMouseDown={(event) => { if (!(event.target instanceof HTMLButtonElement)) event.preventDefault() }} style={{ position: 'fixed', ...position, boxSizing: 'border-box', zIndex: 1000, overflowY: 'auto', background: 'var(--surface)', color: 'var(--foreground)', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
       <div>{listLabel} · {t('↑ ↓ select · Enter accept · Esc close', '↑ ↓ seleccionar · Enter aceptar · Esc cerrar')}</div>
       {marker === '/' && harness && harnessError && <p role="status">{t('Could not refresh harness commands.', 'No se pudieron actualizar los comandos del harness.')}</p>}
       <div id={id} role="listbox" aria-label={listLabel}>
@@ -136,13 +140,27 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
           <strong>{item.name}</strong> <small>{item.description}</small>
         </button>)}
       </div>
-      {!items.length && <p role="status">{(marker === '@' || marker === 'directory') && result.key !== key ? t('Searching paths…', 'Buscando rutas…') : result.key === key && (marker === '@' || marker === 'directory') && result.error ? result.error : t('No matches.', 'Sin coincidencias.')}</p>}
+      {marker === '@' && result.key === key && (result.authorization || result.authorizedFolder) && <ExternalFileAccess key={key} conversationId={conversationId} result={result}
+        cancel={() => { input.current?.focus(); setDismissed(true) }}
+        refresh={() => {
+          if (currentSearch.current !== key) return
+          setResult({ key: '', files: [] }); setSelected(0); setSearchRevision(revision => revision + 1)
+          input.current?.focus(); setFocused(true); setDismissed(false)
+        }}
+        pick={(path) => {
+          if (currentSearch.current !== key) return
+          const start = caret - query.length
+          onChange(value.slice(0, start) + path + value.slice(caret))
+          setCaret(start + path.length); setSelected(0)
+          requestAnimationFrame(() => { input.current?.focus(); input.current?.setSelectionRange(start + path.length, start + path.length) })
+        }} />}
+      {!items.length && !(marker === '@' && result.key === key && result.authorization) && <p role="status">{(marker === '@' || marker === 'directory') && result.key !== key ? t('Searching paths…', 'Buscando rutas…') : result.key === key && (marker === '@' || marker === 'directory') && result.error ? result.error : t('No matches.', 'Sin coincidencias.')}</p>}
       {(marker === '@' || marker === 'directory') && result.key === key && result.truncated && <small>{t('List truncated; type a path to narrow the search.', 'Lista truncada; escribe una ruta para acotar la búsqueda.')}</small>}
     </div>, document.body)}
     <textarea ref={input} className="textarea" aria-label={t('Message for Alfred', 'Mensaje para Alfred')} value={value} readOnly={sending} aria-busy={sending}
       aria-autocomplete="list" aria-controls={open ? id : undefined} aria-expanded={open} aria-activedescendant={open && items.length ? `${id}-${active}` : undefined}
       placeholder={busy ? t('Type to queue a message…', 'Escribe para poner un mensaje en cola…') : t('Type / for commands or @ for files…', 'Escribe / para comandos o @ para archivos…')} rows={2}
-      onFocus={() => { setFocused(true); setDismissed(false) }} onBlur={() => { setFocused(false); setDismissed(true) }}
+      onFocus={() => { setFocused(true); setDismissed(false) }} onBlur={(event) => { if (!suggestions.current?.contains(event.relatedTarget)) { setFocused(false); setDismissed(true) } }}
       onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
       onChange={(event) => { onChange(event.target.value); setCaret(event.target.selectionStart); setDismissed(false); setSelected(0) }}
       onKeyDown={(event) => {

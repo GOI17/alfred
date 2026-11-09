@@ -39,23 +39,23 @@ type WorkspaceTools = {
   write_file: Tool<{ path: string; content: string }, string>
   write_files: Tool<{ files: { path: string; content: string }[] }, BatchWriteResult>
 }
-export function workspaceTools(root: string, approve: (path: string, content: string) => Promise<boolean>, options: { automatic?: boolean; signal?: AbortSignal } = {}): WorkspaceTools {
+export function workspaceTools(root: string, approve: (path: string, content: string) => Promise<boolean>, options: { automatic?: boolean; signal?: AbortSignal; readPath?: (path: string) => Promise<string> } = {}): WorkspaceTools {
   const checkStopped = () => { if (options.signal?.aborted) throw new Error('Write canceled: agent stopped.') }
   return {
     list_directory: tool({
-      description: 'List a workspace folder. Paths are relative; excludes secrets and dependencies.',
+      description: 'List a workspace folder or an explicitly authorized external folder. Paths are relative; excludes secrets and dependencies.',
       inputSchema: z.object({ path: z.string().default('.') }),
       execute: async ({ path }) => {
-        const entries = await readdir(await workspaceFile(root, path), { withFileTypes: true })
+        const entries = await readdir(await (options.readPath ? options.readPath(path) : workspaceFile(root, path)), { withFileTypes: true })
         return entries.filter((entry) => !privatePath(entry.name))
           .slice(0, 300).map((entry) => ({ name: entry.name, directory: entry.isDirectory() }))
       },
     }),
     read_file: tool({
-      description: 'Read a workspace text file (maximum 100 KB).',
+      description: 'Read a workspace text file or an explicitly authorized external file (maximum 100 KB).',
       inputSchema: z.object({ path: z.string() }),
       execute: async ({ path }) => {
-        const file = await workspaceFile(root, path)
+        const file = await (options.readPath ? options.readPath(path) : workspaceFile(root, path))
         const info = await lstat(file)
         if (!info.isFile() || info.nlink > 1 || info.size > 100_000) throw new Error('The file is not a small text file; choose another file.')
         const content = await readFile(file, 'utf8')

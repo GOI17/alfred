@@ -31,6 +31,7 @@ type Run = {
   modelId: string
 }
 export class Chat {
+  readPath?: (id: string, root: string, path: string) => Promise<string>
   notice?: (id: string, kind: 'completed' | 'error' | 'approval') => void
   capabilities?: (request: CapabilityRequest) => Promise<Capabilities>
   harnesses?: HarnessRegistry
@@ -394,7 +395,7 @@ export class Chat {
         return Promise.resolve(true)
       }
       return requestApproval(path, content)
-    }, { automatic: fullAccess, signal: run.controller.signal })
+    }, { automatic: fullAccess, signal: run.controller.signal, readPath: this.readPath ? (path) => this.readPath!(id, root, path) : undefined })
     const permissionInstruction = readOnly
       ? 'Read-only mode: you may explore and respond, but cannot save files or use terminal or MCP.'
       : fullAccess

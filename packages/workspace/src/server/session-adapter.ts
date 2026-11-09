@@ -11,6 +11,7 @@ import type { HarnessRegistry } from './harness-runtime.js'
  * on them. Remove once the legacy tool configuration UI/API is migrated.
  */
 export interface LegacySessionBindings {
+  readPath?: (id: string, root: string, path: string) => Promise<string>
   reconfigure(id: string, apply: () => Promise<void>): Promise<void>
   recover(): Promise<void>
   capabilities?: (request: CapabilityRequest) => Promise<Capabilities>
