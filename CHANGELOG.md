@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.0](https://github.com/GOI17/alfred/compare/v1.4.1...v1.5.0) (2026-11-09)
+
+
+### Features
+
+* **workspace:** authorize external file references per conversation ([06dedab](https://github.com/GOI17/alfred/commit/06dedab8814a1200bfa1a1ac9ad4cad5adbe545e))
+* **workspace:** quote selected chat text and navigate to source ([0539344](https://github.com/GOI17/alfred/commit/053934415f22812adfe92ee73591104a954c1a32))
+
+
+### Bug Fixes
+
+* focus terminal and constrain message navigation ([a496c77](https://github.com/GOI17/alfred/commit/a496c77443b420c1b66ff7e7c5cd915a017eb1c9))
+
 ## [1.4.1](https://github.com/GOI17/alfred/compare/v1.4.0...v1.4.1) (2026-11-05)
 
 
