@@ -12,7 +12,9 @@ afterEach(async () => {
 })
 function setup() {
   const db = { providers: [{ id: 'opencode', model: 'test-model', encryptedKey: 'encrypted' }] as { id: string; model: string; encryptedKey: string }[] }
+  const chatgptModels = vi.fn().mockResolvedValue([])
   const service = {
+    chatgpt: { models: chatgptModels },
     store: { get: () => db, update: async (update: (data: typeof db) => void) => update(db) },
     vault: { decrypt: () => 'test-key', encrypt: () => 'encrypted' },
     changed: vi.fn(),
@@ -23,7 +25,7 @@ function setup() {
   providerModels(app, service)
   const fetchMock = vi.fn()
   vi.stubGlobal('fetch', fetchMock)
-  return { app, db, fetchMock }
+  return { app, db, fetchMock, chatgptModels }
 }
 const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
 
@@ -71,4 +73,26 @@ it('reports Copilot authorization failure without leaking upstream details', asy
   const { fetchMock } = setup()
   fetchMock.mockResolvedValue(new Response('private upstream details', { status: 403 }))
   await expect(copilotToken('test-token')).rejects.toThrow('Could not authorize Copilot')
+})
+
+
+it('exposes ChatGPT capacity from account metadata without invoking a model', async () => {
+  const { app, chatgptModels, fetchMock } = setup()
+  chatgptModels.mockResolvedValue([{ slug: 'custom-chatgpt', display_name: 'Custom', context_window: 96000 }])
+  const result = await app.inject('/api/providers/chatgpt/models')
+  expect(result.statusCode).toBe(200)
+  expect(result.json()).toEqual([{ id: 'custom-chatgpt', name: 'Custom', contextCapacity: {
+    capacityTokens: 96000, capacitySource: 'provider', capacityReference: 'chatgpt/models:custom-chatgpt#context_window',
+  } }])
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+it('keeps subscription models usable when capacity is absent', async () => {
+  const { app, chatgptModels } = setup()
+  chatgptModels.mockResolvedValue([{ slug: 'custom-chatgpt', display_name: 'Custom', max_tokens: 8000 }])
+  expect((await app.inject('/api/providers/chatgpt/models')).json()).toEqual([{ id: 'custom-chatgpt', name: 'Custom' }])
+})
+it('preserves explicit capacity in the OpenCode catalog', async () => {
+  const { app, fetchMock } = setup()
+  fetchMock.mockResolvedValue(json({ data: [{ id: 'custom', context_length: 64000 }] }))
+  expect((await app.inject('/api/providers/opencode/models')).json()[0].contextCapacity).toMatchObject({ capacityTokens: 64000, capacitySource: 'provider' })
 })

@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import * as Dialog from '@radix-ui/react-dialog'
 import { ShieldCheck, X } from 'lucide-react'
 import type { Conversation, PermissionMode, ProviderId, PublicState } from '../../shared/contracts'
-import { latestContextUsage, contextUsedTokens, contextRemaining, conversationConsumption, compactTokenCount, compactedTextEstimate } from '../../shared/context-usage'
+import { latestContextUsage, contextUsedTokens, conversationConsumption, compactTokenCount, compactedTextEstimate } from '../../shared/context-usage'
+import { resolveContextCapacity, type ContextCapacity } from '../../shared/context-capacity'
 import { api, errorMessage } from './api'
 import { Button } from './components/ui/button'
 import { useUI } from './ui-preferences'
@@ -56,6 +57,19 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
   const lock = useRef(false)
   const mode = conversation.permissionMode || 'approval'
   const model = state.providers.find((item) => item.id === provider)?.model
+  const connectionKey = `${provider}:${model}:${provider === 'chatgpt' ? state.chatgpt.active : ''}`
+  const [catalog, setCatalog] = useState<{ key: string; capacity?: ContextCapacity; status: 'ready' | 'error' }>()
+  const [refresh, setRefresh] = useState(0)
+  useEffect(() => {
+    if (!model) return
+    const controller = new AbortController()
+    setCatalog(undefined)
+    void api<{ id: string; contextCapacity?: ContextCapacity }[]>(`/providers/${provider}/models`, undefined, undefined, controller.signal)
+      .then(models => { if (!controller.signal.aborted) setCatalog({ key: connectionKey, capacity: models.find(item => item.id === model)?.contextCapacity, status: 'ready' }) })
+      .catch(() => { if (!controller.signal.aborted) setCatalog({ key: connectionKey, status: 'error' }) })
+    return () => controller.abort()
+  }, [connectionKey, model, provider, refresh])
+  const currentCatalog = catalog?.key === connectionKey ? catalog : undefined
   const measured = latestContextUsage(conversation.messages, provider, model)
   const usage = measured && (!conversation.compaction || measured.measuredAt > conversation.compaction.createdAt) ? measured : undefined
   const consumption = conversationConsumption(conversation)
@@ -63,10 +77,13 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
   const consumptionLabel = consumption.incomplete && consumption.total === 0 ? t('Unavailable', 'No disponible') : `${format(consumption.total)} tokens${consumption.incomplete ? t(' (partial)', ' (parcial)') : ''}`
   const estimate = usage ? undefined : compactedTextEstimate(conversation)
   const used = usage ? contextUsedTokens(usage) : estimate
-  const remaining = usage ? contextRemaining(usage) : undefined
-  const percentage = used !== undefined && usage?.limit && usage.limit > 0 ? Math.round(used / usage.limit * 100) : undefined
+  const discovered = currentCatalog?.capacity ?? resolveContextCapacity(provider, model || '')
+  const capacity = usage?.capacitySource === 'runtime' ? { capacityTokens: usage.limit, capacitySource: usage.capacitySource, capacityReference: usage.capacityReference } : discovered.capacityTokens ? discovered : { capacityTokens: usage?.limit, capacitySource: usage?.capacitySource, capacityReference: usage?.capacityReference }
+  const limit = capacity.capacityTokens
+  const remaining = used !== undefined && limit !== undefined ? Math.max(0, limit - used) : undefined
+  const percentage = used !== undefined && limit && limit > 0 ? Math.round(used / limit * 100) : undefined
   const tokenLabel = used === undefined ? '—' : `${estimate === undefined ? '' : '≈'}${compactTokenCount(used)}`
-  const contextLabel = used === undefined ? '—' : usage?.limit === undefined ? `${format(used)} tokens` : `${format(used)} / ${format(usage.limit)} tokens`
+  const contextLabel = used === undefined ? '—' : limit === undefined ? `${format(used)} tokens` : `${format(used)} / ${format(limit)} tokens`
   const permissionLabel = (value: PermissionMode) => value === 'read-only' ? t('Read only', 'Solo lectura') : value === 'full-access' ? t('Full access', 'Acceso completo') : t('Ask for approval', 'Solicitar aprobación')
   async function compact(reduction: 30 | 50 | 70) {
     if (compactLock.current || busy) return
@@ -89,29 +106,36 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
     finally { lock.current = false; setSaving(false) }
   }
   return <>
-    <Control heading={t('Context', 'Contexto')} label={`${t('Context', 'Contexto')}: ${tokenLabel} tokens · ${percentage === undefined ? t('Percentage unavailable', 'Porcentaje no disponible') : `${percentage}% ${t('used', 'usado')}`}`} icon={<div className="context-token-count" aria-hidden="true" data-unknown={percentage === undefined}>
+    <Control heading={t('Context', 'Contexto')} label={`${t('Context', 'Contexto')}: ${tokenLabel} tokens · ${percentage === undefined ? t('Capacity pending', 'Capacidad pendiente') : `${percentage}% ${t('used', 'usado')}`}`} icon={<div className="context-token-count" aria-hidden="true" data-unknown={percentage === undefined}>
       <svg viewBox="0 0 40 40" focusable="false">
         <circle className="context-ring-track" cx="20" cy="20" r="17" />
         {percentage !== undefined && <circle className="context-ring-value" cx="20" cy="20" r="17" pathLength="100" strokeDasharray="100" strokeDashoffset={100 - Math.min(100, Math.max(0, percentage))} transform="rotate(-90 20 20)" />}
       </svg>
-      <small>{percentage === undefined ? '—' : `${percentage}%`}</small>
+      <small>{percentage === undefined ? tokenLabel : `${estimate === undefined ? '' : '≈'}${percentage}%`}</small>
     </div>}>
-      <p><strong>{t('Used', 'Usado')}:</strong> {estimate === undefined ? '' : '≈'}{contextLabel}{percentage !== undefined && ` · ${percentage}%`}</p>
+      <p><strong>{t('Context occupied', 'Contexto ocupado')}:</strong> {estimate === undefined ? '' : '≈'}{contextLabel}{percentage !== undefined && ` · ${percentage}%`}</p>
       {percentage !== undefined && <progress className="context-progress" aria-label={t('Context usage', 'Uso de contexto')} max={100} value={Math.min(100, percentage)} />}
-      {percentage === undefined && <p>{t('Percentage unavailable.', 'Porcentaje no disponible.')}</p>}
+      {limit === undefined && <p role="status">{!currentCatalog && model ? t('Checking model capacity…', 'Consultando capacidad del modelo…') : currentCatalog?.status === 'error' ? t('Could not refresh model capacity. Recorded usage is preserved.', 'No se pudo actualizar la capacidad del modelo. El consumo registrado se conserva.') : t('The model catalog does not report a context capacity. Recorded tokens remain available.', 'El catálogo del modelo no informa su capacidad de contexto. Los tokens registrados siguen disponibles.')}</p>}
+      <Button type="button" variant="ghost" disabled={!model || !currentCatalog} onClick={() => setRefresh(value => value + 1)}>{t('Refresh capacity', 'Actualizar capacidad')}</Button>
       {estimate !== undefined && <p>{t('≈ Text-only estimate.', '≈ Estimación solo del texto.')}</p>}
       {remaining !== undefined && <p>{t('Available (last measurement)', 'Disponible (última medición)')}: {format(remaining)} tokens.</p>}
-      <p><strong>{t('Total consumed', 'Consumo acumulado')}:</strong> {consumptionLabel}</p>
+      {usage && <p>{t('Last measurement', 'Última medición')}: <time dateTime={usage.measuredAt}>{new Date(usage.measuredAt).toLocaleString(language)}</time></p>}
+      {capacity.capacitySource && <p>{t('Capacity source', 'Fuente de capacidad')}: {capacity.capacitySource === 'provider' ? t('Provider catalog', 'Catálogo del proveedor') : capacity.capacitySource === 'runtime' ? 'Runtime' : t('Local catalog', 'Catálogo local')}</p>}
+      <p><strong>{t('Tokens processed', 'Tokens procesados')}:</strong> {consumptionLabel}</p>
+      <p>{t('Recorded work, not remaining context, subscription quota or an invoice.', 'Trabajo registrado, no contexto restante, cuota de suscripción ni una factura.')}</p>
+      <Button type="button" disabled={busy || compacting || !!conversation.queue?.length || !model} onClick={() => void compact(50)}>{t('Compact context', 'Compactar contexto')}</Button>
+      <details><summary>{t('Advanced compaction', 'Compactación avanzada')}</summary>
       <fieldset disabled={busy || compacting || !!conversation.queue?.length || !model}>
         <legend>{t('Reduce context', 'Reducir contexto')}</legend>
         {([30, 50, 70] as const).map((reduction) => <Button key={reduction} type="button" variant="secondary" onClick={() => void compact(reduction)}>{reduction}%</Button>)}
-      </fieldset>
+      </fieldset></details>
       <p>{t('Approximate reduction. Uses tokens and may lose detail.', 'Reducción aproximada. Consume tokens y puede perder detalles.')}</p>
       {compacting && <p role="status">{t('Compacting context…', 'Compactando contexto…')}</p>}
       {compactError && <p role="alert" className="error-text">{compactError}</p>}
       <details>
         <summary>{t('Details', 'Detalles')}</summary>
         <p>{t('Context is input + output from the last measured model call. SDK totals include cache and reasoning once. After compaction, ≈ indicates a text-only estimate (characters / 4), excluding instructions, tools and attachments, until the next runtime measurement.', 'El contexto es entrada + salida de la última llamada medida al modelo. Los totales del SDK incluyen caché y razonamiento una sola vez. Tras compactar, ≈ indica una estimación del texto (caracteres / 4), sin instrucciones, herramientas ni adjuntos, hasta la siguiente medición del runtime.')}</p>
+        {capacity.capacityReference && <p>{t('Capacity reference', 'Referencia de capacidad')}: {capacity.capacityReference}</p>}
         {percentage === undefined && <p>{t('The percentage requires both context usage and the model limit.', 'El porcentaje requiere conocer el uso de contexto y el límite del modelo.')}</p>}
         <p>{t('Recorded input + output across calls, including continuations and compaction. Cached input is counted once per call. This is not remaining context or subscription quota.', 'Entrada + salida registradas entre llamadas, incluidas continuaciones y compactación. La entrada en caché se cuenta una vez por llamada. No es el contexto disponible ni la cuota de suscripción.')}</p>
         {consumption.incomplete && <p>{t('Historical usage is incomplete; missing calls cannot be reconstructed.', 'El consumo histórico es incompleto; las llamadas faltantes no pueden reconstruirse.')}</p>}

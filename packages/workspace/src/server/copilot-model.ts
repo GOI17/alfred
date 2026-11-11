@@ -2,6 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import type { LanguageModel } from 'ai'
 import { z } from 'zod'
+import { providerContextCapacity, type ContextCapacity } from '../shared/context-capacity.js'
 import { CopilotError, copilotHeaders, copilotSession, type CopilotSession } from './copilot.js'
 
 const remoteModel = z.object({
@@ -11,12 +12,13 @@ const remoteModel = z.object({
   policy: z.object({ state: z.string().optional() }).optional(),
   capabilities: z.object({
     type: z.string().optional(),
+    limits: z.unknown().optional(),
     supports: z.object({ tool_calls: z.boolean().optional(), streaming: z.boolean().optional() }).optional(),
   }).optional(),
 })
 type RemoteModel = z.infer<typeof remoteModel>
 type Endpoint = '/v1/messages' | '/responses' | '/chat/completions'
-type CopilotModel = { id: string; name: string; endpoint: Endpoint }
+type CopilotModel = { id: string; name: string; endpoint: Endpoint; contextCapacity?: ContextCapacity }
 
 function modelEndpoint(model: RemoteModel): Endpoint | undefined {
   // The account's live routing metadata wins over model-name conventions.
@@ -49,7 +51,7 @@ export async function copilotModels(session: CopilotSession): Promise<CopilotMod
   // Some Individual accounts advertise no picker entries but do report enabled policies.
   if (!available.length && new URL(session.baseURL).hostname === 'api.individual.githubcopilot.com')
     available = candidates.filter((model) => model.policy?.state === 'enabled')
-  const models = available.map((model) => ({ id: model.id, name: model.display_name || model.name || model.id, endpoint: model.endpoint }))
+  const models = available.map((model) => ({ id: model.id, name: model.display_name || model.name || model.id, endpoint: model.endpoint, ...(() => { const contextCapacity = providerContextCapacity('copilot', model.id, model); return contextCapacity.capacityTokens ? { contextCapacity } : {} })() }))
   return [...new Map(models.map((model) => [model.id, model])).values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 

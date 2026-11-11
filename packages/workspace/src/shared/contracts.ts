@@ -1,12 +1,13 @@
 import { z } from 'zod'
+import { usageRecordSchema } from './usage-metrics.js'
 import { attachmentsSchema } from './attachments.js'
 import { harnessProjectionSchema } from './subagents.js'
 import { harnessSelectionSchema } from './harnesses.js'
 
-export const apiProviderId = z.enum(['openai', 'anthropic', 'google', 'copilot', 'opencode'])
-export type ApiProviderId = z.infer<typeof apiProviderId>
-export const providerId = z.enum(['openai', 'anthropic', 'google', 'chatgpt', 'copilot', 'opencode'])
-export type ProviderId = z.infer<typeof providerId>
+import { apiProviderId, providerId } from './providers.js'
+export { apiProviderId, providerId } from './providers.js'
+export type { ApiProviderId, ProviderId } from './providers.js'
+import type { ProviderId } from './providers.js'
 export const permissionModeSchema = z.enum(['read-only', 'approval', 'full-access'])
 export type PermissionMode = z.infer<typeof permissionModeSchema>
 export const paneSchema = z.object({
@@ -35,20 +36,16 @@ export const projectSchema = z.object({
   kind: z.enum(['git', 'folder']), createdAt: z.string(),
 })
 export type Project = z.infer<typeof projectSchema>
-// Exact model IDs only; unknown models have no assumed limit.
-export function modelContextLimit(model: string): number | undefined {
-  const limits: Record<string, number> = {
-    'gpt-4o': 128000, 'gpt-4o-2024-08-06': 128000, 'gpt-4o-mini': 128000,
-    'gpt-4.1': 1047576, 'gpt-4.1-mini': 1047576, 'gpt-4.1-nano': 1047576,
-    'o3': 200000, 'o4-mini': 200000,
-    'claude-3-5-sonnet-20241022': 200000, 'claude-3-7-sonnet-20250219': 200000,
-  }
-  return limits[model]
-}
+export { modelContextLimit } from './context-capacity.js'
 export const contextUsageSchema = z.object({
   provider: providerId, model: z.string(),
   inputTokens: z.number().int().nonnegative(), outputTokens: z.number().int().nonnegative().optional(),
   limit: z.number().int().positive().optional(), measuredAt: z.string(),
+  capacitySource: z.enum(['runtime', 'provider', 'catalog']).optional(),
+  capacityReference: z.string().min(1).optional(),
+  compactionThresholdTokens: z.number().int().positive().optional(),
+  compactionThresholdSource: z.literal('runtime').optional(),
+  reserveTokens: z.number().int().nonnegative().optional(),
 })
 export const messageSchema = z.object({
   id: z.string().uuid(), role: z.enum(['user', 'assistant']), text: z.string(),
@@ -84,6 +81,7 @@ export const conversationSchema = z.object({
     summary: z.string(), throughMessageId: z.string().uuid(), createdAt: z.string(),
     reduction: z.union([z.literal(30), z.literal(50), z.literal(70)]),
   }).optional(),
+  usageRecords: z.array(usageRecordSchema).optional(),
   compactionTokens: z.number().int().nonnegative().optional(),
 })
 export type Conversation = z.infer<typeof conversationSchema>

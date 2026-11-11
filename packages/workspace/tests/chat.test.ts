@@ -58,6 +58,9 @@ it('streams native model text, persists it, and owns the agent state on the serv
   const savedUsage = (await new Store(join(root, 'data')).open()).get().conversations[0].messages.at(-1)!.contextUsage
   expect(savedUsage).toEqual(measured)
   const savedMessage = (await new Store(join(root, 'data')).open()).get().conversations[0].messages.at(-1)
+  const records = (await new Store(join(root, 'data')).open()).conversation(conversation.id)!.usageRecords!
+  expect(records).toHaveLength(1)
+  expect(records[0]).toMatchObject({ turnId: savedMessage!.id, purpose: 'response', inputTokens: 1, outputTokens: 1 })
   expect(savedMessage!.segments).toEqual([{ kind: 'result', text: 'Una idea propia.' }])
 })
 it('does not write until approval and handles multiple requested writes one at a time', async () => {
@@ -271,6 +274,8 @@ it.each(([30, 50, 70] as const).flatMap((reduction) => (['openai', 'chatgpt'] as
   expect(after.messages).toEqual(before.messages)
   expect(after.compaction?.throughMessageId).toBe(before.messages[3].id)
   expect(after.compaction?.reduction).toBe(reduction)
+  expect(after.usageRecords).toHaveLength(1)
+  expect(after.usageRecords![0]).toMatchObject({ purpose: 'compaction', inputTokens: 1, outputTokens: 1 })
   expect(conversationConsumption(after)).toEqual({ total: 32, incomplete: false })
   const request = provider === 'chatgpt' ? model.doStreamCalls[0] : model.doGenerateCalls[0]
   expect(request.tools).toBeUndefined()
@@ -338,6 +343,10 @@ it('persists completed steps before continuation and replaces checkpoints withou
   const reopened = await new Store(join(root, 'data')).open()
   expect(reopened.get().conversations[0].messages.filter((m) => m.role === 'assistant')).toHaveLength(1)
   expect(conversationConsumption(reopened.get().conversations[0])).toEqual({ total: 4, incomplete: false })
+  const records = reopened.conversation(conversation.id)!.usageRecords!
+  expect(records).toHaveLength(2)
+  expect(new Set(records.map(record => record.id)).size).toBe(2)
+  expect(new Set(records.map(record => record.turnId)).size).toBe(1)
 })
 
 it('a new idle turn resumes a persisted paused queue in FIFO order', async () => {

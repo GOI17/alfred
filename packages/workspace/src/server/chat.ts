@@ -5,7 +5,9 @@ import { createAnthropic } from '@ai-sdk/anthropic'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { generateText, streamText, type LanguageModel, type ModelMessage, type ToolSet } from 'ai'
 import { contextInputTokens } from '../shared/context-usage.js'
-import { modelContextLimit } from '../shared/contracts.js'
+import { reconcileUsage } from '../shared/usage-ledger.js'
+import { normalizeSdkUsage } from '../shared/normalize-usage.js'
+import { resolveContextCapacity } from '../shared/context-capacity.js'
 import type { AgentState, Message, PermissionMode, ProviderId, QueuedMessage } from '../shared/contracts.js'
 import type { Attachment } from '../shared/attachments.js'
 import { validateAttachments } from './attachments.js'
@@ -207,6 +209,7 @@ export class Chat {
       if (!current.messages.length) throw new Error('Send a message before regenerating the title.')
       const provider = current.lastProvider
       if (!provider) throw new Error('No provider has been used in this conversation.')
+      const callId = randomUUID()
       const previousTitle = current.title
       // Bound input size, prioritizing recent context rather than the first request.
       const messages = current.messages.slice(-12).map((message) => ({
@@ -225,9 +228,16 @@ export class Chat {
           ? await (async () => {
             const output = streamText(options)
             await output.consumeStream({ onError: (error) => { throw error } })
-            return { text: await output.text, finishReason: await output.finishReason }
+            return { text: await output.text, usage: await output.usage, finishReason: await output.finishReason }
           })()
           : await generateText(options)
+        await this.store.updateConversationMetadata(id, target => {
+          if (target) reconcileUsage(target.usageRecords ||= [], {
+            ...normalizeSdkUsage(result.usage), id: callId, conversationId: id, turnId: callId,
+            provider, model: typeof options.model === 'object' ? options.model.modelId : String(options.model),
+            purpose: 'auxiliary', source: 'provider', freshness: 'current', observedAt: new Date().toISOString(),
+          })
+        })
         const title = result.text.trim().replace(/^['"“”]+|['"“”]+$/g, '').replace(/\s+/g, ' ').trim()
         if (result.finishReason !== 'stop' || !title || title.length > 100)
           throw new Error('Invalid title.')
@@ -246,6 +256,7 @@ export class Chat {
   }
   async compact(id: string, provider: ProviderId, reduction: 30 | 50 | 70) {
     const controller = new AbortController()
+    const callId = randomUUID()
     await this.exclusive(id, async () => {
       if (this.closing || this.isRunning(id)) throw new Error('Wait until the agent is idle before compacting.')
       const current = this.store.conversation(id)
@@ -292,10 +303,17 @@ export class Chat {
           return { text: await output.text, usage: await output.usage, finishReason: await output.finishReason }
         })()
         : await generateText(options)
-      const tokens = (result.usage.inputTokens || 0) + (result.usage.outputTokens || 0)
+      const normalized = normalizeSdkUsage(result.usage)
       // Account for the call even if its summary cannot safely be applied.
       await this.store.updateConversationMetadata(id, (target) => {
-        if (target) target.compactionTokens = (target.compactionTokens || 0) + tokens
+        if (target) {
+          const delta = reconcileUsage(target.usageRecords ||= [], {
+            ...normalized, id: callId, conversationId: id, turnId: callId,
+            provider, model: typeof options.model === 'object' ? options.model.modelId : String(options.model),
+            purpose: 'compaction', source: 'provider', freshness: 'current', observedAt: new Date().toISOString(),
+          })
+          target.compactionTokens = (target.compactionTokens || 0) + delta
+        }
       })
       controller.signal.throwIfAborted()
       if (result.finishReason !== 'stop' || !result.text.trim() || result.text.length >= source.length)
@@ -440,23 +458,37 @@ export class Chat {
           await this.saveExecution(id, run, history, false)
           if (run.suspendRequested) run.controller.abort()
         },
-        usage: async (usage) => {
-          run.partial.consumedTokens = (run.partial.consumedTokens || 0) + (usage.inputTokens || 0) + (usage.outputTokens || 0)
-          if (usage.inputTokens === undefined || usage.outputTokens === undefined) run.partial.consumptionIncomplete = true
+        usage: async (usage, callId) => {
+          const normalized = normalizeSdkUsage(usage)
+          if (normalized.quality !== 'measured') run.partial.consumptionIncomplete = true
           const inputTokens = contextInputTokens(run.provider, usage)
           if (inputTokens === undefined) {
             run.partial.contextUsage = undefined
           } else {
           // Last step, not cumulative billing usage across repeated context sends.
+          const { capacityTokens, ...capacityMetadata } = resolveContextCapacity(run.provider, run.modelId)
           run.partial.contextUsage = { provider: run.provider, model: run.modelId,
-            inputTokens, outputTokens: usage.outputTokens,
-            limit: modelContextLimit(run.modelId), measuredAt: new Date().toISOString() }
+            inputTokens, outputTokens: normalized.outputTokens,
+            limit: capacityTokens, ...capacityMetadata, measuredAt: new Date().toISOString() }
           }
           // Persist before the SDK starts another step. Until finalization this
           // snapshot is incomplete, including after an unexpected server exit.
           const snapshot = structuredClone(run.partial)
           snapshot.consumptionIncomplete = true
-          await this.store.upsertMessage(id, snapshot)
+          await this.store.updateConversation(id, (current) => {
+            if (!current) throw new Error('Conversation deleted.')
+            const delta = reconcileUsage(current.usageRecords ||= [], {
+              ...normalized, id: callId, conversationId: id, turnId: run.partial.id,
+              provider: run.provider, model: run.modelId, purpose: 'response',
+              source: 'provider', freshness: 'current', observedAt: new Date().toISOString(),
+            })
+            const position = current.messages.findIndex(message => message.id === snapshot.id)
+            snapshot.consumedTokens = (current.messages[position]?.consumedTokens ?? run.partial.consumedTokens ?? 0) + delta
+            if (position < 0) current.messages.push(snapshot)
+            else current.messages[position] = snapshot
+            if (current.execution) current.execution.partial = structuredClone(snapshot)
+          })
+          run.partial.consumedTokens = snapshot.consumedTokens
           this.changed()
         },
         text: (text) => {

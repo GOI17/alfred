@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { streamText, stepCountIs, type LanguageModel, type ModelMessage, type LanguageModelUsage } from 'ai'
 import type { workspaceTools } from './workspace-files.js'
@@ -21,7 +22,7 @@ export async function generateWithRecovery(options: {
   signal: AbortSignal
   text: (text: string) => void
   tool: (name: string) => void
-  usage?: (usage: LanguageModelUsage) => void | Promise<void>
+  usage?: (usage: LanguageModelUsage, callId: string) => void | Promise<void>
   checkpoint?: (messages: ModelMessage[]) => Promise<void>
   retry: (notice: string) => void
 }) {
@@ -37,12 +38,14 @@ export async function generateWithRecovery(options: {
     let recoverable = false
     let continuation = false
     let failure: unknown
+    const attemptId = randomUUID()
+    let stepIndex = 0
     try {
       const output = streamText({
         model: options.model, messages, system: options.system, tools: options.tools,
         abortSignal: options.signal, stopWhen: [stepCountIs(12), () => options.signal.aborted],
         maxOutputTokens: 8192, maxRetries: 0, providerOptions: { openai: { store: false } },
-        onStepFinish: async ({ response, usage }) => { completed = [...response.messages]; await options.usage?.(usage); await options.checkpoint?.([...messages, ...completed]) },
+        onStepFinish: async ({ response, usage }) => { completed = [...response.messages]; await options.usage?.(usage, `${attemptId}:${stepIndex++}`); await options.checkpoint?.([...messages, ...completed]) },
       })
       for await (const part of output.fullStream) {
         if (part.type === 'text-delta') {

@@ -1,3 +1,4 @@
+import { providerContextCapacity, type ContextCapacity } from '../shared/context-capacity.js'
 import { copilotSession } from './copilot.js'
 import { copilotModels } from './copilot-model.js'
 import type { FastifyInstance } from 'fastify'
@@ -5,14 +6,18 @@ import { z } from 'zod'
 import { apiProviderId, providerId } from '../shared/contracts.js'
 import type { WorkspaceService } from './service.js'
 
-type Model = { id: string; name: string }
+type Model = { id: string; name: string; contextCapacity?: ContextCapacity }
+function capacity(provider: z.infer<typeof providerId>, model: string, metadata: unknown) {
+  const contextCapacity = providerContextCapacity(provider, model, metadata)
+  return contextCapacity.capacityTokens ? { contextCapacity } : {}
+}
 export function providerModels(app: FastifyInstance, service: WorkspaceService) {
   async function catalog(provider: z.infer<typeof providerId>): Promise<Model[]> {
-    if (provider === 'chatgpt') return (await service.chatgpt.models()).map((model) => ({ id: model.slug, name: model.display_name }))
+    if (provider === 'chatgpt') return (await service.chatgpt.models()).map((model) => ({ id: model.slug, name: model.display_name, ...capacity(provider, model.slug, model) }))
     const settings = service.store.get().providers.find((item) => item.id === provider)
     if (!settings) throw new Error('Connect this provider in Settings.')
     const storedKey = service.vault.decrypt(settings.encryptedKey)
-    if (provider === 'copilot') return (await copilotModels(await copilotSession(storedKey))).map(({ id, name }) => ({ id, name }))
+    if (provider === 'copilot') return (await copilotModels(await copilotSession(storedKey))).map(({ id, name, contextCapacity }) => ({ id, name, ...(contextCapacity ? { contextCapacity } : {}) }))
     const key = storedKey
     const headers: Record<string, string> = provider === 'anthropic'
       ? { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
@@ -28,12 +33,12 @@ export function providerModels(app: FastifyInstance, service: WorkspaceService) 
       if (!response.ok) throw new Error('Could not load the provider catalog. Check the connection and its permissions.')
       const data: unknown = await response.json()
       if (provider === 'google') {
-        const result = z.object({ models: z.array(z.object({ name: z.string(), displayName: z.string().optional(), supportedGenerationMethods: z.array(z.string()).optional() })), nextPageToken: z.string().optional() }).parse(data)
-        models.push(...result.models.filter((item) => item.supportedGenerationMethods?.includes('generateContent')).map((item) => ({ id: item.name.replace(/^models\//, ''), name: item.displayName || item.name })))
+        const result = z.object({ models: z.array(z.object({ name: z.string(), displayName: z.string().optional(), supportedGenerationMethods: z.array(z.string()).optional() }).passthrough()), nextPageToken: z.string().optional() }).parse(data)
+        models.push(...result.models.filter((item) => item.supportedGenerationMethods?.includes('generateContent')).map((item) => ({ id: item.name.replace(/^models\//, ''), name: item.displayName || item.name, ...capacity(provider, item.name.replace(/^models\//, ''), item) })))
         next = result.nextPageToken || ''
       } else {
-        const result = z.object({ data: z.array(z.object({ id: z.string(), display_name: z.string().optional(), name: z.string().optional(), capabilities: z.object({ type: z.string().optional() }).optional() })), has_more: z.boolean().optional(), last_id: z.string().optional() }).parse(data)
-        models.push(...result.data.filter((item) => provider !== 'openai' || /^(gpt-|chatgpt-|o[134](?:-|$))/.test(item.id) && !/(audio|realtime|transcribe|tts|image)/.test(item.id)).map((item) => ({ id: item.id, name: item.display_name || item.name || item.id })))
+        const result = z.object({ data: z.array(z.object({ id: z.string(), display_name: z.string().optional(), name: z.string().optional(), capabilities: z.object({ type: z.string().optional() }).optional() }).passthrough()), has_more: z.boolean().optional(), last_id: z.string().optional() }).parse(data)
+        models.push(...result.data.filter((item) => provider !== 'openai' || /^(gpt-|chatgpt-|o[134](?:-|$))/.test(item.id) && !/(audio|realtime|transcribe|tts|image)/.test(item.id)).map((item) => ({ id: item.id, name: item.display_name || item.name || item.id, ...capacity(provider, item.id, item) })))
         next = result.has_more ? result.last_id || '' : ''
       }
       if (!next) break

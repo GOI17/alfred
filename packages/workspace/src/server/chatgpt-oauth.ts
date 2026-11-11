@@ -273,7 +273,7 @@ export class ChatgptOAuth {
     const catalog = z
       .object({
         models: z.array(
-          z.object({ slug: z.string(), display_name: z.string(), visibility: z.string() }),
+          z.object({ slug: z.string(), display_name: z.string(), visibility: z.string() }).passthrough(),
         ),
       })
       .parse(await response.json())
