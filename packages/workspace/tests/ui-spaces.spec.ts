@@ -105,7 +105,9 @@ test('message index has all messages, focus previews and a measured context ring
   await expect(page.locator('.context-ring-value')).toHaveAttribute('stroke-dashoffset', '62')
   await sidebar(page)
   await page.getByRole('button', { name: 'Mobile UI', exact: true }).click()
-  await expect(page.getByRole('button', { name: /^Context: .*Percentage unavailable$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Context: .*Capacity pending$/ })).toBeVisible()
+  await expect(page.locator('.context-token-count')).toHaveAttribute('data-unknown', 'true')
+  await expect(page.locator('.context-ring-value')).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
