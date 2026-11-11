@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.6.0](https://github.com/GOI17/alfred/compare/v1.5.0...v1.6.0) (2026-11-11)
+
+
+### Features
+
+* **ui:** replace native confirmations with styled dialogs ([f66f23f](https://github.com/GOI17/alfred/commit/f66f23fb7298c82e63bba8d710309f8fe4ede09c))
+* **workspace:** expand Git workbench and safe change management ([346f0b5](https://github.com/GOI17/alfred/commit/346f0b59952c5e5d2ec3906baf5b7f4303aa4ae7))
+* **workspace:** track token usage and discover context capacity ([c19f223](https://github.com/GOI17/alfred/commit/c19f223db75f4c3019dad844681537156eaa2733))
+
+
+### Bug Fixes
+
+* **workspace:** replace native Git prompts with safe dialogs ([d5dd64b](https://github.com/GOI17/alfred/commit/d5dd64be6eb0abd6cfb41c17f0556d95393c688a))
+
 ## [1.5.0](https://github.com/GOI17/alfred/compare/v1.4.1...v1.5.0) (2026-11-09)
 
 
