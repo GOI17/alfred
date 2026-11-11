@@ -13,7 +13,11 @@ test('native selection cancellation keeps projects unchanged and remote errors s
   await page.goto('/')
   await page.getByLabel('Connection code').fill('alfred-e2e-only')
   await page.getByRole('button', { name: 'Enter my workspace' }).click()
-  const before = await (await page.request.get('/api/state')).json()
+  await expect(page.getByRole('button', { name: 'Enter my workspace' })).toHaveCount(0)
+  const stateResponse = await page.request.get('/api/state')
+  expect(stateResponse.ok()).toBe(true)
+  const before = await stateResponse.json()
+  expect(Array.isArray(before.projects)).toBe(true)
   let selections = 0
   await page.route('**/api/projects/pick', async (route) => {
     selections++
