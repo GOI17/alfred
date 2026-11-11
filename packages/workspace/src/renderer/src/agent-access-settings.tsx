@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { agentAccessSchema, parseMcpServers, type AgentAccess } from '../../shared/agent-access'
 import { api, errorMessage } from './api'
 import { Button } from './components/ui/button'
+import { useConfirmation } from './components/ui/confirmation'
 
 export function AgentAccessSettings({ conversationId }: { conversationId: string }) {
   const [access, setAccess] = useState<AgentAccess | null>(null)
   const [servers, setServers] = useState('[]')
+  const { confirm, dialog } = useConfirmation(conversationId)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -33,7 +35,7 @@ export function AgentAccessSettings({ conversationId }: { conversationId: string
       setError(`Invalid configuration: ${errorMessage(error)}`)
       return
     }
-    if (!window.confirm('Save agent access?\n\nThe current step will finish safely, then pending work will resume automatically with the new access. Explicitly stopped work stays paused. Completed actions are not undone. Terminal and MCP can access the host or external services; they are not sandboxed to the workspace. A stdio MCP starts a process even during tool discovery. Only authorize trusted servers.\n\nIn Full access, enabled terminal and authorized MCP servers connect and execute without prompting, including ask permissions. Explicit blocks are respected. Permissions persist for this conversation until revoked.')) return
+    if (!await confirm('Save agent access?\n\nThe current step will finish safely, then pending work will resume automatically with the new access. Explicitly stopped work stays paused. Completed actions are not undone. Terminal and MCP can access the host or external services; they are not sandboxed to the workspace. A stdio MCP starts a process even during tool discovery. Only authorize trusted servers.\n\nIn Full access, enabled terminal and authorized MCP servers connect and execute without prompting, including ask permissions. Explicit blocks are respected. Permissions persist for this conversation until revoked.')) return
     setSaving(true)
     try {
       await api(`/conversations/${conversationId}/agent-access`, { access: next, confirmed: true }, 'PUT')
@@ -44,6 +46,7 @@ export function AgentAccessSettings({ conversationId }: { conversationId: string
     finally { setSaving(false) }
   }
   return <section aria-label="Terminal and MCP servers">
+    {dialog}
     <h3>Terminal and MCP</h3>
     <p>Persistent access per conversation. Both are blocked in Read only. Ask for approval confirms each execution.</p>
     {!access && !error && <p role="status">Loading access settings…</p>}

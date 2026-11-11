@@ -8,6 +8,7 @@
     "build": "node scripts/build.mjs",
     "serve": "node scripts/serve.mjs",
     "dev": "node scripts/serve.mjs",
+    "test": "node --test scripts/confirmation.test.mjs",
     "check": "node --check scripts/build.mjs && node --check scripts/serve.mjs && node scripts/check-html.mjs"
   }
 }

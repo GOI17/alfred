@@ -10,6 +10,7 @@ export function Dialog({
   description,
   children,
   onOpenAutoFocus,
+  onCloseAutoFocus,
 }: {
   open: boolean
   onClose: () => void
@@ -17,6 +18,7 @@ export function Dialog({
   description: string
   children: ReactNode
   onOpenAutoFocus?: (event: Event) => void
+  onCloseAutoFocus?: (event: Event) => void
 }) {
   return (
     <Primitive.Root
@@ -27,14 +29,14 @@ export function Dialog({
     >
       <Primitive.Portal>
         <Primitive.Overlay className="dialog-overlay" />
-        <Primitive.Content className="dialog-content" onOpenAutoFocus={onOpenAutoFocus}>
+        <Primitive.Content className="dialog-content" onOpenAutoFocus={onOpenAutoFocus} onCloseAutoFocus={onCloseAutoFocus}>
           <div className="dialog-heading">
             <Primitive.Title>{title}</Primitive.Title>
             <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}>
               <X size={18} />
             </Button>
           </div>
-          <Primitive.Description className="muted">{description}</Primitive.Description>
+          <Primitive.Description className="muted" style={{ whiteSpace: 'pre-line' }}>{description}</Primitive.Description>
           {children}
         </Primitive.Content>
       </Primitive.Portal>

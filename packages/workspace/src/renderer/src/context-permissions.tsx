@@ -6,6 +6,7 @@ import { latestContextUsage, contextUsedTokens, conversationConsumption, compact
 import { resolveContextCapacity, type ContextCapacity } from '../../shared/context-capacity'
 import { api, errorMessage } from './api'
 import { Button } from './components/ui/button'
+import { useConfirmation } from './components/ui/confirmation'
 import { useUI } from './ui-preferences'
 import './assets/context-permissions.css'
 
@@ -48,6 +49,7 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
   conversation: Conversation; state: PublicState; provider: ProviderId; busy: boolean
 }) {
   const { t, language } = useUI()
+  const { confirm, dialog } = useConfirmation(conversation.id)
   const [saving, setSaving] = useState(false)
   const [compacting, setCompacting] = useState(false)
   const [compactError, setCompactError] = useState('')
@@ -87,7 +89,7 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
   const permissionLabel = (value: PermissionMode) => value === 'read-only' ? t('Read only', 'Solo lectura') : value === 'full-access' ? t('Full access', 'Acceso completo') : t('Ask for approval', 'Solicitar aprobación')
   async function compact(reduction: 30 | 50 | 70) {
     if (compactLock.current || busy) return
-    if (!window.confirm(t(`Attempt to reduce context by ${reduction}%? Visible messages and recorded consumption will be kept. Summarization uses your selected model and consumes tokens. The reduction is approximate; some detail may be lost.`, `¿Intentar reducir el contexto un ${reduction}%? Se conservarán los mensajes visibles y el consumo registrado. El resumen usa el modelo seleccionado y consume tokens. La reducción es aproximada; se pueden perder detalles.`))) return
+    if (!await confirm(t(`Attempt to reduce context by ${reduction}%? Visible messages and recorded consumption will be kept. Summarization uses your selected model and consumes tokens. The reduction is approximate; some detail may be lost.`, `¿Intentar reducir el contexto un ${reduction}%? Se conservarán los mensajes visibles y el consumo registrado. El resumen usa el modelo seleccionado y consume tokens. La reducción es aproximada; se pueden perder detalles.`))) return
     compactLock.current = true
     setCompacting(true); setCompactError('')
     try { await api(`/conversations/${conversation.id}/compact`, { provider, reduction }) }
@@ -97,7 +99,7 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
   async function change(value: PermissionMode, confirmedChange = false) {
     if (lock.current || value === mode) return
     if (busy && !confirmedChange) { setPending(value); setError(''); return }
-    if (value === 'full-access' && !window.confirm(t('Enable Full access for this conversation?\n\nThe agent can create and overwrite workspace files without approval, including when processing the queue. Enabled terminal and authorized MCP tools can run automatically, including ask permissions. Explicit blocks are respected. Terminal and MCP are not sandboxed to the workspace. Stopping does not undo completed actions.\n\nThis permission persists across reloads until you change it.', '¿Activar acceso completo para esta conversación?\n\nEl agente puede crear y reemplazar archivos sin aprobación, incluso al procesar la cola. Terminal habilitada y herramientas MCP autorizadas pueden ejecutarse automáticamente, incluidos permisos de consulta. Se respetan los bloqueos explícitos. Terminal y MCP no están aislados al workspace. Detener no deshace acciones completadas.\n\nEste permiso persiste al recargar hasta que lo cambies.'))) return
+    if (value === 'full-access' && !await confirm(t('Enable Full access for this conversation?\n\nThe agent can create and overwrite workspace files without approval, including when processing the queue. Enabled terminal and authorized MCP tools can run automatically, including ask permissions. Explicit blocks are respected. Terminal and MCP are not sandboxed to the workspace. Stopping does not undo completed actions.\n\nThis permission persists across reloads until you change it.', '¿Activar acceso completo para esta conversación?\n\nEl agente puede crear y reemplazar archivos sin aprobación, incluso al procesar la cola. Terminal habilitada y herramientas MCP autorizadas pueden ejecutarse automáticamente, incluidos permisos de consulta. Se respetan los bloqueos explícitos. Terminal y MCP no están aislados al workspace. Detener no deshace acciones completadas.\n\nEste permiso persiste al recargar hasta que lo cambies.'))) return
     lock.current = true; setSaving(true); setError('')
     try {
       await api(`/conversations/${conversation.id}/permissions`, { mode: value, confirmed: value === 'full-access' }, 'PUT')
@@ -106,6 +108,7 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
     finally { lock.current = false; setSaving(false) }
   }
   return <>
+    {dialog}
     <Control heading={t('Context', 'Contexto')} label={`${t('Context', 'Contexto')}: ${tokenLabel} tokens · ${percentage === undefined ? t('Capacity pending', 'Capacidad pendiente') : `${percentage}% ${t('used', 'usado')}`}`} icon={<div className="context-token-count" aria-hidden="true" data-unknown={percentage === undefined}>
       <svg viewBox="0 0 40 40" focusable="false">
         <circle className="context-ring-track" cx="20" cy="20" r="17" />

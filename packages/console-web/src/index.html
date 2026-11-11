@@ -91,6 +91,9 @@
     pre { background: #0b0d11; padding: 10px; border-radius: 6px; overflow-x: auto; font: 12px ui-monospace, monospace; }
     .step-num { display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center; background: var(--accent); color: #0b1015; border-radius: 50%; font-weight: 600; margin-right: 8px; }
     .step { margin: 12px 0; }
+    .confirmation-dialog { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
+    .confirmation-dialog::backdrop { background: rgb(0 0 0 / 60%); }
+    .confirmation-dialog button { font: inherit; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -263,6 +266,14 @@ Restart Claude Desktop. Tools appear in the conversation panel.</pre>
   </div>
 </div>
 
+<dialog id="revokeDialog" class="confirmation-dialog" aria-labelledby="revokeTitle" aria-describedby="revokeDescription">
+  <h2 id="revokeTitle">Revoke this key?</h2>
+  <p id="revokeDescription">Any agent using it will get 401. This action cannot be undone.</p>
+  <form method="dialog" class="row">
+    <button class="btn secondary" value="cancel" autofocus>Cancel</button>
+    <button class="btn danger" value="confirm">Revoke key</button>
+  </form>
+</dialog>
 <script>
 let API_KEY = "";
 let CURRENT_TENANT = "";
@@ -723,8 +734,15 @@ async function issueKey() {
 }
 
 async function revokeKey(keyId) {
-  if (!confirm("Revoke this key? Any agent using it will get 401.")) return;
+  const dialog = document.getElementById("revokeDialog");
+  if (dialog.open) return;
   const sessionVersion = SESSION_VERSION;
+  const accepted = await new Promise((resolve) => {
+    dialog.returnValue = "cancel";
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
+    dialog.showModal();
+  });
+  if (!accepted || sessionVersion !== SESSION_VERSION || !API_KEY) return;
   try {
     await api("/console/api/keys/" + keyId, { method: "DELETE" });
     if (sessionVersion !== SESSION_VERSION || !API_KEY) return;
