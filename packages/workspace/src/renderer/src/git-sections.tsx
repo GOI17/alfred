@@ -1,3 +1,4 @@
+import { useGitDialog } from './git-dialog'
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight, GitBranch, GitMerge, Plus } from 'lucide-react'
 import { graphRows } from '../../shared/git-graph'
@@ -28,6 +29,7 @@ type Props = {
 }
 export function GitSections({ history, details, section, locked, loading, skip, setSkip, setRevision, act }: Props) {
   const { t, language } = useUI()
+  const { confirm, prompt, dialog } = useGitDialog()
   const [remote, setRemote] = useState('')
   const [file, setFile] = useState('')
   const [search, setSearch] = useState('')
@@ -39,6 +41,7 @@ export function GitSections({ history, details, section, locked, loading, skip, 
   const graph = graphRows(history?.commits ?? [])
   const graphWidth = Math.max(1, ...graph.map(row => row.width)) * 16 + 8
   return <>
+          {dialog}
           {history && section === 'history' && (
             <>
               <div className="git-section-heading">
@@ -113,21 +116,23 @@ export function GitSections({ history, details, section, locked, loading, skip, 
           {section === 'stashes' && <section className="git-branch-card">
             <h3>Stashes</h3>
             <p className="git-hint">{t('Apply retains the stash. Pop removes it only after a successful apply. Conflicts keep the original stash.', 'Aplicar conserva el stash. Pop lo elimina solo tras aplicarlo correctamente. Los conflictos conservan el stash original.')}</p>
-            <Button size="small" disabled={locked || !!details?.operation || !changes.length} onClick={() => {
-              const message = window.prompt(t('Stash description', 'Descripción del stash'))
+            <Button size="small" disabled={locked || !!details?.operation || !changes.length} onClick={async () => {
+              const message = await prompt(t('Stash description', 'Descripción del stash'))
               if (!message?.trim()) return
-              const untracked = window.confirm(t('Include untracked files? Cancel saves only tracked changes.', '¿Incluir archivos nuevos? Cancelar guarda solo cambios de archivos seguidos.')) ? 'yes' : 'no'
+              const includeUntracked = await confirm(t('Include untracked files?', '¿Incluir archivos nuevos?'), t('Tracked files only', 'Solo archivos seguidos'))
+              if (includeUntracked === null) return
+              const untracked = includeUntracked ? 'yes' : 'no'
               void act({ action: 'stash-create', message, untracked })
             }}>{t('Save stash…', 'Guardar stash…')}</Button>
             {!details?.stashes.length && <p>{t('No stashes.', 'No hay stashes.')}</p>}
             {details?.stashes.map(stash => <div className="git-branch-card" key={stash.ref}>
               <strong>{stash.ref} · {stash.subject}</strong>
-              <Button size="small" disabled={locked || !!details.operation || !!changes.length} onClick={() => {
-                const name = window.prompt(t('Create and switch to a branch from this stash? Stash is retained. Branch name:', '¿Crear una rama desde este stash y cambiar a ella? Se conserva el stash. Nombre:'))
+              <Button size="small" disabled={locked || !!details.operation || !!changes.length} onClick={async () => {
+                const name = await prompt(t('Create and switch to a branch from this stash? Stash is retained. Branch name:', '¿Crear una rama desde este stash y cambiar a ella? Se conserva el stash. Nombre:'))
                 if (name?.trim()) void act({ action: 'stash-branch', hash: stash.hash, name: name.trim() })
               }}>{t('Create branch…', 'Crear rama…')}</Button>
-              <div className="git-sync-bar">{(['stash-show', 'stash-apply', 'stash-pop', 'stash-drop'] as const).map(action => <Button size="small" variant="secondary" key={action} disabled={locked || (action !== 'stash-show' && !!details.operation)} onClick={() => {
-                if (action === 'stash-show' || window.confirm(t(`${action}: ${stash.ref}? Drop permanently removes this stash reference. Apply/pop require a clean working tree.`, `${action}: ¿${stash.ref}? Drop elimina esta referencia. Aplicar/pop requieren un árbol limpio.`))) void act({ action, hash: stash.hash })
+              <div className="git-sync-bar">{(['stash-show', 'stash-apply', 'stash-pop', 'stash-drop'] as const).map(action => <Button size="small" variant="secondary" key={action} disabled={locked || (action !== 'stash-show' && !!details.operation)} onClick={async () => {
+                if (action === 'stash-show' || await confirm(t(`${action}: ${stash.ref}? Drop permanently removes this stash reference. Apply/pop require a clean working tree.`, `${action}: ¿${stash.ref}? Drop elimina esta referencia. Aplicar/pop requieren un árbol limpio.`))) void act({ action, hash: stash.hash })
               }}>{action === 'stash-show' ? t('Inspect', 'Inspeccionar') : action === 'stash-apply' ? t('Apply', 'Aplicar') : action === 'stash-pop' ? 'Pop' : t('Delete…', 'Eliminar…')}</Button>)}</div>
             </div>)}
           </section>}
@@ -142,12 +147,12 @@ export function GitSections({ history, details, section, locked, loading, skip, 
                 <h3>{t('Local branches', 'Ramas locales')}</h3>
                 {details?.localBranches.map(branch => <div key={branch} className="git-section-heading">
                   <span>{branch}{branch === history.branch ? ' ✓' : ''}</span>
-                  <Button size="small" variant="ghost" disabled={locked || !!details.operation} onClick={() => {
-                    const name = window.prompt(t('New branch name', 'Nuevo nombre de rama'), branch)
+                  <Button size="small" variant="ghost" disabled={locked || !!details.operation} onClick={async () => {
+                    const name = await prompt(t('New branch name', 'Nuevo nombre de rama'), branch)
                     if (name?.trim() && name !== branch) void act({ action: 'branch-rename', branch, name: name.trim() })
                   }}>{t('Rename', 'Renombrar')}</Button>
-                  <Button size="small" variant="ghost" disabled={locked || !!details.operation || branch === history.branch} onClick={() => {
-                    if (window.confirm(t(`Delete local branch ${branch}? Git will reject unmerged or occupied branches.`, `¿Eliminar la rama local ${branch}? Git rechazará ramas sin integrar u ocupadas.`))) void act({ action: 'branch-delete', branch })
+                  <Button size="small" variant="ghost" disabled={locked || !!details.operation || branch === history.branch} onClick={async () => {
+                    if (await confirm(t(`Delete local branch ${branch}? Git will reject unmerged or occupied branches.`, `¿Eliminar la rama local ${branch}? Git rechazará ramas sin integrar u ocupadas.`))) void act({ action: 'branch-delete', branch })
                   }}>{t('Delete…', 'Eliminar…')}</Button>
                   <Button size="small" variant="secondary"
                     disabled={locked || !!details.operation || branch === history.branch}
@@ -161,8 +166,8 @@ export function GitSections({ history, details, section, locked, loading, skip, 
                 <h3>{t('Remote branches', 'Ramas remotas')}</h3>
                 {details?.remoteBranches.filter(ref => !ref.endsWith('/HEAD')).map(ref => <div className="git-sync-bar" key={ref}>
                   <span>{ref.replace(/^refs\/remotes\//, '')}</span>
-                  <Button size="small" disabled={locked || !!details.operation || !!changes.length} onClick={() => {
-                    const name = window.prompt(t('New local tracking branch name', 'Nombre de la nueva rama local con seguimiento'))
+                  <Button size="small" disabled={locked || !!details.operation || !!changes.length} onClick={async () => {
+                    const name = await prompt(t('New local tracking branch name', 'Nombre de la nueva rama local con seguimiento'))
                     if (name?.trim()) void act({ action: 'track', ref, name: name.trim() })
                   }}>{t('Track locally…', 'Seguir localmente…')}</Button>
                 </div>)}
@@ -174,8 +179,8 @@ export function GitSections({ history, details, section, locked, loading, skip, 
                   </select>
                 </label>
                 <Button size="small" disabled={locked || !remote || !!details?.operation || history.branch === 'Detached HEAD'}
-                  onClick={() => {
-                    if (window.confirm(t(`Publish ${history.branch} to ${remote} and set its upstream?`, `¿Publicar ${history.branch} en ${remote} y configurar su seguimiento?`)))
+                  onClick={async () => {
+                    if (await confirm(t(`Publish ${history.branch} to ${remote} and set its upstream?`, `¿Publicar ${history.branch} en ${remote} y configurar su seguimiento?`)))
                       void act({ action: 'publish', remote })
                   }}>{t('Publish…', 'Publicar…')}</Button>
               </section>

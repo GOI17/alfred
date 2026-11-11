@@ -1,3 +1,4 @@
+import { useGitDialog } from './git-dialog'
 import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import { Button } from './components/ui/button'
@@ -8,6 +9,7 @@ export function GitConflict({ endpoint, path, close, saved }: {
   endpoint: string; path: string; close: () => void; saved: () => void
 }) {
   const { t } = useUI()
+  const { confirm, dialog } = useGitDialog()
   const [source, setSource] = useState<Conflict>()
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
@@ -24,6 +26,7 @@ export function GitConflict({ endpoint, path, close, saved }: {
     return () => controller.abort()
   }, [endpoint, path])
   return <section className="git-branch-card" aria-label={t('Conflict editor', 'Editor de conflictos')}>
+    {dialog}
     <h3>{path}</h3>
     <p>{t('Stage 2 is the current side; stage 3 is the incoming side. During rebase, stage 2 is the target branch and stage 3 is the commit being replayed. Saving does not stage or commit.', 'La etapa 2 es el lado actual; la etapa 3 es el entrante. Durante rebase, la etapa 2 es la rama destino y la etapa 3 el commit que se reaplica. Guardar no prepara ni crea un commit.')}</p>
     {error && <p role="alert">{error}</p>}
@@ -33,8 +36,8 @@ export function GitConflict({ endpoint, path, close, saved }: {
         <summary>{stage === '1' ? t('Base', 'Base') : stage === '2' ? t('Stage 2 · current side', 'Etapa 2 · lado actual') : t('Stage 3 · incoming side', 'Etapa 3 · lado entrante')}</summary>
         {source.versions[stage] === null ? <p>{t('File absent in this version', 'Archivo ausente en esta versión')}</p> : <>
           <pre style={{ maxHeight: 240, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{source.versions[stage]}</pre>
-          <Button size="small" variant="secondary" disabled={busy} onClick={() => {
-            if (window.confirm(t('Replace the entire result with this version?', '¿Reemplazar todo el resultado por esta versión?'))) setDraft(source.versions[stage]!)
+          <Button size="small" variant="secondary" disabled={busy} onClick={async () => {
+            if (await confirm(t('Replace the entire result with this version?', '¿Reemplazar todo el resultado por esta versión?'))) setDraft(source.versions[stage]!)
           }}>{t('Use this version', 'Usar esta versión')}</Button>
         </>}
       </details>)}
@@ -51,8 +54,8 @@ export function GitConflict({ endpoint, path, close, saved }: {
         finally { setBusy(false) }
       }}>{t('Save result without staging', 'Guardar resultado sin preparar')}</Button>
     </>}
-    <Button variant="secondary" disabled={busy} onClick={() => {
-      if (!source || draft === source.content || window.confirm(t('Close and discard the unsaved draft?', '¿Cerrar y descartar el borrador sin guardar?'))) close()
+    <Button variant="secondary" disabled={busy} onClick={async () => {
+      if (!source || draft === source.content || await confirm(t('Close and discard the unsaved draft?', '¿Cerrar y descartar el borrador sin guardar?'))) close()
     }}>{t('Close', 'Cerrar')}</Button>
   </section>
 }

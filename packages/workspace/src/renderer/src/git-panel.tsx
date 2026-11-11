@@ -1,3 +1,4 @@
+import { useGitDialog } from './git-dialog'
 import { useEffect, useRef, useState } from 'react'
 import { GitCommitHorizontal, GitBranch, RefreshCw, Check, FileText, Download, Upload, Search } from 'lucide-react'
 import type { GitHistory } from '../../shared/contracts'
@@ -17,6 +18,7 @@ export function GitPanel({ conversationId, active = true }: { conversationId: st
 }
 function RepositoryPanel({ conversationId, active }: { conversationId: string; active: boolean }) {
   const { t } = useUI()
+  const { confirm, prompt, dialog } = useGitDialog()
   const [conflictPath, setConflictPath] = useState('')
   const [history, setHistory] = useState<GitHistory>()
   const [details, setDetails] = useState<Details>()
@@ -125,7 +127,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
         `Discard unstaged changes in ${preview.paths.length} file(s)? Staged changes and new files are retained. This cannot be undone through reflog. The file filter does not limit this action.`,
         `¿Descartar los cambios sin preparar de ${preview.paths.length} archivo(s)? Se conservan los cambios preparados y los archivos nuevos. No se puede deshacer mediante reflog. El filtro de archivos no limita esta acción.`,
       )
-      if (!window.confirm(`${message}\n\n${preview.paths.slice(0, 20).join('\n')}${preview.paths.length > 20 ? '\n…' : ''}`)) return
+      if (!await confirm(`${message}\n\n${preview.paths.slice(0, 20).join('\n')}${preview.paths.length > 20 ? '\n…' : ''}`)) return
       const applied = await api<{ output: string }>(`${endpoint}/git/action`, { action: 'discard-unstaged', ...(path ? { path } : {}), snapshot: preview.snapshot })
       setOutput(applied.output)
     } catch (cause) { setError(errorMessage(cause)) }
@@ -151,6 +153,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
     close={() => setConflictPath('')} saved={() => { setConflictPath(''); setRefresh(value => value + 1) }} />
   return (
     <div className="git-panel git-workbench">
+      {dialog}
       <header className="git-repository-header">
         <span className="git-repository-icon">
           <GitBranch size={18} />
@@ -199,8 +202,8 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
           size="small"
           disabled={locked}
           title={t('Pull using the selected strategy', 'Actualizar con la estrategia seleccionada')}
-          onClick={() => {
-            if (pullStrategy === 'ff-only' || window.confirm(t('Integrate upstream changes using the selected strategy? This may create conflicts or rewrite local commits.', '¿Integrar cambios remotos con la estrategia seleccionada? Puede generar conflictos o reescribir commits locales.')))
+          onClick={async () => {
+            if (pullStrategy === 'ff-only' || await confirm(t('Integrate upstream changes using the selected strategy? This may create conflicts or rewrite local commits.', '¿Integrar cambios remotos con la estrategia seleccionada? Puede generar conflictos o reescribir commits locales.')))
               void act({ action: 'pull', strategy: pullStrategy })
           }}
         >
@@ -227,8 +230,8 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
             <option value="rebase">Rebase</option>
           </select>
         </label>
-        <Button variant="ghost" size="small" disabled={locked} onClick={() => {
-          if (window.confirm(t('Fetch all remotes and remove stale remote-tracking references? Local branches are retained.', '¿Consultar todos los remotos y eliminar referencias remotas obsoletas? Se conservan las ramas locales.')))
+        <Button variant="ghost" size="small" disabled={locked} onClick={async () => {
+          if (await confirm(t('Fetch all remotes and remove stale remote-tracking references? Local branches are retained.', '¿Consultar todos los remotos y eliminar referencias remotas obsoletas? Se conservan las ramas locales.')))
             void act({ action: 'fetch', prune: 'yes' })
         }}>Fetch + prune…</Button>
       </div>
@@ -245,13 +248,13 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
           {t('Continue', 'Continuar')}
         </Button>
         {details.operation !== 'merge' && <Button size="small" variant="secondary" disabled={locked}
-          onClick={() => {
-            if (window.confirm(t('Skip the current commit? Its changes and conflict-resolution edits will be discarded for this operation.', '¿Saltar el commit actual? Se descartarán sus cambios y las ediciones de resolución de esta operación.')))
+          onClick={async () => {
+            if (await confirm(t('Skip the current commit? Its changes and conflict-resolution edits will be discarded for this operation.', '¿Saltar el commit actual? Se descartarán sus cambios y las ediciones de resolución de esta operación.')))
               void act({ action: 'skip', operation: details.operation! })
           }}>{t('Skip commit…', 'Saltar commit…')}</Button>}
         <Button size="small" variant="secondary" disabled={locked}
-          onClick={() => {
-            if (window.confirm(t('Abort this operation? Conflict resolution edits may be lost.', '¿Abortar esta operación? Se pueden perder las ediciones de resolución de conflictos.')))
+          onClick={async () => {
+            if (await confirm(t('Abort this operation? Conflict resolution edits may be lost.', '¿Abortar esta operación? Se pueden perder las ediciones de resolución de conflictos.')))
               void act({ action: 'abort', operation: details.operation! })
           }}>{t('Abort…', 'Abortar…')}</Button>
       </div>}
@@ -307,23 +310,23 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
       )}
       {revision && /^[a-f0-9]{40,64}$/.test(revision) && <div className="git-sync-bar">
         {(['cherry-pick', 'revert', 'recover', 'tag'] as const).map(action => <Button key={action} size="small" variant="secondary" disabled={locked || !!details?.operation}
-          onClick={() => {
+          onClick={async () => {
             if (action === 'recover' || action === 'tag') {
-              const name = window.prompt(t('New reference name (existing references are never overwritten)', 'Nombre de la nueva referencia (no se sobrescriben referencias existentes)'))
+              const name = await prompt(t('New reference name (existing references are never overwritten)', 'Nombre de la nueva referencia (no se sobrescriben referencias existentes)'))
               if (name?.trim()) void act({ action, hash: revision, name: name.trim() })
-            } else if (window.confirm(t(`${action} ${revision.slice(0, 7)} on the current branch? This creates a commit and may cause conflicts.`, `¿${action} ${revision.slice(0, 7)} en la rama actual? Crea un commit y puede producir conflictos.`))) void act({ action, hash: revision })
+            } else if (await confirm(t(`${action} ${revision.slice(0, 7)} on the current branch? This creates a commit and may cause conflicts.`, `¿${action} ${revision.slice(0, 7)} en la rama actual? Crea un commit y puede producir conflictos.`))) void act({ action, hash: revision })
           }}>{action === 'recover' ? t('Create branch', 'Crear rama') : action === 'tag' ? t('Create tag', 'Crear tag') : action}</Button>)}
       </div>}
       {revision && /^[a-f0-9]{40,64}$/.test(revision) && <>
         <div className="git-sync-bar">
           {(['soft', 'mixed', 'hard'] as const).map(mode => <Button key={mode} size="small" variant="secondary"
             disabled={locked || !!details?.operation || !!changes.length || !details?.head}
-            onClick={() => {
+            onClick={async () => {
               const explanation = mode === 'soft'
                 ? t('Moves HEAD; keeps index and files.', 'Mueve HEAD; conserva índice y archivos.')
                 : mode === 'mixed' ? t('Moves HEAD and resets index; keeps files.', 'Mueve HEAD y restablece el índice; conserva archivos.')
                   : t('Moves HEAD, index and working files to the selected commit.', 'Mueve HEAD, índice y archivos al commit seleccionado.')
-              if (window.confirm(`${explanation} ${t('Requires a clean tree. A recovery branch preserves the old HEAD. Published history may be rewritten. Proceed?', 'Requiere árbol limpio. Una rama de recuperación conserva el HEAD anterior. Puede reescribir historial publicado. ¿Continuar?')}`))
+              if (await confirm(`${explanation} ${t('Requires a clean tree. A recovery branch preserves the old HEAD. Published history may be rewritten. Proceed?', 'Requiere árbol limpio. Una rama de recuperación conserva el HEAD anterior. Puede reescribir historial publicado. ¿Continuar?')}`))
                 void act({ action: 'reset', mode, hash: revision, head: details!.head })
             }}>Reset {mode}…</Button>)}
         </div>
@@ -332,12 +335,12 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
       </>}
       {filePath && <div className="git-sync-bar">
         {revision === 'working' && changes.find(item => item.path === filePath)?.status === '??'
-          ? <Button size="small" disabled={locked || !!details?.operation} onClick={() => {
-            if (window.confirm(t(`Ignore only ${filePath}? This edits .gitignore without staging it.`, `¿Ignorar solo ${filePath}? Modifica .gitignore sin prepararlo.`)))
+          ? <Button size="small" disabled={locked || !!details?.operation} onClick={async () => {
+            if (await confirm(t(`Ignore only ${filePath}? This edits .gitignore without staging it.`, `¿Ignorar solo ${filePath}? Modifica .gitignore sin prepararlo.`)))
               void act({ action: 'ignore-file', path: filePath })
           }}>{t('Ignore file…', 'Ignorar archivo…')}</Button>
-          : revision === 'working' && <Button size="small" disabled={locked || !!details?.operation || !diff || diff.truncated || !!diffError} onClick={() => {
-            if (diff && window.confirm(t(`Discard unstaged changes to ${filePath}? Staged content is retained. Uncommitted edits cannot be recovered through reflog.`, `¿Descartar los cambios sin preparar de ${filePath}? Se conserva lo preparado. Las ediciones descartadas no se recuperan con reflog.`)))
+          : revision === 'working' && <Button size="small" disabled={locked || !!details?.operation || !diff || diff.truncated || !!diffError} onClick={async () => {
+            if (diff && await confirm(t(`Discard unstaged changes to ${filePath}? Staged content is retained. Uncommitted edits cannot be recovered through reflog.`, `¿Descartar los cambios sin preparar de ${filePath}? Se conserva lo preparado. Las ediciones descartadas no se recuperan con reflog.`)))
               void act({ action: 'discard', path: filePath, snapshot: diff.text })
           }}>{t('Discard unstaged changes…', 'Descartar cambios sin preparar…')}</Button>}
 
@@ -410,8 +413,8 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
                   </span>
                   <Button size="small" type="button" variant="secondary"
                     disabled={locked || !details?.head || !commitMessage.trim() || !!details?.conflicts.length || (!!details?.operation && details.operation !== 'rebase')}
-                    onClick={() => {
-                      if (window.confirm(t('Replace the current commit with the staged content and this message? Published hashes change. A recovery branch is created.', '¿Sustituir el commit actual con el contenido preparado y este mensaje? Cambian los hashes publicados. Se crea una rama de recuperación.')))
+                    onClick={async () => {
+                      if (await confirm(t('Replace the current commit with the staged content and this message? Published hashes change. A recovery branch is created.', '¿Sustituir el commit actual con el contenido preparado y este mensaje? Cambian los hashes publicados. Se crea una rama de recuperación.')))
                         void act({ action: 'amend', head: details!.head, message: commitMessage })
                     }}>Amend…</Button>
                   <Button
