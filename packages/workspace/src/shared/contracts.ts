@@ -121,7 +121,7 @@ export interface PublicState {
     error?: string
   }
 }
-export interface GitCommit { hash: string; shortHash: string; author: string; date: string; subject: string }
+export interface GitCommit { hash: string; shortHash: string; author: string; date: string; subject: string; parents?: string[]; refs?: string }
 export interface GitHistory {
   branch: string
   commits: GitCommit[]

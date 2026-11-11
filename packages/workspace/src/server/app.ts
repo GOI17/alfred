@@ -308,10 +308,11 @@ export async function createApp(options: {
     return git.history(await service.workspace(service.conversation(id(request.params))), skip)
   })
   app.get('/api/conversations/:id/diff', async (request) => {
-    const { revision } = z.object({ revision: z.string().max(64) }).parse(request.query)
+    const { revision, path } = z.object({ revision: z.string().max(64), path: z.string().min(1).max(4000).optional() }).parse(request.query)
     const result = await git.diff(
       await service.workspace(service.conversation(id(request.params))),
       revision,
+      path,
     )
     return { text: result.stdout, truncated: result.truncated }
   })

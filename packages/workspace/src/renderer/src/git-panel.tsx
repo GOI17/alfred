@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { GitCommitHorizontal, GitBranch, RefreshCw, ChevronLeft, ChevronRight, Check, Plus, FileText, Download, Upload, GitMerge, Search } from 'lucide-react'
+import { GitCommitHorizontal, GitBranch, RefreshCw, Check, FileText, Download, Upload, Search } from 'lucide-react'
 import type { GitHistory } from '../../shared/contracts'
 import { api, errorMessage } from './api'
 import { liveRefresh } from './live-refresh'
@@ -7,32 +7,37 @@ import { Button } from './components/ui/button'
 import { useUI } from './ui-preferences'
 import { GitFileGroup, GitDiff, useGitDiff } from './git-review'
 import './assets/git-panel.css'
-type Details = { branches: string[]; conflicts: string[] }
-type Section = 'changes' | 'history' | 'branches'
+import { GitConflict } from './git-conflict'
+import { GitRebase } from './git-rebase'
+import { GitSections, type Details } from './git-sections'
+type Section = 'changes' | 'history' | 'branches' | 'stashes' | 'recovery'
 // Reset repository-specific drafts and requests when the conversation changes.
 export function GitPanel({ conversationId, active = true }: { conversationId: string; active?: boolean }) {
   return <RepositoryPanel key={conversationId} conversationId={conversationId} active={active} />
 }
 function RepositoryPanel({ conversationId, active }: { conversationId: string; active: boolean }) {
-  const { t, language } = useUI()
+  const { t } = useUI()
+  const [conflictPath, setConflictPath] = useState('')
   const [history, setHistory] = useState<GitHistory>()
   const [details, setDetails] = useState<Details>()
   const [section, setSection] = useState<Section>('changes')
   const [error, setError] = useState('')
   const [loadError, setLoadError] = useState('')
   const [skip, setSkip] = useState(0)
-  const [revision, setRevision] = useState('')
+  const [revision, updateRevision] = useState('')
+  const [filePath, setFilePath] = useState<string>()
+  const setRevision = (value: string) => { setFilePath(undefined); updateRevision(value) }
+  const reviewFile = (value: string, path: string) => { setFilePath(path); updateRevision(value) }
   const [refresh, setRefresh] = useState(0)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState('')
   const actionLock = useRef(false)
-  const [branchName, setBranchName] = useState('')
-  const [mergeBranch, setMergeBranch] = useState('')
   const [commitMessage, setCommitMessage] = useState('')
   const [output, setOutput] = useState('')
   const [query, setQuery] = useState('')
+  const [pullStrategy, setPullStrategy] = useState('ff-only')
   const endpoint = `/conversations/${conversationId}`
-  const { diff, diffError } = useGitDiff(endpoint, revision, refresh, active && !busy)
+  const { diff, diffError } = useGitDiff(endpoint, revision, refresh, active && !busy, filePath)
   async function act(body: Record<string, string>) {
     if (actionLock.current || loading) return
     actionLock.current = true
@@ -46,8 +51,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
         setCommitMessage('')
         setSkip(0)
       }
-      if (body.action === 'branch') setBranchName('')
-      if (body.action === 'merge') setMergeBranch('')
+      if (['switch', 'branch', 'track', 'stash-branch'].includes(body.action)) { setSkip(0); setRevision('') }
     } catch (cause) {
       setError(errorMessage(cause))
     } finally {
@@ -108,6 +112,30 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
       setRefresh((value) => value + 1)
     }
   }
+  async function discardUnstaged(path?: string) {
+    if (actionLock.current || loading) return
+    actionLock.current = true
+    setBusy('discard-preview')
+    setError('')
+    setOutput('')
+    try {
+      const result = await api<{ output: string }>(`${endpoint}/git/action`, { action: 'discard-preview', ...(path ? { path } : {}) })
+      const preview = JSON.parse(result.output) as { paths: string[]; snapshot: string }
+      const message = t(
+        `Discard unstaged changes in ${preview.paths.length} file(s)? Staged changes and new files are retained. This cannot be undone through reflog. The file filter does not limit this action.`,
+        `¿Descartar los cambios sin preparar de ${preview.paths.length} archivo(s)? Se conservan los cambios preparados y los archivos nuevos. No se puede deshacer mediante reflog. El filtro de archivos no limita esta acción.`,
+      )
+      if (!window.confirm(`${message}\n\n${preview.paths.slice(0, 20).join('\n')}${preview.paths.length > 20 ? '\n…' : ''}`)) return
+      const applied = await api<{ output: string }>(`${endpoint}/git/action`, { action: 'discard-unstaged', ...(path ? { path } : {}), snapshot: preview.snapshot })
+      setOutput(applied.output)
+    } catch (cause) { setError(errorMessage(cause)) }
+    finally {
+      actionLock.current = false
+      setBusy('')
+      setLoading(true)
+      setRefresh(value => value + 1)
+    }
+  }
   const locked = !!busy || loading || !!loadError || !details || !history
   const revisionTitle =
     revision === 'working'
@@ -119,6 +147,8 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
     setError('')
     setRefresh((value) => value + 1)
   }
+  if (conflictPath) return <GitConflict key={conflictPath} endpoint={endpoint} path={conflictPath}
+    close={() => setConflictPath('')} saved={() => { setConflictPath(''); setRefresh(value => value + 1) }} />
   return (
     <div className="git-panel git-workbench">
       <header className="git-repository-header">
@@ -159,7 +189,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
             'Fetch all remotes without changing your files',
             'Consultar remotos sin modificar tus archivos',
           )}
-          onClick={() => void act({ action: 'fetch' })}
+          onClick={() => void act({ action: 'fetch', prune: 'no' })}
         >
           <RefreshCw size={14} />
           Fetch
@@ -168,8 +198,11 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
           variant="ghost"
           size="small"
           disabled={locked}
-          title={t('Pull with fast-forward only', 'Actualizar solo con avance rápido')}
-          onClick={() => void act({ action: 'pull' })}
+          title={t('Pull using the selected strategy', 'Actualizar con la estrategia seleccionada')}
+          onClick={() => {
+            if (pullStrategy === 'ff-only' || window.confirm(t('Integrate upstream changes using the selected strategy? This may create conflicts or rewrite local commits.', '¿Integrar cambios remotos con la estrategia seleccionada? Puede generar conflictos o reescribir commits locales.')))
+              void act({ action: 'pull', strategy: pullStrategy })
+          }}
         >
           <Download size={14} />
           Pull
@@ -185,8 +218,45 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
           Push
         </Button>
       </div>
+      <div className="git-sync-bar">
+        <label>{t('Pull strategy', 'Estrategia de pull')}
+          <select className="input" value={pullStrategy} disabled={locked || !!details?.operation}
+            onChange={event => setPullStrategy(event.target.value)}>
+            <option value="ff-only">Fast-forward only</option>
+            <option value="merge">Merge</option>
+            <option value="rebase">Rebase</option>
+          </select>
+        </label>
+        <Button variant="ghost" size="small" disabled={locked} onClick={() => {
+          if (window.confirm(t('Fetch all remotes and remove stale remote-tracking references? Local branches are retained.', '¿Consultar todos los remotos y eliminar referencias remotas obsoletas? Se conservan las ramas locales.')))
+            void act({ action: 'fetch', prune: 'yes' })
+        }}>Fetch + prune…</Button>
+      </div>
+      {details && <div className="git-notice">
+        {details.upstream
+          ? `${details.upstream} · ↑ ${details.ahead ?? '?'} · ↓ ${details.behind ?? '?'}`
+          : t('No upstream configured', 'Sin rama de seguimiento')}
+        <small> · {t('Remote state as of last fetch', 'Estado remoto según el último fetch')}</small>
+      </div>}
+      {details?.operation && <div className="git-notice git-notice-warning" role="status">
+        <strong>{t('Operation in progress', 'Operación en curso')}: {details.operation}</strong>
+        <Button size="small" disabled={locked || !!details.conflicts.length}
+          onClick={() => void act({ action: 'continue', operation: details.operation! })}>
+          {t('Continue', 'Continuar')}
+        </Button>
+        {details.operation !== 'merge' && <Button size="small" variant="secondary" disabled={locked}
+          onClick={() => {
+            if (window.confirm(t('Skip the current commit? Its changes and conflict-resolution edits will be discarded for this operation.', '¿Saltar el commit actual? Se descartarán sus cambios y las ediciones de resolución de esta operación.')))
+              void act({ action: 'skip', operation: details.operation! })
+          }}>{t('Skip commit…', 'Saltar commit…')}</Button>}
+        <Button size="small" variant="secondary" disabled={locked}
+          onClick={() => {
+            if (window.confirm(t('Abort this operation? Conflict resolution edits may be lost.', '¿Abortar esta operación? Se pueden perder las ediciones de resolución de conflictos.')))
+              void act({ action: 'abort', operation: details.operation! })
+          }}>{t('Abort…', 'Abortar…')}</Button>
+      </div>}
       <nav className="git-section-nav" aria-label={t('Git views', 'Vistas de Git')}>
-        {(['changes', 'history', 'branches'] as const).map((value) => (
+        {(['changes', 'history', 'branches', 'stashes', 'recovery'] as const).map((value) => (
           <button
             key={value}
             aria-pressed={section === value}
@@ -206,7 +276,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
               ? t('Changes', 'Cambios')
               : value === 'history'
                 ? t('History', 'Historial')
-                : t('Branches', 'Ramas')}
+                : value === 'branches' ? t('Branches', 'Ramas') : value === 'stashes' ? 'Stashes' : t('Recovery', 'Recuperación')}
             {value === 'changes' && !!changes.length && (
               <span className="git-count">{changes.length}</span>
             )}
@@ -235,9 +305,49 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
           <pre>{output}</pre>
         </details>
       )}
+      {revision && /^[a-f0-9]{40,64}$/.test(revision) && <div className="git-sync-bar">
+        {(['cherry-pick', 'revert', 'recover', 'tag'] as const).map(action => <Button key={action} size="small" variant="secondary" disabled={locked || !!details?.operation}
+          onClick={() => {
+            if (action === 'recover' || action === 'tag') {
+              const name = window.prompt(t('New reference name (existing references are never overwritten)', 'Nombre de la nueva referencia (no se sobrescriben referencias existentes)'))
+              if (name?.trim()) void act({ action, hash: revision, name: name.trim() })
+            } else if (window.confirm(t(`${action} ${revision.slice(0, 7)} on the current branch? This creates a commit and may cause conflicts.`, `¿${action} ${revision.slice(0, 7)} en la rama actual? Crea un commit y puede producir conflictos.`))) void act({ action, hash: revision })
+          }}>{action === 'recover' ? t('Create branch', 'Crear rama') : action === 'tag' ? t('Create tag', 'Crear tag') : action}</Button>)}
+      </div>}
+      {revision && /^[a-f0-9]{40,64}$/.test(revision) && <>
+        <div className="git-sync-bar">
+          {(['soft', 'mixed', 'hard'] as const).map(mode => <Button key={mode} size="small" variant="secondary"
+            disabled={locked || !!details?.operation || !!changes.length || !details?.head}
+            onClick={() => {
+              const explanation = mode === 'soft'
+                ? t('Moves HEAD; keeps index and files.', 'Mueve HEAD; conserva índice y archivos.')
+                : mode === 'mixed' ? t('Moves HEAD and resets index; keeps files.', 'Mueve HEAD y restablece el índice; conserva archivos.')
+                  : t('Moves HEAD, index and working files to the selected commit.', 'Mueve HEAD, índice y archivos al commit seleccionado.')
+              if (window.confirm(`${explanation} ${t('Requires a clean tree. A recovery branch preserves the old HEAD. Published history may be rewritten. Proceed?', 'Requiere árbol limpio. Una rama de recuperación conserva el HEAD anterior. Puede reescribir historial publicado. ¿Continuar?')}`))
+                void act({ action: 'reset', mode, hash: revision, head: details!.head })
+            }}>Reset {mode}…</Button>)}
+        </div>
+        <GitRebase key={revision} endpoint={endpoint} base={revision}
+          locked={locked || !!details?.operation || !!changes.length} act={act} />
+      </>}
+      {filePath && <div className="git-sync-bar">
+        {revision === 'working' && changes.find(item => item.path === filePath)?.status === '??'
+          ? <Button size="small" disabled={locked || !!details?.operation} onClick={() => {
+            if (window.confirm(t(`Ignore only ${filePath}? This edits .gitignore without staging it.`, `¿Ignorar solo ${filePath}? Modifica .gitignore sin prepararlo.`)))
+              void act({ action: 'ignore-file', path: filePath })
+          }}>{t('Ignore file…', 'Ignorar archivo…')}</Button>
+          : revision === 'working' && <Button size="small" disabled={locked || !!details?.operation || !diff || diff.truncated || !!diffError} onClick={() => {
+            if (diff && window.confirm(t(`Discard unstaged changes to ${filePath}? Staged content is retained. Uncommitted edits cannot be recovered through reflog.`, `¿Descartar los cambios sin preparar de ${filePath}? Se conserva lo preparado. Las ediciones descartadas no se recuperan con reflog.`)))
+              void act({ action: 'discard', path: filePath, snapshot: diff.text })
+          }}>{t('Discard unstaged changes…', 'Descartar cambios sin preparar…')}</Button>}
+
+        <Button size="small" disabled={locked} onClick={() => void act({ action: 'file-history', path: filePath })}>{t('File history', 'Historial del archivo')}</Button>
+        <Button size="small" disabled={locked} onClick={() => void act({ action: 'blame', path: filePath })}>Blame (HEAD)</Button>
+      </div>}
       {revision ? (
         <GitDiff
-          revisionTitle={revisionTitle}
+          revisionTitle={filePath ? `${revisionTitle} · ${filePath}` : revisionTitle}
+          hunkAction={!locked && filePath && diff && !diff.truncated && (revision === 'working' || revision === 'staged') && !details?.operation && !details?.conflicts.length && diff.text.startsWith('diff --git ') && !/^(new file|deleted file|old mode|new mode|rename |copy |Binary files|GIT binary patch)/m.test(diff.text) ? (index, lines) => void act({ action: 'hunk', path: filePath, revision, snapshot: diff.text, index: String(index), ...(lines ? { lines: JSON.stringify(lines) } : {}) }) : undefined}
           diff={diff}
           diffError={diffError}
           setRevision={setRevision}
@@ -267,6 +377,8 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
                   </p>
                 </div>
               )}
+              {details?.conflicts.map(path => <Button key={path} variant="secondary" disabled={locked}
+                onClick={() => setConflictPath(path)}>{t('Resolve visually', 'Resolver visualmente')} · {path}</Button>)}
               <form
                 className="git-commit-form"
                 onSubmit={(event) => {
@@ -296,6 +408,12 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
                   <span>
                     {t(`${staged.length} staged files`, `${staged.length} archivos preparados`)}
                   </span>
+                  <Button size="small" type="button" variant="secondary"
+                    disabled={locked || !details?.head || !commitMessage.trim() || !!details?.conflicts.length || (!!details?.operation && details.operation !== 'rebase')}
+                    onClick={() => {
+                      if (window.confirm(t('Replace the current commit with the staged content and this message? Published hashes change. A recovery branch is created.', '¿Sustituir el commit actual con el contenido preparado y este mensaje? Cambian los hashes publicados. Se crea una rama de recuperación.')))
+                        void act({ action: 'amend', head: details!.head, message: commitMessage })
+                    }}>Amend…</Button>
                   <Button
                     size="small"
                     type="submit"
@@ -316,7 +434,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
                   <span className="git-empty-icon">
                     <Check size={24} />
                   </span>
-                  <strong>{t('All clean', 'Todo al día')}</strong>
+                  <strong>{t('No local changes', 'Sin cambios locales')}</strong>
                   <p>
                     {t(
                       'Your next changes will appear here. Browse history to review previous work.',
@@ -339,6 +457,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
                     />
                   </label>
                   <GitFileGroup
+                    reviewFile={reviewFile}
                     items={staged}
                     unstageAll={() => act({ action: 'unstage-all' })}
                     unstageAllBlocked={!!details?.conflicts.length}
@@ -351,8 +470,11 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
                     act={act}
                   />
                   <GitFileGroup
+                    reviewFile={reviewFile}
                     items={unstaged}
                     stageAll={stageAll}
+                    discard={discardUnstaged}
+                    discardBlocked={!!details?.operation || !!details?.conflicts.length}
                     prepared={false}
                     query={query}
                     conflicted={conflicted}
@@ -365,153 +487,8 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
               )}
             </>
           )}
-          {history && section === 'history' && (
-            <>
-              <div className="git-section-heading">
-                <h3>{t('Commit history', 'Historial de commits')}</h3>
-                <span className="git-hint">{history.branch}</span>
-              </div>
-              <div className="commit-list">
-                {history.commits.map((commit) => (
-                  <button
-                    key={commit.hash}
-                    className="commit"
-                    onClick={() => setRevision(commit.hash)}
-                  >
-                    <span className="commit-node">
-                      <GitCommitHorizontal size={18} />
-                    </span>
-                    <span>
-                      <strong>{commit.subject}</strong>
-                      <span className="commit-meta">
-                        {commit.author} · {new Date(commit.date).toLocaleDateString(language)}
-                        <code>{commit.shortHash}</code>
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {!history.commits.length && (
-                <p className="git-empty">
-                  {t('No commits on this page.', 'No hay commits en esta página.')}
-                </p>
-              )}
-              <div className="pagination">
-                <Button
-                  variant="ghost"
-                  size="small"
-                  disabled={!skip || loading}
-                  onClick={() => setSkip((value) => Math.max(0, value - 50))}
-                >
-                  <ChevronLeft size={14} />
-                  {t('Previous', 'Anterior')}
-                </Button>
-                <span>
-                  {history.commits.length ? `${skip + 1}–${skip + history.commits.length}` : '0'}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="small"
-                  disabled={!history.hasMore || loading}
-                  onClick={() => setSkip((value) => value + 50)}
-                >
-                  {t('Next', 'Siguiente')}
-                  <ChevronRight size={14} />
-                </Button>
-              </div>
-            </>
-          )}
-          {history && section === 'branches' && (
-            <>
-              <section className="git-branch-card">
-                <h3>
-                  <GitBranch size={16} />
-                  {t('Create a branch', 'Crear una rama')}
-                </h3>
-                <p className="git-hint">
-                  {t(
-                    'Creates a branch from HEAD and switches to it.',
-                    'Crea una rama desde HEAD y cambia a ella.',
-                  )}
-                </p>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    if (branchName.trim()) void act({ action: 'branch', name: branchName })
-                  }}
-                >
-                  <label>
-                    {t('Branch name', 'Nombre de la rama')}
-                    <input
-                      className="input"
-                      placeholder="feature/…"
-                      maxLength={150}
-                      value={branchName}
-                      onChange={(event) => setBranchName(event.target.value)}
-                    />
-                  </label>
-                  <Button
-                    variant="secondary"
-                    size="small"
-                    type="submit"
-                    disabled={locked || !branchName.trim()}
-                  >
-                    <Plus size={14} />
-                    {t('Create and switch', 'Crear y cambiar')}
-                  </Button>
-                </form>
-              </section>
-              <section className="git-branch-card">
-                <h3>
-                  <GitMerge size={16} />
-                  {t('Merge into current branch', 'Fusionar en la rama actual')}
-                </h3>
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    if (mergeBranch && !details?.conflicts.length)
-                      void act({ action: 'merge', branch: mergeBranch })
-                  }}
-                >
-                  <label>
-                    {t('Source branch', 'Rama de origen')}
-                    <select
-                      className="input"
-                      value={mergeBranch}
-                      onChange={(event) => setMergeBranch(event.target.value)}
-                    >
-                      <option value="">{t('Select a branch', 'Selecciona una rama')}</option>
-                      {details?.branches
-                        .filter((branch) => branch !== history.branch)
-                        .map((branch) => (
-                          <option key={branch} value={branch}>
-                            {branch}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                  <p className="git-merge-target">
-                    {mergeBranch || '…'} → <strong>{history.branch}</strong>
-                  </p>
-                  <p className="git-hint">
-                    {t(
-                      'Updates your working tree without committing. Review changes and resolve any conflicts before creating the merge commit.',
-                      'Modifica tu árbol de trabajo sin crear el commit. Revisa los cambios y resuelve los conflictos antes de crear el commit de merge.',
-                    )}
-                  </p>
-                  <Button
-                    variant="secondary"
-                    size="small"
-                    type="submit"
-                    disabled={locked || !mergeBranch || !!details?.conflicts.length}
-                  >
-                    <GitMerge size={14} />
-                    {t('Merge without committing', 'Fusionar sin commit')}
-                  </Button>
-                </form>
-              </section>
-            </>
-          )}
+          <GitSections history={history} details={details} section={section} locked={locked}
+            loading={loading} skip={skip} setSkip={setSkip} setRevision={setRevision} act={act} />
         </div>
       )}
     </div>

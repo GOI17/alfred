@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import { liveRefresh } from './live-refresh'
-import { ArrowLeft, Check, Plus, X } from 'lucide-react'
+import { ArrowLeft, Plus, X } from 'lucide-react'
 import type { GitHistory } from '../../shared/contracts'
 import { Button } from './components/ui/button'
 import { useUI } from './ui-preferences'
@@ -16,11 +16,17 @@ export function GitFileGroup({
   setRevision,
   act,
   stageAll,
+  discard,
+  discardBlocked = false,
   unstageAll,
   unstageAllBlocked = false,
+  reviewFile,
 }: {
+  reviewFile: (revision: string, path: string) => void
   unstageAll?: () => Promise<void>
   unstageAllBlocked?: boolean
+  discard?: (path?: string) => Promise<void>
+  discardBlocked?: boolean
   stageAll?: () => Promise<void>
   items: GitHistory['changes']
   prepared: boolean
@@ -63,6 +69,11 @@ export function GitFileGroup({
               {t('Unstage all', 'Quitar todos de preparación')}
             </Button>
           )}
+          {!prepared && discard && <Button variant="ghost" size="small"
+            disabled={locked || discardBlocked || !items.some(item => item.status !== '??')}
+            onClick={() => void discard()}>
+            {t('Discard all unstaged…', 'Descartar todos sin preparar…')}
+          </Button>}
           {!prepared && stageAll && (
             <Button
               variant="ghost"
@@ -109,11 +120,23 @@ export function GitFileGroup({
                       ? '?'
                       : item.status[1]}
               </span>
-              <span className="git-file-path" title={item.path}>
+              <button type="button" className="git-file-path" title={item.path}
+                disabled={loading} onClick={() => reviewFile(prepared ? 'staged' : 'working', item.path)}
+                aria-label={`${t('Review diff', 'Revisar diff')}: ${item.path}`}>
                 {item.path}
-              </span>
+              </button>
+              {!prepared && discard && item.status !== '??' && <Button variant="ghost" size="small"
+                disabled={locked || discardBlocked || conflicted(item.path)}
+                aria-label={`${t('Discard unstaged changes', 'Descartar cambios sin preparar')}: ${item.path}`}
+                onClick={() => void discard(item.path)}>
+                {t('Discard…', 'Descartar…')}
+              </Button>}
               {prepared ? (
-                <Check size={15} aria-label={t('Staged', 'Preparado')} />
+                <Button variant="ghost" size="small" disabled={locked || unstageAllBlocked}
+                  aria-label={`${t('Unstage', 'Quitar de preparación')}: ${item.path}`}
+                  onClick={() => void act({ action: 'unstage', path: item.path })}>
+                  {t('Unstage', 'Quitar de preparación')}
+                </Button>
               ) : (
                 <Button
                   variant="ghost"
@@ -141,16 +164,21 @@ export function GitFileGroup({
 
 export function GitDiff({
   revisionTitle,
+  hunkAction,
   diff,
   diffError,
   setRevision,
 }: {
   revisionTitle: string
+  hunkAction?: (index: number, lines?: number[]) => void
   diff?: { text: string; truncated: boolean }
   diffError: string
   setRevision: (revision: string) => void
 }) {
   const { t } = useUI()
+  const [selected, setSelected] = useState<number[]>([])
+  const [split, setSplit] = useState(false)
+  useEffect(() => setSelected([]), [diff?.text, revisionTitle])
   return (
     <>
       <div className="git-diff-heading">
@@ -163,6 +191,9 @@ export function GitDiff({
           <ArrowLeft size={16} />
         </Button>
         <strong>{revisionTitle}</strong>
+        <Button variant="ghost" size="small" aria-pressed={split} onClick={() => setSplit(value => !value)}>
+          {split ? t('Unified view', 'Vista unificada') : t('Side by side', 'Lado a lado')}
+        </Button>
         <Button
           variant="ghost"
           size="icon"
@@ -192,7 +223,8 @@ export function GitDiff({
               </p>
             )}
             {diff.text ? (
-              <pre>
+              <pre style={split ? { minWidth: 640 } : undefined}>
+                {split && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}><strong>{t('Before', 'Antes')}</strong><strong>{t('After', 'Después')}</strong></div>}
                 {diff.text.split('\n').map((line, index) => (
                   <div
                     key={index}
@@ -210,15 +242,28 @@ export function GitDiff({
                               : 'context'
                     }
                   >
-                    {line || ' '}
+                    {hunkAction && /^[+-]/.test(line) && !/^(---|\+\+\+)/.test(line) && <input type="checkbox" aria-label={`${t('Select changed line', 'Seleccionar línea modificada')} ${index + 1}`} checked={selected.includes(index)} onChange={event => setSelected(previous => event.target.checked ? [...previous, index] : previous.filter(value => value !== index))} />}
+                    {split && !/^(diff |index |---|\+\+\+|@@|\\)/.test(line) ? (
+                      <span style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)' }}>
+                        <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', borderRight: '1px solid currentColor', paddingRight: 8 }}>{line.startsWith('+') ? ' ' : line.slice(1) || ' '}</span>
+                        <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', paddingLeft: 8 }}>{line.startsWith('-') ? ' ' : line.slice(1) || ' '}</span>
+                      </span>
+                    ) : line || ' '}
+                    {hunkAction && line.startsWith('@@ ') && <Button size="small" variant="secondary" onClick={() => hunkAction(diff.text.split('\n').slice(0, index).filter(value => value.startsWith('@@ ')).length)}>{t('Apply this hunk to index', 'Aplicar este bloque al índice')}</Button>}
+                    {hunkAction && line.startsWith('@@ ') && (() => {
+                      const lines = diff.text.split('\n')
+                      const next = lines.findIndex((value, offset) => offset > index && value.startsWith('@@ '))
+                      const chosen = selected.filter(offset => offset > index && (next < 0 || offset < next))
+                      return chosen.length > 0 && <Button size="small" variant="secondary" onClick={() => hunkAction(lines.slice(0, index).filter(value => value.startsWith('@@ ')).length, chosen)}>{t('Apply selected lines to index', 'Aplicar líneas seleccionadas al índice')}</Button>
+                    })()}
                   </div>
                 ))}
               </pre>
             ) : (
               <p className="git-empty">
                 {t(
-                  'No diff available. Untracked files need to be staged before previewing.',
-                  'No hay diff disponible. Prepara los archivos nuevos para ver sus cambios.',
+                  'No changes in this view. Select a new file individually to preview its contents.',
+                  'No hay cambios en esta vista. Selecciona un archivo nuevo individualmente para ver su contenido.',
                 )}
               </p>
             )}
@@ -229,7 +274,7 @@ export function GitDiff({
   )
 }
 
-export function useGitDiff(endpoint: string, revision: string, refresh: number, active = true) {
+export function useGitDiff(endpoint: string, revision: string, refresh: number, active = true, filePath?: string) {
   const [diff, setDiff] = useState<{ text: string; truncated: boolean }>()
   const [diffError, setDiffError] = useState('')
   useEffect(() => {
@@ -238,13 +283,13 @@ export function useGitDiff(endpoint: string, revision: string, refresh: number, 
     setDiffError('')
     return liveRefresh(async (signal) => {
       const data = await api<{ text: string; truncated: boolean }>(
-        `${endpoint}/diff?revision=${encodeURIComponent(revision)}`, undefined, undefined, signal,
+        `${endpoint}/diff?revision=${encodeURIComponent(revision)}${filePath !== undefined ? `&path=${encodeURIComponent(filePath)}` : ''}`, undefined, undefined, signal,
       )
       if (signal.aborted) return
       setDiff((previous) => previous?.text === data.text && previous.truncated === data.truncated ? previous : data)
       setDiffError('')
     }, (cause) => setDiffError(errorMessage(cause)), revision === 'working' || revision === 'staged' ? 3000 : null)
-  }, [endpoint, revision, refresh, active])
+  }, [endpoint, revision, refresh, active, filePath])
 
   return { diff, diffError }
 }

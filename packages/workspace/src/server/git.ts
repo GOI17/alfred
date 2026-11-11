@@ -2,6 +2,7 @@ import { lstat, readFile, realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, resolve, relative, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { workspaceFile } from './workspace-files.js'
 import { runProcess } from '../shared/child-process/run-process.js'
 import type { GitHistory, Project, Worktree } from '../shared/contracts.js'
 
@@ -121,7 +122,7 @@ export async function removeWorktree(project: Project, path: string) {
 export async function history(path: string, skip = 0): Promise<GitHistory> {
   const [branch, status, head] = await Promise.all([
     runProcess('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], path),
-    git(path, ['status', '--porcelain=v1', '-z']),
+    git(path, ['status', '--porcelain=v1', '--untracked-files=all', '-z']),
     runProcess('git', ['rev-parse', '--verify', 'HEAD'], path),
   ])
   const commits =
@@ -131,7 +132,9 @@ export async function history(path: string, skip = 0): Promise<GitHistory> {
             'log',
             '--max-count=51',
             `--skip=${skip}`,
-            '--format=%H%x00%h%x00%an%x00%aI%x00%s%x00',
+            '--topo-order',
+            '--branches', '--remotes', '--tags',
+            '--format=%H%x00%h%x00%an%x00%aI%x00%s%x00%P%x00%D%x00',
             'HEAD',
             '--',
           ])
@@ -139,8 +142,8 @@ export async function history(path: string, skip = 0): Promise<GitHistory> {
           .split('\0\n')
           .filter(Boolean)
           .map((record) => {
-            const [hash, shortHash, author, date, subject] = record.split('\0')
-            return { hash, shortHash, author, date, subject }
+            const [hash, shortHash, author, date, subject, parents, refs] = record.split('\0')
+            return { hash, shortHash, author, date, subject, parents: parents ? parents.split(' ') : [], refs }
           })
       : []
   const records = status.stdout.split('\0').filter(Boolean)
@@ -157,7 +160,38 @@ export async function history(path: string, skip = 0): Promise<GitHistory> {
     hasMore: commits.length > 50,
   }
 }
-export async function diff(path: string, revision: string) {
+export async function diff(path: string, revision: string, filePath?: string) {
+  if (filePath !== undefined) {
+    if (revision !== 'working' && revision !== 'staged')
+      throw new Error('File previews require working or staged changes.')
+    if (!filePath || filePath.length > 4000) throw new Error('Select an individual file.')
+    const file = await workspaceFile(path, filePath, true)
+    const info = await lstat(file).catch((error) => {
+      if (error.code === 'ENOENT') return undefined
+      throw error
+    })
+    if (info && !info.isFile()) throw new Error('Select an individual regular file.')
+    const tracked = await git(path, ['--literal-pathspecs', 'ls-files', '-z', '--', filePath])
+    if (tracked.stdout.split('\0').filter(Boolean).some(entry => entry !== filePath))
+      throw new Error('Select an exact file path.')
+    if (revision === 'working' && !tracked.stdout && info) {
+      const untracked = await git(path, ['--literal-pathspecs', 'ls-files', '--others', '--exclude-standard', '-z', '--', filePath])
+      if (!untracked.stdout.split('\0').includes(filePath)) throw new Error('File is ignored or unavailable.')
+      if (info.size > 2_000_000) throw new Error('File exceeds the 2 MB preview limit.')
+      const text = await readFile(file, 'utf8')
+      if (text.includes('\0')) return { stdout: 'Binary file — text preview unavailable.', truncated: false }
+      // Read-only preview: never use intent-to-add, which would mutate the index.
+      const lines = text ? text.split('\n') : []
+      if (text.endsWith('\n')) lines.pop()
+      const stdout = `--- /dev/null\n+++ ${JSON.stringify(filePath)}\n`
+        + (lines.length ? `@@ -0,0 +1,${lines.length} @@\n` : 'New empty file\n')
+        + lines.map(line => `+${line}\n`).join('')
+        + (text && !text.endsWith('\n') ? '\\ No newline at end of file\n' : '')
+      return { stdout: stdout.slice(0, 2_000_000), truncated: stdout.length > 2_000_000 }
+    }
+    return git(path, ['--literal-pathspecs', 'diff', ...(revision === 'staged' ? ['--cached'] : []),
+      '--no-ext-diff', '--no-textconv', '--no-color', '--', filePath])
+  }
   if (revision === 'working')
     return git(path, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--', '.'])
   if (revision === 'staged')
