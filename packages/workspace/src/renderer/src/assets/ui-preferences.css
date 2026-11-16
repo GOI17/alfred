@@ -6,6 +6,8 @@
   --foreground: #e3eae3;
   --muted: #a4b0a6;
   --border: #3b473e;
+  --control-border: #859581;
+  --focus-ring: #a7d1f5;
   --primary: #b5d3ac;
   --primary-foreground: #17271b;
   --accent: #344733;
@@ -74,3 +76,5 @@
   .chat-panel .composer-footer .attachment-controls > .context-control:has(.context-ring) { grid-column: 1 / -1; grid-row: 2; justify-self: start; }
 }
 @media (prefers-reduced-motion: reduce) { .chat-studio .chat-panel { animation: none; } }
+
+@media (forced-colors: active) { :root[data-theme='dark'] { --focus-ring: Highlight; --control-border: ButtonText; } }

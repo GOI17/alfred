@@ -1,0 +1,63 @@
+/* Consumer overrides: preserve readable labels at any panel width. */
+.chat-panel .composer .composer-footer { flex-wrap: wrap; }
+.chat-panel .composer-footer .attachment-controls {
+  flex: 1 1 240px;
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.chat-panel .composer-footer :is(.context-control, .model-picker-trigger) {
+  height: auto;
+  min-height: var(--composer-control-size);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding-block: 6px;
+}
+.chat-panel .composer-footer .model-picker-trigger > span {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+.chat-panel .composer-footer .model-picker-trigger { border-color: var(--control-border); }
+.approval-card { min-width: 0; overflow-wrap: anywhere; }
+.approval-card details, .approval-card pre { min-width: 0; max-width: 100%; }
+.approval-card pre { white-space: pre; overflow-wrap: normal; }
+.approval-card summary { padding-block: 8px; }
+.approval-card :is(summary, pre):focus-visible,
+.composer-suggestions button:focus-visible,
+.composer .attachment-chip > button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.approval-card svg { flex-shrink: 0; }
+.approval-card [role='status']:empty { display: none; }
+.composer-suggestions { overflow-wrap: anywhere; }
+.composer-suggestions button { min-height: var(--control-touch); font: inherit; }
+.composer .attachment-chip > button {
+  min-width: var(--control-compact);
+  min-height: var(--control-compact);
+  flex-shrink: 0;
+}
+@container (max-width: 700px) {
+  .chat-panel .composer .composer-footer { --composer-control-size: var(--control-touch); }
+  .chat-panel .composer-footer .attachment-controls { flex-basis: 100%; }
+  .chat-panel .message-history .messages > div > .approval-card { width: calc(100% - 16px); margin-inline: 8px; }
+  .approval-card .button { min-height: var(--control-touch); }
+}
+@media (max-width: 700px), (pointer: coarse) {
+  .composer .attachment-chip > button { min-width: var(--control-touch); min-height: var(--control-touch); }
+}
+
+.chat-runtime-state { color: var(--muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.chat-runtime-state:empty { margin: 0; }
+
+/* Instant following also respects reduced motion; streaming never moves focus. */
+.chat-panel .messages { scroll-behavior: auto; }
+.chat-panel .messages:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+[data-follow-latest] {
+  position: absolute;
+  inset-inline-end: 12px;
+  bottom: 12px;
+  max-width: calc(100% - 48px);
+  min-height: var(--control-touch);
+  z-index: 2;
+}

@@ -57,7 +57,7 @@
 .chat-panel .composer-footer .queue-send-actions > .button > svg { width: 18px; height: 18px; }
 .chat-panel .composer-footer button:not(:disabled):hover { filter: brightness(.97); }
 .chat-panel .composer-footer :is(button, select):focus-visible {
-  outline: 2px solid var(--success);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 .chat-panel .composer-footer :disabled { cursor: not-allowed; }

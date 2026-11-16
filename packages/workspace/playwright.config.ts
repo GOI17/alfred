@@ -7,6 +7,9 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   testIgnore: [
     'chat-lab',
+    'ui-primitives',
+    'chat-controls',
+    'chat-runtime',
     'ui-spaces',
     'notification-preferences',
     'worktree-dialog',

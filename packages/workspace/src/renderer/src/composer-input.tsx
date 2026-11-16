@@ -45,8 +45,15 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
       element.style.height = `${element.scrollHeight}px`
     }
     resize()
+    // Observe width only: height changes from auto-sizing must not loop.
+    let width = element.getBoundingClientRect().width
+    const observer = new ResizeObserver(() => {
+      const next = element.getBoundingClientRect().width
+      if (next !== width) { width = next; resize() }
+    })
+    observer.observe(element)
     window.addEventListener('resize', resize)
-    return () => window.removeEventListener('resize', resize)
+    return () => { observer.disconnect(); window.removeEventListener('resize', resize) }
   }, [value])
   const suggestions = useRef<HTMLDivElement>(null)
   const activeOption = useRef<HTMLButtonElement>(null)
@@ -130,7 +137,7 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
   }
   const listLabel = marker === 'directory' ? t('Folders', 'Carpetas') : marker === '@' ? t('Project files', 'Archivos del proyecto') : t('Commands', 'Comandos')
   return <div style={{ position: 'relative' }}>
-    {open && createPortal(<div ref={suggestions} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget) && event.relatedTarget !== input.current) { setFocused(false); setDismissed(true) } }} onMouseDown={(event) => { if (!(event.target instanceof HTMLButtonElement)) event.preventDefault() }} style={{ position: 'fixed', ...position, boxSizing: 'border-box', zIndex: 1000, overflowY: 'auto', background: 'var(--surface)', color: 'var(--foreground)', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
+    {open && createPortal(<div className="composer-suggestions" ref={suggestions} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget) && event.relatedTarget !== input.current) { setFocused(false); setDismissed(true) } }} onMouseDown={(event) => { if (!(event.target instanceof HTMLButtonElement)) event.preventDefault() }} style={{ position: 'fixed', ...position, boxSizing: 'border-box', zIndex: 1000, overflowY: 'auto', background: 'var(--surface)', color: 'var(--foreground)', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
       <div>{listLabel} · {t('↑ ↓ select · Enter accept · Esc close', '↑ ↓ seleccionar · Enter aceptar · Esc cerrar')}</div>
       {marker === '/' && harness && harnessError && <p role="status">{t('Could not refresh harness commands.', 'No se pudieron actualizar los comandos del harness.')}</p>}
       <div id={id} role="listbox" aria-label={listLabel}>

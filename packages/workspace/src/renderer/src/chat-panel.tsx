@@ -1,9 +1,11 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { ArrowUp, Square, Sparkles, FileCheck2, Check, X, Paperclip } from 'lucide-react'
+import { ArrowUp, Square, Sparkles, X, Paperclip } from 'lucide-react'
 import type { AgentState, Conversation, PublicState, ProviderId } from '../../shared/contracts'
 import { attachmentMediaType, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_TOTAL_ATTACHMENT_BYTES, type Attachment } from '../../shared/attachments'
-import { api, errorMessage } from './api'
+import { errorMessage } from './api'
+import { ChatRuntimeState, useChatRequest } from './chat-runtime-state'
 import { Button } from './components/ui/button'
+import { ApprovalCard } from './approval-card'
 import { ComposerInput } from './composer-input'
 import { ModelPicker } from './model-picker'
 import { SubagentsPanel } from './subagents-panel'
@@ -61,53 +63,13 @@ const MessageRow = memo(function MessageRow({ message, conversationId, active, s
   </VirtualMessage>
 })
 const emptyQueue: NonNullable<Conversation['queue']> = []
-function ApprovalCard({ approval, conversationId, onError }: {
-  approval: NonNullable<AgentState['approval']>; conversationId: string; onError: (message: string) => void
-}) {
-  const { t } = useUI()
-  const operation = /^(Connect MCP:|MCP:|Terminal:)/.test(approval.path)
-  const [saving, setSaving] = useState(false)
-  const lock = useRef(false)
-  // Never infer permission from preview content. Decisions reference this exact approval ID.
-  let files: { path: string; content: string }[] | undefined
-  if (/^Batch of \d+ file\(s\)$/.test(approval.path)) {
-    try {
-      const parsed: unknown = JSON.parse(approval.content)
-      if (parsed && typeof parsed === 'object' && 'files' in parsed && Array.isArray(parsed.files) && parsed.files.length > 0 &&
-        parsed.files.every((file: unknown): file is { path: string; content: string } => !!file && typeof file === 'object' && 'path' in file && typeof file.path === 'string' && 'content' in file && typeof file.content === 'string')) files = parsed.files
-    } catch { /* Fall back to the exact original preview. */ }
-  }
-  async function decide(accepted: boolean) {
-    if (lock.current) return
-    lock.current = true; setSaving(true)
-    try { await api(`/conversations/${conversationId}/approval`, { approvalId: approval.id, accepted }) }
-    catch (error) { onError(errorMessage(error)) }
-    finally { lock.current = false; setSaving(false) }
-  }
-  return <div className="approval-card">
-    <div><FileCheck2 size={18} /><strong>{operation ? t('Authorize operation', 'Autorizar operación') : t('Review changes', 'Revisar cambios')}</strong></div>
-    {files ? <>
-      <p>{t(`The runtime proposes saving ${files.length} file(s). This approval covers only the contents shown.`, `El runtime propone guardar ${files.length} archivo(s). Esta aprobación cubre solo el contenido mostrado.`)}</p>
-      {files.map((file, index) => <details key={index}><summary><code>{file.path}</code> · {t('View proposed content', 'Ver contenido propuesto')}</summary><pre>{file.content}</pre></details>)}
-      <p>{t('Saving is not atomic: if a file fails, successfully saved files will be reported.', 'El guardado no es atómico: si un archivo falla, se informarán los archivos guardados correctamente.')}</p>
-    </> : <>
-      <p>{operation ? t('The runtime requests authorization for', 'El runtime solicita autorización para') : t('The runtime proposes saving', 'El runtime propone guardar')} <code>{approval.path}</code></p>
-      <details><summary>{t('View proposed content', 'Ver contenido propuesto')}</summary><pre>{approval.content}</pre></details>
-    </>}
-    {approval.path.startsWith('Connect MCP:') && <p>{t('Authorize the connection for this conversation during the server session. Changing the configuration revokes this authorization. Tool calls retain their own permissions.', 'Autoriza la conexión para esta conversación durante la sesión del servidor. Cambiar la configuración revoca esta autorización. Las llamadas a herramientas conservan sus propios permisos.')}</p>}
-    <div className="approval-actions">
-      <Button variant="secondary" size="small" disabled={saving} onClick={() => void decide(false)}><X size={14} />{files ? t('Reject all', 'Rechazar todo') : t('Reject', 'Rechazar')}</Button>
-      <Button size="small" disabled={saving} onClick={() => void decide(true)}><Check size={14} />{operation ? t('Authorize', 'Autorizar') : files ? t('Approve and save all', 'Aprobar y guardar todo') : t('Save file', 'Guardar archivo')}</Button>
-    </div>
-  </div>
-}
 function ConversationChat({ conversation, state, agent, settings }: Props) {
-  const { t, language } = useUI()
+  const { t } = useUI()
   const [text, setText] = useState(() => { try { return sessionStorage.getItem(`alfred.draft.${conversation.id}`) || '' } catch { return '' } })
   const [provider, setProvider] = useState<ProviderId>(conversation.lastProvider || state.providers[0]?.id || 'openai')
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
-  const [queueAction, setQueueAction] = useState(false)
+  const { request, perform, blocked: queueAction } = useChatRequest(conversation.id, setError)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [reading, setReading] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -129,7 +91,8 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
   const messageContent = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const follow = useChatReading(conversation.id, scroller, messageContent)
-  const stopFollowing = useCallback(() => { follow.current = false }, [follow])
+  const [awayFromLatest, setAwayFromLatest] = useState(!follow.current)
+  const stopFollowing = useCallback(() => { follow.current = false; setAwayFromLatest(true) }, [follow])
   const busy = agent?.status === 'running' || agent?.status === 'waiting'
   const queue = conversation.queue || emptyQueue
   const history = useMemo(() => [...conversation.messages.filter(message => message.role === 'user'), ...queue]
@@ -138,6 +101,16 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
   const canSend = !sending && !reading && !queueAction && (!!text.trim() || !!attachments.length)
   useEffect(() => { try { sessionStorage.setItem(`alfred.draft.${conversation.id}`, text) } catch { /* Storage may be unavailable. */ } }, [conversation.id, text])
   function scrollToLatest() { const element = scroller.current; if (element) element.scrollTop = element.scrollHeight }
+  function resumeFollowing() {
+    const element = scroller.current
+    if (!element) return
+    element.dispatchEvent(new Event('chat-follow-latest'))
+    follow.current = true
+    setAwayFromLatest(false)
+    scrollToLatest()
+    // The invoking button disappears; keep keyboard focus in the history.
+    element.focus({ preventScroll: true })
+  }
   useLayoutEffect(() => { if (follow.current) scrollToLatest() }, [conversation.messages, agent?.approval, agent?.status, queue, text, attachments, sending, error])
   useLayoutEffect(() => {
     const element = scroller.current, content = messageContent.current
@@ -147,10 +120,7 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
     return () => observer.disconnect()
   }, [])
   async function act(path: string, body: object = {}) {
-    setQueueAction(true); setError('')
-    try { await api(`/conversations/${conversation.id}/${path}`, body) }
-    catch (error) { setError(errorMessage(error)) }
-    finally { setQueueAction(false) }
+    await perform(path === 'stop' ? 'stop' : 'queue', path, body)
   }
   async function addFiles(files: File[]) {
     if (readingLock.current || sendLock.current) return
@@ -187,19 +157,23 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
     if ((!text.trim() && !attachments.length) || readingLock.current || sendLock.current || queueAction) return
     if (!configured && !/^\/cd(?:\s|$)/.test(text.trim())) { settings(); return }
     composer.current?.querySelector('textarea')?.focus({ preventScroll: true })
-    sendLock.current = true; setSending(true); setError(''); follow.current = true; scrollToLatest()
+    sendLock.current = true; setSending(true); setError(''); scroller.current?.dispatchEvent(new Event('chat-follow-latest')); follow.current = true; setAwayFromLatest(false); scrollToLatest()
     try {
-      await api(`/conversations/${conversation.id}/messages`, { text, provider, attachments, mode: 'queue' })
-      setText(''); setAttachments([])
+      if (await perform('send', 'messages', { text, provider, attachments, mode: 'queue' })) {
+        setText(''); setAttachments([])
+      }
     } catch (error) { setError(errorMessage(error)) }
     finally { sendLock.current = false; setSending(false) }
   }
   const sendLabel = busy || queue.length || conversation.queuePaused ? t('Queue message', 'Poner mensaje en cola') : t('Send message', 'Enviar mensaje')
   return <div className="chat-panel">
     <div className="message-history">
-      <div className="messages" ref={scroller} onScroll={() => {
+      <div className="messages" ref={scroller} tabIndex={0} role="region" aria-label={t('Conversation history', 'Historial de conversación')} onScroll={() => {
         const element = scroller.current
-        if (element) follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100
+        if (element) {
+          follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 2
+          setAwayFromLatest(!follow.current)
+        }
       }}>
         <div ref={messageContent} style={{ display: 'flow-root' }}>
           {!conversation.messages.length && <div className="chat-welcome">
@@ -211,10 +185,12 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
           </div>}
           <MessageList messages={conversation.messages} conversationId={conversation.id} busy={busy} scroller={scroller} />
           <SubagentsPanel projections={conversation.subagents} />
-          {agent?.status === 'running' && <div className="agent-progress"><span className="status-dot" data-status="running" />{t('Runtime is working…', 'El runtime está trabajando…')}</div>}
           {agent?.approval && <ApprovalCard key={agent.approval.id} approval={agent.approval} conversationId={conversation.id} onError={setError} />}
         </div>
       </div>
+      {awayFromLatest && <Button data-follow-latest="true" type="button" variant="secondary" onClick={resumeFollowing}>
+        {t('Back to latest', 'Volver a lo más reciente')}
+      </Button>}
       <ChatQuotes scroller={scroller} disabled={sending} onNavigate={stopFollowing} onAdd={(quote) => {
         setText(current => `${current}${current.trim() ? '\n\n' : ''}${quote}\n\n`)
         composer.current?.querySelector('textarea')?.focus({ preventScroll: true })
@@ -222,6 +198,7 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
       <MessageNavigation messages={conversation.messages} scroller={scroller} content={messageContent} onNavigate={stopFollowing} />
     </div>
     <div className="composer-wrap">
+      <ChatRuntimeState agent={agent} request={request} />
       {error && <p role="alert" className="error-text">{error}</p>}
       {agent?.status === 'error' && agent.detail && <p role="alert" className="error-text">{agent.detail}</p>}
       {!!queue.length && <section className="message-queue" aria-label={t('Queued messages', 'Mensajes en cola')}>

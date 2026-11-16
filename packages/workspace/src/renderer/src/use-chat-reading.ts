@@ -43,6 +43,7 @@ export function useChatReading(id: string, scroller: RefObject<HTMLDivElement | 
     restore()
     const observer = new ResizeObserver(restore)
     observer.observe(body); observer.observe(viewport)
+    viewport.addEventListener('chat-follow-latest', interact)
     viewport.addEventListener('wheel', interact, { passive: true })
     viewport.addEventListener('touchstart', interact, { passive: true })
     viewport.addEventListener('pointerdown', interact)
@@ -54,6 +55,7 @@ export function useChatReading(id: string, scroller: RefObject<HTMLDivElement | 
     window.addEventListener('pagehide', save)
     return () => {
       save(); observer.disconnect()
+      viewport.removeEventListener('chat-follow-latest', interact)
       viewport.removeEventListener('wheel', interact); viewport.removeEventListener('touchstart', interact)
       viewport.removeEventListener('pointerdown', interact); viewport.removeEventListener('keydown', interact)
       panel?.removeEventListener('click', interact)

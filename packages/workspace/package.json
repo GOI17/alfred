@@ -19,6 +19,7 @@
     "format": "prettier --write .",
     "check:format": "prettier --check .",
     "lint": "eslint .",
+    "test:ui": "playwright test --config playwright.ui.config.ts",
     "test:chat": "playwright test --config playwright.chat.config.ts",
     "lab:chat": "cross-env ORCA_BACKGROUND_LAUNCH=1 tsx tests/chat-lab-server.ts",
     "test:cli": "node --test tests/cli.test.mjs",

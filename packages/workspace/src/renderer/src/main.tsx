@@ -13,6 +13,7 @@ const Login = lazy(() => import('./device-connection').then(module => ({ default
 const SettingsDialog = lazy(() => import('./project-dialogs').then(module => ({ default: module.SettingsDialog })))
 import { Button } from './components/ui/button'
 import { NotificationPreferences } from './notification-preferences'
+import './assets/chat-accessibility.css'
 
 /** A separate client: no workspace selection or layout persistence side effects. */
 function DetachedChat({ id }: { id: string }) {

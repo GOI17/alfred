@@ -52,7 +52,7 @@ export const MessageNavigation = memo(function MessageNavigation({ messages, scr
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update) }
     viewport.addEventListener('scroll', schedule, { passive: true })
     const release = () => { clearDestination(); schedule() }
-    const inputs = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const
+    const inputs = ['wheel', 'touchstart', 'pointerdown', 'keydown', 'chat-follow-latest'] as const
     for (const input of inputs) viewport.addEventListener(input, release, { passive: true })
     const observer = new ResizeObserver(schedule)
     observer.observe(viewport); observer.observe(body); schedule()

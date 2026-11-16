@@ -7,8 +7,15 @@
   --surface: #fcfdf9;
   --surface-muted: #edf1e9;
   --foreground: #27382e;
-  --muted: #788176;
+  --muted: #626d60;
   --border: #dfe5d9;
+  --control-border: #7b8778;
+  --focus-ring: #356b98;
+  --focus-ring-inverse: #b4d9fa;
+  --control-height: 38px;
+  --control-compact: 30px;
+  --control-touch: 44px;
+  --motion-control: 150ms;
   --primary: #324c3d;
   --primary-foreground: #f3f8ee;
   --accent: #e2edda;
@@ -76,8 +83,12 @@ a {
 }
 button:focus-visible,
 a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--success);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
 button {
@@ -162,11 +173,14 @@ svg {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   font-weight: 550;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  max-width: 100%;
   flex-shrink: 0;
   transition:
-    background 0.15s,
-    opacity 0.15s;
+    background var(--motion-control),
+    opacity var(--motion-control);
 }
 .button-primary {
   background: var(--primary);
@@ -193,21 +207,23 @@ svg {
   color: var(--danger);
 }
 .button-default {
-  min-height: 38px;
+  min-height: var(--control-height);
   padding: 8px 15px;
   font-size: var(--text-sm);
 }
 .button-icon {
-  width: 30px;
-  height: 30px;
+  width: var(--control-compact);
+  min-width: var(--control-compact);
+  height: var(--control-compact);
   padding: 0;
 }
 .button-small {
-  min-height: 30px;
+  min-height: var(--control-compact);
   padding: 5px 9px;
   font-size: var(--text-xs);
 }
 .input {
+  min-height: var(--control-height);
   background: var(--surface);
   color: var(--foreground);
   border: 1px solid var(--border);
@@ -216,10 +232,9 @@ svg {
   width: 100%;
   min-width: 0;
   font-size: var(--text-sm);
-  outline: none;
 }
 .input:focus {
-  border-color: var(--success);
+  border-color: var(--focus-ring);
 }
 .input::placeholder,
 .textarea::placeholder {
@@ -233,7 +248,7 @@ svg {
   background: transparent;
   color: var(--foreground);
   padding: 16px 18px 6px;
-  outline: none;
+  border-radius: var(--radius-sm);
   line-height: 1.7;
 }
 .dialog-overlay {
@@ -250,7 +265,9 @@ svg {
   left: 50%;
   transform: translate(-50%, -50%);
   width: min(500px, calc(100vw - 32px));
-  max-height: 90dvh;
+  max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
   overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -266,6 +283,7 @@ svg {
   margin-bottom: 12px;
 }
 .dialog-heading h2 {
+  min-width: 0;
   margin: 0;
 }
 .dialog-content form {
@@ -287,6 +305,7 @@ form > label + label {
 }
 .dialog-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
   margin-top: 26px;
@@ -797,7 +816,7 @@ form > label + label {
   overflow: hidden;
 }
 .pane[data-focused='true'] {
-  border-color: var(--success);
+  border-color: var(--focus-ring);
 }
 .pane-heading {
   display: flex;
@@ -1002,7 +1021,7 @@ form > label + label {
   margin: auto;
 }
 .composer:focus-within {
-  border-color: var(--success);
+  border-color: var(--focus-ring);
 }
 .composer-footer {
   display: flex;
@@ -1560,4 +1579,23 @@ form > label + label {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Shared controls: keep focus inside fields so scroll containers cannot clip it. */
+:is(.input, .textarea):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.input, .button-secondary { border-color: var(--control-border); }
+:is(.input, .textarea)[aria-invalid='true'] { border: 2px solid var(--danger); }
+:is(.input, .textarea):disabled { cursor: not-allowed; opacity: .65; }
+:is(.sidebar, .terminal-panel) { --focus-ring: var(--focus-ring-inverse); }
+@media (max-width: 700px), (pointer: coarse) {
+  .button, .input { min-height: var(--control-touch); }
+  .button-icon { width: var(--control-touch); min-width: var(--control-touch); height: var(--control-touch); }
+}
+@media (forced-colors: active) {
+  :root { --focus-ring: Highlight; --focus-ring-inverse: Highlight; --control-border: ButtonText; }
+  .button { border-color: ButtonText; }
+  :is(.input, .textarea)[aria-invalid='true'] { border-style: dashed; }
 }
