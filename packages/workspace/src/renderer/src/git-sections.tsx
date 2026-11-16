@@ -1,3 +1,4 @@
+import { Select } from './components/ui/input'
 import { useGitDialog } from './git-dialog'
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight, GitBranch, GitMerge, Plus } from 'lucide-react'
@@ -173,10 +174,10 @@ export function GitSections({ history, details, section, locked, loading, skip, 
                 </div>)}
                 <h3>{t('Publish current branch', 'Publicar rama actual')}</h3>
                 <label>{t('Remote', 'Remoto')}
-                  <select className="input" value={remote} onChange={event => setRemote(event.target.value)}>
+                  <Select aria-label={t('Remote', 'Remoto')} value={remote} onValueChange={(value) => setRemote(value)}>
                     <option value="">{t('Select remote', 'Selecciona un remoto')}</option>
                     {details?.remotes.map(name => <option key={name} value={name}>{name}</option>)}
-                  </select>
+                  </Select>
                 </label>
                 <Button size="small" disabled={locked || !remote || !!details?.operation || history.branch === 'Detached HEAD'}
                   onClick={async () => {
@@ -244,10 +245,9 @@ export function GitSections({ history, details, section, locked, loading, skip, 
                 >
                   <label>
                     {t('Source branch', 'Rama de origen')}
-                    <select
-                      className="input"
+                    <Select aria-label={t('Source branch', 'Rama de origen')}
                       value={mergeBranch}
-                      onChange={(event) => setMergeBranch(event.target.value)}
+                      onValueChange={(value) => setMergeBranch(value)}
                     >
                       <option value="">{t('Select a branch', 'Selecciona una rama')}</option>
                       {details?.branches
@@ -257,7 +257,7 @@ export function GitSections({ history, details, section, locked, loading, skip, 
                             {branch}
                           </option>
                         ))}
-                    </select>
+                    </Select>
                   </label>
                   <p className="git-merge-target">
                     {mergeBranch || '…'} → <strong>{history.branch}</strong>

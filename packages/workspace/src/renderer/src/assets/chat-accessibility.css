@@ -5,23 +5,23 @@
   flex-wrap: wrap;
   overflow: visible;
 }
-.chat-panel .composer-footer :is(.context-control, .model-picker-trigger) {
+.chat-panel .composer-footer :is([data-control="context-control"], [data-control="model-picker-trigger"]) {
   height: auto;
   min-height: var(--composer-control-size);
   white-space: normal;
   overflow-wrap: anywhere;
-  padding-block: 6px;
+  padding-block: var(--ds-space-075, 6px);
 }
-.chat-panel .composer-footer .model-picker-trigger > span {
+.chat-panel .composer-footer [data-control="model-picker-trigger"] > span {
   white-space: normal;
   overflow: visible;
   overflow-wrap: anywhere;
 }
-.chat-panel .composer-footer .model-picker-trigger { border-color: var(--control-border); }
+.chat-panel .composer-footer [data-control="model-picker-trigger"] { border-color: var(--control-border); }
 .approval-card { min-width: 0; overflow-wrap: anywhere; }
 .approval-card details, .approval-card pre { min-width: 0; max-width: 100%; }
 .approval-card pre { white-space: pre; overflow-wrap: normal; }
-.approval-card summary { padding-block: 8px; }
+.approval-card summary { padding-block: var(--ds-space-100, 8px); }
 .approval-card :is(summary, pre):focus-visible,
 .composer-suggestions button:focus-visible,
 .composer .attachment-chip > button:focus-visible {
@@ -40,8 +40,8 @@
 @container (max-width: 700px) {
   .chat-panel .composer .composer-footer { --composer-control-size: var(--control-touch); }
   .chat-panel .composer-footer .attachment-controls { flex-basis: 100%; }
-  .chat-panel .message-history .messages > div > .approval-card { width: calc(100% - 16px); margin-inline: 8px; }
-  .approval-card .button { min-height: var(--control-touch); }
+  .chat-panel .message-history .messages > div > .approval-card { width: calc(100% - 16px); margin-inline: var(--ds-space-100, 8px); }
+  .approval-card [data-alfred-button] { min-height: var(--control-touch); }
 }
 @media (max-width: 700px), (pointer: coarse) {
   .composer .attachment-chip > button { min-width: var(--control-touch); min-height: var(--control-touch); }

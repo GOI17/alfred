@@ -1,3 +1,4 @@
+import { Select } from './components/ui/input'
 import { layoutKey, point, pointMap, stringList, usePersistentLayout } from './use-persistent-layout'
 import { createPortal } from 'react-dom'
 import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react'
@@ -100,14 +101,14 @@ export function ChatDeck({ conversation, conversations, render, floatingIds, set
     {inHeader(<div className="chat-deck-toolbar" aria-label={t('Chat layout', 'Disposición de chats')}>
       <label className="chat-column-picker" title={t('Add chat column', 'Agregar columna de chat')}>
       <Columns2 size={16} aria-hidden="true" />
-      <select disabled={!available.some((item) => !ids.includes(item.id))} aria-label={t('Add chat column', 'Agregar columna de chat')} value="" onChange={(event) => {
-        const id = event.target.value
+      <Select disabled={!available.some((item) => !ids.includes(item.id))} aria-label={t('Add chat column', 'Agregar columna de chat')} value="" onValueChange={(value) => {
+        const id = value
         if (!id) return
         setIds((current) => [...current, id]); reveal(id)
       }}>
         <option value="">{t('Add chat column…', 'Agregar columna de chat…')}</option>
         {available.filter((item) => !ids.includes(item.id)).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-      </select></label>
+      </Select></label>
       {chats.length > 1 && <div className="chat-deck-navigation">
       <Button variant="ghost" size="icon" title={t('Previous chat', 'Chat anterior')} aria-label={t('Previous chat', 'Chat anterior')} disabled={chats.length < 2} onClick={() => reveal(chats[(chats.findIndex((item) => item.id === active) + chats.length - 1) % chats.length].id)}><ChevronLeft size={16} /></Button>
       <Button variant="ghost" size="icon" title={t('Next chat', 'Chat siguiente')} aria-label={t('Next chat', 'Chat siguiente')} disabled={chats.length < 2} onClick={() => reveal(chats[(chats.findIndex((item) => item.id === active) + 1) % chats.length].id)}><ChevronRight size={16} /></Button>

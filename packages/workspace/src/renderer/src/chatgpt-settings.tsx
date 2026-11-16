@@ -65,8 +65,8 @@ export function ChatgptSettings({ state }: { state: PublicState }) {
           <Select
             aria-label="ChatGPT account"
             value={active?.id || ''}
-            onChange={(event) => {
-              const account = accounts.find((item) => item.id === event.target.value)
+            onValueChange={(value) => {
+              const account = accounts.find((item) => item.id === value)
               if (!account) return
               if (account.connected)
                 void api('/chatgpt/select', { accountId: account.id }).catch((error) =>
@@ -90,12 +90,12 @@ export function ChatgptSettings({ state }: { state: PublicState }) {
       {active?.connected && (
         <label>
           Model from your plan
-          <Select
+          <Select aria-label="Model from your plan"
             value={active.model}
-            onChange={(event) => {
+            onValueChange={(value) => {
               void api('/chatgpt/select', {
                 accountId: active.id,
-                model: event.target.value,
+                model: value,
               }).catch((error) => setError(errorMessage(error)))
             }}
           >

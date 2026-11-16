@@ -1,6 +1,6 @@
 .message-queue {
-  margin-bottom: 8px;
-  padding: 8px 12px;
+  margin-bottom: var(--ds-space-100, 8px);
+  padding: var(--ds-space-100, 8px) var(--ds-space-150, 12px);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
@@ -11,7 +11,7 @@
 .queue-send-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-100, 8px);
 }
 .message-queue-heading {
   justify-content: space-between;
@@ -20,7 +20,7 @@
   max-height: 140px;
   overflow-y: auto;
   padding: 0;
-  margin: 4px 0 0;
+  margin: var(--ds-space-050, 4px) 0 0;
   list-style: none;
 }
 .message-queue li > span {
@@ -36,7 +36,7 @@
 }
 .composer-footer {
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ds-space-100, 8px);
 }
 .queue-send-actions {
   flex-wrap: wrap;
@@ -51,7 +51,7 @@
 }
 @media (max-width: 700px) {
   .messages .agent-progress {
-    padding-inline-start: 32px;
+    padding-inline-start: var(--ds-space-400, 32px);
   }
 }
 
@@ -104,7 +104,7 @@
   height: min(3px, 50%);
   background: currentColor;
   opacity: 0.5;
-  transition: width 120ms, opacity 120ms;
+  transition: width var(--motion-control), opacity var(--motion-control);
 }
 .message-navigation button[aria-current='location'] > span {
   width: 22px;

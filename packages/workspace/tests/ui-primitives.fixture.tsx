@@ -1,3 +1,4 @@
+import { ProjectActions } from '../src/renderer/src/components/project-actions'
 import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import '../src/renderer/src/assets/main.css'
@@ -14,7 +15,7 @@ function Fixture() {
   return <main style={{ padding: 16, background: 'var(--surface)', minHeight: '100dvh' }}>
     <Button onClick={() => setOpen(true)}>Abrir diálogo</Button>
     <Button onClick={async () => setResult(await confirm('Esta acción requiere confirmación.') ? 'Confirmado' : 'Cancelado')}>Acción sensible</Button>
-    <p role="status">{result}</p>
+    <p role="status">{result}</p><ProjectActions removeProject={() => setResult('Solicitud de eliminación')} />
     <Button disabled>No disponible</Button>
     <Dialog open={open} onClose={() => setOpen(false)} title="Configuración de controles" description="Revisa los valores antes de guardar.">
       <form onSubmit={event => { event.preventDefault(); setOpen(false) }}>
@@ -22,7 +23,7 @@ function Fixture() {
         <Input id="name" aria-invalid="true" aria-describedby="name-help name-error" />
         <p id="name-help" className="field-note">Usa un nombre descriptivo.</p>
         <p id="name-error" className="error-text">El nombre es obligatorio.</p>
-        <label>Tipo<Select defaultValue="local"><option value="local">Local</option></Select></label>
+        <label>Tipo<Select defaultValue="local"><option value="local">Local</option><option value="remote">Remoto</option></Select></label>
         <label>Notas<Textarea rows={3} /></label>
         <div className="dialog-actions">
           <Button variant="secondary" onClick={() => setOpen(false)}>Cancelar sin guardar los cambios</Button>

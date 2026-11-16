@@ -48,7 +48,7 @@ for (const theme of ['light', 'dark'] as const) {
   test(`${theme}: reflow, enlarged text and semantic focus`, async ({ page }, testInfo) => {
     await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' })
     await page.getByRole('button', { name: 'Abrir diálogo' }).click()
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    await expect(page.locator('html')).toHaveAttribute('data-color-mode', theme)
     const field = page.getByRole('textbox', { name: 'Nombre' })
     await field.focus()
     const colors = await field.evaluate(element => {
@@ -81,7 +81,7 @@ test('forced colors retain a visible field focus', async ({ page }) => {
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme}: semantic token contrast`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: theme })
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    await expect(page.locator('html')).toHaveAttribute('data-color-mode', theme)
     const ratios = await page.evaluate(() => {
       const style = getComputedStyle(document.documentElement)
       const luminance = (token: string) => {
@@ -98,7 +98,7 @@ for (const theme of ['light', 'dark'] as const) {
         ['--danger', '--danger-surface', 4.5], ['--focus-ring', '--surface', 3],
         ['--focus-ring', '--surface-muted', 3], ['--control-border', '--surface', 3],
         ['--control-border', '--surface-muted', 3], ['--focus-ring-inverse', '--sidebar', 3],
-        ['--focus-ring-inverse', '--terminal', 3],
+        ['--terminal-focus-ring', '--terminal', 3],
       ]
       return pairs.map(([foreground, background, minimum]) => {
         const a = luminance(foreground), b = luminance(background)
@@ -108,3 +108,46 @@ for (const theme of ['light', 'dark'] as const) {
     for (const pair of ratios) expect(pair.ratio, `${pair.foreground} on ${pair.background}`).toBeGreaterThanOrEqual(pair.minimum)
   })
 }
+
+
+test('Atlassian themes supply semantic aliases and follow system changes', async ({ page }) => {
+  for (const theme of ['dark', 'light'] as const) {
+    await page.emulateMedia({ colorScheme: theme })
+    await expect(page.locator('html')).toHaveAttribute('data-color-mode', theme)
+    const tokens = await page.evaluate(() => {
+      const style = getComputedStyle(document.documentElement)
+      return ['--surface', '--ds-surface', '--primary', '--ds-background-brand-bold'].map(name => style.getPropertyValue(name).trim())
+    })
+    expect(tokens[1]).not.toBe('')
+    expect(tokens[0]).toBe(tokens[1])
+    expect(tokens[2]).toBe(tokens[3])
+  }
+})
+
+
+test('official select handles keyboard selection without dismissing its modal', async ({ page }) => {
+  await page.getByRole('button', { name: 'Abrir diálogo' }).click()
+  await expect(page.getByRole('heading', { name: 'Configuración de controles' })).toBeFocused()
+  const select = page.getByRole('combobox', { name: 'Tipo' })
+  await select.focus()
+  await page.keyboard.press('ArrowDown')
+  await page.getByRole('option', { name: 'Remoto', exact: true }).click()
+  await expect(page.locator('.ads-select')).toContainText('Remoto')
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(select).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+})
+
+test('official project menu dismisses without action and selects explicitly', async ({ page }) => {
+  const opener = page.getByRole('button', { name: 'Acciones del proyecto' })
+  await opener.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('menuitem', { name: 'Eliminar proyecto' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(opener).toBeFocused()
+  await expect(page.getByRole('status')).toHaveText('Sin cambios')
+  await opener.click()
+  await page.getByRole('menuitem', { name: 'Eliminar proyecto' }).click()
+  await expect(page.getByRole('status')).toHaveText('Solicitud de eliminación')
+})

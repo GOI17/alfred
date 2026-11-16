@@ -1,14 +1,14 @@
 # Diseño de Alfred Workspace
 
-La interfaz nueva pertenece a Alfred. La referencia de interacción es la organización por espacios de Arc; no se reutilizan componentes, estilos ni recursos del fork anterior.
+La interfaz pertenece a Alfred y adopta Atlassian Design System como base visual. La organización por espacios y los flujos de IA son propios del producto. La migración de componentes es incremental; no implica copiar la marca de Jira.
 
 ## Fuente canónica
 
-Los tokens están en `src/renderer/src/assets/main.css`. Colores, tipografías, superficies, bordes y sombras se definen allí. Los controles reutilizables están en `src/renderer/src/components/ui/`, siguiendo la composición de shadcn: variantes en el primitivo y accesibilidad de Dialog mediante Radix.
+La fuente de tokens es `@atlaskit/tokens`, inicializada con `setGlobalTheme` en `ui-preferences.tsx`. `src/renderer/src/assets/main.css` mantiene alias semánticos para los consumidores existentes. Los controles reutilizables están en `src/renderer/src/components/ui/`: Button, Input y Textarea envuelven componentes oficiales Atlaskit. Dialog conserva Radix y Select conserva HTML nativo durante la transición.
 
 ## Composición
 
-- Barra lateral verde profunda para proyectos, workspaces y conversaciones; área de trabajo clara.
+- Navegación y área de trabajo con superficies semánticas Atlassian, adaptadas al tema claro u oscuro.
 - Jerarquía: espacio → workspace → conversación → panel. Las herramientas son parte de una conversación.
 - Texto de producto en español, con nombres de proveedores y términos de Git reconocibles.
 - Los estados vacíos explican el siguiente paso. No mostrar conversaciones ni actividad inventadas.
@@ -19,7 +19,7 @@ Los tokens están en `src/renderer/src/assets/main.css`. Colores, tipografías, 
 
 Usar `--background`, `--surface`, `--surface-muted`, `--foreground`, `--muted`, `--border`, `--primary` y `--accent` para el área de trabajo. Los tokens `--sidebar-*` pertenecen a la navegación. `--terminal*` solo a la terminal. Las diferencias de Git utilizan `--diff-add` y `--diff-remove`.
 
-DM Sans es la tipografía de lectura; Manrope se reserva para títulos y marca. Ambas se distribuyen localmente. La escala base es 11, 13, 14, 18, 28 y 40 px. Las excepciones de 8–10 px son metadatos y marcas compactas; el logo ilustrado usa 66 px. En teléfono los campos editables usan 16 px para evitar zoom involuntario. Preferir la escala antes de agregar tamaños.
+Las familias de lectura y títulos provienen de los tokens de tipografía Atlassian, con fallback a fuentes del sistema. No se descargan fuentes de marca desde un CDN. La escala base es 11, 13, 14, 18, 28 y 40 px. Las excepciones de 8–10 px son metadatos y marcas compactas; el logo ilustrado usa 66 px. En teléfono los campos editables usan 16 px para evitar zoom involuntario. Preferir la escala antes de agregar tamaños.
 
 Los botones se eligen por `variant` y `size`; no recibirán clases de restyling desde sus consumidores. Los diálogos deben tener título, descripción y cierre accesible. Los botones de icono necesitan un nombre accesible incluso si su etiqueta visible se oculta en teléfono.
 
@@ -166,3 +166,38 @@ La siguiente etapa es migrar consumidores, compositor y aprobaciones, no volver 
 **Evidencia automatizada:** `pnpm test:ui`: 38 ejecuciones aprobadas, incluidas cuatro nuevas combinando escritorio y móvil de 320 px con preferencias de movimiento normal/reducido. Sobre ChatPanel real se verifica desbordamiento interno efectivo, seguimiento de fragmentos al final, conservación de foco y borrador, PageUp para abandonar el final, conservación de posición al crecer el contenido y retorno explícito mediante teclado. El fixture limita la altura disponible como el contenedor de aplicación; espera a que termine el desplazamiento nativo de PageUp antes de medir estabilidad. `pnpm tc` y ESLint de los archivos TypeScript de este bloque pasan.
 
 **Límites:** fragmentos simulados y API interceptada, sin llamadas a proveedores. No cubre transporte WebSocket, gestos físicos o teclado virtual, ni certifica accesibilidad integral. Siguen pendientes lector de pantalla y zoom real al 400 %. No añade idempotencia de backend, reconciliación ni persistencia de adjuntos. La restauración entre montajes y navegación por citas requieren cobertura específica adicional.
+
+
+## Migración a Atlassian Design System
+
+### Implementado
+
+- Dependencias directas fijadas: `@atlaskit/tokens` 20.12.0, `@atlaskit/button` 25.8.1, `@atlaskit/textfield` y `@atlaskit/textarea` 10.3.1. Sus manifiestos declaran Apache-2.0 y soporte para React 18.2/19. Esto no concede derechos sobre marcas o recursos externos.
+- Temas claro, oscuro y automático oficiales; carga serializada y limpieza de suscripciones. `data-color-mode` determina el modo; `data-theme` queda reservado al contrato de Atlassian.
+- Alias de colores, superficies, foco, radios y familias tipográficas enlazados a tokens oficiales. Los fallbacks cromáticos corresponden al tema claro instalado, no a la paleta verde anterior.
+- Botones, campos de texto y áreas de texto compartidos usan implementaciones oficiales. Se conservan el registro de comandos, etiquetas, errores, foco y extensiones de reflow/tamaño táctil.
+- Se retiran las dependencias tipográficas DM Sans y Manrope y su configuración de Vite.
+
+### Pendiente para sustitución completa
+
+- Migrar Dialog y sus contratos de foco a ModalDialog oficial antes de retirar Radix.
+- Revisar selectores, menús y controles personalizados; los elementos HTML con clases heredadas no se convierten automáticamente en Atlaskit.
+- Migrar las escalas locales de tamaño, espaciado y movimiento restantes. Terminal y resaltado de código mantienen estilos especializados.
+- Revisión visual de todas las pantallas, lector de pantalla, teclado virtual y zoom real al 400 %. La suite de fixtures no certifica toda la aplicación.
+
+La compilación frontend previa pasa con una advertencia de chunk mayor de 500 kB. Los cuatro bloques de seguridad y accesibilidad siguen siendo contratos obligatorios durante la migración.
+
+**Validación de la migración inicial:** 40 ejecuciones UI aprobadas (escritorio y teléfono), incluidas comprobaciones de tokens oficiales y cambios de tema del sistema. TypeScript y lint de los archivos TypeScript modificados se verifican por separado. No se ha ejecutado la suite integral `ui-spaces` en esta entrega.
+
+
+### Cierre de implementación de controles ADS
+
+- Se incorporan `@atlaskit/modal-dialog` 17.2.5, `@atlaskit/select` 23.2.1 y `@atlaskit/dropdown-menu` 21.3.3. Se retira la dependencia directa de Radix Dialog. Los avisos de compatibilidad de dependencias transitivas no se ocultan ni se corrigen con `--force`; las pruebas realizadas verifican esta combinación, no garantizan compatibilidad futura.
+- El adaptador de diálogo conserva nombre, descripción, foco inicial, confirmaciones en Cancelar y retorno al activador. Modelo y permisos utilizan ahora el modal oficial también en escritorio, en lugar de popovers posicionados manualmente.
+- Selectores compartidos y sus consumidores usan Select oficial y `onValueChange`; se actualizan las pruebas que dependían de `selectOption` nativo. El menú de proyecto utiliza DropdownMenu oficial.
+- Los espaciados compatibles se enlazan a la escala `--ds-space-*`. Las medidas funcionales (objetivos táctiles de 44 px, dimensiones de paneles, terminal y geometría específica) permanecen como excepciones del producto. Las duraciones locales se centralizan en variables de movimiento: no se presentan como tokens oficiales de ADS.
+- Los componentes específicos de Alfred conservan su lógica y semántica: adoptar ADS no implica sustituir el editor, terminal, historial, aprobaciones o compositor por controles sin equivalencia funcional.
+
+**Validación de cierre:** 44 pruebas de UI aprobadas; 41 pruebas de integración aprobadas y una omitida (modo flotante en teléfono) en las suites de espacios, harnesses, notificaciones y worktrees. Compilación frontend correcta, con advertencia de chunk principal superior a 500 kB. Estas pruebas usan entornos locales de laboratorio, no proveedores reales.
+
+**Pendientes de verificación humana:** revisión visual exhaustiva de todas las pantallas, lector de pantalla, teclado virtual físico y zoom real al 400 %. No se declara certificación WCAG ni cierre de esas verificaciones. La sección anterior de pendientes describe el estado de la entrega inicial; diálogos, selectores y menú compartidos quedan sustituidos por esta entrega.

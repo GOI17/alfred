@@ -1,40 +1,41 @@
-@import '@fontsource-variable/dm-sans';
-@import '@fontsource-variable/manrope';
-
 :root {
   color-scheme: light;
-  --background: #f2f4ee;
-  --surface: #fcfdf9;
-  --surface-muted: #edf1e9;
-  --foreground: #27382e;
-  --muted: #626d60;
-  --border: #dfe5d9;
-  --control-border: #7b8778;
-  --focus-ring: #356b98;
-  --focus-ring-inverse: #b4d9fa;
-  --control-height: 38px;
-  --control-compact: 30px;
+  --background: var(--ds-surface-sunken, #F8F8F8);
+  --surface: var(--ds-surface, #FFFFFF);
+  --surface-muted: var(--ds-surface-sunken, #F8F8F8);
+  --foreground: var(--ds-text, #292A2E);
+  --muted: var(--ds-text-subtle, #505258);
+  --border: var(--ds-border, #0B120E24);
+  --control-border: var(--ds-border-bold, #7D818A);
+  --focus-ring: var(--ds-border-focused, #4688EC);
+  --focus-ring-inverse: var(--ds-border-focused, #4688EC);
+  --terminal-focus-ring: #b4d9fa;
+  --control-height: var(--ds-space-400, 32px);
+  --control-compact: var(--ds-space-300, 24px);
   --control-touch: 44px;
   --motion-control: 150ms;
-  --primary: #324c3d;
-  --primary-foreground: #f3f8ee;
-  --accent: #e2edda;
-  --sidebar: #263c32;
-  --sidebar-foreground: #e4eddf;
-  --sidebar-muted: #9eafa2;
-  --sidebar-active: #3a5144;
-  --sidebar-border: #3c5043;
+  --motion-panel: 200ms;
+  --motion-loading: 1400ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+  --primary: var(--ds-background-brand-bold, #1868DB);
+  --primary-foreground: var(--ds-text-inverse, #FFFFFF);
+  --accent: var(--ds-background-selected, #E9F2FE);
+  --sidebar: var(--ds-surface, #FFFFFF);
+  --sidebar-foreground: var(--ds-text, #292A2E);
+  --sidebar-muted: var(--ds-text-subtle, #505258);
+  --sidebar-active: var(--ds-background-selected, #E9F2FE);
+  --sidebar-border: var(--ds-border, #0B120E24);
   --terminal: #1d2721;
   --terminal-foreground: #e0e8d9;
-  --success: #78a477;
-  --warning: #b38436;
-  --danger: #a53f40;
-  --danger-surface: #f9e9e6;
-  --diff-add: #e5f2df;
-  --diff-remove: #fae9e7;
-  --overlay: #16251b66;
-  --font-sans: 'DM Sans Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Manrope Variable', var(--font-sans);
+  --success: var(--ds-text-success, #4C6B1F);
+  --warning: var(--ds-text-warning, #9E4C00);
+  --danger: var(--ds-text-danger, #AE2E24);
+  --danger-surface: var(--ds-background-danger, #FFECEB);
+  --diff-add: var(--ds-background-accent-green-subtlest, #DCFFF1);
+  --diff-remove: var(--ds-background-danger, #FFECEB);
+  --overlay: var(--ds-blanket, #050C1F75);
+  --font-sans: var(--ds-font-family-body, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  --font-display: var(--ds-font-family-heading, var(--font-sans));
   --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   --text-xs: 11px;
   --text-sm: 13px;
@@ -42,10 +43,10 @@
   --text-lg: 18px;
   --text-xl: 28px;
   --text-display: 40px;
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 18px;
-  --shadow-dialog: 0 20px 80px var(--overlay);
+  --radius-sm: var(--ds-radius-small, 4px);
+  --radius: var(--ds-radius-medium, 8px);
+  --radius-lg: var(--ds-radius-large, 12px);
+  --shadow-dialog: var(--ds-shadow-overlay, 0 8px 12px var(--overlay));
 }
 * {
   box-sizing: border-box;
@@ -165,63 +166,22 @@ svg {
   text-underline-offset: 4px;
   font-size: var(--text-sm);
 }
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  font-weight: 550;
+/* Atlassian owns appearance; only responsive geometry is adapted here. */
+button[data-alfred-button] {
+  height: auto;
+  min-height: var(--control-height);
+  max-width: 100%;
+  min-width: 0;
   white-space: normal;
   overflow-wrap: anywhere;
-  min-width: 0;
-  max-width: 100%;
   flex-shrink: 0;
-  transition:
-    background var(--motion-control),
-    opacity var(--motion-control);
-}
-.button-primary {
-  background: var(--primary);
-  color: var(--primary-foreground);
-}
-.button-primary:hover {
-  opacity: 0.9;
-}
-.button-secondary {
-  background: var(--surface-muted);
-  color: var(--foreground);
-  border-color: var(--border);
-}
-.button-ghost {
-  background: transparent;
-  color: inherit;
-}
-.button-ghost:hover {
-  background: var(--accent);
-  color: var(--foreground);
-}
-.button-danger {
-  background: var(--danger-surface);
-  color: var(--danger);
-}
-.button-default {
-  min-height: var(--control-height);
-  padding: 8px 15px;
   font-size: var(--text-sm);
 }
-.button-icon {
-  width: var(--control-compact);
-  min-width: var(--control-compact);
-  height: var(--control-compact);
-  padding: 0;
-}
-.button-small {
-  min-height: var(--control-compact);
-  padding: 5px 9px;
-  font-size: var(--text-xs);
-}
+button[data-alfred-button] > span { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+button[data-alfred-button='icon'] { width: var(--control-compact); padding: 0; }
+button[data-alfred-button='small'] { min-height: var(--control-compact); }
+button[data-alfred-button]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.ads-input input, textarea.ads-textarea { font-size: var(--text-base); }
 .input {
   min-height: var(--control-height);
   background: var(--surface);
@@ -247,52 +207,28 @@ svg {
   border: 0;
   background: transparent;
   color: var(--foreground);
-  padding: 16px 18px 6px;
+  padding: var(--ds-space-200, 16px) 18px var(--ds-space-075, 6px);
   border-radius: var(--radius-sm);
   line-height: 1.7;
-}
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay);
-  backdrop-filter: blur(3px);
-  z-index: 100;
-}
-.dialog-content {
-  position: fixed;
-  z-index: 101;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(500px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-  overflow-wrap: anywhere;
-  overscroll-behavior: contain;
-  overflow-y: auto;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 26px;
-  box-shadow: var(--shadow-dialog);
 }
 .dialog-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
+  gap: var(--ds-space-200, 16px);
+  margin-bottom: var(--ds-space-150, 12px);
 }
 .dialog-heading h2 {
   min-width: 0;
   margin: 0;
 }
-.dialog-content form {
+.ads-dialog-body form {
   margin-top: 22px;
 }
 .worktree-location { margin-top: 18px; min-width: 0; }
-.worktree-location-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: var(--text-sm); font-weight: 500; }
+.worktree-location-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--ds-space-150, 12px); margin-bottom: var(--ds-space-100, 8px); font-size: var(--text-sm); font-weight: 500; }
 .worktree-location-heading button { flex-shrink: 0; }
-.worktree-location-path { display: block; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; }
+.worktree-location-path { display: block; padding: 10px var(--ds-space-150, 12px); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; }
 .worktree-location .input { width: 100%; min-width: 0; }
 label {
   display: grid;
@@ -306,7 +242,7 @@ form > label + label {
 .dialog-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ds-space-100, 8px);
   justify-content: flex-end;
   margin-top: 26px;
 }
@@ -317,8 +253,8 @@ form > label + label {
 }
 .chatgpt-settings {
   border-bottom: 1px solid var(--border);
-  padding: 8px 0 24px;
-  margin-bottom: 24px;
+  padding: var(--ds-space-100, 8px) 0 var(--ds-space-300, 24px);
+  margin-bottom: var(--ds-space-300, 24px);
 }
 .chatgpt-settings > label {
   margin: 15px 0;
@@ -326,8 +262,8 @@ form > label + label {
 .account-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 18px 0 12px;
+  gap: var(--ds-space-100, 8px);
+  margin: 18px 0 var(--ds-space-150, 12px);
 }
 .badge {
   display: inline-flex;
@@ -340,7 +276,7 @@ form > label + label {
   overflow-wrap: anywhere;
 }
 .command-snippet {
-  padding: 16px;
+  padding: var(--ds-space-200, 16px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-muted);
@@ -407,7 +343,7 @@ form > label + label {
 .project-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--ds-space-050, 4px);
   max-height: 25dvh;
   overflow-y: auto;
 }
@@ -512,12 +448,12 @@ form > label + label {
 .sidebar-text-button {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-100, 8px);
   background: transparent;
   border: 0;
   color: var(--sidebar-muted);
   font-size: var(--text-xs);
-  padding: 8px 9px;
+  padding: var(--ds-space-100, 8px) 9px;
 }
 .sidebar-text-button:hover {
   color: var(--sidebar-foreground);
@@ -525,7 +461,7 @@ form > label + label {
 .new-conversation {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-100, 8px);
   background: transparent;
   border: 1px solid var(--sidebar-border);
   padding: 10px 11px;
@@ -547,7 +483,7 @@ form > label + label {
   min-height: 50px;
 }
 .conversation-row {
-  margin: 2px 0;
+  margin: var(--ds-space-025, 2px) 0;
 }
 .conversation-row > button:first-child {
   font-size: var(--text-xs);
@@ -566,8 +502,8 @@ form > label + label {
   margin-top: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 16px 0 8px;
+  gap: var(--ds-space-100, 8px);
+  padding: var(--ds-space-200, 16px) 0 var(--ds-space-100, 8px);
 }
 .sidebar-footer > span {
   display: flex;
@@ -654,7 +590,7 @@ form > label + label {
   gap: 10px;
   font-size: 9px;
   color: var(--muted);
-  padding: 0 20px;
+  padding: 0 var(--ds-space-250, 20px);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -667,7 +603,7 @@ form > label + label {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 24px 70px;
+  padding: var(--ds-space-500, 40px) var(--ds-space-300, 24px) 70px;
   text-align: center;
 }
 .start-screen h1 {
@@ -684,7 +620,7 @@ form > label + label {
   position: relative;
   width: 220px;
   height: 160px;
-  margin-bottom: 32px;
+  margin-bottom: var(--ds-space-400, 32px);
   display: grid;
   place-items: center;
 }
@@ -749,7 +685,7 @@ form > label + label {
   min-height: 48px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--ds-space-150, 12px);
   justify-content: space-between;
   padding: 7px 17px;
   flex-shrink: 0;
@@ -758,7 +694,7 @@ form > label + label {
 .conversation-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-100, 8px);
   min-width: 0;
   font-size: var(--text-sm);
 }
@@ -850,11 +786,11 @@ form > label + label {
   flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 24px clamp(16px, 4%, 50px);
+  padding: var(--ds-space-300, 24px) clamp(var(--ds-space-200, 16px), 4%, 50px);
 }
 .chat-welcome {
   max-width: 570px;
-  margin: clamp(20px, 8vh, 110px) auto 30px;
+  margin: clamp(var(--ds-space-250, 20px), 8vh, 110px) auto 30px;
 }
 .welcome-symbol {
   display: inline-flex;
@@ -862,11 +798,11 @@ form > label + label {
   background: var(--accent);
   border-radius: 16px;
   color: var(--primary);
-  margin-bottom: 24px;
+  margin-bottom: var(--ds-space-300, 24px);
 }
 .chat-welcome h1 {
   font-size: clamp(28px, 3vw, 40px);
-  margin-bottom: 16px;
+  margin-bottom: var(--ds-space-200, 16px);
 }
 .chat-welcome > p:not(.eyebrow) {
   color: var(--muted);
@@ -877,7 +813,7 @@ form > label + label {
   display: flex;
   flex-direction: column;
   gap: 9px;
-  margin-top: 32px;
+  margin-top: var(--ds-space-400, 32px);
   max-width: 370px;
 }
 .prompt-suggestions > button {
@@ -886,7 +822,7 @@ form > label + label {
   justify-content: space-between;
   gap: 10px;
   text-align: left;
-  padding: 12px 15px;
+  padding: var(--ds-space-150, 12px) 15px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -902,7 +838,7 @@ form > label + label {
   max-width: 850px;
   margin: 0 auto 26px;
   display: flex;
-  gap: 12px;
+  gap: var(--ds-space-150, 12px);
 }
 .message-avatar {
   flex-shrink: 0;
@@ -926,7 +862,7 @@ form > label + label {
 .message-heading {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--ds-space-150, 12px);
   font-weight: 600;
   font-size: var(--text-sm);
   margin: 3px 0 10px;
@@ -968,7 +904,7 @@ form > label + label {
   margin-top: 10px;
 }
 .tool-notes p {
-  margin: 6px 0;
+  margin: var(--ds-space-075, 6px) 0;
   overflow-wrap: anywhere;
 }
 .tool-notes summary,
@@ -978,7 +914,7 @@ form > label + label {
 .agent-progress {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-100, 8px);
   margin: 15px 0;
   font-size: var(--text-xs);
   color: var(--muted);
@@ -994,23 +930,23 @@ form > label + label {
 .approval-card > div:first-child {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-100, 8px);
   margin-bottom: 10px;
 }
 .approval-card pre {
   overflow: auto;
   max-height: 280px;
   background: var(--surface);
-  padding: 12px;
+  padding: var(--ds-space-150, 12px);
 }
 .approval-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--ds-space-100, 8px);
   margin-top: 14px;
 }
 .composer-wrap {
-  padding: 0 clamp(12px, 4%, 50px) 12px;
+  padding: 0 clamp(var(--ds-space-150, 12px), 4%, 50px) var(--ds-space-150, 12px);
   flex-shrink: 0;
 }
 .composer {
@@ -1028,7 +964,7 @@ form > label + label {
   justify-content: space-between;
   align-items: center;
   gap: 14px;
-  padding: 4px 11px 11px;
+  padding: var(--ds-space-050, 4px) 11px 11px;
 }
 .composer-footer > select {
   max-width: 190px;
@@ -1053,7 +989,7 @@ form > label + label {
   color: var(--terminal-foreground);
   flex: 1;
   min-width: 0;
-  padding: 10px 8px 0;
+  padding: 10px var(--ds-space-100, 8px) 0;
 }
 .terminal-canvas {
   flex: 1;
@@ -1072,7 +1008,7 @@ form > label + label {
 }
 .terminal-keys {
   display: flex;
-  gap: 2px;
+  gap: var(--ds-space-025, 2px);
 }
 .browser-panel {
   display: flex;
@@ -1090,7 +1026,7 @@ form > label + label {
 .browser-security {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--ds-space-075, 6px);
   justify-content: space-between;
   padding: 5px 10px;
   font-size: 9px;
@@ -1098,7 +1034,7 @@ form > label + label {
 }
 .browser-security label {
   display: flex;
-  gap: 4px;
+  gap: var(--ds-space-050, 4px);
   align-items: center;
   font-size: 10px;
 }
@@ -1138,7 +1074,7 @@ form > label + label {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--ds-space-300, 24px);
   text-align: center;
   color: var(--muted);
 }
@@ -1154,7 +1090,7 @@ form > label + label {
   display: flex;
   align-items: center;
   gap: 3px;
-  padding: 6px;
+  padding: var(--ds-space-075, 6px);
   border-top: 1px solid var(--border);
 }
 .git-panel {
@@ -1167,7 +1103,7 @@ form > label + label {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 12px;
+  padding: 7px var(--ds-space-150, 12px);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-xs);
 }
@@ -1179,7 +1115,7 @@ form > label + label {
 .git-content {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 16px;
+  padding: var(--ds-space-250, 20px) var(--ds-space-200, 16px);
 }
 .section-label {
   font-size: 10px;
@@ -1192,9 +1128,9 @@ form > label + label {
 .clean-state {
   color: var(--muted);
   font-size: var(--text-xs);
-  padding-bottom: 20px;
+  padding-bottom: var(--ds-space-250, 20px);
   border-bottom: 1px solid var(--border);
-  margin-bottom: 24px;
+  margin-bottom: var(--ds-space-300, 24px);
 }
 .change-actions {
   display: flex;
@@ -1238,7 +1174,7 @@ form > label + label {
 }
 .commit-node {
   color: var(--success);
-  padding-top: 2px;
+  padding-top: var(--ds-space-025, 2px);
 }
 .commit > span:last-child {
   min-width: 0;
@@ -1255,8 +1191,8 @@ form > label + label {
   color: var(--muted);
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
+  gap: var(--ds-space-100, 8px);
+  margin-top: var(--ds-space-075, 6px);
 }
 .commit-meta code {
   margin-left: auto;
@@ -1267,7 +1203,7 @@ form > label + label {
   align-items: center;
   font-size: 10px;
   color: var(--muted);
-  margin-top: 16px;
+  margin-top: var(--ds-space-200, 16px);
 }
 .diff-view {
   overflow: auto;
@@ -1279,7 +1215,7 @@ form > label + label {
 }
 .diff-view pre > div {
   min-height: 19px;
-  padding: 0 12px;
+  padding: 0 var(--ds-space-150, 12px);
 }
 .diff-view [data-kind='add'] {
   background: var(--diff-add);
@@ -1293,7 +1229,7 @@ form > label + label {
 }
 .app-error,
 .connection-banner {
-  padding: 9px 16px;
+  padding: 9px var(--ds-space-200, 16px);
   font-size: var(--text-xs);
   flex-shrink: 0;
 }
@@ -1319,7 +1255,7 @@ form > label + label {
   align-items: center;
   justify-content: center;
   background: var(--background);
-  padding: 24px;
+  padding: var(--ds-space-300, 24px);
 }
 .loading-screen {
   flex-direction: column;
@@ -1333,7 +1269,7 @@ form > label + label {
   color: var(--primary);
 }
 .login-card h1 {
-  margin-bottom: 16px;
+  margin-bottom: var(--ds-space-200, 16px);
 }
 .login-card > p:not(.eyebrow) {
   color: var(--muted);
@@ -1346,7 +1282,7 @@ form > label + label {
   margin-top: 18px;
 }
 .login-scan {
-  margin-top: 8px;
+  margin-top: var(--ds-space-100, 8px);
 }
 .login-scan > button {
   width: 100%;
@@ -1358,13 +1294,13 @@ form > label + label {
 }
 .connection-handoff {
   margin-top: 18px;
-  padding: 16px;
+  padding: var(--ds-space-200, 16px);
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
 }
 .connection-handoff p {
-  margin: 0 0 12px;
+  margin: 0 0 var(--ds-space-150, 12px);
   color: var(--muted);
 }
 .connection-camera {
@@ -1394,7 +1330,7 @@ form > label + label {
     max-width: 45%;
   }
   .start-features {
-    gap: 16px;
+    gap: var(--ds-space-200, 16px);
   }
 }
 @media (max-width: 700px) {
@@ -1415,7 +1351,7 @@ form > label + label {
     transform: translateX(-100%);
     transition: transform 0.2s;
     background: var(--sidebar);
-    padding: max(20px, env(safe-area-inset-top)) 16px max(10px, env(safe-area-inset-bottom));
+    padding: max(var(--ds-space-250, 20px), env(safe-area-inset-top)) var(--ds-space-200, 16px) max(10px, env(safe-area-inset-bottom));
   }
   .sidebar[data-open='true'] {
     transform: translateX(0);
@@ -1440,13 +1376,13 @@ form > label + label {
   }
   .workspace-header {
     min-height: 54px;
-    padding: max(4px, env(safe-area-inset-top)) 10px 4px;
+    padding: max(var(--ds-space-050, 4px), env(safe-area-inset-top)) 10px var(--ds-space-050, 4px);
   }
   .workspace-breadcrumb {
     gap: 7px;
   }
   .workspace-footer {
-    padding: 0 12px env(safe-area-inset-bottom);
+    padding: 0 var(--ds-space-150, 12px) env(safe-area-inset-bottom);
     height: calc(28px + env(safe-area-inset-bottom));
     font-size: 8px;
   }
@@ -1463,7 +1399,7 @@ form > label + label {
     font-size: var(--text-sm);
   }
   .start-orbit {
-    margin-bottom: 24px;
+    margin-bottom: var(--ds-space-300, 24px);
   }
   .start-features {
     margin-top: 50px;
@@ -1490,7 +1426,7 @@ form > label + label {
   .mobile-pane-tabs button {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--ds-space-075, 6px);
     white-space: nowrap;
     padding: 7px 10px;
     border: 1px solid var(--border);
@@ -1505,7 +1441,7 @@ form > label + label {
     border-color: var(--accent);
   }
   .layout-root {
-    padding: 0 6px 6px;
+    padding: 0 var(--ds-space-075, 6px) var(--ds-space-075, 6px);
   }
   .layout-split,
   .split-child {
@@ -1524,7 +1460,7 @@ form > label + label {
     padding: 22px 17px;
   }
   .chat-welcome {
-    margin: 30px 0 20px;
+    margin: 30px 0 var(--ds-space-250, 20px);
   }
   .chat-welcome h1 {
     font-size: var(--text-xl);
@@ -1551,7 +1487,7 @@ form > label + label {
     font-size: 9px;
   }
   .message {
-    gap: 8px;
+    gap: var(--ds-space-100, 8px);
   }
   .message-avatar {
     width: 24px;
@@ -1563,9 +1499,6 @@ form > label + label {
   }
   .browser-security > span {
     display: none;
-  }
-  .dialog-content {
-    padding: 22px;
   }
   .terminal-keys {
     gap: 1px;
@@ -1582,20 +1515,33 @@ form > label + label {
 }
 
 /* Shared controls: keep focus inside fields so scroll containers cannot clip it. */
-:is(.input, .textarea):focus-visible {
+:is(.input, .textarea, .ads-input input, .ads-textarea):focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
-.input, .button-secondary { border-color: var(--control-border); }
-:is(.input, .textarea)[aria-invalid='true'] { border: 2px solid var(--danger); }
-:is(.input, .textarea):disabled { cursor: not-allowed; opacity: .65; }
-:is(.sidebar, .terminal-panel) { --focus-ring: var(--focus-ring-inverse); }
+.input { border-color: var(--control-border); }
+:is(.input, .textarea, .ads-input input, .ads-textarea)[aria-invalid='true'] { border: 2px solid var(--danger); }
+:is(.input, .textarea, .ads-input input, .ads-textarea):disabled { cursor: not-allowed; opacity: .65; }
+.sidebar { --focus-ring: var(--focus-ring-inverse); }
+.terminal-panel { --focus-ring: var(--terminal-focus-ring); }
 @media (max-width: 700px), (pointer: coarse) {
-  .button, .input { min-height: var(--control-touch); }
-  .button-icon { width: var(--control-touch); min-width: var(--control-touch); height: var(--control-touch); }
+  button[data-alfred-button], .input, .ads-input input { min-height: var(--control-touch); }
+  button[data-alfred-button='icon'] { width: var(--control-touch); min-width: var(--control-touch); height: var(--control-touch); }
 }
 @media (forced-colors: active) {
-  :root { --focus-ring: Highlight; --focus-ring-inverse: Highlight; --control-border: ButtonText; }
-  .button { border-color: ButtonText; }
-  :is(.input, .textarea)[aria-invalid='true'] { border-style: dashed; }
+  :root { --focus-ring: Highlight; --focus-ring-inverse: Highlight; --terminal-focus-ring: Highlight; --control-border: ButtonText; }
+  button[data-alfred-button] { border-color: ButtonText; }
+  :is(.input, .textarea, .ads-input input, .ads-textarea)[aria-invalid='true'] { border-style: dashed; }
+}
+
+@media (max-width: 700px), (pointer: coarse) { .ads-input input, textarea.ads-textarea { font-size: max(16px, var(--text-base)); } }
+
+/* ADS components own placement and appearance; these are reflow extensions. */
+.ads-dialog-heading { width: 100%; min-width: 0; overflow-wrap: anywhere; }
+.ads-dialog-body { min-width: 0; overflow-wrap: anywhere; }
+.ads-select { min-width: 0; font-size: var(--text-base); }
+.ads-select [class*="singleValue"] { white-space: normal; overflow-wrap: anywhere; }
+.ads-select [class*="option"] { overflow-wrap: anywhere; }
+@media (max-width: 700px), (pointer: coarse) {
+  .ads-select [class*="control"], .ads-select [class*="option"] { min-height: var(--control-touch); }
 }

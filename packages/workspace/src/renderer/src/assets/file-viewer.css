@@ -1,17 +1,17 @@
 .file-viewer { display: flex; flex-direction: column; width: min(650px, 55%); min-width: 300px; min-height: 0; border-left: 1px solid var(--border); background: var(--background); }
-.file-viewer-toolbar { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: var(--text-xs); }
+.file-viewer-toolbar { display: flex; align-items: center; gap: var(--ds-space-050, 4px); padding: var(--ds-space-075, 6px) var(--ds-space-100, 8px); border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: var(--text-xs); }
 .file-viewer-toolbar > span { flex: 1; }
 .workspace-content-row:has(> .file-viewer[data-maximized='true']) > .workspace-content-main { display: none; }
 .file-viewer[data-maximized='true'] { flex: 1; width: auto; min-width: 0; }
 .file-viewer-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 .file-viewer nav { box-sizing: border-box; width: max-content; min-width: min(120px, 45%); max-width: 45%; flex: 0 0 auto; overflow: auto; border-right: 1px solid var(--border); }
-.file-tree { list-style: none; margin: 0; padding: 4px 0 4px 10px; font-size: 12px; }
+.file-tree { list-style: none; margin: 0; padding: var(--ds-space-050, 4px) 0 var(--ds-space-050, 4px) 10px; font-size: 12px; }
 .file-tree button { display: block; border: 0; background: transparent; color: inherit; text-align: left; padding: 5px; white-space: nowrap; cursor: pointer; }
 .file-tree button:hover { background: var(--accent); }
 .file-tree button[aria-current='true'] { background: var(--accent); color: var(--accent-foreground); font-weight: 600; box-shadow: inset 2px 0 0 currentColor; }
 .file-tree button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 .file-preview { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
-.file-preview-path { display: flex; align-items: center; justify-content: space-between; padding: 6px; overflow-wrap: anywhere; font-size: 12px; border-bottom: 1px solid var(--border); }
+.file-preview-path { display: flex; align-items: center; justify-content: space-between; padding: var(--ds-space-075, 6px); overflow-wrap: anywhere; font-size: 12px; border-bottom: 1px solid var(--border); }
 .file-editor {
   flex: 1; min-height: 0; overflow: hidden;
   --vscode-background: #ffffff;
@@ -29,7 +29,7 @@
   --vscode-attribute: #e50000;
   --vscode-invalid: #cd3131;
 }
-[data-theme='dark'] .file-editor {
+[data-color-mode='dark'] .file-editor {
   --vscode-background: #1e1e1e;
   --vscode-foreground: #d4d4d4;
   --vscode-line-number: #858585;

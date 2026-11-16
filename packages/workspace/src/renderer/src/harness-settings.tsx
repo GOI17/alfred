@@ -58,7 +58,7 @@ export function HarnessSettings({ conversation }: { conversation: Conversation }
   return <div className="harness-settings">
     <p>{t('Discover resources installed on the Alfred server and in this workspace. Choose which harness supplies this conversation’s prompts and skills.', 'Descubre los recursos instalados en el servidor de Alfred y en este workspace. Elige qué harness aporta las instrucciones y skills de esta conversación.')}</p>
     <div className="harness-toolbar">
-      <label>{t('Harness', 'Harness')}<Select value={harness} onChange={(event) => { const found = catalog?.harnesses.find((item) => item.id === event.target.value); if (found) setHarness(found.id) }}>
+      <label>{t('Harness', 'Harness')}<Select aria-label="Harness" value={harness} onValueChange={(value) => { const found = catalog?.harnesses.find((item) => item.id === value); if (found) setHarness(found.id) }}>
         {Object.entries(harnessNames).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
       </Select></label>
       <Button variant="secondary" disabled={busy} onClick={() => void act(async () => setCatalog(await api<HarnessCatalog>(`/conversations/${conversation.id}/harnesses?refresh=true`)))}>{t('Refresh resources', 'Actualizar recursos')}</Button>

@@ -57,10 +57,10 @@
 .tool-dock-heading {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--ds-space-075, 6px);
   flex-shrink: 0;
   min-width: 0;
-  padding: 4px 8px;
+  padding: var(--ds-space-050, 4px) var(--ds-space-100, 8px);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-xs);
 }

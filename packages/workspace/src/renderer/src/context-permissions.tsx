@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import * as Dialog from '@radix-ui/react-dialog'
-import { ShieldCheck, X } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Dialog } from './components/ui/dialog'
+import { ShieldCheck } from 'lucide-react'
 import type { Conversation, PermissionMode, ProviderId, PublicState } from '../../shared/contracts'
 import { latestContextUsage, contextUsedTokens, conversationConsumption, compactTokenCount, compactedTextEstimate } from '../../shared/context-usage'
 import { resolveContextCapacity, type ContextCapacity } from '../../shared/context-capacity'
@@ -11,39 +11,13 @@ import { useUI } from './ui-preferences'
 import './assets/context-permissions.css'
 
 function Control({ label, heading, icon, children }: { label: string; heading?: string; icon: ReactNode; children: ReactNode }) {
-  const { t } = useUI()
   const [open, setOpen] = useState(false)
-  const [mobile, setMobile] = useState(() => matchMedia('(max-width: 700px)').matches)
-  const trigger = useRef<HTMLButtonElement>(null)
-  const [position, setPosition] = useState({ left: 12, bottom: 12, maxHeight: 400 })
-  useEffect(() => {
-    const query = matchMedia('(max-width: 700px)')
-    const update = () => setMobile(query.matches)
-    query.addEventListener('change', update)
-    return () => query.removeEventListener('change', update)
-  }, [])
-  useLayoutEffect(() => {
-    if (!open || mobile) return
-    const update = () => {
-      const rect = trigger.current?.getBoundingClientRect()
-      if (!rect) return
-      setPosition({ left: Math.max(12, Math.min(rect.left, window.innerWidth - Math.min(360, window.innerWidth - 24) - 12)), bottom: Math.max(12, window.innerHeight - rect.top + 8), maxHeight: Math.max(0, rect.top - 20) })
-    }
-    update()
-    window.addEventListener('resize', update)
-    window.addEventListener('scroll', update, true)
-    return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true) }
-  }, [open, mobile])
-  return <Dialog.Root modal={mobile} open={open} onOpenChange={setOpen}>
-    <Dialog.Trigger asChild><button ref={trigger} type="button" className="context-control" title={label}>{icon}<span>{label}</span></button></Dialog.Trigger>
-    <Dialog.Portal>
-      {mobile && <Dialog.Overlay className="dialog-overlay" />}
-      <Dialog.Content className={`dialog-content context-dialog${mobile ? '' : ' context-dropdown'}`} style={mobile ? undefined : position} aria-describedby={undefined}>
-        <div className="dialog-heading"><Dialog.Title>{heading || label}</Dialog.Title><Dialog.Close asChild><Button type="button" variant="ghost" size="icon" aria-label={t('Close', 'Cerrar')}><X size={18} /></Button></Dialog.Close></div>
-        {children}
-      </Dialog.Content>
-    </Dialog.Portal>
-  </Dialog.Root>
+  return <>
+    <Button variant="ghost" data-control="context-control" title={label} aria-label={label} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>{icon}<span>{label}</span></Button>
+    <Dialog open={open} onClose={() => setOpen(false)} title={heading || label} description="">
+      <div className="context-dialog">{children}</div>
+    </Dialog>
+  </>
 }
 export function ContextPermissions({ conversation, state, provider, busy }: {
   conversation: Conversation; state: PublicState; provider: ProviderId; busy: boolean

@@ -1,3 +1,4 @@
+import { Select } from './components/ui/input'
 import { useGitDialog } from './git-dialog'
 import { useEffect, useRef, useState } from 'react'
 import { GitCommitHorizontal, GitBranch, RefreshCw, Check, FileText, Download, Upload, Search } from 'lucide-react'
@@ -122,7 +123,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
     setOutput('')
     try {
       const result = await api<{ output: string }>(`${endpoint}/git/action`, { action: 'discard-preview', ...(path ? { path } : {}) })
-      const preview = JSON.parse(result.output) as { paths: string[]; snapshot: string }
+      const preview: { paths: string[]; snapshot: string } = JSON.parse(result.output)
       const message = t(
         `Discard unstaged changes in ${preview.paths.length} file(s)? Staged changes and new files are retained. This cannot be undone through reflog. The file filter does not limit this action.`,
         `¿Descartar los cambios sin preparar de ${preview.paths.length} archivo(s)? Se conservan los cambios preparados y los archivos nuevos. No se puede deshacer mediante reflog. El filtro de archivos no limita esta acción.`,
@@ -223,12 +224,12 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
       </div>
       <div className="git-sync-bar">
         <label>{t('Pull strategy', 'Estrategia de pull')}
-          <select className="input" value={pullStrategy} disabled={locked || !!details?.operation}
-            onChange={event => setPullStrategy(event.target.value)}>
+          <Select aria-label={t('Pull strategy', 'Estrategia de pull')} value={pullStrategy} disabled={locked || !!details?.operation}
+            onValueChange={(value) => setPullStrategy(value)}>
             <option value="ff-only">Fast-forward only</option>
             <option value="merge">Merge</option>
             <option value="rebase">Rebase</option>
-          </select>
+          </Select>
         </label>
         <Button variant="ghost" size="small" disabled={locked} onClick={async () => {
           if (await confirm(t('Fetch all remotes and remove stale remote-tracking references? Local branches are retained.', '¿Consultar todos los remotos y eliminar referencias remotas obsoletas? Se conservan las ramas locales.')))

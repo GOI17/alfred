@@ -3,13 +3,13 @@
 .harness-toolbar label { flex: 1; min-width: 150px; }
 .harness-checkbox { display: flex; align-items: center; gap: 10px; margin: 18px 0; }
 .harness-checkbox input { width: 18px; height: 18px; margin: 0; accent-color: var(--primary); }
-.harness-kinds { display: flex; flex-wrap: wrap; gap: 6px; margin: 20px 0; }
+.harness-kinds { display: flex; flex-wrap: wrap; gap: var(--ds-space-075, 6px); margin: var(--ds-space-250, 20px) 0; }
 .harness-kinds span { color: var(--muted); }
-.harness-resource-list { list-style: none; padding: 0; display: grid; gap: 12px; }
-.harness-resource-list > li { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-.harness-resource-heading { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.harness-resource-list { list-style: none; padding: 0; display: grid; gap: var(--ds-space-150, 12px); }
+.harness-resource-list > li { min-width: 0; padding: var(--ds-space-200, 16px); border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.harness-resource-heading { display: flex; justify-content: space-between; gap: 10px; margin-bottom: var(--ds-space-100, 8px); }
 .harness-resource-heading span { color: var(--muted); font-size: 12px; }
-.harness-resource-list p { margin-bottom: 8px; }
+.harness-resource-list p { margin-bottom: var(--ds-space-100, 8px); }
 .harness-source { display: block; color: var(--muted); font-size: 12px; margin-bottom: 10px; }
 .harness-settings code, .harness-settings p, .harness-resource-heading strong { overflow-wrap: anywhere; }
 .harness-preview { max-height: 55dvh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }

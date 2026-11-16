@@ -1,3 +1,4 @@
+import { Select } from './components/ui/input'
 import { useGitDialog } from './git-dialog'
 import { useState } from 'react'
 import { api, errorMessage } from './api'
@@ -18,7 +19,7 @@ export function GitRebase({ endpoint, base, locked, act }: {
     setLoading(true); setError(''); setPlan(undefined)
     try {
       const result = await api<{ output: string }>(`${endpoint}/git/action`, { action: 'rebase-plan', base })
-      const data = JSON.parse(result.output) as { head: string; base: string; commits: { hash: string; subject: string }[] }
+      const data: { head: string; base: string; commits: { hash: string; subject: string }[] } = JSON.parse(result.output)
       setPlan({ ...data, rows: data.commits.map(commit => ({ ...commit, action: 'pick' })) })
     } catch (cause) { setError(errorMessage(cause)) }
     finally { setLoading(false) }
@@ -40,10 +41,10 @@ export function GitRebase({ endpoint, base, locked, act }: {
     {plan && <>
       {plan.rows.map((row, index) => <div className="git-sync-bar" key={row.hash}>
         <span>{row.hash.slice(0, 7)} · {row.subject}</span>
-        <select className="input" aria-label={`${t('Action', 'Acción')} ${row.hash.slice(0, 7)}`} value={row.action} disabled={locked} onChange={event => {
-          const action = event.target.value
+        <Select aria-label={`${t('Action', 'Acción')} ${row.hash.slice(0, 7)}`} value={row.action} disabled={locked} onValueChange={(value) => {
+          const action = value
           setPlan(previous => previous && ({ ...previous, rows: previous.rows.map(value => value.hash === row.hash ? { ...value, action } : value) }))
-        }}>{['pick', 'edit', 'squash', 'fixup', 'drop'].map(action => <option key={action}>{action}</option>)}</select>
+        }}>{['pick', 'edit', 'squash', 'fixup', 'drop'].map(action => <option key={action}>{action}</option>)}</Select>
         <Button size="small" disabled={locked || index === 0} aria-label={t('Move up', 'Subir')} onClick={() => move(index, -1)}>↑</Button>
         <Button size="small" disabled={locked || index === plan.rows.length - 1} aria-label={t('Move down', 'Bajar')} onClick={() => move(index, 1)}>↓</Button>
       </div>)}

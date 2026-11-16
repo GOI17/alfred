@@ -26,7 +26,9 @@ async function settings(page: Page) {
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByRole('button', { name: 'Agent harnesses', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Use these resources', exact: true })).toBeEnabled()
-  await page.getByRole('combobox', { name: 'Harness', exact: true }).selectOption('opencode')
+  await page.getByRole('combobox', { name: 'Harness', exact: true }).focus()
+  await page.getByRole('combobox', { name: 'Harness', exact: true }).press('ArrowDown')
+  await page.getByRole('option', { name: 'OpenCode', exact: true }).click()
   return page.locator('.harness-settings')
 }
 test('shows origins and previews, enables resources and exposes commands in the actual composer', async ({ page }, testInfo) => {
@@ -75,7 +77,7 @@ test('imports a secret-free MCP reference and exposes it in the existing access 
   await expect(panel.getByText('lab-mcp', { exact: true })).toBeVisible()
   await expect(panel).not.toContainText('lab-private-header')
   await panel.getByRole('button', { name: 'Import MCP', exact: true }).click()
-  await expect(panel.getByRole('status')).toContainText('MCP reference saved.')
+  await expect(panel.getByRole('status').filter({ hasText: 'MCP reference saved.' })).toBeVisible()
   await page.getByRole('button', { name: 'Terminal and MCP', exact: true }).click()
   const json = page.getByLabel('MCP servers (JSON)', { exact: true })
   await expect(json).toHaveValue(/"type": "harness"/)

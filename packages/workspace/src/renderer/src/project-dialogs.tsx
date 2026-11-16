@@ -91,8 +91,8 @@ export function SettingsDialog({ state, onClose }: { state: PublicState; onClose
       catch (error) { setError(errorMessage(error)) }
       finally { setBusy(false) }
     }}>
-      <label>{t('Provider', 'Proveedor')}<Select value={provider} onChange={(event) => {
-        const next = apiProviderId.parse(event.target.value)
+      <label>{t('Provider', 'Proveedor')}<Select aria-label={t('Provider', 'Proveedor')} value={provider} onValueChange={(value) => {
+        const next = apiProviderId.parse(value)
         setProvider(next); setModel(state.providers.find((item) => item.id === next)?.model || ''); setKey(''); setSaved(false)
       }}>
         {Object.entries(providerNames).filter(([id]) => id !== 'chatgpt' && id !== 'copilot').map(([id, name]) => <option key={id} value={id}>{name}</option>)}

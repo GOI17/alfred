@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import * as Dialog from '@radix-ui/react-dialog'
-import { Check, ChevronDown, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Dialog } from './components/ui/dialog'
+import { Check, ChevronDown } from 'lucide-react'
 import type { ProviderId, PublicState } from '../../shared/contracts'
 import { apiProviderId } from '../../shared/contracts'
 import { api, errorMessage } from './api'
@@ -18,9 +18,6 @@ export function ModelPicker({ state, provider, onSelect, settings, disabled }: {
 }) {
   const { t } = useUI()
   const [open, setOpen] = useState(false)
-  const [mobile, setMobile] = useState(() => matchMedia('(max-width: 700px)').matches)
-  const trigger = useRef<HTMLButtonElement>(null)
-  const [position, setPosition] = useState({ left: 12, bottom: 12, maxHeight: 420 })
   const [view, setView] = useState(providerGroup(provider))
   const [models, setModels] = useState<ModelOption[]>([])
   const [loading, setLoading] = useState(false)
@@ -40,31 +37,10 @@ export function ModelPicker({ state, provider, onSelect, settings, disabled }: {
     ? state.chatgpt.accounts.find((account) => account.id === state.chatgpt.active)?.model
     : state.providers.find((item) => item.id === provider)?.model
   useEffect(() => {
-    const query = matchMedia('(max-width: 700px)')
-    const update = () => setMobile(query.matches)
-    query.addEventListener('change', update)
-    return () => query.removeEventListener('change', update)
-  }, [])
-  useLayoutEffect(() => {
-    if (!open || mobile) return
-    const update = () => {
-      const rect = trigger.current?.getBoundingClientRect()
-      if (!rect) return
-      const width = Math.min(600, window.innerWidth - 24)
-      setPosition({ left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)), bottom: Math.max(12, window.innerHeight - rect.top + 8), maxHeight: Math.max(0, rect.top - 20) })
-    }
-    update()
-    window.addEventListener('resize', update)
-    window.addEventListener('scroll', update, true)
-    const observer = new ResizeObserver(update)
-    if (trigger.current) observer.observe(trigger.current)
-    return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true); observer.disconnect() }
-  }, [open, mobile])
-  useEffect(() => {
     let current = true
     setModels([]); setError(''); setLoading(open && available)
     if (open && available) {
-      const sources = connectionKey.split(',') as ProviderId[]
+      const sources = connectionKey.split(',').filter((value): value is ProviderId => value === 'chatgpt' || apiProviderId.options.some(id => id === value))
       void Promise.allSettled(sources.map(async (connection) => {
         const items = await api<Model[]>(`/providers/${connection}/models`)
         return items.map((item) => ({ ...item, connection }))
@@ -90,24 +66,15 @@ export function ModelPicker({ state, provider, onSelect, settings, disabled }: {
     } catch (error) { setError(errorMessage(error)) }
     finally { lock.current = false; setSaving(false) }
   }
-  return <Dialog.Root modal={mobile} open={open} onOpenChange={(value) => {
-    if (lock.current) return
-    if (value) { setView(providerGroup(provider)); setModels([]); setError(''); setLoading(groupConnected(providerGroup(provider))) }
-    setOpen(value)
-  }}>
-    <Dialog.Trigger asChild>
-      <button ref={trigger} type="button" className="model-picker-trigger" disabled={disabled} aria-label={`${t('Select model', 'Seleccionar modelo')}: ${activeModel || providerNames[providerGroup(provider)]}`} title={activeModel}>
-        <span>{activeModel || providerNames[providerGroup(provider)]}</span><ChevronDown size={14} />
-      </button>
-    </Dialog.Trigger>
-    <Dialog.Portal>
-      {mobile && <Dialog.Overlay className="dialog-overlay" />}
-      <Dialog.Content className={`dialog-content model-picker-dialog${mobile ? '' : ' model-picker-dropdown'}`} style={mobile ? undefined : position}>
-        <div className="dialog-heading">
-          <Dialog.Title>{t('Select model', 'Seleccionar modelo')}</Dialog.Title>
-          <Dialog.Close asChild><Button variant="ghost" size="icon" disabled={saving} aria-label={t('Close model picker', 'Cerrar selector de modelos')}><X size={18} /></Button></Dialog.Close>
-        </div>
-        <Dialog.Description className="model-picker-description">{t('The selected model will be the default for its connection for future messages.', 'El modelo seleccionado será el predeterminado de su conexión para futuros mensajes.')}</Dialog.Description>
+  function show() {
+    setView(providerGroup(provider)); setModels([]); setError(''); setLoading(groupConnected(providerGroup(provider))); setOpen(true)
+  }
+  return <>
+    <Button variant="secondary" data-control="model-picker-trigger" disabled={disabled} aria-haspopup="dialog" aria-expanded={open} onClick={show} aria-label={`${t('Select model', 'Seleccionar modelo')}: ${activeModel || providerNames[providerGroup(provider)]}`} title={activeModel}>
+      <span>{activeModel || providerNames[providerGroup(provider)]}</span><ChevronDown size={14} />
+    </Button>
+    <Dialog open={open} onClose={() => { if (!lock.current) setOpen(false) }} title={t('Select model', 'Seleccionar modelo')}
+      description={t('The selected model will be the default for its connection for future messages.', 'El modelo seleccionado será el predeterminado de su conexión para futuros mensajes.')}>
         <div className="model-picker-columns">
           <nav className="model-provider-list" aria-label={t('Supported providers', 'Proveedores compatibles')}>
             {apiProviderId.options.map((id) => <button type="button" key={id} aria-pressed={view === id} disabled={saving} onClick={() => { if (id !== view) { setModels([]); setError(''); setLoading(groupConnected(id)); setView(id) } }}>
@@ -132,7 +99,6 @@ export function ModelPicker({ state, provider, onSelect, settings, disabled }: {
               </>}
           </section>
         </div>
-      </Dialog.Content>
-    </Dialog.Portal>
-  </Dialog.Root>
+    </Dialog>
+  </>
 }

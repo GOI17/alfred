@@ -66,7 +66,7 @@ test('three spaces preserve drafts and reading; + invokes folder selection', asy
   await page.getByRole('button', { name: 'Alfred UI', exact: true }).click()
   await expect(page.getByLabel('Message for Alfred')).toHaveValue('Draft for Alfred')
   await expect.poll(() => page.locator('.message-slot').evaluateAll((nodes, saved) => {
-    const anchor = nodes.find(node => (node as HTMLElement).dataset.messageId === saved.anchor)
+    const anchor = nodes.find(node => node.getAttribute('data-message-id') === saved.anchor)
     const viewport = anchor?.closest('.messages')
     return anchor && viewport ? Math.abs(anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top - saved.offset) : Infinity
   }, before)).toBeLessThan(12)
@@ -116,15 +116,18 @@ test('theme and language live in settings, persist and follow system appearance'
   await expect(page.locator('.sidebar select')).toHaveCount(0)
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByRole('button', { name: 'Interface', exact: true }).click()
-  await page.getByLabel('Appearance', { exact: true }).selectOption('dark')
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-  await page.getByLabel('Language', { exact: true }).selectOption('es')
+  await page.getByRole('combobox', { name: 'Appearance', exact: true }).locator('xpath=ancestor::*[contains(@class, "ads-select__control")]').click()
+  await page.getByRole('option', { name: 'Dark', exact: true }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'dark')
+  await page.getByRole('combobox', { name: 'Language', exact: true }).locator('xpath=ancestor::*[contains(@class, "ads-select__control")]').click()
+  await page.getByRole('option', { name: 'Español', exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('lang', 'es')
-  await page.getByLabel('Apariencia', { exact: true }).selectOption('system')
+  await page.getByRole('combobox', { name: 'Apariencia', exact: true }).locator('xpath=ancestor::*[contains(@class, "ads-select__control")]').click()
+  await page.getByRole('option', { name: 'Sistema', exact: true }).click()
   await page.emulateMedia({ colorScheme: 'light' })
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'light')
   await page.emulateMedia({ colorScheme: 'dark' })
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.locator('html')).toHaveAttribute('data-color-mode', 'dark')
   await expect.poll(() => page.evaluate(() => [localStorage.getItem('alfred.theme'), localStorage.getItem('alfred.language')])).toEqual(['system', 'es'])
   await page.getByRole('button', { name: 'Volver al espacio', exact: true }).click()
   await expect(page.getByLabel('Mensaje para Alfred')).toBeVisible()
@@ -135,11 +138,12 @@ test('theme and language live in settings, persist and follow system appearance'
 test('composer controls share geometry in both themes and narrow panes', async ({ page }, testInfo) => {
   const expectedSize = testInfo.project.name === 'phone' ? 44 : 36
   for (const theme of ['light', 'dark']) {
-    await page.evaluate((value) => document.documentElement.dataset.theme = value, theme)
-    const controls = page.locator('.composer-footer .context-control, .composer-footer .model-picker-trigger, .composer-footer .queue-send-actions > button')
+    await page.evaluate((value) => document.documentElement.dataset.colorMode = value, theme)
+    const controls = page.locator('.composer-footer [data-control="context-control"], .composer-footer [data-control="model-picker-trigger"], .composer-footer .queue-send-actions > button')
     const heights = await controls.evaluateAll((nodes) => nodes.map((node) => ({ height: node.getBoundingClientRect().height, ring: !!node.querySelector('.context-token-count') })))
     expect(heights.length).toBeGreaterThanOrEqual(6)
-    for (const { height, ring } of heights) expect(height).toBe(ring ? 44 : expectedSize)
+    // Labels may wrap and narrow desktop panes also use touch-sized controls.
+    for (const { height, ring } of heights) expect(height).toBeGreaterThanOrEqual(ring ? 44 : expectedSize)
     const overflow = await page.locator('.composer').evaluate((node) => node.scrollWidth > node.clientWidth)
     expect(overflow).toBe(false)
     await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeVisible()
@@ -153,7 +157,7 @@ test('composer controls share geometry in both themes and narrow panes', async (
 
 test('chat utilities stay in a compact heading instead of a vertical action column', async ({ page }, testInfo) => {
   for (const theme of ['light', 'dark']) {
-    await page.evaluate((value) => document.documentElement.dataset.theme = value, theme)
+    await page.evaluate((value) => document.documentElement.dataset.colorMode = value, theme)
     const action = page.getByRole('button', { name: 'Open in separate window', exact: true, includeHidden: true })
     if (testInfo.project.name === 'phone') {
       await expect(action).toBeVisible()

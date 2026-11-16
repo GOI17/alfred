@@ -227,7 +227,7 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
         <div className="composer-footer">
           <div className="attachment-controls">
             <input ref={fileInput} type="file" multiple hidden onChange={(event) => { void addFiles(Array.from(event.target.files || [])); event.target.value = '' }} />
-            <span className="context-control" title={t('Execution is provided by the configured runtime adapter', 'La ejecución corresponde al adaptador de runtime configurado')}>{t('Runtime', 'Runtime')}</span>
+            <span data-control="context-control" title={t('Execution is provided by the configured runtime adapter', 'La ejecución corresponde al adaptador de runtime configurado')}>{t('Runtime', 'Runtime')}</span>
             <ModelPicker state={state} provider={provider} onSelect={setProvider} settings={settings} disabled={sending} />
             <ContextPermissions conversation={conversation} state={state} provider={provider} busy={busy || sending || queueAction} />
           </div>
