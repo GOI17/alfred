@@ -13,7 +13,7 @@ import './assets/context-permissions.css'
 function Control({ label, heading, icon, children }: { label: string; heading?: string; icon: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   return <>
-    <Button variant="ghost" data-control="context-control" title={label} aria-label={label} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>{icon}<span>{label}</span></Button>
+    <Button variant="ghost" data-control="context-control" title={label} aria-label={label} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>{icon}<span className="context-control-label">{label}</span></Button>
     <Dialog open={open} onClose={() => setOpen(false)} title={heading || label} description="">
       <div className="context-dialog">{children}</div>
     </Dialog>

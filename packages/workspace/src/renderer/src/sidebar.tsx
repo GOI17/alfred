@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react'
 import { FolderPlus, Plus, Settings2, X, PanelLeftClose, Pin } from 'lucide-react'
 import type { Conversation, Project, PublicState } from '../../shared/contracts'
 import { Button } from './components/ui/button'
@@ -27,7 +27,8 @@ function lastActivity(item: Conversation) {
     return Number.isFinite(time) ? Math.max(latest, time) : latest
   }, -Infinity)
 }
-export function Sidebar({ state, project, conversation, workspacePath, connected, mobileOpen, selectProject, selectConversation, addProject, addConversation, removeProject, removeConversation, settings, close }: {
+export function Sidebar({ state, project, conversation, workspacePath, connected, mobileOpen, selectProject, selectConversation, addProject, addConversation, removeProject, removeConversation, settings, close, desktopToggle }: {
+  desktopToggle?: ReactNode
   state: PublicState; project?: Project; conversation?: Conversation; workspacePath: string; connected: boolean; mobileOpen: boolean
   selectProject: (id: string) => void; selectConversation: (id: string) => void;
   addProject: () => void; addConversation: () => void; removeProject: () => void
@@ -116,6 +117,7 @@ export function Sidebar({ state, project, conversation, workspacePath, connected
         </> : <button className="project-item" onClick={addProject}><FolderPlus size={18} /><span>{t('Your first space', 'Tu primer espacio')}</span></button>}
       </div>
       {!connected && <p className="sidebar-connection" role="status">{t('Reconnecting…', 'Reconectando…')}</p>}
+      <div className="space-dock-row">
       <div className="space-dock">
         <nav className="space-switcher" aria-label={t('Spaces', 'Espacios')}>
           {state.projects.map((item, index) => <WorkspaceAgentSummary key={item.id} state={state} connected={connected} projectId={item.id} label={item.name} selectConversation={selectConversation} dock>
@@ -129,6 +131,8 @@ export function Sidebar({ state, project, conversation, workspacePath, connected
           </WorkspaceAgentSummary>)}
         </nav>
         <button className="space-icon space-add" onClick={addProject} aria-label={t('Add space', 'Agregar espacio')} title={t('Add space', 'Agregar espacio')}><Plus size={22} /></button>
+      </div>
+      {desktopToggle}
       </div>
     </aside>
     <SidebarResizer />

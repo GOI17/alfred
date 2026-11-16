@@ -222,7 +222,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
           Push
         </Button>
       </div>
-      <div className="git-sync-bar">
+      <div className="git-sync-bar git-pull-strategy">
         <label>{t('Pull strategy', 'Estrategia de pull')}
           <Select aria-label={t('Pull strategy', 'Estrategia de pull')} value={pullStrategy} disabled={locked || !!details?.operation}
             onValueChange={(value) => setPullStrategy(value)}>

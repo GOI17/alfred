@@ -47,6 +47,15 @@
   flex-wrap: wrap;
   flex-shrink: 0;
 }
+/* Align the action with the selector, not the selector plus its label. */
+.git-pull-strategy {
+  align-items: flex-end;
+  gap: var(--ds-space-100, 8px);
+}
+.git-pull-strategy > label {
+  min-width: 0;
+  max-width: 100%;
+}
 .git-sync-bar > span {
   flex: 1;
   padding-left: var(--ds-space-050, 4px);

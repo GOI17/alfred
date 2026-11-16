@@ -1,5 +1,14 @@
 /* Consumer overrides: preserve readable labels at any panel width. */
-.chat-panel .composer .composer-footer { flex-wrap: wrap; }
+.chat-panel .composer .composer-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.chat-panel .composer-footer .queue-send-actions {
+  grid-column: 2;
+  grid-row: 1;
+  align-items: center;
+}
 .chat-panel .composer-footer .attachment-controls {
   flex: 1 1 240px;
   flex-wrap: wrap;
@@ -39,7 +48,18 @@
 }
 @container (max-width: 700px) {
   .chat-panel .composer .composer-footer { --composer-control-size: var(--control-touch); }
-  .chat-panel .composer-footer .attachment-controls { flex-basis: 100%; }
+  .chat-panel .composer-footer .attachment-controls {
+    gap: var(--ds-space-050, 4px);
+  }
+  /* Compact by panel width, not viewport: split desktop panes need this too. */
+  .chat-panel .composer-footer button[data-control="context-control"] .context-control-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   .chat-panel .message-history .messages > div > .approval-card { width: calc(100% - 16px); margin-inline: var(--ds-space-100, 8px); }
   .approval-card [data-alfred-button] { min-height: var(--control-touch); }
 }

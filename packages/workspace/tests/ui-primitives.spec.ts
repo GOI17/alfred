@@ -151,3 +151,145 @@ test('official project menu dismisses without action and selects explicitly', as
   await page.getByRole('menuitem', { name: 'Eliminar proyecto' }).click()
   await expect(page.getByRole('status')).toHaveText('Solicitud de eliminación')
 })
+
+for (const opener of ['Abrir diálogo', 'Acción sensible']) {
+  test(`modal bottom inset is preserved: ${opener}`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.getByRole('button', { name: opener, exact: true }).click()
+    const dialog = page.getByRole('dialog')
+    const actions = dialog.locator('.dialog-actions')
+    await expect(actions).toBeVisible()
+    await actions.scrollIntoViewIfNeeded()
+    const spacing = await dialog.evaluate(element => {
+      const body = element.querySelector('.ads-dialog-body')!
+      const actions = body.querySelector('.dialog-actions')!
+      return {
+        padding: parseFloat(getComputedStyle(body).paddingBottom),
+        inset: body.getBoundingClientRect().bottom - actions.getBoundingClientRect().bottom,
+        fits: element.scrollWidth <= element.clientWidth + 1,
+      }
+    })
+    expect(spacing.padding).toBeGreaterThanOrEqual(24)
+    expect(spacing.inset).toBeGreaterThanOrEqual(23)
+    expect(spacing.fits).toBe(true)
+  })
+}
+
+test('button icons stay centered inside touch targets', async ({ page }) => {
+  for (const name of ['Ajustes de prueba', 'Ajustes principales', 'Ajustar']) {
+    const button = page.getByRole('button', { name, exact: true })
+    const geometry = await button.evaluate(element => {
+      const box = element.getBoundingClientRect()
+      const icon = element.querySelector('svg')!.getBoundingClientRect()
+      return {
+        vertical: Math.abs(icon.y + icon.height / 2 - box.y - box.height / 2),
+        horizontal: Math.abs(icon.x + icon.width / 2 - box.x - box.width / 2),
+      }
+    })
+    expect(geometry.vertical, name).toBeLessThanOrEqual(1)
+    if (name !== 'Ajustar') expect(geometry.horizontal, name).toBeLessThanOrEqual(1)
+  }
+})
+
+
+test('button content aligns text with leading and trailing icons', async ({ page }) => {
+  const button = page.getByRole('button', { name: 'Add space', exact: true })
+  const geometry = await button.evaluate(element => {
+    const content = element.querySelector('.alfred-button-content')!
+    const text = Array.from(content.childNodes).find(node => node.nodeType === Node.TEXT_NODE)!
+    const range = document.createRange()
+    range.selectNodeContents(text)
+    const label = range.getBoundingClientRect()
+    const icons = Array.from(content.querySelectorAll('svg')).map(icon => icon.getBoundingClientRect())
+    const box = element.getBoundingClientRect()
+    return {
+      offsets: icons.map(icon => Math.abs(icon.y + icon.height / 2 - box.y - box.height / 2)),
+      textOffset: Math.abs(label.y + label.height / 2 - box.y - box.height / 2),
+      gaps: [label.left - icons[0].right, icons[1].left - label.right],
+    }
+  })
+  for (const offset of geometry.offsets) expect(offset).toBeLessThanOrEqual(1)
+  expect(geometry.textOffset).toBeLessThanOrEqual(2)
+  for (const gap of geometry.gaps) expect(gap).toBeGreaterThanOrEqual(7)
+})
+
+
+test('chat column picker stays within its icon target and selects an exact chat', async ({ page }) => {
+  const enabled = page.getByTestId('column-picker-enabled').getByRole('button')
+  const disabled = page.getByTestId('column-picker-disabled').getByRole('button')
+  await expect(disabled).toBeDisabled()
+  for (const button of [enabled, disabled]) {
+    const bounds = await button.evaluate(element => {
+      const box = element.getBoundingClientRect()
+      const icon = element.querySelector('svg')!.getBoundingClientRect()
+      return { width: box.width, height: box.height, overflow: element.scrollHeight - element.clientHeight,
+        offset: Math.abs(icon.y + icon.height / 2 - box.y - box.height / 2) }
+    })
+    expect(bounds.height).toBeLessThanOrEqual(48)
+    expect(bounds.width).toBeLessThanOrEqual(48)
+    expect(bounds.overflow).toBeLessThanOrEqual(1)
+    expect(bounds.offset).toBeLessThanOrEqual(1)
+  }
+  await enabled.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('menuitem', { name: 'Segundo chat' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(enabled).toBeFocused()
+  await expect(page.getByRole('status')).toHaveText('Sin cambios')
+  await enabled.click()
+  await page.getByRole('menuitem', { name: 'Segundo chat' }).click()
+  await expect(page.getByRole('status')).toHaveText('chat-2')
+  await expect(page.getByRole('menuitem')).toHaveCount(0)
+})
+
+
+test('pull strategy action aligns with the control instead of its label', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 800 })
+  const row = page.locator('.git-pull-strategy')
+  const control = await row.locator('.ads-select__control').boundingBox()
+  const button = await row.getByRole('button', { name: 'Fetch + prune…' }).boundingBox()
+  expect(control).not.toBeNull()
+  expect(button).not.toBeNull()
+  expect(Math.abs(control!.y + control!.height - button!.y - button!.height)).toBeLessThanOrEqual(1)
+  await page.setViewportSize({ width: 320, height: 800 })
+  expect(await row.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+})
+
+
+test('settings columns scroll independently on desktop and reflow on mobile', async ({ page }) => {
+  await page.addStyleTag({ path: 'src/renderer/src/assets/settings-screen.css' })
+  // Isolate the layout contract with long content and an overflowing navigation.
+  await page.evaluate(() => {
+    const screen = document.createElement('main')
+    screen.className = 'settings-screen'
+    screen.innerHTML = `<header class="settings-screen-header"><button style="min-height:44px">Back to workspace</button><h1>Settings layout</h1></header>
+      <div class="settings-screen-layout"><nav class="settings-screen-nav" aria-label="Layout navigation">
+      ${Array.from({ length: 20 }, (_, i) => `<button style="min-height:44px">Section ${i}</button>`).join('')}
+      </nav><div class="settings-screen-content"><div style="height:2400px">Long settings content</div><button>Last action</button></div></div>`
+    document.body.append(screen)
+  })
+  const screen = page.locator('.settings-screen')
+  const nav = page.locator('.settings-screen-nav')
+  const content = page.locator('.settings-screen-content')
+  if (page.viewportSize()!.width > 700) {
+    const before = await nav.boundingBox()
+    const headerBefore = await page.locator('.settings-screen-header').boundingBox()
+    expect(headerBefore!.height).toBeLessThanOrEqual(48)
+    const contentBox = await content.boundingBox()
+    expect(contentBox!.y - headerBefore!.y - headerBefore!.height).toBeLessThanOrEqual(16)
+    await content.evaluate(el => { el.scrollTop = 500 })
+    expect(await content.evaluate(el => el.scrollTop)).toBe(500)
+    expect(await nav.boundingBox()).toEqual(before)
+    expect(await page.locator('.settings-screen-header').boundingBox()).toEqual(headerBefore)
+    expect(await screen.evaluate(el => el.scrollTop)).toBe(0)
+    await nav.getByRole('button').last().focus()
+    expect(await nav.evaluate(el => el.scrollTop)).toBeGreaterThan(0)
+    expect(await content.evaluate(el => el.scrollTop)).toBe(500)
+  } else {
+    await screen.evaluate(el => { el.scrollTop = 500 })
+    expect(await screen.evaluate(el => el.scrollTop)).toBe(500)
+    expect(await screen.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    await content.getByRole('button').focus()
+    await expect(content.getByRole('button')).toBeInViewport()
+  }
+})

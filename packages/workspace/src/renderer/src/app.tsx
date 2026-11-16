@@ -302,6 +302,7 @@ export function App() {
     <div id="workspace-sidebar" className="workspace-sidebar-container">
       <Sidebar state={state} project={project} conversation={(floatingIds.length ? state.conversations.find((item) => item.id === focusedChatId && item.projectId === projectId && item.workspacePath === workspacePath) : undefined) || conversation} workspacePath={workspacePath} connected={connected} mobileOpen={mobileOpen}
         close={() => setMobileOpen(false)} selectProject={selectSpace}
+        desktopToggle={<span className="desktop-sidebar-toggle"><Button variant="ghost" size="icon" aria-controls="workspace-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} title={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</Button></span>}
         selectConversation={(id) => {
           const item = state.conversations.find((chat) => chat.id === id)
           if (!item) return
@@ -317,7 +318,7 @@ export function App() {
     </div>
     <main className="main-workspace">
       <header className="workspace-header workspace-header-unified">
-        <span className="desktop-sidebar-toggle"><Button variant="ghost" size="icon" aria-controls="workspace-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} title={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</Button></span>
+        {sidebarCollapsed && <span className="desktop-sidebar-toggle"><Button variant="ghost" size="icon" aria-controls="workspace-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} title={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</Button></span>}
         <span className="mobile-only"><Button variant="ghost" size="icon" aria-label={t('Open spaces', 'Abrir espacios')} aria-controls="workspace-sidebar" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu size={19} /></Button></span>
         <div className="workspace-heading-context">
           <div className="workspace-breadcrumb"><span className="breadcrumb-project" title={project?.name}>{project?.name || t('Welcome to Alfred', 'Bienvenido a Alfred')}</span>{project && <><span className="breadcrumb-slash">/</span><WorktreePicker key={`${project.id}:${workspacePath}`} state={state} project={project} worktrees={worktrees} workspacePath={workspacePath} connected={connected}

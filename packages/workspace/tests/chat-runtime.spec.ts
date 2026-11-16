@@ -117,3 +117,70 @@ for (const reducedMotion of ['reduce', 'no-preference'] as const) test(`streamin
   await expect(input).toHaveValue('Borrador durante streaming')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
+
+for (const theme of ['light', 'dark'] as const) test(`context indicator remains visible and opens details in ${theme}`, async ({ page }) => {
+  await page.emulateMedia({ colorScheme: theme })
+  const trigger = page.getByRole('button', { name: /^Contexto:/ })
+  const ring = trigger.locator('.context-token-count')
+  await expect(ring).toBeVisible()
+  await trigger.scrollIntoViewIfNeeded()
+  const geometry = await ring.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    const button = element.closest('button')!
+    const bounds = button.getBoundingClientRect()
+    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+    return {
+      width: rect.width, height: rect.height,
+      contained: rect.left >= bounds.left && rect.right <= bounds.right && rect.top >= bounds.top && rect.bottom <= bounds.bottom,
+      painted: !!hit && element.contains(hit),
+    }
+  })
+  expect(geometry.width).toBeGreaterThanOrEqual(36)
+  expect(geometry.height).toBeGreaterThanOrEqual(36)
+  expect(geometry.contained).toBe(true)
+  expect(geometry.painted).toBe(true)
+  await trigger.focus()
+  await page.keyboard.press('Enter')
+  const dialog = page.getByRole('dialog', { name: 'Contexto', exact: true })
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText('Contexto ocupado')
+  await page.keyboard.press('Escape')
+  await expect(trigger).toBeFocused()
+})
+
+
+test('composer reserves aligned actions as its panel narrows', async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 900 })
+  const panel = page.locator('.chat-panel')
+  const input = page.getByRole('textbox', { name: 'Mensaje para Alfred' })
+  await input.fill('Borrador al ajustar el panel')
+  for (const busy of [false, true]) {
+    await page.getByRole('button', { name: busy ? 'running' : 'idle', exact: true }).click()
+    for (const width of [900, 700, 620, 480, 320]) {
+      await panel.evaluate((el, width) => {
+        el.style.flex = 'none'
+        el.style.width = `${width}px`
+      }, width)
+      const geometry = await page.locator('.composer-footer').evaluate(el => {
+        const bounds = el.getBoundingClientRect()
+        const controls = el.querySelector('.attachment-controls')!.getBoundingClientRect()
+        const actions = el.querySelector('.queue-send-actions')!.getBoundingClientRect()
+        const buttons = [...el.querySelectorAll('button')].map(button => button.getBoundingClientRect())
+        return {
+          sameRow: actions.top < controls.bottom && actions.bottom > controls.top,
+          separate: controls.right <= actions.left,
+          contained: buttons.every(rect => rect.left >= bounds.left && rect.right <= bounds.right + 1),
+          centers: [...el.querySelectorAll('.queue-send-actions button')].map(button => {
+            const rect = button.getBoundingClientRect()
+            return rect.top + rect.height / 2
+          }),
+        }
+      })
+      expect(geometry.sameRow, `width=${width}, busy=${busy}`).toBe(true)
+      expect(geometry.separate).toBe(true)
+      expect(geometry.contained).toBe(true)
+      expect(Math.max(...geometry.centers) - Math.min(...geometry.centers)).toBeLessThan(1)
+      await expect(input).toHaveValue('Borrador al ajustar el panel')
+    }
+  }
+})

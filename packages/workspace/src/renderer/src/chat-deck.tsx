@@ -1,4 +1,5 @@
-import { Select } from './components/ui/input'
+import DropdownMenu, { DropdownItem, DropdownItemGroup } from '@atlaskit/dropdown-menu'
+import AtlassianButton from '@atlaskit/button/new'
 import { layoutKey, point, pointMap, stringList, usePersistentLayout } from './use-persistent-layout'
 import { createPortal } from 'react-dom'
 import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react'
@@ -9,6 +10,24 @@ import { useUI } from './ui-preferences'
 import './assets/chat-deck.css'
 
 export const ChatHeaderTarget = createContext<HTMLElement | null>(null)
+
+export function ChatColumnPicker({ options, onSelect }: {
+  options: { id: string; title: string }[]
+  onSelect: (id: string) => void
+}) {
+  const { t } = useUI()
+  const [open, setOpen] = useState(false)
+  const label = t('Add chat column', 'Agregar columna de chat')
+  return <DropdownMenu isOpen={open && options.length > 0} onOpenChange={({ isOpen }) => setOpen(isOpen)} placement="bottom-end"
+    trigger={({ triggerRef, ...props }) => <AtlassianButton {...props} ref={triggerRef}
+      appearance="subtle" data-alfred-button="icon" isDisabled={!options.length} aria-label={label} title={label}>
+      <span className="alfred-button-content"><Columns2 size={16} aria-hidden="true" /></span>
+    </AtlassianButton>}>
+    <DropdownItemGroup>
+      {options.map(option => <DropdownItem key={option.id} onClick={() => { setOpen(false); onSelect(option.id) }}>{option.title}</DropdownItem>)}
+    </DropdownItemGroup>
+  </DropdownMenu>
+}
 
 /** Layout is persisted per workspace. Closing a column never deletes a conversation. */
 export function ChatDeck({ conversation, conversations, render, floatingIds, setFloatingIds, onActiveChatChange }: {
@@ -99,16 +118,9 @@ export function ChatDeck({ conversation, conversations, render, floatingIds, set
 
   return <div className="chat-deck" ref={root}>
     {inHeader(<div className="chat-deck-toolbar" aria-label={t('Chat layout', 'Disposición de chats')}>
-      <label className="chat-column-picker" title={t('Add chat column', 'Agregar columna de chat')}>
-      <Columns2 size={16} aria-hidden="true" />
-      <Select disabled={!available.some((item) => !ids.includes(item.id))} aria-label={t('Add chat column', 'Agregar columna de chat')} value="" onValueChange={(value) => {
-        const id = value
-        if (!id) return
-        setIds((current) => [...current, id]); reveal(id)
-      }}>
-        <option value="">{t('Add chat column…', 'Agregar columna de chat…')}</option>
-        {available.filter((item) => !ids.includes(item.id)).map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-      </Select></label>
+      <ChatColumnPicker options={available.filter(item => !ids.includes(item.id))} onSelect={id => {
+        setIds(current => [...current, id]); reveal(id)
+      }} />
       {chats.length > 1 && <div className="chat-deck-navigation">
       <Button variant="ghost" size="icon" title={t('Previous chat', 'Chat anterior')} aria-label={t('Previous chat', 'Chat anterior')} disabled={chats.length < 2} onClick={() => reveal(chats[(chats.findIndex((item) => item.id === active) + chats.length - 1) % chats.length].id)}><ChevronLeft size={16} /></Button>
       <Button variant="ghost" size="icon" title={t('Next chat', 'Chat siguiente')} aria-label={t('Next chat', 'Chat siguiente')} disabled={chats.length < 2} onClick={() => reveal(chats[(chats.findIndex((item) => item.id === active) + 1) % chats.length].id)}><ChevronRight size={16} /></Button>

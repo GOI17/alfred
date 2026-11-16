@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { socketUrl } from './api'
+import { terminalWordNavigation } from './terminal-keyboard'
 import { Button } from './components/ui/button'
 
 export function TerminalPanel({
@@ -18,20 +19,38 @@ export function TerminalPanel({
   useEffect(() => {
     if (!container.current) return
     const tokens = getComputedStyle(document.documentElement)
+    const readTheme = () => {
+      const styles = getComputedStyle(document.documentElement)
+      return {
+        background: styles.getPropertyValue('--terminal').trim(),
+        foreground: styles.getPropertyValue('--terminal-foreground').trim(),
+        cursor: styles.getPropertyValue('--terminal-foreground').trim(),
+        cursorAccent: styles.getPropertyValue('--terminal').trim(),
+      }
+    }
     const terminal = new Terminal({
       cursorBlink: true,
       fontSize: 13,
       fontFamily: tokens.getPropertyValue('--font-mono'),
-      theme: {
-        background: tokens.getPropertyValue('--terminal').trim(),
-        foreground: tokens.getPropertyValue('--terminal-foreground').trim(),
-        cursor: tokens.getPropertyValue('--terminal-foreground').trim(),
-      },
+      theme: readTheme(),
       scrollback: 5000,
     })
     const fit = new FitAddon()
     terminal.loadAddon(fit)
     terminal.open(container.current)
+    // ADS changes these attributes for explicit themes and automatic OS changes.
+    // Update xterm in place: recreating it would discard output and reconnect the PTY.
+    let themeFrame = 0
+    const themeObserver = new MutationObserver(() => {
+      cancelAnimationFrame(themeFrame)
+      themeFrame = requestAnimationFrame(() => {
+        terminal.options.theme = readTheme()
+      })
+    })
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-color-mode', 'data-theme', 'style'],
+    })
     let disposed = false,
       wasVisible = false,
       retry: ReturnType<typeof setTimeout> | undefined
@@ -78,6 +97,14 @@ export function TerminalPanel({
       }
     }
     connect()
+    terminal.attachCustomKeyEventHandler((event) => {
+      const data = terminalWordNavigation(event, navigator.platform)
+      if (data === undefined) return true
+      event.preventDefault()
+      // Use xterm's input path so onData sends exactly one sequence to the PTY.
+      terminal.input(data, true)
+      return false
+    })
     const subscription = terminal.onData((data) => {
       if (socket.current?.readyState === WebSocket.OPEN)
         socket.current.send(JSON.stringify({ type: 'input', data }))
@@ -88,6 +115,8 @@ export function TerminalPanel({
       disposed = true
       clearTimeout(retry)
       observer.disconnect()
+      themeObserver.disconnect()
+      cancelAnimationFrame(themeFrame)
       subscription.dispose()
       socket.current?.close()
       terminal.dispose()

@@ -160,7 +160,7 @@
     justify-content: center;
   }
   /* Keep the full labels available to screen readers while showing compact icons. */
-  .chat-panel .composer-footer button[data-control="context-control"] > span {
+  .chat-panel .composer-footer button[data-control="context-control"] .context-control-label {
     position: absolute;
     width: 1px;
     height: 1px;

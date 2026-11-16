@@ -9,7 +9,7 @@
   --control-border: var(--ds-border-bold, #7D818A);
   --focus-ring: var(--ds-border-focused, #4688EC);
   --focus-ring-inverse: var(--ds-border-focused, #4688EC);
-  --terminal-focus-ring: #b4d9fa;
+  --terminal-focus-ring: var(--ds-border-focused, #4688EC);
   --control-height: var(--ds-space-400, 32px);
   --control-compact: var(--ds-space-300, 24px);
   --control-touch: 44px;
@@ -25,8 +25,8 @@
   --sidebar-muted: var(--ds-text-subtle, #505258);
   --sidebar-active: var(--ds-background-selected, #E9F2FE);
   --sidebar-border: var(--ds-border, #0B120E24);
-  --terminal: #1d2721;
-  --terminal-foreground: #e0e8d9;
+  --terminal: var(--ds-surface, #FFFFFF);
+  --terminal-foreground: var(--ds-text, #292A2E);
   --success: var(--ds-text-success, #4C6B1F);
   --warning: var(--ds-text-warning, #9E4C00);
   --danger: var(--ds-text-danger, #AE2E24);
@@ -168,6 +168,9 @@ svg {
 }
 /* Atlassian owns appearance; only responsive geometry is adapted here. */
 button[data-alfred-button] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: auto;
   min-height: var(--control-height);
   max-width: 100%;
@@ -177,7 +180,29 @@ button[data-alfred-button] {
   flex-shrink: 0;
   font-size: var(--text-sm);
 }
-button[data-alfred-button] > span { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+/* ADS wraps children in a label span. Center that label's contents as well as
+   the button itself so our larger touch targets do not top-align SVG icons. */
+button[data-alfred-button] > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-100, 8px);
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+/* Own the content layout rather than relying on ADS's internal label depth. */
+button[data-alfred-button] .alfred-button-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-100, 8px);
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+button[data-alfred-button] svg { flex-shrink: 0; }
 button[data-alfred-button='icon'] { width: var(--control-compact); padding: 0; }
 button[data-alfred-button='small'] { min-height: var(--control-compact); }
 button[data-alfred-button]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
@@ -1538,7 +1563,8 @@ form > label + label {
 
 /* ADS components own placement and appearance; these are reflow extensions. */
 .ads-dialog-heading { width: 100%; min-width: 0; overflow-wrap: anywhere; }
-.ads-dialog-body { min-width: 0; overflow-wrap: anywhere; }
+/* Actions remain inside the body (and their form); reserve the footer inset here. */
+.ads-dialog-body { min-width: 0; padding-bottom: var(--ds-space-300, 24px); overflow-wrap: anywhere; }
 .ads-select { min-width: 0; font-size: var(--text-base); }
 .ads-select [class*="singleValue"] { white-space: normal; overflow-wrap: anywhere; }
 .ads-select [class*="option"] { overflow-wrap: anywhere; }

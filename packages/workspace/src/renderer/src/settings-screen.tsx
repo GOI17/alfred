@@ -15,18 +15,18 @@ export function SettingsScreen({ state, onClose, children }: { state: PublicStat
   const { t } = useUI()
   const [section, setSection] = useState<'models' | 'access' | 'interface' | 'harnesses'>('models')
   const [conversationId, setConversationId] = useState(() => localStorage.getItem('alfred.conversation') || '')
-  const heading = useRef<HTMLHeadingElement>(null)
+  const screen = useRef<HTMLElement>(null)
   const conversation = state.conversations.find((item) => item.id === conversationId)
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const workspace = document.querySelector<HTMLElement>('.app-shell')
     const wasInert = workspace?.inert ?? false
     if (workspace) workspace.inert = true
-    heading.current?.focus()
+    screen.current?.focus()
     return () => { if (workspace) workspace.inert = wasInert; if (previousFocus?.isConnected) previousFocus.focus() }
   }, [])
-  return createPortal(<main className="settings-screen" aria-labelledby="settings-title">
-    <header className="settings-screen-header"><Button variant="ghost" onClick={onClose}><ArrowLeft size={18} />{t('Back to workspace', 'Volver al espacio')}</Button><h1 id="settings-title" ref={heading} tabIndex={-1}>{t('Settings', 'Ajustes')}</h1></header>
+  return createPortal(<main className="settings-screen" aria-label={t('Settings', 'Ajustes')} ref={screen} tabIndex={-1}>
+    <header className="settings-screen-header"><Button variant="ghost" onClick={onClose}><ArrowLeft size={18} />{t('Back to workspace', 'Volver al espacio')}</Button></header>
     <div className="settings-screen-layout">
       <nav className="settings-screen-nav" aria-label={t('Settings sections', 'Secciones de ajustes')}>
         {(['interface', 'models', 'harnesses', 'access'] as const).map((item) => <Button key={item} variant={section === item ? 'secondary' : 'ghost'} aria-current={section === item ? 'page' : undefined} onClick={() => setSection(item)}>{item === 'interface' ? t('Interface', 'Interfaz') : item === 'models' ? t('Models and connections', 'Modelos y conexiones') : item === 'harnesses' ? 'Agent harnesses' : 'Terminal y MCP'.replace(' y ', t(' and ', ' y '))}</Button>)}

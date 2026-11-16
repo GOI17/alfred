@@ -24,6 +24,6 @@
 .context-token-count small { font-size: 9px; font-weight: 600; line-height: 1; }
 .context-token-count[data-unknown="true"] .context-ring-track { stroke-dasharray: 3 3; }
 .chat-panel .composer-footer button[data-control="context-control"]:has(.context-token-count) { width: 44px; min-width: 44px; min-height: 44px; flex: 0 0 auto; justify-content: center; padding: var(--ds-space-050, 4px); }
-.chat-panel .composer-footer button[data-control="context-control"]:has(.context-token-count) > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.chat-panel .composer-footer button[data-control="context-control"]:has(.context-token-count) .context-control-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .context-progress { width: 100%; height: 8px; accent-color: var(--accent, currentColor); }
 @media (prefers-reduced-motion: reduce) { .context-ring-value { transition: none; } }

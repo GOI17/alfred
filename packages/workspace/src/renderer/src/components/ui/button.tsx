@@ -25,5 +25,5 @@ export function Button({
   }), [id])
   return <AtlassianButton type="button" {...props} ref={element} isDisabled={disabled}
     appearance={appearances[variant]} spacing={size === 'small' ? 'compact' : 'default'}
-    data-alfred-button={size}>{children}</AtlassianButton>
+    data-alfred-button={size}><span className="alfred-button-content">{children}</span></AtlassianButton>
 }
