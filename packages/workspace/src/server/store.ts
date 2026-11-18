@@ -116,7 +116,11 @@ export class Store {
       if (revision !== this.revision + 1) throw new Error('Workspace journal has a missing transaction')
       const entry = JSON.parse(await readFile(join(journal, name), 'utf8'))
       if (entry.base !== this.revision) throw new Error('Invalid workspace journal transaction')
-      this.data = validateTransaction(this.data, applyStateDelta(this.data, entry.delta))
+      try {
+        this.data = validateTransaction(this.data, applyStateDelta(this.data, entry.delta))
+      } catch (cause) {
+        throw new Error(`Cannot replay journal/${name} (base revision ${this.revision}): ${cause instanceof Error ? cause.message : 'invalid transaction'}`, { cause })
+      }
       this.revision = revision
     }
     return this

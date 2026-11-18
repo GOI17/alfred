@@ -175,3 +175,17 @@ mientras sus referencias persistidas no cambien. Aún se copian arrays de refere
 para construir el estado público; la lista conserva anclas por mensaje y algunos
 comandos siguen ligados a botones montados. Estas rutas no tienen coste constante
 con historiales arbitrariamente grandes.
+
+### Dictado de prompts
+
+Selecciona el motor junto al micrófono, pulsa para hablar y vuelve a pulsar para transcribir. Revisa el borrador antes de enviarlo. El navegador necesita permiso de micrófono y un contexto seguro (HTTPS o localhost).
+
+- **Navegador** (predeterminado): usa el reconocimiento que proporcione el navegador.
+- **Whisper local**: Alfred incluye el motor. Al primer uso descarga automáticamente `Xenova/whisper-base` de Hugging Face y el navegador puede guardarlo en caché. El audio se procesa en el dispositivo del micrófono; no requiere Python ni un servicio local.
+- **Enviar audio a OpenAI**: reutiliza la conexión OpenAI guardada en Ajustes de Alfred, sin reiniciar. Requiere una clave API con cuota de transcripción (no una suscripción ChatGPT). Solo este modo envía la grabación desde Alfred a `gpt-4o-transcribe`.
+
+Los modos de IA admiten grabaciones WebM o MP4 de hasta 8 MiB. Si falla Whisper local, Workspace no reenvía la grabación a la nube.
+
+### Conversación hablada (`/voice`)
+
+Escribe `/voice` y pulsa Enter. A diferencia del dictado, cada turno se envía al chat sin pasar por el borrador. La conversación usa el motor de transcripción seleccionado: con el reconocimiento del navegador, una pausa puede cerrar el turno; con Whisper local u OpenAI, pulsa **Terminar turno**. Alfred espera la respuesta, la lee mediante la síntesis de voz del navegador y vuelve a escuchar al terminar la lectura. **Salir de /voice** detiene la escucha o la lectura; no retira los turnos ya enviados.

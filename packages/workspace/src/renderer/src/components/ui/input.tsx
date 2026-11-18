@@ -19,9 +19,9 @@ function optionsFrom(children: ReactNode): Option[] {
     return [{ value: String(child.props.value ?? label), label, isDisabled: !!child.props.disabled }]
   })
 }
-export function Select({ children, value, defaultValue, onValueChange, disabled, required, id, name, ...props }:
+export function Select({ children, value, defaultValue, onValueChange, menuPosition, disabled, required, id, name, ...props }:
   Omit<SelectHTMLAttributes<HTMLSelectElement>, 'className' | 'onChange' | 'value' | 'defaultValue' | 'multiple' | 'onBlur' | 'onFocus' | 'onKeyDown' | 'onKeyUp'> & {
-    value?: string; defaultValue?: string; onValueChange?: (value: string) => void
+    menuPosition?: 'absolute' | 'fixed'; value?: string; defaultValue?: string; onValueChange?: (value: string) => void
   }) {
   const generatedId = useId()
   const [selected, setSelected] = useState(defaultValue ?? '')
@@ -33,7 +33,7 @@ export function Select({ children, value, defaultValue, onValueChange, disabled,
     isDisabled={disabled} required={required} isSearchable={false}
     aria-label={props['aria-label']} aria-labelledby={props['aria-labelledby']}
     aria-describedby={props['aria-describedby']} aria-invalid={props['aria-invalid']}
-    menuPlacement="auto" minMenuHeight={80} maxMenuHeight={240}
+    menuPosition={menuPosition ?? 'absolute'} menuPlacement="auto" minMenuHeight={80} maxMenuHeight={240}
   />
 }
 export function Textarea({ disabled, readOnly, required, spellCheck, ...props }: Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'className' | 'value' | 'defaultValue'> & { value?: string; defaultValue?: string }) {

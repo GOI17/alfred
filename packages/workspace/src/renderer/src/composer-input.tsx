@@ -9,10 +9,11 @@ import { liveRefresh } from './live-refresh'
 type Props = {
   conversationId: string; value: string; onChange: (value: string) => void
   sending: boolean; busy: boolean; onSend: () => void; settings: () => void
+  onVoice: () => void
   history?: string[]
   harness?: HarnessSelection
 }
-export function ComposerInput({ conversationId, value, onChange, sending, busy, onSend, settings, harness, history = [] }: Props) {
+export function ComposerInput({ conversationId, value, onChange, sending, busy, onSend, settings, onVoice, harness, history = [] }: Props) {
   const { t } = useUI()
   const [harnessResources, setHarnessResources] = useState<{ conversation: string; harness: string; resources: HarnessResource[] }>()
   const [harnessError, setHarnessError] = useState('')
@@ -31,6 +32,7 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
     { name: '/explore', description: t('Explore the project', 'Explorar el proyecto'), text: t('Explore this project and explain its structure.', 'Explora este proyecto y explica su estructura.') },
     { name: '/plan', description: t('Prepare a plan', 'Preparar un plan'), text: t('Help me plan the following feature: ', 'Ayúdame a planear la siguiente funcionalidad: ') },
     { name: '/review', description: t('Review code', 'Revisar código'), text: t('Review the code and suggest improvements: ', 'Revisa el código y sugiere mejoras: ') },
+    { name: '/voice', description: t('Start a spoken conversation', 'Iniciar conversación hablada'), text: '/voice' },
     { name: '/settings', description: t('Open settings', 'Abrir ajustes'), text: '' },
     ...(harnessResources?.conversation === conversationId && harnessResources.harness === harness?.id ? harnessResources.resources.map((resource) => ({ name: resource.invocation!, description: resource.description, text: resource.invocation + ' ' })) : []),
   ]
@@ -125,6 +127,7 @@ export function ComposerInput({ conversationId, value, onChange, sending, busy, 
     const item = items[index]
     if (!item) return
     const start = caret - query.length - (marker === 'directory' ? 0 : 1)
+    if (marker === '/' && item.name === '/voice' && start === 0 && caret === value.length) { onVoice(); return }
     onChange(value.slice(0, start) + item.text + value.slice(caret))
     setCaret(start + item.text.length)
     setSelected(0)

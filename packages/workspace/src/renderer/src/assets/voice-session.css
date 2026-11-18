@@ -1,0 +1,25 @@
+.voice-session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-150, 12px);
+  padding: var(--ds-space-150, 12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+.voice-session-title,
+.voice-session-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-100, 8px);
+}
+.voice-session-actions { flex-wrap: wrap; }
+.voice-session p {
+  margin: var(--ds-space-050, 4px) 0 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}

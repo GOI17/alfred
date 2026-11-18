@@ -1,3 +1,4 @@
+import { transcriptionRoutes } from './transcription.js'
 import { StateStream } from './state-stream.js'
 import type { SessionAdapterFactory } from './session-adapter.js'
 import { notificationRoutes } from './notifications.js'
@@ -58,6 +59,10 @@ export async function createApp(options: {
   })
   await app.register(websocket, { options: { maxPayload: 250_000 } })
   await authentication(app, options.token, options.tunnel?.origin)
+  transcriptionRoutes(app, () => {
+    const provider = service.store.get().providers.find(item => item.id === 'openai')
+    return provider ? service.vault.decrypt(provider.encryptedKey) : process.env.OPENAI_API_KEY
+  })
   subagentRoutes(app, service)
   if (service.adapter.legacyBindings) harnessRoutes(app, service, harnesses)
   app.get('/api/runtime', async () => service.adapter.describe())

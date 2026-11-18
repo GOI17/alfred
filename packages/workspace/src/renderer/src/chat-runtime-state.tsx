@@ -47,8 +47,7 @@ export function ChatRuntimeState({ agent, request }: { agent?: AgentState; reque
     message = t('Stop confirmed by the server; queue paused. Previous effects are not undone.', 'Detención confirmada por el servidor; cola pausada. No se revierten los efectos anteriores.')
   } else if (request?.phase === 'pending') {
     message = t('Sending request…', 'Enviando solicitud…')
-  } else if (agent?.status === 'idle') {
-    message = t('Runtime inactive. Check results in the conversation.', 'Runtime inactivo. Consulta los resultados en la conversación.')
   }
+  if (!message) return null
   return <p className="chat-runtime-state" role="status" aria-live="polite" aria-atomic="true">{message}</p>
 }

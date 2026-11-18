@@ -1,13 +1,16 @@
 import { takeMessageNavigation } from './search-message-navigation'
 import { flushSync } from 'react-dom'
 import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { ArrowUp, Square, Sparkles, X, Paperclip } from 'lucide-react'
+import { ArrowUp, Square, Sparkles, X, Mic, Paperclip } from 'lucide-react'
 import type { AgentState, Conversation, PublicState, ProviderId } from '../../shared/contracts'
 import { attachmentMediaType, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_TOTAL_ATTACHMENT_BYTES, type Attachment } from '../../shared/attachments'
 import { errorMessage } from './api'
 import { ChatRuntimeState, useChatRequest } from './chat-runtime-state'
 import { Button } from './components/ui/button'
 import { ApprovalCard } from './approval-card'
+import { useDictation } from './use-dictation'
+import { VoiceSettings } from './voice-settings'
+import { VoiceSession } from './voice-session'
 import { ComposerInput } from './composer-input'
 import { ModelPicker } from './model-picker'
 import { SubagentsPanel } from './subagents-panel'
@@ -66,8 +69,11 @@ const MessageRow = memo(function MessageRow({ message, conversationId, active, s
 })
 const emptyQueue: NonNullable<Conversation['queue']> = []
 function ConversationChat({ conversation, state, agent, settings }: Props) {
-  const { t } = useUI()
+  const { t, replyVoice } = useUI()
   const [text, setText] = useState(() => { try { return sessionStorage.getItem(`alfred.draft.${conversation.id}`) || '' } catch { return '' } })
+  const dictation = useDictation(words => setText(current => current + (current && !/\s$/.test(current) ? ' ' : '') + words))
+  const [voice, setVoice] = useState(false)
+  const dictationLabel = dictation.active ? t('Stop dictation', 'Detener dictado') : t('Dictate prompt', 'Dictar prompt')
   const [provider, setProvider] = useState<ProviderId>(conversation.lastProvider || state.providers[0]?.id || 'openai')
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
@@ -177,10 +183,20 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
     } catch (error) { setError(errorMessage(error)) }
     finally { readingLock.current = false; setReading(false) }
   }
+  function startVoice() {
+    if (voice || sending || reading || queueAction) return
+    if (!configured) { settings(); return }
+    if (busy || queue.length) { setError(t('Wait for the current response before starting voice.', 'Espera a que termine la respuesta antes de iniciar /voice.')); return }
+    if (!replyVoice.startsWith('openai:') && (!window.speechSynthesis || !window.SpeechSynthesisUtterance)) { setError(t('Spoken replies are unavailable in this browser.', 'Este navegador no admite respuestas en voz alta.')); return }
+    dictation.cancel(); setError(''); setText(''); setVoice(true)
+  }
   async function send() {
+    if (voice) return
+    if (text.trim() === '/voice') { startVoice(); return }
     if ((!text.trim() && !attachments.length) || readingLock.current || sendLock.current || queueAction) return
     if (!configured && !/^\/cd(?:\s|$)/.test(text.trim())) { settings(); return }
     composer.current?.querySelector('textarea')?.focus({ preventScroll: true })
+    dictation.cancel()
     sendLock.current = true; setSending(true); setError(''); scroller.current?.dispatchEvent(new Event('chat-follow-latest')); follow.current = true; setAwayFromLatest(false); scrollToLatest()
     try {
       if (await perform('send', 'messages', { text, provider, attachments, mode: 'queue' })) {
@@ -232,7 +248,8 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
           <Button type="button" variant="secondary" size="icon" aria-label={`${t('Remove from queue', 'Quitar de la cola')}: ${(item.text || item.attachments[0]?.name || t('Message', 'Mensaje')).slice(0, 80)}`} disabled={queueAction || sending} onClick={() => void act('queue/remove', { messageId: item.id })}><X size={14} /></Button>
         </li>)}</ol>
       </section>}
-      <form ref={composer} className={`composer${dragging ? ' composer-dragging' : ''}`}
+      {voice && <VoiceSession conversation={conversation} provider={provider} agent={agent} engine={dictation.mode} onClose={() => setVoice(false)} />}
+      <form style={voice ? { display: 'none' } : undefined} ref={composer} className={`composer${dragging ? ' composer-dragging' : ''}`}
         onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = sending || reading ? 'none' : 'copy'; setDragging(!sending && !reading) } }}
         onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDragging(false) }}
         onDrop={(event) => { event.preventDefault(); setDragging(false); void addFiles(Array.from(event.dataTransfer.files)) }}
@@ -247,7 +264,7 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
         {!!attachments.length && <div className="attachment-list" aria-label={t('Pending attachments', 'Adjuntos pendientes')}>
           {attachments.map((file, index) => <span className="attachment-chip" key={index}><Paperclip size={14} /><span title={file.name}>{file.name}</span><button type="button" disabled={sending || reading} aria-label={`${t('Remove', 'Quitar')} ${file.name}`} onClick={() => setAttachments((current) => current.filter((_, i) => i !== index))}><X size={14} /></button></span>)}
         </div>}
-        <ComposerInput history={history} conversationId={conversation.id} harness={conversation.harness} value={text} onChange={setText} sending={sending} busy={busy} onSend={() => void send()} settings={settings} />
+        <ComposerInput onVoice={startVoice} history={history} conversationId={conversation.id} harness={conversation.harness} value={text} onChange={setText} sending={sending} busy={busy} onSend={() => void send()} settings={settings} />
         <div className="composer-footer">
           <div className="attachment-controls">
             <input ref={fileInput} type="file" multiple hidden onChange={(event) => { void addFiles(Array.from(event.target.files || [])); event.target.value = '' }} />
@@ -256,11 +273,14 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
             <ContextPermissions conversation={conversation} state={state} provider={provider} busy={busy || sending || queueAction} />
           </div>
           <div className="queue-send-actions">
+            <VoiceSettings mode={dictation.mode} disabled={voice || sending || dictation.active || dictation.busy} onChange={mode => { dictation.cancel(); dictation.setMode(mode) }} />
+            <Button type="button" variant="secondary" size="icon" disabled={sending || dictation.busy} aria-label={dictationLabel} title={dictationLabel} aria-pressed={dictation.active} onClick={dictation.toggle}>{dictation.active ? <Square size={15} fill="currentColor" /> : <Mic size={17} />}</Button>
             <Button type="button" variant="secondary" size="icon" disabled={sending || reading} aria-label={t('Attach files', 'Adjuntar archivos')} title={t('Attach images or text · maximum 2 MB per file', 'Adjuntar imágenes o texto · máximo 2 MB por archivo')} onClick={() => fileInput.current?.click()}><Paperclip size={17} /></Button>
             {busy && <Button type="button" variant="secondary" size="icon" disabled={queueAction || sending} aria-label={t('Stop response and pause queue', 'Detener respuesta y pausar cola')} onClick={() => void act('stop')}><Square size={15} /></Button>}
             <Button type="submit" size="icon" disabled={!canSend} aria-label={sendLabel} title={sendLabel}><ArrowUp size={19} /></Button>
           </div>
         </div>
+        {(dictation.active || dictation.notice) && <p role="status">{dictation.active ? t('Dictating…', 'Dictando…') : dictation.notice}</p>}
         {reading && <p role="status">{t('Preparing attachments…', 'Preparando adjuntos…')}</p>}
       </form>
     </div>

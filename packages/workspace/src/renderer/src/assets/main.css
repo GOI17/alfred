@@ -1562,6 +1562,8 @@ form > label + label {
 .ads-dialog-heading { width: 100%; min-width: 0; overflow-wrap: anywhere; }
 /* Actions remain inside the body (and their form); reserve the footer inset here. */
 .ads-dialog-body { min-width: 0; padding-bottom: var(--ds-space-300, 24px); overflow-wrap: anywhere; }
+.voice-settings-fields { display: grid; gap: var(--ds-space-200, 16px); }
+.voice-preview-action { margin-block-start: var(--ds-space-150, 12px); }
 .ads-select { min-width: 0; font-size: var(--text-base); }
 .ads-select [class*="singleValue"] { white-space: normal; overflow-wrap: anywhere; }
 .ads-select [class*="option"] { overflow-wrap: anywhere; }
