@@ -48,3 +48,22 @@ it('preserves the existing title when the generated title is empty', async () =>
   await expect(service.chat.regenerateTitle!(conversation.id)).rejects.toThrow('existing title was preserved')
   expect(service.conversation(conversation.id).title).toBe('Título anterior')
 })
+
+it('suggests an editable commit subject using only the bounded diff as context', async () => {
+  const { service, conversation, model } = await setup('Corrige el contador')
+  const staged = '+counter++\n' + 'x'.repeat(24000) + 'omitted-tail'
+  const message = await service.chat.generateCommitMessage!(conversation.id, staged, 'es')
+  expect(message).toBe('Corrige el contador')
+  const prompt = JSON.stringify(model.doGenerateCalls[0].prompt)
+  expect(prompt).toContain('Spanish')
+  expect(prompt).toContain('+counter++')
+  expect(prompt).not.toContain('omitted-tail')
+  expect(prompt).not.toContain('Ahora quiero regenerar')
+  expect(model.doGenerateCalls[0].tools?.length || 0).toBe(0)
+})
+
+it('does not call the provider without staged changes', async () => {
+  const { service, conversation, model } = await setup('unused')
+  await expect(service.chat.generateCommitMessage!(conversation.id, '', 'en')).rejects.toThrow('Stage changes')
+  expect(model.doGenerateCalls).toHaveLength(0)
+})

@@ -307,6 +307,13 @@ export async function createApp(options: {
       .parse(request.query)
     return git.history(await service.workspace(service.conversation(id(request.params))), skip)
   })
+  app.post('/api/conversations/:id/git/commit-message', async (request) => {
+    const { language } = z.object({ language: z.enum(['en', 'es']) }).parse(request.body)
+    const conversation = service.conversation(id(request.params))
+    if (!service.chat.generateCommitMessage) throw new Error('This runtime does not support commit message generation.')
+    const staged = await git.diff(await service.workspace(conversation), 'staged')
+    return { message: await service.chat.generateCommitMessage(conversation.id, staged.stdout, language) }
+  })
   app.get('/api/conversations/:id/diff', async (request) => {
     const { revision, path } = z.object({ revision: z.string().max(64), path: z.string().min(1).max(4000).optional() }).parse(request.query)
     const result = await git.diff(

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync, realpathSync, openSync, closeSync } from 'node:fs'
-import { access, mkdir, realpath, chmod } from 'node:fs/promises'
+import { access, mkdir, realpath, chmod, lstat, unlink, rmdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { resolve, join } from 'node:path'
@@ -70,11 +70,51 @@ async function status(endpoint, command = 'status') {
   if (!endpoint) return null
   try { return await request(endpoint, command) } catch (error) {
     if (error.code === 'ENOENT') return null
-    // Never unlink a socket belonging to a concurrent startup or signal a reused PID.
-    if (error.code === 'ECONNREFUSED') throw new Error(
-      `Workspace control socket is unavailable: ${endpoint}. If a previous daemon crashed, verify it is stopped and remove the stale socket before starting again.`,
-    )
+    // Recovery belongs to the worker, under its startup lock.
+    if (error.code === 'ECONNREFUSED') return null
     throw error
+  }
+}
+
+async function listenControl(control, endpoint) {
+  // Serialize cleanup and bind: a second worker must never unlink the socket
+  // between the first worker's bind and listen. Windows pipes need no cleanup.
+  const lock = `${endpoint}.startup-lock`
+  const unix = process.platform !== 'win32'
+  if (unix) {
+    try { await mkdir(lock, { mode: 0o700 }) } catch (error) {
+      if (error.code === 'EEXIST') throw new Error('Workspace startup is already in progress. Retry after it finishes.')
+      throw error
+    }
+  }
+  try {
+    if (unix) {
+      let before
+      try { before = await lstat(endpoint) } catch (error) {
+        if (error.code !== 'ENOENT') throw error
+      }
+      if (before) {
+        if (!before.isSocket()) throw new Error(`Workspace control path is not a socket: ${endpoint}`)
+        try {
+          await request(endpoint, 'status')
+          throw new Error('Workspace daemon is already running.')
+        } catch (error) {
+          if (error.code !== 'ECONNREFUSED' && error.code !== 'ENOENT') throw error
+          if (error.code === 'ECONNREFUSED') {
+            const current = await lstat(endpoint)
+            if (!current.isSocket() || current.dev !== before.dev || current.ino !== before.ino)
+              throw new Error('Workspace control socket changed during recovery; retry the command.')
+            await unlink(endpoint)
+          }
+        }
+      }
+    }
+    await new Promise((resolveListen, reject) => {
+      control.once('error', reject)
+      control.listen(endpoint, resolveListen)
+    })
+  } finally {
+    if (unix) await rmdir(lock)
   }
 }
 
@@ -101,10 +141,7 @@ async function runDaemon(options, args) {
       } else socket.end(JSON.stringify({ error: 'Daemon is starting or stopping.' }))
     })
   })
-  await new Promise((resolveListen, reject) => {
-    control.once('error', reject)
-    control.listen(endpoint, resolveListen)
-  })
+  await listenControl(control, endpoint)
   try {
     if (process.platform !== 'win32') await chmod(endpoint, 0o600)
     const { startWorkspace } = await import(entrypoint.href)
