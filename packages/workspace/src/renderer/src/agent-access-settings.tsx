@@ -4,18 +4,24 @@ import { api, errorMessage } from './api'
 import { Button } from './components/ui/button'
 import { useConfirmation } from './components/ui/confirmation'
 
+const referenceKey = 'alfred.mcp-reference-conversation.v1'
+
 export function AgentAccessSettings({ conversationId }: { conversationId: string }) {
+  return <ConversationAccess key={conversationId} conversationId={conversationId} />
+}
+
+function ConversationAccess({ conversationId }: { conversationId: string }) {
   const [access, setAccess] = useState<AgentAccess | null>(null)
   const [servers, setServers] = useState('[]')
   const { confirm, dialog } = useConfirmation(conversationId)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [reference, setReference] = useState<string | null>(() => {
+    try { return localStorage.getItem(referenceKey) } catch { return null }
+  })
   useEffect(() => {
     const controller = new AbortController()
-    setAccess(null)
-    setError('')
-    setNotice('')
     void api<AgentAccess>(`/conversations/${conversationId}/agent-access`, undefined, undefined, controller.signal)
       .then((value) => {
         if (controller.signal.aborted) return
@@ -24,10 +30,34 @@ export function AgentAccessSettings({ conversationId }: { conversationId: string
       }).catch((error) => { if (!controller.signal.aborted) setError(errorMessage(error)) })
     return () => controller.abort()
   }, [conversationId])
+  function bookmark(id: string | null) {
+    setError(''); setNotice('')
+    try {
+      if (id) localStorage.setItem(referenceKey, id)
+      else localStorage.removeItem(referenceKey)
+      setReference(id)
+      setNotice(id ? 'Reference updated. Other conversations on this device can reuse the saved MCP list.' : 'Reference removed. Conversation permissions are unchanged.')
+    } catch (error) { setError(errorMessage(error)) }
+  }
+  async function reuse() {
+    if (!reference || saving) return
+    setSaving(true); setError(''); setNotice('')
+    try {
+      const draft = parseMcpServers(JSON.parse(servers))
+      const source = agentAccessSchema.parse(await api(`/conversations/${encodeURIComponent(reference)}/agent-access`))
+      const additions = source.servers.filter((server) => !draft.some((item) => item.id === server.id)).map((server) => ({
+        ...server, permission: server.permission === 'blocked' ? 'blocked' : 'ask',
+        tools: Object.fromEntries(Object.entries(server.tools).filter(([, permission]) => permission === 'blocked')),
+      }))
+      const merged = agentAccessSchema.parse({ servers: [...draft, ...additions] })
+      if (additions.length) setServers(JSON.stringify(merged.servers, null, 2))
+      setNotice(`${additions.length} MCP(s) added to the draft; ${source.servers.length - additions.length} existing ID(s) kept. Review before saving. No connection has been tested.`)
+    } catch (error) { setError(`Could not reuse the reference. Check that the source conversation still exists and the draft is valid: ${errorMessage(error)}`) }
+    finally { setSaving(false) }
+  }
   async function save() {
     if (!access || saving) return
-    setError('')
-    setNotice('')
+    setError(''); setNotice('')
     let next: AgentAccess
     try {
       next = agentAccessSchema.parse({ terminal: access.terminal, servers: parseMcpServers(JSON.parse(servers)) })
@@ -52,6 +82,11 @@ export function AgentAccessSettings({ conversationId }: { conversationId: string
     {!access && !error && <p role="status">Loading access settings…</p>}
     {access && <fieldset disabled={saving}>
       <legend>Authorized capabilities</legend>
+      <h4>Reuse MCP connections</h4>
+      <p>Choose one conversation as your reference on this device. Import reads its latest saved connections into this draft, keeping existing IDs. Terminal access and allow permissions are not copied. Check workspace paths before saving in another worktree.</p>
+      <Button type="button" variant="secondary" disabled={!access.servers.length || reference === conversationId} onClick={() => bookmark(conversationId)}>{reference === conversationId ? 'This conversation is your MCP reference' : reference ? 'Replace MCP reference with this conversation' : 'Use this conversation as MCP reference'}</Button>
+      {reference && reference !== conversationId && <Button type="button" variant="secondary" onClick={() => void reuse()}>Import from MCP reference</Button>}
+      {reference && <Button type="button" variant="ghost" onClick={() => bookmark(null)}>Forget reference</Button>}
       <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, minHeight: 44, paddingBlock: 10 }}>
         <input type="checkbox" checked={access.terminal} aria-describedby={`terminal-note-${conversationId}`} onChange={(event) => setAccess({ ...access, terminal: event.target.checked })} style={{ flex: '0 0 auto', width: 18, height: 18, margin: '1px 0 0', accentColor: 'var(--primary)' }} />
         <span style={{ minWidth: 0 }}>Allow agent terminal</span>
