@@ -47,7 +47,17 @@ export function useWorkspace() {
       setConnected(true)
     })
     events.onerror = () => setConnected(false)
-    return () => events.close()
+    // After offline suspension, do not wait for the browser's SSE retry timer.
+    const reconnect = () => {
+      events.close()
+      setConnected(false)
+      setStreamGeneration(value => value + 1)
+    }
+    window.addEventListener('online', reconnect)
+    return () => {
+      window.removeEventListener('online', reconnect)
+      events.close()
+    }
   }, [authenticated, streamGeneration])
   return { state, authenticated, connected, refresh }
 }

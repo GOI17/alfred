@@ -21,6 +21,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/')
 })
 async function settings(page: Page) {
+  await expect(page.locator('.app-shell')).toBeVisible()
   const opener = page.getByRole('button', { name: 'Open spaces', exact: true })
   if (await opener.isVisible()) await opener.click()
   await page.getByRole('button', { name: 'Settings', exact: true }).click()

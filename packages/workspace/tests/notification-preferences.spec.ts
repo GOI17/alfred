@@ -163,7 +163,7 @@ test('opens Interface settings after a delayed workspace restore', async ({ page
     expect(await page.evaluate(() => !!document.querySelector('.loading-screen'))).toBe(true)
     restore()
     await opening
-    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
+    await expect(page.getByRole('main', { name: 'Settings', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Enable notifications', exact: true })).toBeEnabled()
     expect(requests).toEqual([])
   } finally { restore() }

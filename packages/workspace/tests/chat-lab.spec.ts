@@ -66,11 +66,12 @@ test('stop then new idle message resumes without manual queue intervention', asy
   await completed(page, id, before + 1)
 })
 
- test('reconnects after browser network loss and receives the completed turn', async ({ page, context }) => {
+test('reconnects after browser network loss and receives the completed turn', async ({ page, context }, testInfo) => {
   const initial = await state(page)
   const id = initial.conversations[0].id
   const before = initial.conversations[0].messages.filter((m: { role: string }) => m.role === 'assistant').length
-  await send(page, id, '[slow] Reconnect lab turn')
+  const prompt = `[slow] Reconnect lab turn (${testInfo.project.name})`
+  await send(page, id, prompt)
   await context.setOffline(true)
   try {
     // APIRequestContext is independent of browser offline emulation.
@@ -78,7 +79,12 @@ test('stop then new idle message resumes without manual queue intervention', asy
   } finally {
     await context.setOffline(false)
   }
-  await expect(page.getByText('[slow] Reconnect lab turn', { exact: true }).first()).toBeVisible({ timeout: 15_000 })
+  const conversation = (await state(page)).conversations.find((item: { id: string }) => item.id === id)
+  const reply = conversation.messages.at(-1)
+  expect(reply.role).toBe('assistant')
+  const received = page.locator(`.message-slot[data-message-id="${reply.id}"]`)
+  await received.scrollIntoViewIfNeeded({ timeout: 15_000 })
+  await expect(received).toContainText('Streaming completed.', { timeout: 15_000 })
   await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0, { timeout: 15_000 })
 })
 
