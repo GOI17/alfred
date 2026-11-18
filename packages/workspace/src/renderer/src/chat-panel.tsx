@@ -1,6 +1,6 @@
 import { takeMessageNavigation } from './search-message-navigation'
 import { flushSync } from 'react-dom'
-import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { ArrowUp, Square, Sparkles, X, Mic, Paperclip } from 'lucide-react'
 import type { AgentState, Conversation, PublicState, ProviderId } from '../../shared/contracts'
 import { attachmentMediaType, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_TOTAL_ATTACHMENT_BYTES, type Attachment } from '../../shared/attachments'
@@ -24,7 +24,8 @@ import './assets/attachments.css'
 import './assets/message-queue.css'
 import './assets/message-phases.css'
 
-const Markdown = lazy(() => import('./message-markdown'))
+// Message rendering must remain available if the connection drops after startup.
+import Markdown from './message-markdown'
 type Props = { conversation: Conversation; state: PublicState; agent?: AgentState; settings: () => void }
 export function ChatPanel(props: Props) { return <ConversationChat key={props.conversation.id} {...props} /> }
 // Stable message references from incremental state updates skip historic Markdown work.
@@ -42,13 +43,13 @@ const ChatMessage = memo(function ChatMessage({ message, conversationId, active 
               {message.role === 'assistant' && message.segments?.length ? <div className="message-phases">
                 {message.segments.some((segment) => segment.kind === 'activity') && <details className="message-activity" open={active ? true : undefined}>
                   <summary>{t('Activity', 'Actividad')}</summary>
-                  {message.segments.filter((segment) => segment.kind === 'activity').map((segment, index) => <div className="markdown message-phase" key={index}><Suspense fallback={<p>{segment.text}</p>}><Markdown conversationId={conversationId}>{segment.text}</Markdown></Suspense></div>)}
+                  {message.segments.filter((segment) => segment.kind === 'activity').map((segment, index) => <div className="markdown message-phase" key={index}><Markdown conversationId={conversationId}>{segment.text}</Markdown></div>)}
                 </details>}
                 {message.segments.filter((segment) => segment.kind !== 'activity').map((segment, index) => <section className="message-result" key={index}>
                   <h3>{segment.kind === 'result' ? t('Result', 'Resultado') : active ? t('Response in progress', 'Respuesta en curso') : t('Partial response', 'Respuesta parcial')}</h3>
-                  <div className="markdown"><Suspense fallback={<p>{segment.text}</p>}><Markdown conversationId={conversationId}>{segment.text}</Markdown></Suspense></div>
+                  <div className="markdown"><Markdown conversationId={conversationId}>{segment.text}</Markdown></div>
                 </section>)}
-              </div> : <div className="markdown"><Suspense fallback={<p>{message.text}</p>}><Markdown conversationId={conversationId}>{message.text}</Markdown></Suspense></div>}
+              </div> : <div className="markdown"><Markdown conversationId={conversationId}>{message.text}</Markdown></div>}
               {message.notes.length > 0 && <details className="tool-notes"><summary>{t('Tool log and notices', 'Herramientas y avisos')} · {message.notes.length}</summary>{message.notes.map((note, index) => <p key={index}>{note}</p>)}</details>}
             </div>
           </article>

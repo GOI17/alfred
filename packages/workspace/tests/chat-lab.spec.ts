@@ -68,14 +68,22 @@ test('stop then new idle message resumes without manual queue intervention', asy
 
 test('reconnects after browser network loss and receives the completed turn', async ({ page, context }, testInfo) => {
   const initial = await state(page)
-  const id = initial.conversations[0].id
-  const before = initial.conversations[0].messages.filter((m: { role: string }) => m.role === 'assistant').length
+  // Do not depend on which chat earlier desktop or phone tests left selected.
+  const project = initial.projects[0]
+  const created = await page.request.post('/api/conversations', {
+    data: { projectId: project.id, workspacePath: project.path },
+  })
+  expect(created.ok()).toBe(true)
+  const { id } = await created.json()
+  await page.goto(`/?conversation=${encodeURIComponent(id)}`)
   const prompt = `[slow] Reconnect lab turn (${testInfo.project.name})`
-  await send(page, id, prompt)
+  await page.getByLabel('Message for Alfred').fill(prompt)
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Conversation history' }).getByText(prompt, { exact: true })).toBeVisible()
   await context.setOffline(true)
   try {
     // APIRequestContext is independent of browser offline emulation.
-    await completed(page, id, before + 1)
+    await completed(page, id, 1)
   } finally {
     await context.setOffline(false)
   }
