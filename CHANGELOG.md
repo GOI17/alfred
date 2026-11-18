@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.1](https://github.com/GOI17/alfred/compare/v1.7.0...v1.7.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* **workspace:** deduplicate React in the distributed renderer ([83c4a33](https://github.com/GOI17/alfred/commit/83c4a33958b34a8c33d1aa26276afd529f904406))
+* **workspace:** keep chat messages renderable across network loss ([c979c9b](https://github.com/GOI17/alfred/commit/c979c9bda0720fdd1c14367d042a8d0829009087))
+
 ## [1.7.0](https://github.com/GOI17/alfred/compare/v1.6.0...v1.7.0) (2026-11-18)
 
 
