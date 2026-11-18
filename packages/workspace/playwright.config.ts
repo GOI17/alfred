@@ -8,6 +8,7 @@ export default defineConfig({
   testIgnore: [
     'chat-lab',
     'ui-primitives',
+    'workspace-search', // Vite fixture served by playwright.ui.config.ts
     'chat-controls',
     'chat-runtime',
     'ui-spaces',

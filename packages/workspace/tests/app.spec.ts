@@ -89,7 +89,7 @@ test('project, native chat, panels, worktrees and mobile navigation', async ({
     await page.getByRole('button', { name: 'Explore this project' }).click()
     await expect(page.getByLabel('Message for Alfred')).toHaveValue('Explore this project')
     await page.getByRole('button', { name: 'Send message', exact: true }).click()
-    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible()
+    await expect(page.getByRole('main', { name: 'Settings', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Continue with ChatGPT' })).toBeVisible()
     await page.getByRole('button', { name: 'Back to workspace', exact: true }).click()
     if (!mobile) {

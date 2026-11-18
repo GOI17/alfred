@@ -63,5 +63,6 @@ jobs:
           pnpm --filter @alfred-labs/workspace test
           pnpm --filter @alfred-labs/workspace test:package
           pnpm --filter @alfred-labs/workspace exec playwright test
+          pnpm --filter @alfred-labs/workspace test:ui workspace-search.spec.ts
           pnpm --filter @alfred-labs/workspace test:chat
           test ! -e "$ALFRED_TEST_NETWORK_DENIED"
