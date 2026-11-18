@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.7.0](https://github.com/GOI17/alfred/compare/v1.6.0...v1.7.0) (2026-11-18)
+
+
+### Features
+
+* **workspace:** add contextual workspace search ([2069acf](https://github.com/GOI17/alfred/commit/2069acf51a37d3f83710e42ea91f9ff05efc5981))
+* **workspace:** add dictation and spoken conversations ([24c98d6](https://github.com/GOI17/alfred/commit/24c98d6dc2454c542489d2ff4821464b5e303375))
+* **workspace:** generate commit messages from staged changes with AI ([2ac0eae](https://github.com/GOI17/alfred/commit/2ac0eae2e26c05702f2b73a1080c7b598a0af789))
+* **workspace:** improve accessibility and safe chat interactions ([a4a631d](https://github.com/GOI17/alfred/commit/a4a631d1b296977d146db6d70cc574f19e41f25d))
+* **workspace:** migrate shared UI to Atlassian Design System ([4af47d9](https://github.com/GOI17/alfred/commit/4af47d98427262a81966dcc338a646409482eebe))
+* **workspace:** reuse MCP settings from a reference conversation ([a04a37c](https://github.com/GOI17/alfred/commit/a04a37c5ef6f5482cae1506a09562d026a0dac61))
+
+
+### Bug Fixes
+
+* **packaging:** keep renderer-only dependencies out of native runtime closure ([28b925b](https://github.com/GOI17/alfred/commit/28b925b677b5bfcc190ae20cc5e5237032d9a013))
+* **packaging:** lock dictation and Atlaskit inputs for Workspace builds ([85e17b2](https://github.com/GOI17/alfred/commit/85e17b22233d0794cd02c1c11fc1c5649b2ebe46))
+* **workspace:** handle extracted Atlaskit CSS in Node markup tests ([8e795a1](https://github.com/GOI17/alfred/commit/8e795a1aaca37295e7cf42822810303cbb73a7ff))
+* **workspace:** polish ADS layout and terminal interactions ([263d25a](https://github.com/GOI17/alfred/commit/263d25a58bd8d070d066cc5b6b03f5be3df82854))
+* **workspace:** reconnect on network restoration and synchronize settings tests ([095eb4e](https://github.com/GOI17/alfred/commit/095eb4e13b6117f268b251d86da02ab9e8f536e5))
+* **workspace:** recover stale daemon sockets on startup ([cbe4e64](https://github.com/GOI17/alfred/commit/cbe4e64b3c7abd92357b99f4c0f7db4915e98860))
+* **workspace:** refine sidebar behavior, composer focus and Git actions ([bece49d](https://github.com/GOI17/alfred/commit/bece49dd50644114ba0954c329ea02ce4a16413e))
+
 ## [1.6.0](https://github.com/GOI17/alfred/compare/v1.5.0...v1.6.0) (2026-11-11)
 
 
