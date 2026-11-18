@@ -156,6 +156,8 @@ test('composer controls share geometry in both themes and narrow panes', async (
 })
 
 test('chat utilities stay in a compact heading instead of a vertical action column', async ({ page }, testInfo) => {
+  // Measure the resting layout, not the panel's translateX entrance animation.
+  await page.emulateMedia({ reducedMotion: 'reduce' })
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => document.documentElement.dataset.colorMode = value, theme)
     const action = page.getByRole('button', { name: 'Open in separate window', exact: true, includeHidden: true })
