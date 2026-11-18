@@ -1,3 +1,4 @@
+import { requestMessageNavigation } from '../src/renderer/src/search-message-navigation'
 import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ChatPanel } from '../src/renderer/src/chat-panel'
@@ -19,7 +20,7 @@ function Fixture() {
   const [agent, setAgent] = useState<AgentState>({ status: 'idle' })
   return <main style={{ height: '100dvh', display: 'flex', flexDirection: 'column' }}>
     <nav aria-label="Simulación">{(['idle', 'running', 'waiting', 'error'] as const).map(status => <button key={status} onClick={() => setAgent({ status, detail: status === 'error' ? 'Fallo simulado' : undefined })}>{status}</button>)}</nav>
-    <nav aria-label="Streaming"><button onClick={() => setMessages(Array.from({ length: 8 }, (_, index) => ({ id: `stream-${index}`, role: 'assistant' as const, text: `Mensaje ${index}\n\n` + 'Contenido de lectura. '.repeat(100), notes: [], createdAt: '' })))}>Cargar historial</button><button onClick={() => setMessages(current => current.map((message, index) => index === current.length - 1 ? { ...message, text: message.text + '\n\nFragmento nuevo. '.repeat(40) } : message))}>Fragmento</button></nav>
+    <button onClick={() => requestMessageNavigation(conversation.id, "stream-0")}>Buscar primer mensaje</button><nav aria-label="Streaming"><button onClick={() => setMessages(Array.from({ length: 8 }, (_, index) => ({ id: `stream-${index}`, role: 'assistant' as const, text: `Mensaje ${index}\n\n` + 'Contenido de lectura. '.repeat(100), notes: [], createdAt: '' })))}>Cargar historial</button><button onClick={() => setMessages(current => current.map((message, index) => index === current.length - 1 ? { ...message, text: message.text + '\n\nFragmento nuevo. '.repeat(40) } : message))}>Fragmento</button></nav>
     <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}><ChatPanel conversation={{ ...conversation, messages }} state={state} agent={agent} settings={() => {}} /></div>
   </main>
 }

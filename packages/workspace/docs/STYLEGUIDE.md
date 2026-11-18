@@ -201,3 +201,14 @@ La compilación frontend previa pasa con una advertencia de chunk mayor de 500 k
 **Validación de cierre:** 44 pruebas de UI aprobadas; 41 pruebas de integración aprobadas y una omitida (modo flotante en teléfono) en las suites de espacios, harnesses, notificaciones y worktrees. Compilación frontend correcta, con advertencia de chunk principal superior a 500 kB. Estas pruebas usan entornos locales de laboratorio, no proveedores reales.
 
 **Pendientes de verificación humana:** revisión visual exhaustiva de todas las pantallas, lector de pantalla, teclado virtual físico y zoom real al 400 %. No se declara certificación WCAG ni cierre de esas verificaciones. La sección anterior de pendientes describe el estado de la entrega inicial; diálogos, selectores y menú compartidos quedan sustituidos por esta entrega.
+
+
+### Búsqueda contextual del espacio
+
+- El botón de búsqueda, ⌘P y Ctrl+P abren el mismo buscador. La paleta de comandos ofrece entradas filtradas por conversaciones, mensajes, worktrees y archivos.
+- Los resultados se agrupan por tipo y muestran su espacio y ruta; los mensajes incluyen la conversación y un fragmento. Conversaciones y mensajes se consultan en el estado cargado de la aplicación; worktrees se consultan mediante las API existentes. Los archivos conservan el alcance del chat activo.
+- Coincidencias de títulos, textos y ramas/rutas sin distinguir mayúsculas ni acentos. Hasta 50 resultados por grupo; una consulta vacía no expone todo el historial de mensajes.
+- Combobox con lista agrupada, navegación con flechas, selección con Enter y cierre con Escape. Seleccionar un mensaje revela el contenido diferido, detiene el seguimiento automático y centra y enfoca el mensaje sin borrar el borrador.
+- Las peticiones se cancelan al cerrar o cambiar consulta; un fallo parcial de worktrees no suprime los resultados locales. No se envían consultas a proveedores ni se incorpora un índice persistente.
+- Validación: 6 pruebas unitarias y 10 ejecuciones UI nuevas aprobadas en escritorio y móvil, incluyendo la aplicación completa con API interceptada. TypeScript y lint de los archivos de implementación y pruebas pasan. Suite UI completa: 66 aprobadas y 8 fallidas por selectores ambiguos de primitivas (status y ads-select); no se declara validación completa.
+- Límites: no busca adjuntos ni contenido fuera del estado cargado; no hay paginación o índice de servidor. Pendientes lector de pantalla y prueba integral con datos reales. Los resultados de archivos siguen las reglas de búsqueda del servidor existente.

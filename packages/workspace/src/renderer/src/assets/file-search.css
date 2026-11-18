@@ -2,3 +2,7 @@
 .file-search-results { max-height: min(50vh, 420px); overflow: auto; margin-top: var(--ds-space-100, 8px); }
 .file-search-result { padding: var(--ds-space-100, 8px) 10px; font-family: monospace; font-size: 12px; overflow-wrap: anywhere; cursor: pointer; border-radius: 4px; }
 .file-search-result:hover, .file-search-result[aria-selected='true'] { background: var(--accent); }
+
+.workspace-search-filters { display: flex; flex-wrap: wrap; gap: var(--ds-space-050, 4px); margin-bottom: var(--ds-space-100, 8px); }
+.workspace-search-heading { padding: var(--ds-space-100, 8px); font-weight: 600; }
+.file-search-result small { display: block; overflow-wrap: anywhere; }

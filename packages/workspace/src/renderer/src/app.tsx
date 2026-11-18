@@ -1,3 +1,5 @@
+import type { SearchKind, SearchResult } from './workspace-search'
+import { requestMessageNavigation } from './search-message-navigation'
 import { layoutKey, stringList, usePersistentLayout } from './use-persistent-layout'
 import CommandPalette, { type WorkspaceCommand } from './command-palette'
 import { workspaceCommands } from './command-registry'
@@ -5,7 +7,7 @@ import { ChatHeaderTarget } from './chat-deck'
 import { ActivityCenter } from './activity-center'
 import { NotificationPreferences } from './notification-preferences'
 import { lazy, Suspense, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { Files, RefreshCw, ArrowUpRight, FolderPlus, GitBranch, Globe, Menu, MessageSquare, Plus, Smartphone, TerminalSquare, Columns2, Sparkles, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Search, Files, RefreshCw, ArrowUpRight, FolderPlus, GitBranch, Globe, Menu, MessageSquare, Plus, Smartphone, TerminalSquare, Columns2, Sparkles, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import type { Conversation, Layout, Worktree } from '../../shared/contracts'
 import { panes } from '../../shared/contracts'
 import { api, errorMessage } from './api'
@@ -74,6 +76,7 @@ export function App() {
     setActivePane(panes(item.layout).find((pane) => pane.kind === 'chat')?.id || ''); setMobileOpen(false)
   }
   const [paletteCommands, setPaletteCommands] = useState<WorkspaceCommand[]>()
+  const [searchFilter, setSearchFilter] = useState<SearchKind | 'all'>('all')
   const [fileSearchConversation, setFileSearchConversation] = useState('')
   const [fileRequest, setFileRequest] = useState<{ conversationId: string; path: string }>()
   const [filesConversation, setFilesConversation] = useState('')
@@ -257,21 +260,34 @@ export function App() {
   }, [conversation, activePane, projectId, workspacePath, busy, tools, mobile])
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'p' || !conversation || !authenticated || document.querySelector('[role="dialog"]')) return
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'p' || event.isComposing || event.repeat || !authenticated || document.querySelector('[role="dialog"]')) return
       event.preventDefault()
       event.stopPropagation()
-      setFileSearchConversation(conversation.id)
+      setSearchFilter('all'); setFileSearchConversation('workspace')
     }
     window.addEventListener('keydown', handler, true)
     return () => window.removeEventListener('keydown', handler, true)
   }, [conversation?.id, authenticated])
+  function selectSearchResult(result: SearchResult) {
+    setFileSearchConversation('')
+    if (result.kind === 'files' && result.conversationId && result.path) { openWorkspaceFile(result.conversationId, result.path); return }
+    if (result.kind === 'worktrees' && result.path) {
+      setProjectId(result.projectId); setWorkspacePath(result.path)
+      setConversationId(state?.conversations.find(item => item.projectId === result.projectId && item.workspacePath === result.path)?.id || '')
+      setMobileOpen(false); return
+    }
+    const item = state?.conversations.find(item => item.id === result.conversationId)
+    if (!item) { setError(t('This conversation is no longer available.', 'Esta conversación ya no está disponible.')); return }
+    if (result.messageId) requestMessageNavigation(item.id, result.messageId)
+    setFloatingIds([]); openConversation(item)
+  }
   function openCommandPalette() {
     const commands: WorkspaceCommand[] = [
       { id: 'new-chat', label: t('Conversation: New conversation', 'Conversación: Nueva conversación'), disabled: !project || busy || !connected, run: () => { void newConversation() } },
       { id: 'add-space', label: t('Space: Add folder', 'Espacio: Agregar carpeta'), disabled: selecting, run: addProject },
       { id: 'settings', label: t('Workspace: Settings', 'Espacio: Configuración'), run: () => setDialog('settings') },
       { id: 'sidebar', label: t('View: Toggle sidebar', 'Vista: Mostrar u ocultar barra lateral'), run: () => mobile ? setMobileOpen(value => !value) : setSidebarCollapsed(value => !value) },
-      { id: 'search-files', label: t('Files: Open file… (⌘P / Ctrl+P)', 'Archivos: Abrir archivo… (⌘P / Ctrl+P)'), disabled: !conversation, run: () => { if (conversation) setFileSearchConversation(conversation.id) } },
+      ...(['all', 'files', 'conversations', 'messages', 'worktrees'] as const).map(kind => ({ id: `search-${kind}`, label: `${t('Search', 'Buscar')}: ${{ all: t('All (⌘P / Ctrl+P)', 'Todo (⌘P / Ctrl+P)'), files: t('Files', 'Archivos'), conversations: t('Conversations', 'Conversaciones'), messages: t('Messages', 'Mensajes'), worktrees: 'Worktrees' }[kind]}`, run: () => { setSearchFilter(kind); setFileSearchConversation('workspace') } })),
       { id: 'files', label: t('View: Files', 'Vista: Archivos'), disabled: !conversation, run: () => { if (conversation) { setFilesConversation(conversation.id); showTool('browser', false); showTool('git', false) } } },
       ...(['terminal', 'browser', 'git'] as const).map(kind => ({ id: kind, label: `${t('View', 'Vista')}: ${kind}`, disabled: !conversation || busy || (mobile && kind !== 'git') || (kind === 'git' && project?.kind !== 'git'), run: () => toggleTool(kind) })),
       { id: 'new-terminal', label: t('Terminal: New terminal', 'Terminal: Nueva terminal'), disabled: !conversation || mobile || busy || !!conversation && panes(conversation.layout).length >= 8, run: () => addTool('terminal') },
@@ -337,6 +353,7 @@ export function App() {
         </div>
         <div className="workspace-chat-actions" ref={setChatHeaderTarget} />
         <div className="panel-tools">
+          <Button variant="ghost" size="icon" aria-label={t('Search workspace', 'Buscar en el espacio')} title={t('Search (⌘P / Ctrl+P)', 'Buscar (⌘P / Ctrl+P)')} onClick={() => { setSearchFilter('all'); setFileSearchConversation('workspace') }}><Search size={18} /></Button>
           <ActivityCenter state={state} connected={connected} select={openConversation} />
           {toolButton('terminal')}
         </div>
@@ -371,10 +388,7 @@ export function App() {
       </div>
     </main>
     {paletteCommands && <CommandPalette commands={paletteCommands} close={() => setPaletteCommands(undefined)} />}
-    {conversation && fileSearchConversation === conversation.id && <Suspense fallback={null}><FileSearch key={conversation.id} conversationId={conversation.id} close={() => setFileSearchConversation('')} select={path => {
-      openWorkspaceFile(conversation.id, path)
-      setFileSearchConversation('')
-    }} /></Suspense>}
+    {fileSearchConversation && <Suspense fallback={null}><FileSearch conversationId={conversation?.id} projects={state.projects} conversations={state.conversations} initialFilter={searchFilter} close={() => setFileSearchConversation('')} select={selectSearchResult} /></Suspense>}
     {dialog === 'worktree' && project && <Suspense fallback={null}><WorktreeDialog project={project} onClose={() => setDialog(null)} onAdded={(path) => { setTreeVersion((value) => value + 1); setWorkspacePath(path); void newConversation(path) }} /></Suspense>}
     {dialog === 'settings' && <Suspense fallback={null}><SettingsDialog state={state} onClose={() => setDialog(null)} /></Suspense>}
     {canConnectPhone && dialog === 'phone' && <Suspense fallback={null}><PhoneDialog onClose={() => setDialog(null)} /></Suspense>}

@@ -1,3 +1,5 @@
+import { takeMessageNavigation } from './search-message-navigation'
+import { flushSync } from 'react-dom'
 import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { ArrowUp, Square, Sparkles, X, Paperclip } from 'lucide-react'
 import type { AgentState, Conversation, PublicState, ProviderId } from '../../shared/contracts'
@@ -93,6 +95,28 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
   const follow = useChatReading(conversation.id, scroller, messageContent)
   const [awayFromLatest, setAwayFromLatest] = useState(!follow.current)
   const stopFollowing = useCallback(() => { follow.current = false; setAwayFromLatest(true) }, [follow])
+  useEffect(() => {
+    let frame = 0
+    const navigate = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const messageId = takeMessageNavigation(conversation.id)
+        const viewport = scroller.current
+        if (!messageId || !viewport) return
+        const target = Array.from(viewport.querySelectorAll<HTMLElement>('[data-message-id]')).find(node => node.dataset.messageId === messageId)
+        if (!target) return
+        viewport.dispatchEvent(new Event('chat-follow-latest'))
+        stopFollowing()
+        flushSync(() => target.dispatchEvent(new Event('reveal-message')))
+        target.tabIndex = -1
+        target.focus({ preventScroll: true })
+        target.scrollIntoView({ block: 'center', behavior: 'instant' })
+      })
+    }
+    navigate()
+    window.addEventListener('workspace-message-navigation', navigate)
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('workspace-message-navigation', navigate) }
+  }, [conversation.id, stopFollowing])
   const busy = agent?.status === 'running' || agent?.status === 'waiting'
   const queue = conversation.queue || emptyQueue
   const history = useMemo(() => [...conversation.messages.filter(message => message.role === 'user'), ...queue]

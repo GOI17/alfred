@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: ['ui-primitives.spec.ts', 'chat-controls.spec.ts', 'chat-runtime.spec.ts'],
+  testMatch: ['ui-primitives.spec.ts', 'chat-controls.spec.ts', 'chat-runtime.spec.ts', 'workspace-search.spec.ts'],
   workers: 1,
   use: { baseURL: 'http://127.0.0.1:4315', headless: true, trace: 'retain-on-failure' },
   projects: [

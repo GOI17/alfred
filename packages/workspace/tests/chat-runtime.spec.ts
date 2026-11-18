@@ -184,3 +184,15 @@ test('composer reserves aligned actions as its panel narrows', async ({ page }) 
     }
   }
 })
+
+
+test('search navigation reveals and focuses a virtualized message without losing draft', async ({ page }) => {
+  await page.getByRole('button', { name: 'Cargar historial' }).click()
+  const input = page.getByRole('textbox', { name: 'Mensaje para Alfred' })
+  await input.fill('Borrador antes de buscar')
+  await page.getByRole('button', { name: 'Buscar primer mensaje' }).click()
+  const message = page.locator('[data-message-id="stream-0"]')
+  await expect(message).toBeFocused()
+  await expect(message).toContainText('Mensaje 0')
+  await expect(input).toHaveValue('Borrador antes de buscar')
+})
