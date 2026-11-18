@@ -36,6 +36,9 @@ function whisperRuntime(): Plugin {
 export default defineConfig({
   root: fileURLToPath(new URL('./src/renderer', import.meta.url)),
   cacheDir: fileURLToPath(new URL('./.cache/vite', import.meta.url)),
+  // The isolated npm build also installs React DOM 18 under Atlaskit.
+  // Resolve every renderer import (including subpaths) to Workspace's React pair.
+  resolve: { dedupe: ['react', 'react-dom'] },
   worker: { format: 'es' },
   plugins: [react(), whisperRuntime()],
   server: {
