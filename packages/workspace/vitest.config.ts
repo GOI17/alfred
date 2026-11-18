@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   cacheDir: '.cache/vitest',
   test: {
+    setupFiles: ['./tests/setup-compiled-css.cjs'],
     include: ['tests/**/*.test.{ts,tsx}'],
     testTimeout: 30_000,
     hookTimeout: 30_000,
