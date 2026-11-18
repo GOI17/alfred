@@ -17,7 +17,7 @@ export function GitPanel({ conversationId, active = true }: { conversationId: st
   return <RepositoryPanel key={conversationId} conversationId={conversationId} active={active} />
 }
 function RepositoryPanel({ conversationId, active }: { conversationId: string; active: boolean }) {
-  const { t } = useUI()
+  const { t, language } = useUI()
   const { confirm, prompt, dialog } = useGitDialog()
   const [conflictPath, setConflictPath] = useState('')
   const [history, setHistory] = useState<GitHistory>()
@@ -40,6 +40,20 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
   const [pullStrategy, setPullStrategy] = useState('ff-only')
   const endpoint = `/conversations/${conversationId}`
   const { diff, diffError } = useGitDiff(endpoint, revision, refresh, active && !busy, filePath)
+  async function generateMessage() {
+    if (actionLock.current || !await confirm(t(
+      'Send the staged diff (up to 24,000 characters) to the last AI provider used in this conversation? The suggestion replaces the draft but does not create a commit.',
+      '¿Enviar el diff preparado (hasta 24.000 caracteres) al último proveedor de IA usado en esta conversación? La sugerencia sustituye el borrador, pero no crea un commit.',
+    )) || actionLock.current) return
+    actionLock.current = true
+    setBusy('generate-message')
+    setError('')
+    try {
+      const { message } = await api<{ message: string }>(`${endpoint}/git/commit-message`, { language })
+      setCommitMessage(message)
+    } catch (cause) { setError(errorMessage(cause)) }
+    finally { actionLock.current = false; setBusy('') }
+  }
   async function act(body: Record<string, string>) {
     if (actionLock.current || loading) return
     actionLock.current = true
@@ -411,6 +425,11 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
                   <span>
                     {t(`${staged.length} staged files`, `${staged.length} archivos preparados`)}
                   </span>
+                  <Button size="small" type="button" variant="secondary"
+                    disabled={locked || !staged.length || !!details?.conflicts.length}
+                    onClick={() => void generateMessage()}>
+                    {busy === 'generate-message' ? t('Generating…', 'Generando…') : t('Generate with AI…', 'Generar con IA…')}
+                  </Button>
                   <Button size="small" type="button" variant="secondary"
                     disabled={locked || !details?.head || !commitMessage.trim() || !!details?.conflicts.length || (!!details?.operation && details.operation !== 'rebase')}
                     onClick={async () => {
