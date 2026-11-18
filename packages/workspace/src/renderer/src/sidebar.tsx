@@ -132,9 +132,11 @@ export function Sidebar({ state, project, conversation, workspacePath, connected
         </nav>
         <button className="space-icon space-add" onClick={addProject} aria-label={t('Add space', 'Agregar espacio')} title={t('Add space', 'Agregar espacio')}><Plus size={22} /></button>
       </div>
-      {desktopToggle}
       </div>
     </aside>
-    <SidebarResizer />
+    <div className="sidebar-edge">
+      <SidebarResizer />
+      {desktopToggle}
+    </div>
   </>
 }

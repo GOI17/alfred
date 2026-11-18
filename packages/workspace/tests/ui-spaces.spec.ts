@@ -203,3 +203,45 @@ test('chat utilities stay in a compact heading instead of a vertical action colu
   await expect(page.locator('[data-chat-column="ui-chat-0"]')).toBeVisible()
   await expect(page.locator('.conversation-title')).toBeVisible()
 })
+
+
+test('hide sidebar closes immediately and transfers focus without an outside click', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'phone', 'Desktop hover sidebar only')
+  const sidebar = page.locator('#workspace-sidebar > .sidebar')
+  const opener = page.locator('.workspace-header .desktop-sidebar-toggle button')
+  for (const keyboard of [false, true]) {
+    const hide = page.locator('.sidebar-edge').getByRole('button', { name: 'Hide sidebar', exact: true })
+    if (keyboard) {
+      await hide.focus()
+      await page.keyboard.press('Enter')
+    } else {
+      const resizer = page.getByRole('separator', { name: 'Resize sidebar', exact: true })
+      await page.mouse.move(600, 100)
+      await expect(hide.locator('..')).toHaveCSS('opacity', '0')
+      const edge = await resizer.boundingBox()
+      expect(edge).not.toBeNull()
+      await page.mouse.move(edge!.x + edge!.width / 2, edge!.y + 100)
+      await expect(hide.locator('..')).toHaveCSS('opacity', '1')
+      const button = await hide.boundingBox()
+      expect(button).not.toBeNull()
+      expect(Math.abs(button!.y + button!.height / 2 - (edge!.y + edge!.height / 2))).toBeLessThan(1)
+      expect(Math.abs(button!.x + button!.width / 2 - (edge!.x + edge!.width / 2))).toBeLessThan(1)
+      const width = await resizer.getAttribute('aria-valuenow')
+      await hide.click()
+      await expect(page.locator('.sidebar-resizer')).toHaveAttribute('aria-valuenow', width!)
+    }
+    // Keep the pointer at the click position: no outside click or mouse move.
+    await expect(sidebar).toBeHidden()
+    await expect(opener).toBeFocused()
+    await expect(opener).toHaveAttribute('aria-expanded', 'false')
+    await page.mouse.move(600, 100)
+    const edge = await page.locator('#workspace-sidebar').boundingBox()
+    expect(edge).not.toBeNull()
+    await page.mouse.move(edge!.x + 2, edge!.y + 100)
+    await expect(sidebar).toBeVisible()
+    await page.mouse.move(600, 100)
+    await expect(sidebar).toBeHidden()
+    await opener.press('Enter')
+    await expect(sidebar).toBeVisible()
+  }
+})

@@ -96,9 +96,6 @@
   border-radius: 14px;
 }
 
-.chat-panel .composer:focus-within {
-  border-color: var(--focus-ring);
-}
 
 .chat-panel .composer .textarea {
   display: block;
@@ -175,8 +172,8 @@
    extends over the workspace, so previewing never resizes the chat. Keep the
    preview open while keyboard focus is inside it. */
 @media (min-width: 701px) and (hover: hover) and (pointer: fine) {
-  .app-shell[data-sidebar-collapsed='true'] .workspace-sidebar-container:hover > .sidebar,
-  .app-shell[data-sidebar-collapsed='true'] .workspace-sidebar-container:focus-within > .sidebar {
+  .app-shell[data-sidebar-collapsed='true'] .workspace-sidebar-container:not([data-preview-suppressed='true']):hover > .sidebar,
+  .app-shell[data-sidebar-collapsed='true'] .workspace-sidebar-container:not([data-preview-suppressed='true']):focus-within > .sidebar {
     transform: translateX(0);
     visibility: visible;
     box-shadow: 12px 0 32px var(--overlay);
@@ -254,9 +251,9 @@
   .composer-footer .attachment-controls > [data-control="context-control"]:last-child > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
-.sidebar-resizer { display: none; }
+.sidebar-edge, .sidebar-resizer { display: none; }
 @media (min-width: 701px) {
-  .app-shell[data-sidebar-collapsed='false'] .sidebar-resizer {
+  .app-shell[data-sidebar-collapsed='false'] .sidebar-edge {
     display: block;
     position: absolute;
     inset: 0 -4px 0 auto;
@@ -265,6 +262,56 @@
     cursor: col-resize;
     touch-action: none;
     user-select: none;
+  }
+  .sidebar-edge > .sidebar-resizer {
+    display: block;
+    position: absolute;
+    inset: 0;
+  }
+  .sidebar-edge > .desktop-sidebar-toggle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+  }
+  .sidebar-edge:hover > .desktop-sidebar-toggle,
+  .sidebar-edge:focus-within > .desktop-sidebar-toggle {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .sidebar-edge > .desktop-sidebar-toggle > button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    position: relative;
+    isolation: isolate;
+    background: transparent;
+    border: 0;
+    border-radius: var(--ds-radius-full, 9999px);
+  }
+  /* Keep the hit target generous without making the resize handle bulky. */
+  .sidebar-edge > .desktop-sidebar-toggle > button::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 24px;
+    height: 36px;
+    box-sizing: border-box;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--ds-radius-full, 9999px);
+    pointer-events: none;
+    z-index: -1;
+  }
+  .sidebar-edge > .desktop-sidebar-toggle > button svg {
+    width: 14px;
+    height: 14px;
   }
   .sidebar-resizer::after {
     content: '';
@@ -427,6 +474,6 @@
   .workspace-right-sidebar [data-alfred-button="icon"][aria-pressed='true']::before { left: -2px; }
 }
 
-/* Keep the desktop sidebar action beside, not inside, the scrolling dock. */
+/* Keep the space dock flexible within the sidebar. */
 .space-dock-row { display: flex; align-items: center; gap: var(--ds-space-050, 4px); flex-shrink: 0; min-width: 0; margin: var(--ds-space-150, 12px) 0 var(--ds-space-100, 8px); }
 .space-dock-row > .space-dock { flex: 1; min-width: 0; margin: 0; }

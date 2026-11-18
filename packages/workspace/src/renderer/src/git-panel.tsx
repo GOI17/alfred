@@ -1,7 +1,7 @@
 import { Select } from './components/ui/input'
 import { useGitDialog } from './git-dialog'
 import { useEffect, useRef, useState } from 'react'
-import { GitCommitHorizontal, GitBranch, RefreshCw, Check, FileText, Download, Upload, Search } from 'lucide-react'
+import { Sparkles, Pencil, GitCommitHorizontal, GitBranch, RefreshCw, Check, FileText, Download, Upload, Search } from 'lucide-react'
 import type { GitHistory } from '../../shared/contracts'
 import { api, errorMessage } from './api'
 import { liveRefresh } from './live-refresh'
@@ -41,6 +41,9 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
   const [pullStrategy, setPullStrategy] = useState('ff-only')
   const endpoint = `/conversations/${conversationId}`
   const { diff, diffError } = useGitDiff(endpoint, revision, refresh, active && !busy, filePath)
+  const generateLabel = busy === 'generate-message' ? t('Generating…', 'Generando…') : t('Generate with AI…', 'Generar con IA…')
+  const amendLabel = t('Amend…', 'Modificar commit…')
+  const commitLabel = t('Commit', 'Crear commit')
   async function generateMessage() {
     if (actionLock.current || !await confirm(t(
       'Send the staged diff (up to 24,000 characters) to the last AI provider used in this conversation? The suggestion replaces the draft but does not create a commit.',
@@ -422,24 +425,26 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
                     onChange={(event) => setCommitMessage(event.target.value)}
                   />
                 </label>
-                <div>
-                  <span>
+                <div className="git-commit-actions">
+                  <span title={t(`${staged.length} staged files`, `${staged.length} archivos preparados`)}>
                     {t(`${staged.length} staged files`, `${staged.length} archivos preparados`)}
                   </span>
                   <Button size="small" type="button" variant="secondary"
+                    aria-label={generateLabel} title={generateLabel}
                     disabled={locked || !staged.length || !!details?.conflicts.length}
                     onClick={() => void generateMessage()}>
-                    {busy === 'generate-message' ? t('Generating…', 'Generando…') : t('Generate with AI…', 'Generar con IA…')}
+                    <Sparkles size={16} aria-hidden="true" /><span className="git-action-label">{generateLabel}</span>
                   </Button>
                   <Button size="small" type="button" variant="secondary"
+                    aria-label={amendLabel} title={amendLabel}
                     disabled={locked || !details?.head || !commitMessage.trim() || !!details?.conflicts.length || (!!details?.operation && details.operation !== 'rebase')}
                     onClick={async () => {
                       if (await confirm(t('Replace the current commit with the staged content and this message? Published hashes change. A recovery branch is created.', '¿Sustituir el commit actual con el contenido preparado y este mensaje? Cambian los hashes publicados. Se crea una rama de recuperación.')))
                         void act({ action: 'amend', head: details!.head, message: commitMessage })
-                    }}>Amend…</Button>
+                    }}><Pencil size={16} aria-hidden="true" /><span className="git-action-label">{amendLabel}</span></Button>
                   <Button
                     size="small"
-                    type="submit"
+                    type="submit" aria-label={commitLabel} title={commitLabel}
                     disabled={
                       locked ||
                       !commitMessage.trim() ||
@@ -448,7 +453,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
                     }
                   >
                     <GitCommitHorizontal size={16} />
-                    {t('Commit', 'Crear commit')}
+                    <span className="git-action-label">{commitLabel}</span>
                   </Button>
                 </div>
               </form>

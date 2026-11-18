@@ -53,6 +53,21 @@ export function App() {
   const [projectId, setProjectId] = useState(localStorage.getItem('alfred.project') || '')
   const [conversationId, setConversationId] = useState(localStorage.getItem('alfred.conversation') || '')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(localStorage.getItem('alfred.sidebarCollapsed') === 'true')
+  const [sidebarPreviewSuppressed, setSidebarPreviewSuppressed] = useState(false)
+  const sidebarOpener = useRef<HTMLSpanElement>(null)
+  const focusSidebarOpener = useRef(false)
+  function toggleSidebar() {
+    const collapsing = !sidebarCollapsed
+    setSidebarPreviewSuppressed(collapsing)
+    focusSidebarOpener.current = collapsing
+    setSidebarCollapsed(collapsing)
+  }
+  useEffect(() => {
+    if (sidebarCollapsed && focusSidebarOpener.current) {
+      sidebarOpener.current?.querySelector('button')?.focus({ preventScroll: true })
+      focusSidebarOpener.current = false
+    }
+  }, [sidebarCollapsed])
   const [workspacePath, setWorkspacePath] = useState(''), [worktrees, setWorktrees] = useState<Worktree[]>([]), [treeVersion, setTreeVersion] = useState(0)
   const [worktreeError, setWorktreeError] = useState('')
   const [treeFailure, setTreeFailure] = useState<{ projectId: string; root: string; path: string; error: string }>()
@@ -286,7 +301,7 @@ export function App() {
       { id: 'new-chat', label: t('Conversation: New conversation', 'Conversación: Nueva conversación'), disabled: !project || busy || !connected, run: () => { void newConversation() } },
       { id: 'add-space', label: t('Space: Add folder', 'Espacio: Agregar carpeta'), disabled: selecting, run: addProject },
       { id: 'settings', label: t('Workspace: Settings', 'Espacio: Configuración'), run: () => setDialog('settings') },
-      { id: 'sidebar', label: t('View: Toggle sidebar', 'Vista: Mostrar u ocultar barra lateral'), run: () => mobile ? setMobileOpen(value => !value) : setSidebarCollapsed(value => !value) },
+      { id: 'sidebar', label: t('View: Toggle sidebar', 'Vista: Mostrar u ocultar barra lateral'), run: () => mobile ? setMobileOpen(value => !value) : toggleSidebar() },
       ...(['all', 'files', 'conversations', 'messages', 'worktrees'] as const).map(kind => ({ id: `search-${kind}`, label: `${t('Search', 'Buscar')}: ${{ all: t('All (⌘P / Ctrl+P)', 'Todo (⌘P / Ctrl+P)'), files: t('Files', 'Archivos'), conversations: t('Conversations', 'Conversaciones'), messages: t('Messages', 'Mensajes'), worktrees: 'Worktrees' }[kind]}`, run: () => { setSearchFilter(kind); setFileSearchConversation('workspace') } })),
       { id: 'files', label: t('View: Files', 'Vista: Archivos'), disabled: !conversation, run: () => { if (conversation) { setFilesConversation(conversation.id); showTool('browser', false); showTool('git', false) } } },
       ...(['terminal', 'browser', 'git'] as const).map(kind => ({ id: kind, label: `${t('View', 'Vista')}: ${kind}`, disabled: !conversation || busy || (mobile && kind !== 'git') || (kind === 'git' && project?.kind !== 'git'), run: () => toggleTool(kind) })),
@@ -315,10 +330,10 @@ export function App() {
   if (authenticated === undefined) return <div className="loading-screen"><span className="brand-mark">a·</span><p>{t('Opening your workspace…', 'Abriendo tu espacio…')}</p></div>
   if (!authenticated || !state) return <Suspense fallback={<div className="loading-screen" role="status">{t('Loading…', 'Cargando…')}</div>}><Login connected={refresh} /></Suspense>
   return <NotificationPreferences><div className="app-shell" data-sidebar-collapsed={sidebarCollapsed}>
-    <div id="workspace-sidebar" className="workspace-sidebar-container">
+    <div id="workspace-sidebar" className="workspace-sidebar-container" data-preview-suppressed={sidebarPreviewSuppressed} onPointerEnter={() => setSidebarPreviewSuppressed(false)} onPointerLeave={() => setSidebarPreviewSuppressed(false)}>
       <Sidebar state={state} project={project} conversation={(floatingIds.length ? state.conversations.find((item) => item.id === focusedChatId && item.projectId === projectId && item.workspacePath === workspacePath) : undefined) || conversation} workspacePath={workspacePath} connected={connected} mobileOpen={mobileOpen}
         close={() => setMobileOpen(false)} selectProject={selectSpace}
-        desktopToggle={<span className="desktop-sidebar-toggle"><Button variant="ghost" size="icon" aria-controls="workspace-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} title={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</Button></span>}
+        desktopToggle={<span className="desktop-sidebar-toggle"><Button variant="ghost" size="icon" aria-controls="workspace-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} title={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} onClick={toggleSidebar}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</Button></span>}
         selectConversation={(id) => {
           const item = state.conversations.find((chat) => chat.id === id)
           if (!item) return
@@ -334,7 +349,7 @@ export function App() {
     </div>
     <main className="main-workspace">
       <header className="workspace-header workspace-header-unified">
-        {sidebarCollapsed && <span className="desktop-sidebar-toggle"><Button variant="ghost" size="icon" aria-controls="workspace-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} title={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</Button></span>}
+        {sidebarCollapsed && <span ref={sidebarOpener} className="desktop-sidebar-toggle"><Button variant="ghost" size="icon" aria-controls="workspace-sidebar" aria-expanded={!sidebarCollapsed} aria-label={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} title={sidebarCollapsed ? t('Show sidebar', 'Mostrar barra lateral') : t('Hide sidebar', 'Ocultar barra lateral')} onClick={toggleSidebar}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</Button></span>}
         <span className="mobile-only"><Button variant="ghost" size="icon" aria-label={t('Open spaces', 'Abrir espacios')} aria-controls="workspace-sidebar" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu size={19} /></Button></span>
         <div className="workspace-heading-context">
           <div className="workspace-breadcrumb"><span className="breadcrumb-project" title={project?.name}>{project?.name || t('Welcome to Alfred', 'Bienvenido a Alfred')}</span>{project && <><span className="breadcrumb-slash">/</span><WorktreePicker key={`${project.id}:${workspacePath}`} state={state} project={project} worktrees={worktrees} workspacePath={workspacePath} connected={connected}

@@ -5,6 +5,18 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/tests/chat-controls.html')
 })
 
+test('composer only highlights the focused control', async ({ page }) => {
+  const composer = page.locator('form.composer')
+  const border = await composer.evaluate(el => getComputedStyle(el).borderTopColor)
+  const input = page.getByRole('textbox', { name: 'Mensaje para Alfred' })
+  await input.click()
+  await expect(input).toHaveCSS('outline-style', 'solid')
+  await expect(composer).toHaveCSS('border-top-color', border)
+  await input.press('Tab')
+  await expect(composer.locator('.composer-footer :focus')).toHaveCSS('outline-style', 'solid')
+  await expect(composer).toHaveCSS('border-top-color', border)
+})
+
 test('preview is keyboard accessible and narrow panels retain drafts without document overflow', async ({ page }) => {
   const input = page.getByRole('textbox', { name: 'Mensaje para Alfred' })
   await input.fill('Borrador que debe conservarse al cambiar el tamaño del panel.')

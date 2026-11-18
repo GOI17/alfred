@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import { liveRefresh } from './live-refresh'
-import { ArrowLeft, Plus, X } from 'lucide-react'
+import { ArrowLeft, FileDiff, Minus, Plus, Undo2, X } from 'lucide-react'
 import type { GitHistory } from '../../shared/contracts'
 import { Button } from './components/ui/button'
 import { useUI } from './ui-preferences'
@@ -46,19 +46,23 @@ export function GitFileGroup({
           {prepared ? t('Staged', 'Preparados') : t('Changes', 'Sin preparar')}{' '}
           <span className="git-count">{items.length}</span>
         </h3>
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-        <Button
-          variant="ghost"
-          size="small"
-          disabled={!items.length || loading}
-          onClick={() => setRevision(prepared ? 'staged' : 'working')}
-        >
-          {t('Review diff', 'Revisar diff')}
-        </Button>
+        <div className="git-group-actions">
+          <Button
+            variant="ghost"
+            size="small"
+            aria-label={t('Review diff', 'Revisar diff')}
+            title={t('Review diff', 'Revisar diff')}
+            disabled={!items.length || loading}
+            onClick={() => setRevision(prepared ? 'staged' : 'working')}
+          >
+            <FileDiff size={16} aria-hidden="true" />
+            <span className="git-action-label">{t('Review diff', 'Revisar diff')}</span>
+          </Button>
           {prepared && unstageAll && (
             <Button
               variant="ghost"
               size="small"
+              aria-label={t('Unstage all', 'Quitar todos de preparación')}
               disabled={locked || unstageAllBlocked || !items.length}
               title={t(
                 'Unstage all files, regardless of filter. Working files are preserved.',
@@ -66,18 +70,23 @@ export function GitFileGroup({
               )}
               onClick={() => void unstageAll()}
             >
-              {t('Unstage all', 'Quitar todos de preparación')}
+              <Minus size={16} aria-hidden="true" />
+              <span className="git-action-label">{t('Unstage all', 'Quitar todos de preparación')}</span>
             </Button>
           )}
           {!prepared && discard && <Button variant="ghost" size="small"
+            aria-label={t('Discard all unstaged…', 'Descartar todos sin preparar…')}
+            title={t('Discard all unstaged…', 'Descartar todos sin preparar…')}
             disabled={locked || discardBlocked || !items.some(item => item.status !== '??')}
             onClick={() => void discard()}>
-            {t('Discard all unstaged…', 'Descartar todos sin preparar…')}
+            <Undo2 size={16} aria-hidden="true" />
+            <span className="git-action-label">{t('Discard all unstaged…', 'Descartar todos sin preparar…')}</span>
           </Button>}
           {!prepared && stageAll && (
             <Button
               variant="ghost"
               size="small"
+              aria-label={t('Stage all', 'Preparar todos')}
               disabled={locked || !items.some((item) => !conflicted(item.path))}
               title={t(
                 'Stage all unstaged files, regardless of filter. Conflicts are excluded.',
@@ -85,7 +94,8 @@ export function GitFileGroup({
               )}
               onClick={() => void stageAll()}
             >
-              {t('Stage all', 'Preparar todos')}
+              <Plus size={16} aria-hidden="true" />
+              <span className="git-action-label">{t('Stage all', 'Preparar todos')}</span>
             </Button>
           )}
         </div>

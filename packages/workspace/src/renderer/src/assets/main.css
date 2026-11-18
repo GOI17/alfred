@@ -981,9 +981,6 @@ form > label + label {
   max-width: 850px;
   margin: auto;
 }
-.composer:focus-within {
-  border-color: var(--focus-ring);
-}
 .composer-footer {
   display: flex;
   justify-content: space-between;
