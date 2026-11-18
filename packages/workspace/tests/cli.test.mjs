@@ -16,8 +16,8 @@ import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
-async function fixture(t) {
-  const root = await mkdtemp(join(tmpdir(), 'workspace-cli-'))
+async function fixture(t, base = tmpdir()) {
+  const root = await mkdtemp(join(base, 'workspace-cli-'))
   t.after(() => rm(root, { recursive: true, force: true }))
   const pkg = join(root, 'only workspace')
   const cwd = join(root, 'user project with spaces')
@@ -129,7 +129,8 @@ test('standalone binary symlink executes the same entrypoint', async (t) => {
 test('start and restart recover a crashed daemon without deleting unrelated state', {
   skip: process.platform === 'win32',
 }, async (t) => {
-  const f = await fixture(t)
+  // Unix socket paths are length-limited; runner-provided TMPDIR can exceed that limit.
+  const f = await fixture(t, '/tmp')
   const data = join(f.home, '.alfred-workspace')
   await mkdir(join(f.pkg, 'dist/server/server'), { recursive: true })
   await mkdir(data)
