@@ -3,8 +3,7 @@ import { test } from 'node:test'
 import { mkdtemp, mkdir, cp, copyFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { createRequire } from 'node:module'
+import { join } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -88,16 +87,12 @@ for (const dev of [false, true])
       : /(?:src|href)="([^"]*\/assets\/[^"]+)"/.exec(html)
     assert.ok(asset, 'Built client references an asset.')
     assert.equal((await fetch(new URL(asset[1], origin))).status, 200)
-    if (dev) {
-      const require = createRequire(join(pkg, 'package.json'))
-      for (const name of ['manrope', 'dm-sans']) {
-        const directory = dirname(require.resolve(`@fontsource-variable/${name}`))
-        const font = join(directory, 'files', `${name}-latin-wght-normal.woff2`)
-        const response = await fetch(new URL('/@fs' + font, origin))
-        assert.equal(response.status, 200)
-        assert.match(response.headers.get('content-type'), /font|woff/)
-      }
-    }
+    // Dictation loads the ONNX runtime by URL in both development and built packages.
+    const wasm = await fetch(`${origin}/whisper-runtime/ort-wasm-simd-threaded.jsep.wasm`)
+    assert.equal(wasm.status, 200)
+    assert.match(wasm.headers.get('content-type'), /application\/wasm/)
+    const bytes = new Uint8Array(await wasm.arrayBuffer())
+    assert.deepEqual([...bytes.subarray(0, 4)], [0x00, 0x61, 0x73, 0x6d])
     assert.equal((await fetch(`${origin}/api/state`)).status, 401)
     const auth = await fetch(`${origin}/api/auth`, {
       method: 'POST',
