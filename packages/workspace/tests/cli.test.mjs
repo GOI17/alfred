@@ -125,3 +125,54 @@ test('standalone binary symlink executes the same entrypoint', async (t) => {
   assert.equal(result.status, 0, result.stderr)
   assert.match(result.stdout, /^alfred-workspace /)
 })
+
+test('start and restart recover a crashed daemon without deleting unrelated state', {
+  skip: process.platform === 'win32',
+}, async (t) => {
+  const f = await fixture(t)
+  const data = join(f.home, '.alfred-workspace')
+  await mkdir(join(f.pkg, 'dist/server/server'), { recursive: true })
+  await mkdir(data)
+  await writeFile(join(data, 'keep.txt'), 'user state')
+  await writeFile(join(f.pkg, 'dist/server/server/index.js'), `
+    import {writeFileSync} from 'node:fs';
+    export async function startWorkspace({env}) {
+      writeFileSync(env.ALFRED_WORKSPACE_DATA_DIR + '/pid', String(process.pid));
+      return {address: 'test-address', stop: async () => {}};
+    }
+  `)
+  const invoke = (command) => spawnSync(process.execPath, [f.cli, command], {
+    cwd: f.cwd, env: f.env, encoding: 'utf8', timeout: 10000,
+  })
+  t.after(() => invoke('stop'))
+  let result = invoke('start')
+  assert.equal(result.status, 0, result.stderr)
+  for (const command of ['start', 'restart']) {
+    const pid = Number(await readFile(join(data, 'pid'), 'utf8'))
+    process.kill(pid, 'SIGKILL')
+    // Wait for the OS to close the killed process's listening descriptor.
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const {createConnection} = await import('node:net')
+      const closed = await new Promise((resolve) => {
+        const socket = createConnection(join(data, 'daemon.sock'))
+        socket.on('error', () => resolve(true))
+        socket.on('connect', () => { socket.destroy(); resolve(false) })
+      })
+      if (closed) break
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    result = invoke(command)
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /Workspace daemon started/)
+    assert.notEqual(Number(await readFile(join(data, 'pid'), 'utf8')), pid)
+    const active = invoke('start')
+    assert.equal(active.status, 0, active.stderr)
+    assert.match(active.stdout, /already running/)
+    assert.equal(await readFile(join(data, 'keep.txt'), 'utf8'), 'user state')
+  }
+  assert.equal(invoke('stop').status, 0)
+  await writeFile(join(data, 'daemon.sock'), 'not a socket')
+  result = invoke('start')
+  assert.equal(result.status, 1)
+  assert.equal(await readFile(join(data, 'daemon.sock'), 'utf8'), 'not a socket')
+})
