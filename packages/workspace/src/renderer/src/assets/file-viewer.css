@@ -1,4 +1,4 @@
-.file-viewer { display: flex; flex-direction: column; width: min(650px, 55%); min-width: 300px; min-height: 0; border-left: 1px solid var(--border); background: var(--background); }
+.file-viewer { display: flex; flex-direction: column; flex: 0 1 var(--workspace-side-panel-width); min-width: 0; min-height: 0; border-left: 1px solid var(--border); background: var(--background); }
 .file-viewer-toolbar { display: flex; align-items: center; gap: var(--ds-space-050, 4px); padding: var(--ds-space-075, 6px) var(--ds-space-100, 8px); border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: var(--text-xs); }
 .file-viewer-toolbar > span { flex: 1; }
 .workspace-content-row:has(> .file-viewer[data-maximized='true']) > .workspace-content-main { display: none; }
@@ -47,3 +47,14 @@
 }
 .file-preview > p { padding: 10px; }
 @media (max-width: 700px) { .workspace-content-row:has(.file-viewer) .workspace-content-main { display: none; } .file-viewer { width: auto; min-width: 0; flex: 1; } }
+.native-review { flex: 1; min-height: 0; overflow: auto; padding: 1rem; overflow-wrap: anywhere; }
+.native-review p { white-space: pre-wrap; }
+.native-review details { margin-block: .5rem; border-bottom: 1px solid var(--border); }
+.native-review summary { padding-block: .4rem; cursor: pointer; }
+.native-review pre { overflow-x: auto; padding: .75rem; background: var(--accent); font-size: var(--text-xs); }
+.native-review fieldset { margin-top: 1rem; display: grid; gap: .5rem; border: 1px solid var(--border); }
+.native-review textarea { width: 100%; resize: vertical; }
+.review-navigation { display: flex; flex-wrap: wrap; gap: .35rem; margin-block: .75rem; }
+.review-navigation [aria-pressed="true"] { background: var(--accent); font-weight: 600; }
+.review-items { list-style: none; padding: 0; }
+.review-items li { display: grid; gap: .25rem; padding: .5rem; border-bottom: 1px solid var(--border); }

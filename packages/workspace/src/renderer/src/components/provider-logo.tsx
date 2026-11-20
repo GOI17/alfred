@@ -6,11 +6,11 @@ const labels: Record<ProviderId, string> = {
 }
 
 /** Inline marks: no remote images or requests when rendering conversation history. */
-export function ProviderLogo({ provider, size = 15 }: { provider?: ProviderId; size?: number }) {
+export function ProviderLogo({ provider, size = 15, decorative = false }: { provider?: ProviderId; size?: number; decorative?: boolean }) {
   const label = provider ? labels[provider] : 'Provider no registrado'
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor"
-    style={{ flexShrink: 0 }} role="img" aria-label={label}>
-    <title>{label}</title>
+    style={{ flexShrink: 0 }} role={decorative ? undefined : 'img'} aria-hidden={decorative || undefined} aria-label={decorative ? undefined : label}>
+    {!decorative && <title>{label}</title>}
     {provider === 'anthropic' ? <path d="M8.4 3 0 21h4.3l1.7-3.8h8.8l1.7 3.8h4.3L12.4 3h-4Zm2 4.3 2.9 6.5H7.5l2.9-6.5ZM16 3h4l4 9v9L16 3Z" />
       : provider === 'google' ? <>
         <path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.36Z" />
@@ -21,6 +21,11 @@ export function ProviderLogo({ provider, size = 15 }: { provider?: ProviderId; s
       : provider === 'openai' || provider === 'chatgpt' ? <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
         {[0, 60, 120, 180, 240, 300].map((angle) => <path key={angle} transform={`rotate(${angle} 12 12)`}
           d="M12 3a5 5 0 0 1 8.66 5v6L12 19l-3-1.73V9l6-3.46" />)}
+      </g>
+      : provider === 'opencode' ? <path fillRule="evenodd" d="M3 2h18v20H3V2Zm5 5v10h8V7H8Z" />
+      : provider === 'copilot' ? <g stroke="currentColor" strokeWidth="1.7" fill="none">
+        <rect x="3" y="4" width="8" height="7" rx="3" /><rect x="13" y="4" width="8" height="7" rx="3" />
+        <path d="M3 9v8q9 9 18 0V9M1 12v4m22-4v4M8 13v3m8-3v3" />
       </g>
       : <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" strokeWidth="1.5" />}
   </svg>

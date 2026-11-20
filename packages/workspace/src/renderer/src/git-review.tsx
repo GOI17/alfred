@@ -284,7 +284,7 @@ export function GitDiff({
   )
 }
 
-export function useGitDiff(endpoint: string, revision: string, refresh: number, active = true, filePath?: string) {
+export function useGitDiff(endpoint: string, revision: string, refresh: number, active = true, filePath?: string, fullContext = false) {
   const [diff, setDiff] = useState<{ text: string; truncated: boolean }>()
   const [diffError, setDiffError] = useState('')
   useEffect(() => {
@@ -293,13 +293,13 @@ export function useGitDiff(endpoint: string, revision: string, refresh: number, 
     setDiffError('')
     return liveRefresh(async (signal) => {
       const data = await api<{ text: string; truncated: boolean }>(
-        `${endpoint}/diff?revision=${encodeURIComponent(revision)}${filePath !== undefined ? `&path=${encodeURIComponent(filePath)}` : ''}`, undefined, undefined, signal,
+        `${endpoint}/diff?revision=${encodeURIComponent(revision)}${fullContext ? '&context=full' : ''}${filePath !== undefined ? `&path=${encodeURIComponent(filePath)}` : ''}`, undefined, undefined, signal,
       )
       if (signal.aborted) return
       setDiff((previous) => previous?.text === data.text && previous.truncated === data.truncated ? previous : data)
       setDiffError('')
     }, (cause) => setDiffError(errorMessage(cause)), revision === 'working' || revision === 'staged' ? 3000 : null)
-  }, [endpoint, revision, refresh, active, filePath])
+  }, [endpoint, revision, refresh, active, filePath, fullContext])
 
   return { diff, diffError }
 }

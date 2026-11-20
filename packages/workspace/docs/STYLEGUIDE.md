@@ -23,6 +23,8 @@ Las familias de lectura y títulos provienen de los tokens de tipografía Atlass
 
 Los botones se eligen por `variant` y `size`; no recibirán clases de restyling desde sus consumidores. Los diálogos deben tener título, descripción y cierre accesible. Los botones de icono necesitan un nombre accesible incluso si su etiqueta visible se oculta en teléfono.
 
+En los menús flotantes de acciones móviles, usar `Button` con `variant="ghost"` y `size="action-row"` para las opciones con icono y texto. La fila ocupa todo el ancho y conserva la altura táctil `--control-touch`. Usar la superficie de overlay del tema; abrir el menú no debe desplazar el prompt ni la cabecera.
+
 Agregar un proyecto abre directamente el selector nativo de carpetas del sistema, desde el navegador local de la computadora que ejecuta Alfred. No construir un explorador de archivos dentro de la web ni pedir una ruta o nombre manuales. El nombre se deriva de la carpeta del proyecto. En clientes remotos, explicar que el alta se realiza en la computadora; los proyectos existentes siguen disponibles.
 
 ## Teléfono y teclado

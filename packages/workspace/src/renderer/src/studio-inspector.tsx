@@ -5,6 +5,7 @@ import { api, errorMessage } from './api'
 import { openWorkspaceFile } from './open-file'
 import { conversationResources, type ConversationResource } from './conversation-resources'
 import { HARNESS_STALE_MS } from './subagents-panel'
+import { liveRefresh } from './live-refresh'
 import { useUI } from './ui-preferences'
 import './assets/studio-inspector.css'
 
@@ -13,9 +14,9 @@ function agentColor(id: string) {
   return [...id].reduce((value, character) => (value * 31 + character.charCodeAt(0)) >>> 0, 0) % agentIcons.length
 }
 
-export function StudioInspector({ conversation, agent, project, open, onToggle, onOpenGit, onAttach }: {
+export function StudioInspector({ conversation, agent, project, open, onToggle, onAttach, onOpenGit }: {
   conversation: Conversation; agent?: AgentState; project?: Project; open: boolean
-  onToggle: () => void; onOpenGit?: () => void; onAttach: () => void
+  onToggle: () => void; onAttach: () => void; onOpenGit?: () => void
 }) {
   const { t, language } = useUI()
   const [error, setError] = useState('')
@@ -64,7 +65,9 @@ export function StudioInspector({ conversation, agent, project, open, onToggle, 
         </header>
         <div className="inspector-changes">
           <button type="button" className="inspector-row" disabled={!onOpenGit} onClick={onOpenGit} title={onOpenGit ? t('Open Git changes', 'Abrir cambios de Git') : t('Git is unavailable for this workspace', 'Git no está disponible en este espacio')}>
-            <FileDiff size={16} aria-hidden="true" /><span>{t('Changes', 'Cambios')}</span><ChevronRight size={14} className="inspector-row-arrow" aria-hidden="true" />
+            <FileDiff size={16} aria-hidden="true" /><span>{t('Changes', 'Cambios')}</span>
+            {project?.kind === 'git' && <GitIndicator key={conversation.id} id={conversation.id} />}
+            <ChevronRight size={14} className="inspector-row-arrow" aria-hidden="true" />
           </button>
           {agent?.approval && <details className="inspector-approval">
             <summary><span className="inspector-pending-dot" />{t('Pending approval', 'Aprobación pendiente')}<ChevronRight size={13} /></summary>
@@ -114,4 +117,20 @@ export function StudioInspector({ conversation, agent, project, open, onToggle, 
       </>}
     </div>
   </aside>
+}
+
+function GitIndicator({ id }: { id: string }) {
+  const { t } = useUI()
+  const [totals, setTotals] = useState<{ added: number; removed: number } | null>()
+  useEffect(() => liveRefresh(async signal => {
+    const result = await api<{ added: number; removed: number }>(`/conversations/${id}/git/totals`, undefined, undefined, signal)
+    if (!signal.aborted) setTotals(result)
+  }, () => setTotals(null), 5000), [id])
+  const label = totals
+    ? t(`${totals.added} lines added, ${totals.removed} removed`, `${totals.added} líneas añadidas, ${totals.removed} eliminadas`)
+    : totals === null ? t('Totals unavailable', 'Totales no disponibles') : t('Loading totals', 'Cargando totales')
+  const placeholder = totals === null ? '?' : '…'
+  return <span className="inspector-git-totals" role="img" aria-label={label}>
+    <b className="git-added">+{totals?.added ?? placeholder}</b><b className="git-removed">−{totals?.removed ?? placeholder}</b>
+  </span>
 }

@@ -13,7 +13,19 @@ export function hasUnseenCompletion(chat: Conversation) {
   return !!last && last.role === 'assistant' && !last.consumptionIncomplete && seen(chat.id) !== last.id
 }
 
-/** A completion is read only when its final message is actually visible in a focused window. */
+export function markCompletionsSeen(chats: Conversation[]) {
+  let updated = false
+  for (const chat of chats) {
+    if (!hasUnseenCompletion(chat)) continue
+    const messageId = chat.messages.at(-1)!.id
+    memory.set(chat.id, messageId)
+    try { localStorage.setItem(prefix + chat.id, messageId) } catch { /* Keep session behavior when storage is unavailable. */ }
+    updated = true
+  }
+  if (updated) window.dispatchEvent(new Event(changed))
+}
+
+/** Automatically acknowledge results visible in a focused window. */
 export function useCompletionReading(state: PublicState, connected: boolean) {
   const [, refresh] = useReducer((value: number) => value + 1, 0)
   useEffect(() => {
@@ -29,7 +41,7 @@ export function useCompletionReading(state: PublicState, connected: boolean) {
       frame = 0
       if (document.visibilityState !== 'visible' || !document.hasFocus()) return
       const messages = Array.from(document.querySelectorAll<HTMLElement>('.messages [data-message-id]'))
-      let updated = false
+      const visibleChats: Conversation[] = []
       for (const chat of state.conversations) {
         if ((state.agents[chat.id]?.status || 'idle') !== 'idle' || !hasUnseenCompletion(chat)) continue
         const last = chat.messages.at(-1)!
@@ -41,12 +53,9 @@ export function useCompletionReading(state: PublicState, connected: boolean) {
           // Require the end of the result to be visible, not merely an earlier portion.
           return rect.bottom > Math.max(0, bounds.top) && rect.bottom <= Math.min(window.innerHeight, bounds.bottom) + 1 && rect.right > Math.max(0, bounds.left) && rect.left < Math.min(window.innerWidth, bounds.right)
         })
-        if (!visible) continue
-        memory.set(chat.id, last.id)
-        try { localStorage.setItem(prefix + chat.id, last.id) } catch { /* Keep session behavior when storage is unavailable. */ }
-        updated = true
+        if (visible) visibleChats.push(chat)
       }
-      if (updated) window.dispatchEvent(new Event(changed))
+      markCompletionsSeen(visibleChats)
     }
     const schedule = () => { if (!frame) frame = requestAnimationFrame(check) }
     const observer = new MutationObserver(schedule)

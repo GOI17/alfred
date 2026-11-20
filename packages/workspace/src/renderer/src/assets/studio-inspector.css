@@ -72,3 +72,6 @@ details[open] > .inspector-row .inspector-row-arrow { transform: rotate(90deg); 
 .chat-studio[data-inspector-open='false'] .studio-inspector-card { padding: var(--ds-space-075, 6px) var(--ds-space-050, 4px); border-radius: 12px; }
 @container (max-width: 900px) { .studio-inspector { display: none; } }
 @media (prefers-reduced-motion: reduce) { .inspector-row-arrow { transition: none; } }
+.inspector-git-totals { display: inline-flex; gap: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.git-added { color: var(--success); }
+.git-removed { color: var(--danger); }

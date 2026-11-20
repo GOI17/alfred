@@ -31,7 +31,7 @@
 .tool-side-dock {
   display: flex;
   flex-direction: column;
-  flex: 0 1 38%;
+  flex: 0 1 var(--workspace-side-panel-width);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -67,6 +67,7 @@
 
 .tool-dock-actions {
   display: flex;
+  align-items: center;
   flex-shrink: 0;
   margin-left: auto;
 }
@@ -135,13 +136,12 @@
     display: none;
   }
 
-  .tool-workspace-upper {
-    flex-direction: column;
+  .tool-workspace-upper:has(> .tool-side-dock:not([hidden])) > .tool-chat-area {
+    display: none;
   }
 
   .tool-side-dock {
-    flex-basis: 40%;
+    flex: 1;
     border-left: 0;
-    border-top: 1px solid var(--border);
   }
 }

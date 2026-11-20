@@ -7,13 +7,13 @@ import { Select } from './components/ui/input'
 import { useUI } from './ui-preferences'
 
 type Engine = 'browser' | 'local' | 'cloud'
-export function VoiceSettings({ mode, disabled, onChange }: { mode: Engine; disabled: boolean; onChange: (engine: Engine) => void }) {
+export function VoiceSettings({ mode, disabled, onChange, labeled }: { labeled?: boolean; mode: Engine; disabled: boolean; onChange: (engine: Engine) => void }) {
   const { t, speechLanguage, setSpeechLanguage } = useUI()
   const [open, setOpen] = useState(false)
   const id = useId()
   const title = t('Voice settings', 'Ajustes de voz')
   return <>
-    <Button variant="ghost" size="icon" aria-label={title} title={title} aria-haspopup="dialog" disabled={disabled} onClick={() => setOpen(true)}><SlidersHorizontal size={16} /></Button>
+    <Button variant="ghost" size={labeled ? "action-row" : "icon"} aria-label={title} title={title} aria-haspopup="dialog" disabled={disabled} onClick={() => setOpen(true)}><SlidersHorizontal size={16} />{labeled && title}</Button>
     <Dialog open={open} onClose={() => setOpen(false)} title={title} description={t('These settings apply to dictation and /voice.', 'Estos ajustes se aplican al dictado y a /voice.')}>
       <div className="voice-settings-fields">
         <div>

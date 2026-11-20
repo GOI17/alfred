@@ -160,13 +160,12 @@ test('chat utilities stay in a compact heading instead of a vertical action colu
   await page.emulateMedia({ reducedMotion: 'reduce' })
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => document.documentElement.dataset.colorMode = value, theme)
-    const action = page.getByRole('button', { name: 'Open in separate window', exact: true, includeHidden: true })
+    await expect(page.getByRole('button', { name: 'Open in separate window', exact: true, includeHidden: true })).toHaveCount(0)
     if (testInfo.project.name === 'phone') {
-      await expect(action).toBeVisible()
       await expect(page.getByRole('button', { name: 'Move active chat', exact: true })).toHaveCount(0)
     } else {
+      const action = page.locator('.chat-column-heading').getByRole('button', { name: 'Float chat', exact: true })
       await expect(action).toBeVisible()
-      await expect(page.locator('.chat-column-heading').getByRole('button', { name: 'Open in separate window', exact: true })).toHaveCount(1)
       const bounds = await action.boundingBox()
       expect(bounds!.height).toBeLessThanOrEqual(44)
       expect(bounds!.width).toBeLessThanOrEqual(44)

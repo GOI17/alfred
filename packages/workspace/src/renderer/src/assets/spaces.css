@@ -36,6 +36,13 @@
 .sidebar .spaces-heading { padding: 0 9px; letter-spacing: .04em; min-height: 32px; }
 .sidebar .conversation-row { min-height: 40px; }
 .sidebar .conversation-row[data-active='true'] { box-shadow: inset 2px 0 var(--ds-border-selected); }
+.conversation-summary { display: grid; min-width: 0; gap: 2px; }
+.conversation-summary > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-status { color: var(--sidebar-muted); font-size: var(--text-xs); }
+.conversation-status[data-status='done'] { color: var(--success); }
+.conversation-status[data-status='running'] { color: var(--ds-text-information, var(--sidebar-foreground)); }
+.conversation-status[data-status='waiting'] { color: var(--warning); }
+.conversation-status[data-status='error'] { color: var(--danger); }
 .sidebar-connection { flex-shrink: 0; margin: 0; padding: var(--ds-space-075, 6px) 9px; color: var(--sidebar-muted); font-size: var(--text-xs); }
 .space-dock { display: flex; align-items: center; gap: var(--ds-space-025, 2px); flex-shrink: 0; min-width: 0; padding: 3px; margin: var(--ds-space-150, 12px) 0 var(--ds-space-100, 8px); border-radius: 12px; background: var(--surface-muted); }
 .space-switcher { display: flex; align-items: center; gap: var(--ds-space-050, 4px); flex: 1; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; padding: 3px; scrollbar-width: thin; }

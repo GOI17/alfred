@@ -21,10 +21,15 @@
   overflow-wrap: anywhere;
   padding-block: var(--ds-space-075, 6px);
 }
-.chat-panel .composer-footer [data-control="model-picker-trigger"] > span {
-  white-space: normal;
-  overflow: visible;
-  overflow-wrap: anywhere;
+.chat-panel .composer-footer [data-control="model-picker-trigger"] .alfred-button-content {
+  min-width: 0;
+  max-width: 100%;
+}
+.chat-panel .composer-footer .model-picker-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .chat-panel .composer-footer [data-control="model-picker-trigger"] { border-color: var(--control-border); }
 .approval-card { min-width: 0; overflow-wrap: anywhere; }
@@ -46,6 +51,23 @@
   min-height: var(--control-compact);
   flex-shrink: 0;
 }
+/* Keep send actions fixed; let the model name yield before controls wrap. */
+@container (max-width: 1024px) {
+  .chat-panel .composer-footer .attachment-controls {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow: visible;
+    padding-block: 2px;
+  }
+  .chat-panel .composer-footer .attachment-controls > [data-control="context-control"] {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .chat-panel .composer-footer [data-control="model-picker-trigger"] {
+    flex: 0 1 auto;
+    min-width: 76px;
+  }
+}
 @container (max-width: 700px) {
   .chat-panel .composer .composer-footer { --composer-control-size: var(--control-touch); }
   .chat-panel .composer-footer .attachment-controls {
@@ -63,6 +85,18 @@
   .chat-panel .message-history .messages > div > .approval-card { width: calc(100% - 16px); margin-inline: var(--ds-space-100, 8px); }
   .approval-card [data-alfred-button] { min-height: var(--control-touch); }
 }
+/* Give model/context and message actions their own rows on narrow chats. */
+@container (max-width: 570px) {
+  .chat-panel .composer .composer-footer { grid-template-columns: minmax(0, 1fr); }
+  .chat-panel .composer-footer .attachment-controls { flex-wrap: wrap; }
+  .chat-panel .composer-footer [data-control="model-picker-trigger"] { flex: 1 1 76px; }
+  .chat-panel .composer-footer .queue-send-actions {
+    grid-column: 1;
+    grid-row: 2;
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+}
 @media (max-width: 700px), (pointer: coarse) {
   .composer .attachment-chip > button { min-width: var(--control-touch); min-height: var(--control-touch); }
 }
@@ -73,11 +107,24 @@
 /* Instant following also respects reduced motion; streaming never moves focus. */
 .chat-panel .messages { scroll-behavior: auto; }
 .chat-panel .messages:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
-[data-follow-latest] {
+.chat-panel .message-history [data-follow-latest] {
   position: absolute;
   inset-inline-end: 12px;
   bottom: 12px;
-  max-width: calc(100% - 48px);
-  min-height: var(--control-touch);
+  width: var(--control-touch);
+  height: var(--control-touch);
+  border-radius: 50%;
+  background-color: var(--ds-surface-overlay, var(--surface));
+  color: var(--foreground);
+  box-shadow: var(--shadow-dialog);
   z-index: 2;
+}
+
+@media (max-width: 570px) {
+  .chat-panel .composer .composer-footer { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chat-panel .composer-footer .attachment-controls { flex: 1 1 0; flex-wrap: nowrap; }
+  .chat-panel .composer-footer [data-control='model-picker-trigger'] { min-width: 0; }
+  .chat-panel .composer-footer .attachment-controls > span[data-control='context-control'] { display: none; }
+  .chat-panel .composer-footer .queue-send-actions { flex-wrap: nowrap; }
+  .mobile-actions-popup.composer-actions-popup:popover-open { top: auto; bottom: var(--controls-bottom, 64px); left: clamp(8px, var(--controls-left, 8px), max(8px, calc(100vw - 268px))); }
 }

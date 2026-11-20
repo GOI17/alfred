@@ -14,6 +14,7 @@
   --control-compact: var(--ds-space-300, 24px);
   --control-touch: 44px;
   --motion-control: 150ms;
+  --workspace-side-panel-width: clamp(280px, 36vw, 650px);
   --motion-panel: 200ms;
   --motion-loading: 1400ms;
   --motion-ease: cubic-bezier(0.2, 0, 0, 1);
@@ -167,7 +168,7 @@ svg {
   font-size: var(--text-sm);
 }
 /* Atlassian owns appearance; only responsive geometry is adapted here. */
-button[data-alfred-button] {
+:is(button, a)[data-alfred-button] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -182,7 +183,7 @@ button[data-alfred-button] {
 }
 /* ADS wraps children in a label span. Center that label's contents as well as
    the button itself so our larger touch targets do not top-align SVG icons. */
-button[data-alfred-button] > span {
+:is(button, a)[data-alfred-button] > span {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -192,7 +193,7 @@ button[data-alfred-button] > span {
   overflow-wrap: anywhere;
 }
 /* Own the content layout rather than relying on ADS's internal label depth. */
-button[data-alfred-button] .alfred-button-content {
+:is(button, a)[data-alfred-button] .alfred-button-content {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -202,10 +203,19 @@ button[data-alfred-button] .alfred-button-content {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-button[data-alfred-button] svg { flex-shrink: 0; }
-button[data-alfred-button='icon'] { width: var(--control-compact); padding: 0; }
-button[data-alfred-button='small'] { min-height: var(--control-compact); }
-button[data-alfred-button]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+button[data-alfred-button='action-row'] {
+  width: 100%; justify-content: flex-start; text-align: start;
+  min-height: var(--control-touch); padding-inline: var(--ds-space-150, 12px);
+}
+button[data-alfred-button='action-row'] > span,
+button[data-alfred-button='action-row'] .alfred-button-content {
+  width: 100%; justify-content: flex-start; text-align: start;
+}
+button[data-alfred-button='action-row'][aria-pressed='true'] { background: var(--ds-background-selected, var(--surface-muted)); }
+:is(button, a)[data-alfred-button] svg { flex-shrink: 0; }
+:is(button, a)[data-alfred-button='icon'] { width: var(--control-compact); padding: 0; }
+:is(button, a)[data-alfred-button='small'] { min-height: var(--control-compact); }
+:is(button, a)[data-alfred-button]:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .ads-input input, textarea.ads-textarea { font-size: var(--text-base); }
 .input {
   min-height: var(--control-height);

@@ -8,6 +8,7 @@ type Session = {
   sockets: Set<WebSocket>
   insecure: boolean
   timer: ReturnType<typeof setInterval>
+  expiry?: ReturnType<typeof setTimeout>
   capturing: boolean
   queue: Promise<unknown>
   streamQueue: Promise<void>
@@ -30,7 +31,7 @@ export function browserUrl(input: string) {
 export class Browsers {
   private browser?: Promise<Browser>
   private sessions = new Map<string, Promise<Session>>()
-  private async create() {
+  private async create(initialUrl?: string) {
     this.browser ??= chromium
       .launch({ headless: true, env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' } })
       .catch((error) => {
@@ -41,6 +42,10 @@ export class Browsers {
       await this.browser
     ).newContext({ viewport: { width: 1100, height: 760 } })
     const page = await context.newPage()
+    if (initialUrl) {
+      try { await page.goto(browserUrl(initialUrl), { waitUntil: 'commit', timeout: 20_000 }) }
+      catch (error) { await context.close(); throw error }
+    }
     const session: Session = {
       context,
       page,
@@ -144,19 +149,28 @@ export class Browsers {
     })
     return session.streamQueue
   }
-  async attach(id: string, socket: WebSocket) {
+  async attach(id: string, socket: WebSocket, initialUrl?: string) {
     let pending = this.sessions.get(id)
     if (!pending) {
-      pending = this.create()
+      pending = this.create(initialUrl)
       this.sessions.set(id, pending)
       pending.catch(() => this.sessions.delete(id))
     }
     const session = await pending
-    if (socket.readyState !== socket.OPEN || session.closed) return
+    const expireIfIdle = () => {
+      if (initialUrl && !session.closed && !session.sockets.size) {
+        clearTimeout(session.expiry)
+        session.expiry = setTimeout(() => void this.remove(id), 10 * 60_000)
+      }
+    }
+    if (session.closed) return
+    if (socket.readyState !== socket.OPEN) { expireIfIdle(); return }
+    clearTimeout(session.expiry)
     session.sockets.add(socket)
     session.location = undefined
     socket.on('close', () => {
       session.sockets.delete(socket)
+      expireIfIdle()
       void this.syncStream(session)
     })
     const report = (error: unknown) => {
@@ -243,6 +257,7 @@ export class Browsers {
     if (!session) return
     session.closed = true
     clearInterval(session.timer)
+    clearTimeout(session.expiry)
     for (const socket of session.sockets) socket.close()
     await this.syncStream(session)
     await session.context.close()

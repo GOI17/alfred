@@ -81,9 +81,9 @@
 .subagent-detail pre { background: var(--surface); padding: var(--ds-space-150, 12px); border-radius: var(--radius-sm); }
 .chat-panel .message-queue { padding: 10px var(--ds-space-150, 12px); border-radius: var(--radius); }
 .message-queue-heading { font-weight: 550; flex-wrap: wrap; }
-.message-queue li { padding-block: var(--ds-space-050, 4px); }
 .composer .attachment-chip > button { border: 0; background: transparent; color: var(--muted); }
 .composer .attachment-chip > button:hover { background: var(--accent); color: var(--foreground); }
+.message-queue li { padding-block: var(--ds-space-050, 4px); }
 .approval-actions { flex-wrap: wrap; }
 .context-dialog fieldset:not(.permission-options) {
   display: flex;
@@ -137,6 +137,10 @@
 @media (max-width: 700px), (pointer: coarse) {
   .chat-panel { --composer-control-size: 44px; }
 }
+@media (max-width: 1024px) {
+  .chat-panel .message-navigation,
+  .message-preview { display: none; }
+}
 @media (max-width: 700px) {
   .chat-panel .composer .composer-footer {
     display: flex;
@@ -171,9 +175,6 @@
     white-space: nowrap;
   }
   .chat-panel .composer-footer .queue-send-actions { gap: var(--ds-space-050, 4px); }
-  .chat-panel .message-navigation,
-  .message-preview,
-  .chat-deck .chat-column-heading > [data-alfred-button]:has(.lucide-external-link) { display: none; }
   .chat-panel .message-history .messages > div > .subagents-panel { width: calc(100% - 16px); margin-inline: var(--ds-space-100, 8px); }
   .chat-deck .chat-deck-toolbar { padding-inline: var(--ds-space-100, 8px); }
   .chat-deck .chat-deck-toolbar select { height: 44px; font-size: 16px; }
@@ -193,7 +194,6 @@
 .chat-deck .chat-deck-navigation [data-alfred-button] { width: 32px; height: 32px; flex-shrink: 0; color: var(--muted); }
 .chat-deck .chat-column-heading [data-alfred-button]:hover { color: var(--foreground); background: var(--surface-muted); }
 .chat-deck .chat-column-title { padding-inline: 0; font-weight: 600; }
-.chat-window-error { margin: 0; padding: var(--ds-space-100, 8px) var(--ds-space-150, 12px); font-size: var(--text-xs); color: var(--foreground); background: var(--surface-muted); border-bottom: 1px solid var(--border); }
 @media (pointer: coarse) {
   .chat-deck .chat-column-heading [data-alfred-button],
   .chat-deck .chat-deck-navigation [data-alfred-button] { width: 44px; height: 44px; }

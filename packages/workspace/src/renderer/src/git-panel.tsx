@@ -9,10 +9,11 @@ import { Button } from './components/ui/button'
 import { useUI } from './ui-preferences'
 import { GitFileGroup, GitDiff, useGitDiff } from './git-review'
 import './assets/git-panel.css'
+import { ChangeCard } from './git-change-card'
 import { GitConflict } from './git-conflict'
 import { GitRebase } from './git-rebase'
 import { GitSections, type Details } from './git-sections'
-type Section = 'changes' | 'history' | 'branches' | 'stashes' | 'recovery'
+type Section = 'review' | 'changes' | 'history' | 'branches' | 'stashes' | 'recovery'
 // Reset repository-specific drafts and requests when the conversation changes.
 export function GitPanel({ conversationId, active = true }: { conversationId: string; active?: boolean }) {
   return <RepositoryPanel key={conversationId} conversationId={conversationId} active={active} />
@@ -23,7 +24,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
   const [conflictPath, setConflictPath] = useState('')
   const [history, setHistory] = useState<GitHistory>()
   const [details, setDetails] = useState<Details>()
-  const [section, setSection] = useState<Section>('changes')
+  const [section, setSection] = useState<Section>('review')
   const [error, setError] = useState('')
   const [loadError, setLoadError] = useState('')
   const [skip, setSkip] = useState(0)
@@ -194,7 +195,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
           <RefreshCw size={16} />
         </Button>
       </header>
-      <div className="git-sync-bar">
+      {section !== 'review' && <><div className="git-sync-bar">
         <span>
           {history
             ? changes.length
@@ -259,6 +260,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
           : t('No upstream configured', 'Sin rama de seguimiento')}
         <small> · {t('Remote state as of last fetch', 'Estado remoto según el último fetch')}</small>
       </div>}
+      </>}
       {details?.operation && <div className="git-notice git-notice-warning" role="status">
         <strong>{t('Operation in progress', 'Operación en curso')}: {details.operation}</strong>
         <Button size="small" disabled={locked || !!details.conflicts.length}
@@ -277,7 +279,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
           }}>{t('Abort…', 'Abortar…')}</Button>
       </div>}
       <nav className="git-section-nav" aria-label={t('Git views', 'Vistas de Git')}>
-        {(['changes', 'history', 'branches', 'stashes', 'recovery'] as const).map((value) => (
+        {(['review', 'changes', 'history', 'branches', 'stashes', 'recovery'] as const).map((value) => (
           <button
             key={value}
             aria-pressed={section === value}
@@ -293,7 +295,7 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
             ) : (
               <GitBranch size={15} />
             )}
-            {value === 'changes'
+            {value === 'review' ? t('Diff', 'Diff') : value === 'changes'
               ? t('Changes', 'Cambios')
               : value === 'history'
                 ? t('History', 'Historial')
@@ -380,6 +382,16 @@ function RepositoryPanel({ conversationId, active }: { conversationId: string; a
               {t('Updating repository…', 'Actualizando repositorio…')}
             </p>
           )}
+          {history && section === 'review' && <>
+            {!changes.length && <p className="git-empty">{t('No local changes', 'Sin cambios locales')}</p>}
+            {(['working', 'staged'] as const).map(kind => {
+              const files = kind === 'working' ? unstaged : staged
+              return files.length > 0 && <section key={kind} className="git-review-cards">
+                <h3>{kind === 'working' ? t('Unstaged changes', 'Cambios sin preparar') : t('Staged changes', 'Cambios preparados')}</h3>
+                {files.map(file => <ChangeCard key={file.path} path={file.path} endpoint={endpoint} revision={kind} active={active} refresh={refresh} />)}
+              </section>
+            })}
+          </>}
           {history && section === 'changes' && (
             <>
               {!!details?.conflicts.length && (

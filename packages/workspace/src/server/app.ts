@@ -32,6 +32,7 @@ import { WorkspaceService } from './service.js'
 import { chatgptRoutes } from './chatgpt-routes.js'
 import { projectSelection } from './project-selection.js'
 import { configureAgentAccess } from './agent-access.js'
+import { activePullRequest, reviewDiff, reviewItems, submitReview } from './pull-request.js'
 import * as git from './git.js'
 import { gitActionRoutes } from './git-actions.js'
 import type { LanguageModel } from 'ai'
@@ -173,6 +174,37 @@ export async function createApp(options: {
   app.get('/api/projects/:id/worktrees', async (request) =>
     git.listWorktrees(service.project(id(request.params))),
   )
+  app.get('/api/projects/:id/pull-request', async (request) => {
+    const project = service.project(id(request.params))
+    const { path } = z.object({ path: z.string().min(1).max(4000) }).parse(request.query)
+    const tree = project.kind === 'git' && (await git.listWorktrees(project)).find(item => item.path === path)
+    return { pr: tree ? await activePullRequest(tree.path) : null }
+  })
+  async function reviewTarget(projectId: string, query: unknown) {
+    const { path, url } = z.object({ path: z.string().min(1).max(4000), url: z.string().max(4000) }).parse(query)
+    const project = service.project(projectId)
+    const tree = project.kind === 'git' && (await git.listWorktrees(project)).find(item => item.path === path)
+    const pr = tree && await activePullRequest(tree.path)
+    if (!tree || !pr || pr.url !== url) throw new Error('The pull request is no longer available for this worktree.')
+    return { cwd: tree.path, pr }
+  }
+  app.get('/api/projects/:id/review', async request => {
+    const { cwd, pr } = await reviewTarget(id(request.params), request.query)
+    const { section } = z.object({ section: z.enum(['files', 'commits', 'checks']).default('files') }).parse(request.query)
+    return section === 'files' ? { diff: await reviewDiff(cwd, pr) } : { items: await reviewItems(cwd, pr, section) }
+  })
+  app.post('/api/projects/:id/review/ai', async request => {
+    const { provider, language } = z.object({ provider: providerId, language: z.enum(['en', 'es']) }).parse(request.body)
+    if (!service.chat.reviewPullRequest) throw new Error('This runtime does not support AI reviews.')
+    const { cwd, pr } = await reviewTarget(id(request.params), request.query)
+    return service.chat.reviewPullRequest(provider, await reviewDiff(cwd, pr), language)
+  })
+  app.post('/api/projects/:id/review', async request => {
+    const { action, body } = z.object({ action: z.enum(['approve', 'comment', 'changes']), body: z.string().trim().max(10000) }).parse(request.body)
+    const { cwd, pr } = await reviewTarget(id(request.params), request.query)
+    await submitReview(cwd, pr, action, body)
+    return { ok: true }
+  })
   app.get('/api/projects/:id/worktrees/location', async (request) => ({
     path: git.defaultWorktreePath(service.project(id(request.params)), service.worktreeDirectory()),
   }))
@@ -319,12 +351,14 @@ export async function createApp(options: {
     const staged = await git.diff(await service.workspace(conversation), 'staged')
     return { message: await service.chat.generateCommitMessage(conversation.id, staged.stdout, language) }
   })
+  app.get('/api/conversations/:id/git/totals', async request => git.changeTotals(await service.workspace(service.conversation(id(request.params)))))
   app.get('/api/conversations/:id/diff', async (request) => {
-    const { revision, path } = z.object({ revision: z.string().max(64), path: z.string().min(1).max(4000).optional() }).parse(request.query)
+    const { revision, path, context } = z.object({ context: z.literal('full').optional(), revision: z.string().max(64), path: z.string().min(1).max(4000).optional() }).parse(request.query)
     const result = await git.diff(
       await service.workspace(service.conversation(id(request.params))),
       revision,
       path,
+      context === 'full',
     )
     return { text: result.stdout, truncated: result.truncated }
   })

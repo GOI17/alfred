@@ -1,7 +1,7 @@
 import { takeMessageNavigation } from './search-message-navigation'
 import { flushSync } from 'react-dom'
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { ArrowUp, Square, Sparkles, X, Mic, Paperclip } from 'lucide-react'
+import { memo, useId, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { ArrowDown, ArrowUp, Square, Ellipsis, Sparkles, X, Mic, Paperclip } from 'lucide-react'
 import type { AgentState, Conversation, PublicState, ProviderId } from '../../shared/contracts'
 import { attachmentMediaType, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_TOTAL_ATTACHMENT_BYTES, type Attachment } from '../../shared/attachments'
 import { errorMessage } from './api'
@@ -70,6 +70,14 @@ const MessageRow = memo(function MessageRow({ message, conversationId, active, s
 })
 const emptyQueue: NonNullable<Conversation['queue']> = []
 function ConversationChat({ conversation, state, agent, settings }: Props) {
+  const controlsId = useId()
+  const [compact, setCompact] = useState(() => matchMedia('(max-width: 570px)').matches)
+  useEffect(() => {
+    const media = matchMedia('(max-width: 570px)')
+    const update = () => setCompact(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
   const { t, replyVoice } = useUI()
   const [text, setText] = useState(() => { try { return sessionStorage.getItem(`alfred.draft.${conversation.id}`) || '' } catch { return '' } })
   const dictation = useDictation(words => setText(current => current + (current && !/\s$/.test(current) ? ' ' : '') + words))
@@ -206,7 +214,14 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
     } catch (error) { setError(errorMessage(error)) }
     finally { sendLock.current = false; setSending(false) }
   }
+  const latestLabel = t('Back to latest', 'Volver a lo más reciente')
   const sendLabel = busy || queue.length || conversation.queuePaused ? t('Queue message', 'Poner mensaje en cola') : t('Send message', 'Enviar mensaje')
+  // Reuse the dictation slot for Stop on phones; never squeeze the model picker.
+  const dictationInMenu = compact && busy
+  const dictationControl = <Button type="button" variant={dictationInMenu ? "ghost" : "secondary"} size={dictationInMenu ? "action-row" : "icon"} disabled={sending || dictation.busy} aria-label={dictationLabel} title={dictationLabel} aria-pressed={dictation.active} onClick={dictation.toggle}>{dictation.active ? <Square size={15} fill="currentColor" /> : <Mic size={17} />}{dictationInMenu && dictationLabel}</Button>
+  const stopControl = <Button type="button" variant="secondary" size="icon" disabled={queueAction || sending} aria-label={t('Stop response and pause queue', 'Detener respuesta y pausar cola')} onClick={() => void act('stop')}><Square size={15} /></Button>
+  const contextControls = <ContextPermissions labeled={compact} conversation={conversation} state={state} provider={provider} busy={busy || sending || queueAction} />
+  const voiceSettings = <VoiceSettings labeled={compact} mode={dictation.mode} disabled={voice || sending || dictation.active || dictation.busy} onChange={mode => { dictation.cancel(); dictation.setMode(mode) }} />
   return <div className="chat-panel">
     <div className="message-history">
       <div className="messages" ref={scroller} tabIndex={0} role="region" aria-label={t('Conversation history', 'Historial de conversación')} onScroll={() => {
@@ -229,8 +244,8 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
           {agent?.approval && <ApprovalCard key={agent.approval.id} approval={agent.approval} conversationId={conversation.id} onError={setError} />}
         </div>
       </div>
-      {awayFromLatest && <Button data-follow-latest="true" type="button" variant="secondary" onClick={resumeFollowing}>
-        {t('Back to latest', 'Volver a lo más reciente')}
+      {awayFromLatest && <Button data-follow-latest="true" type="button" variant="secondary" size="icon" aria-label={latestLabel} title={latestLabel} onClick={resumeFollowing}>
+        <ArrowDown size={18} aria-hidden="true" />
       </Button>}
       <ChatQuotes scroller={scroller} disabled={sending} onNavigate={stopFollowing} onAdd={(quote) => {
         setText(current => `${current}${current.trim() ? '\n\n' : ''}${quote}\n\n`)
@@ -267,17 +282,26 @@ function ConversationChat({ conversation, state, agent, settings }: Props) {
         </div>}
         <ComposerInput onVoice={startVoice} history={history} conversationId={conversation.id} harness={conversation.harness} value={text} onChange={setText} sending={sending} busy={busy} onSend={() => void send()} settings={settings} />
         <div className="composer-footer">
+          {compact && <><Button variant="ghost" size="icon" popoverTarget={controlsId} aria-label={t('More message controls', 'Más controles del mensaje')} onClick={event => {
+            const rect = event.currentTarget.getBoundingClientRect()
+            const style = document.getElementById(controlsId)?.style
+            style?.setProperty('--controls-bottom', `${window.innerHeight - rect.top + 4}px`)
+            style?.setProperty('--controls-left', `${rect.left}px`)
+          }}><Ellipsis size={18} /></Button>
+          <div id={controlsId} popover="auto" className="mobile-actions-popup composer-actions-popup" onClick={event => {
+            if (event.target instanceof Element && event.target.closest('button') && event.currentTarget.contains(event.target)) event.currentTarget.hidePopover()
+          }}>{contextControls}{voiceSettings}{dictationInMenu && dictationControl}</div></>}
           <div className="attachment-controls">
             <input ref={fileInput} type="file" multiple hidden onChange={(event) => { void addFiles(Array.from(event.target.files || [])); event.target.value = '' }} />
             <span data-control="context-control" title={t('Execution is provided by the configured runtime adapter', 'La ejecución corresponde al adaptador de runtime configurado')}>{t('Runtime', 'Runtime')}</span>
             <ModelPicker state={state} provider={provider} onSelect={setProvider} settings={settings} disabled={sending} />
-            <ContextPermissions conversation={conversation} state={state} provider={provider} busy={busy || sending || queueAction} />
+            {!compact && contextControls}
           </div>
           <div className="queue-send-actions">
-            <VoiceSettings mode={dictation.mode} disabled={voice || sending || dictation.active || dictation.busy} onChange={mode => { dictation.cancel(); dictation.setMode(mode) }} />
-            <Button type="button" variant="secondary" size="icon" disabled={sending || dictation.busy} aria-label={dictationLabel} title={dictationLabel} aria-pressed={dictation.active} onClick={dictation.toggle}>{dictation.active ? <Square size={15} fill="currentColor" /> : <Mic size={17} />}</Button>
+            {!compact && voiceSettings}
+            {dictationInMenu ? stopControl : dictationControl}
             <Button type="button" variant="secondary" size="icon" disabled={sending || reading} aria-label={t('Attach files', 'Adjuntar archivos')} title={t('Attach images or text · maximum 2 MB per file', 'Adjuntar imágenes o texto · máximo 2 MB por archivo')} onClick={() => fileInput.current?.click()}><Paperclip size={17} /></Button>
-            {busy && <Button type="button" variant="secondary" size="icon" disabled={queueAction || sending} aria-label={t('Stop response and pause queue', 'Detener respuesta y pausar cola')} onClick={() => void act('stop')}><Square size={15} /></Button>}
+            {busy && !compact && stopControl}
             <Button type="submit" size="icon" disabled={!canSend} aria-label={sendLabel} title={sendLabel}><ArrowUp size={19} /></Button>
           </div>
         </div>

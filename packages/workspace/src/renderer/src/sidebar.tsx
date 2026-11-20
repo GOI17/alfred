@@ -4,6 +4,7 @@ import type { Conversation, Project, PublicState } from '../../shared/contracts'
 import { Button } from './components/ui/button'
 import { ProviderLogo } from './components/provider-logo'
 import { ProjectActions } from './components/project-actions'
+import { hasUnseenCompletion } from './agent-completion'
 import { WorkspaceAgentSummary } from './workspace-agent-summary'
 import { useUI } from './ui-preferences'
 import { SidebarResizer } from './sidebar-resizer'
@@ -82,10 +83,18 @@ export function Sidebar({ state, project, conversation, workspacePath, connected
     const age = today - calendarDay(time)
     groups[pins.includes(item.id) ? 0 : age <= 0 ? 1 : age === 1 ? 2 : age < 7 ? 3 : 4].items.push(item)
   })
-  function statusLabel(id: string) {
-    if (!connected) return t('Offline: status unavailable', 'Sin conexión: estado no disponible')
-    const status = state.agents[id]?.status
-    return status === 'running' ? t('Working', 'Trabajando') : status === 'waiting' ? t('Awaiting approval', 'Esperando aprobación') : status === 'error' ? t('Error', 'Error') : t('Available', 'Disponible')
+  function historyStatus(chat: Conversation) {
+    const current = state.agents[chat.id]?.status || 'idle'
+    if (current === 'idle' && !hasUnseenCompletion(chat)) return null
+    const status = !connected ? 'offline' : current === 'idle' ? 'done' : current
+    const [indicator, label] = {
+      running: ['↻', t('Working', 'Trabajando')],
+      waiting: ['Ⅱ', t('Awaiting approval', 'Esperando aprobación')],
+      error: ['!', t('Error', 'Error')],
+      done: ['✓', t('Done', 'Finalizado')],
+      offline: ['—', t('Offline', 'Sin conexión')],
+    }[status]
+    return <small className="conversation-status" data-status={status}><span aria-hidden="true">{indicator} </span>{label}</small>
   }
   return <>
     <button className="sidebar-scrim" data-open={mobileOpen} aria-label={t('Close sidebar', 'Cerrar barra lateral')} onClick={close} />
@@ -105,8 +114,8 @@ export function Sidebar({ state, project, conversation, workspacePath, connected
               <h3 className="spaces-heading" style={{ margin: '16px 0 6px', fontSize: 11, fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase' }}>{group.label}</h3>
               {group.items.map((item) => <div key={item.id} className="conversation-row" data-active={conversation?.id === item.id}>
                 <button onClick={() => selectConversation(item.id)} aria-current={conversation?.id === item.id ? 'page' : undefined} title={item.title}>
-                  <ProviderLogo provider={item.lastProvider} /><span>{item.title}</span>
-                  <span className="status-dot" data-status={connected ? state.agents[item.id]?.status || 'idle' : 'offline'} title={statusLabel(item.id)} />
+                  <ProviderLogo provider={item.lastProvider} />
+                  <span className="conversation-summary"><span>{item.title}</span>{historyStatus(item)}</span>
                 </button>
                 <Button variant="ghost" size="icon" aria-pressed={pins.includes(item.id)} aria-label={`${pins.includes(item.id) ? t('Unpin', 'Desfijar') : t('Pin', 'Fijar')} ${item.title}`} onClick={() => togglePin(item.id)}><Pin size={13} /></Button>
                 <Button variant="ghost" size="icon" onClick={() => removeConversation(item.id)} aria-label={`${t('Delete conversation', 'Eliminar conversación')} ${item.title}`}><X size={13} /></Button>

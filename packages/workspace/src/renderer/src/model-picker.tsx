@@ -5,6 +5,7 @@ import type { ProviderId, PublicState } from '../../shared/contracts'
 import { apiProviderId } from '../../shared/contracts'
 import { api, errorMessage } from './api'
 import { Button } from './components/ui/button'
+import { ProviderLogo } from './components/provider-logo'
 import { providerNames } from './provider-names'
 import { useUI } from './ui-preferences'
 import './assets/model-picker.css'
@@ -71,14 +72,14 @@ export function ModelPicker({ state, provider, onSelect, settings, disabled }: {
   }
   return <>
     <Button variant="secondary" data-control="model-picker-trigger" disabled={disabled} aria-haspopup="dialog" aria-expanded={open} onClick={show} aria-label={`${t('Select model', 'Seleccionar modelo')}: ${activeModel || providerNames[providerGroup(provider)]}`} title={activeModel}>
-      <span>{activeModel || providerNames[providerGroup(provider)]}</span><ChevronDown size={14} />
+      <ProviderLogo provider={provider} decorative /><span className="model-picker-label">{activeModel || providerNames[providerGroup(provider)]}</span><ChevronDown size={14} />
     </Button>
     <Dialog open={open} onClose={() => { if (!lock.current) setOpen(false) }} title={t('Select model', 'Seleccionar modelo')}
       description={t('The selected model will be the default for its connection for future messages.', 'El modelo seleccionado será el predeterminado de su conexión para futuros mensajes.')}>
         <div className="model-picker-columns">
           <nav className="model-provider-list" aria-label={t('Supported providers', 'Proveedores compatibles')}>
             {apiProviderId.options.map((id) => <button type="button" key={id} aria-pressed={view === id} disabled={saving} onClick={() => { if (id !== view) { setModels([]); setError(''); setLoading(groupConnected(id)); setView(id) } }}>
-              <span>{providerNames[id]}</span><small>{groupConnected(id) ? t('Connected', 'Conectado') : t('Not connected', 'Sin conectar')}</small>
+              <span className="model-provider-name"><ProviderLogo provider={id} decorative />{providerNames[id]}</span><small>{groupConnected(id) ? t('Connected', 'Conectado') : t('Not connected', 'Sin conectar')}</small>
             </button>)}
           </nav>
           <section className="model-results" aria-label={`${t('Models from', 'Modelos de')} ${providerNames[view]}`} aria-busy={loading || saving}>
@@ -92,7 +93,7 @@ export function ModelPicker({ state, provider, onSelect, settings, disabled }: {
                 {error && <div role="alert"><p className="error-text">{error}</p><Button size="small" variant="secondary" disabled={saving} onClick={() => { setError(''); setLoading(true); setRetry((value) => value + 1) }}>{t('Retry', 'Reintentar')}</Button></div>}
                 {!loading && !error && !models.length && <p>{t('No models available.', 'No hay modelos disponibles.')}</p>}
                 {models.map((model) => <button type="button" className="model-option" key={model.id} disabled={saving || loading} aria-pressed={provider === model.connection && activeModel === model.id} onClick={() => void select(model)}>
-                  <span>{model.name}{model.name !== model.id && <small>{model.id}</small>}</span>
+                  <ProviderLogo provider={model.connection} decorative /><span>{model.name}{model.name !== model.id && <small>{model.id}</small>}</span>
                   {provider === model.connection && activeModel === model.id && <Check size={16} />}
                 </button>)}
                 {saving && <p role="status">{t('Selecting model…', 'Seleccionando modelo…')}</p>}

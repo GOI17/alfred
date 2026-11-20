@@ -4,10 +4,11 @@ import { layoutKey, stringList, usePersistentLayout } from './use-persistent-lay
 import CommandPalette, { type WorkspaceCommand } from './command-palette'
 import { workspaceCommands } from './command-registry'
 import { ChatHeaderTarget } from './chat-deck'
+import { PullRequestPanel, useActivePullRequest } from './pull-request-panel'
 import { ActivityCenter } from './activity-center'
 import { NotificationPreferences } from './notification-preferences'
 import { lazy, Suspense, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { Search, Files, RefreshCw, ArrowUpRight, FolderPlus, GitBranch, Globe, Menu, MessageSquare, Plus, Smartphone, TerminalSquare, Columns2, Sparkles, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Search, Files, GitPullRequest, RefreshCw, ArrowUpRight, FolderPlus, GitBranch, Globe, Ellipsis, Menu, MessageSquare, Plus, Smartphone, TerminalSquare, Columns2, Sparkles, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import type { Conversation, Layout, Worktree } from '../../shared/contracts'
 import { panes } from '../../shared/contracts'
 import { api, errorMessage } from './api'
@@ -52,7 +53,19 @@ export function App() {
   const phoneLabel = tunnelError ? t('Could not verify the tunnel', 'No se pudo verificar el túnel') : !tunnel ? t('Checking phone connection…', 'Comprobando conexión móvil…') : tunnel.state === 'connected' ? t('Phone: tunnel connected', 'Móvil: túnel conectado') : tunnel.state === 'connecting' ? t('Phone: connecting…', 'Móvil: conectando…') : tunnel.state === 'stopping' ? t('Phone: disconnecting…', 'Móvil: desconectando…') : tunnel.state === 'error' ? t('Phone: connection error', 'Móvil: error de conexión') : tunnel.state === 'disabled' ? t('Set up phone connection', 'Configurar conexión móvil') : t('Connect phone', 'Conectar móvil')
   const [projectId, setProjectId] = useState(localStorage.getItem('alfred.project') || '')
   const [conversationId, setConversationId] = useState(localStorage.getItem('alfred.conversation') || '')
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(localStorage.getItem('alfred.sidebarCollapsed') === 'true')
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(localStorage.getItem('alfred.sidebarCollapsed') === 'true')
+  const [compactSidebar, setCompactSidebar] = useState(() => matchMedia('(max-width: 1024px)').matches)
+  const [compactSidebarCollapsed, setCompactSidebarCollapsed] = useState(true)
+  const sidebarCollapsed = compactSidebar ? compactSidebarCollapsed : desktopSidebarCollapsed
+  useEffect(() => {
+    const query = matchMedia('(max-width: 1024px)')
+    const update = () => {
+      setCompactSidebar(query.matches)
+      setCompactSidebarCollapsed(true)
+    }
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
   const [sidebarPreviewSuppressed, setSidebarPreviewSuppressed] = useState(false)
   const sidebarOpener = useRef<HTMLSpanElement>(null)
   const focusSidebarOpener = useRef(false)
@@ -60,7 +73,8 @@ export function App() {
     const collapsing = !sidebarCollapsed
     setSidebarPreviewSuppressed(collapsing)
     focusSidebarOpener.current = collapsing
-    setSidebarCollapsed(collapsing)
+    if (compactSidebar) setCompactSidebarCollapsed(collapsing)
+    else setDesktopSidebarCollapsed(collapsing)
   }
   useEffect(() => {
     if (sidebarCollapsed && focusSidebarOpener.current) {
@@ -94,9 +108,11 @@ export function App() {
   const [searchFilter, setSearchFilter] = useState<SearchKind | 'all'>('all')
   const [fileSearchConversation, setFileSearchConversation] = useState('')
   const [fileRequest, setFileRequest] = useState<{ conversationId: string; path: string }>()
+  const [openPr, setOpenPr] = useState('')
   const [filesConversation, setFilesConversation] = useState('')
   useEffect(() => onOpenWorkspaceFile(request => {
     if (!state?.conversations.some(item => item.id === request.conversationId)) return
+    setOpenPr('')
     setFileRequest(request)
     setFilesConversation(request.conversationId)
     setToolStates(previous => {
@@ -108,10 +124,12 @@ export function App() {
   const tools = toolStates[conversationId] || { visible: { terminal: false, browser: false, git: false }, maximized: null }
   const [confirmation, setConfirmation] = useState<{ title: string; description: string; perform: () => Promise<void> }>()
   const project = state?.projects.find((item) => item.id === projectId)
+  const pr = useActivePullRequest(authenticated && project?.kind === 'git' ? project.id : undefined, workspacePath)
+  const prShown = !!pr && openPr === pr.url
   const conversation = state?.conversations.find((item) => item.id === conversationId && item.projectId === projectId && item.workspacePath === workspacePath)
-  useEffect(() => { setFileSearchConversation(''); setFilesConversation('') }, [conversationId, workspacePath, projectId])
+  useEffect(() => { setOpenPr(''); setFileSearchConversation(''); setFilesConversation('') }, [conversationId, workspacePath, projectId])
   const headerConversation = state?.conversations.find((item) => item.id === focusedChatId && item.projectId === projectId && item.workspacePath === workspacePath) || conversation
-  useEffect(() => { localStorage.setItem('alfred.sidebarCollapsed', String(sidebarCollapsed)) }, [sidebarCollapsed])
+  useEffect(() => { localStorage.setItem('alfred.sidebarCollapsed', String(desktopSidebarCollapsed)) }, [desktopSidebarCollapsed])
   useEffect(() => {
     if (state && !state.projects.some((item) => item.id === projectId)) selectSpace(state.projects[0]?.id || '')
   }, [state, projectId])
@@ -210,7 +228,7 @@ export function App() {
     if (conversation) void execute(async () => { await api(`/conversations/${conversation.id}/layout`, layout, 'PUT'); await refresh() })
   }
   function showTool(kind: ToolKind, shown: boolean) {
-    if (shown && kind !== 'terminal') setFilesConversation('')
+    if (shown && kind !== 'terminal') { setFilesConversation(''); setOpenPr('') }
     setToolStates((previous) => {
       const current = previous[conversationId] || { visible: { terminal: false, browser: false, git: false }, maximized: null }
       const visible = { ...current.visible, [kind]: shown }
@@ -247,7 +265,7 @@ export function App() {
     const Icon = kind === 'terminal' ? TerminalSquare : kind === 'browser' ? Globe : GitBranch
     const exists = panes(conversation.layout).some((pane) => pane.kind === kind)
     const shown = exists && tools.visible[kind]
-    return <Button key={kind} variant="ghost" size="icon" disabled={busy || (!exists && panes(conversation.layout).length >= 8) || (kind === 'git' && project?.kind !== 'git')} onClick={() => toggleTool(kind)} aria-label={label} aria-pressed={shown} title={`${shown ? t('Hide', 'Ocultar') : t('Show', 'Mostrar')} ${label}`}><Icon size={18} /></Button>
+    return <Button key={kind} variant="ghost" size={mobile ? "action-row" : "icon"} disabled={busy || (!exists && panes(conversation.layout).length >= 8) || (kind === 'git' && project?.kind !== 'git')} onClick={() => toggleTool(kind)} aria-label={label} aria-pressed={shown} title={`${shown ? t('Hide', 'Ocultar') : t('Show', 'Mostrar')} ${label}`}><Icon size={18} />{mobile && label}</Button>
   }
   useEffect(() => {
     let prefix = false, timer: ReturnType<typeof setTimeout>
@@ -329,6 +347,26 @@ export function App() {
   })
   if (authenticated === undefined) return <div className="loading-screen"><span className="brand-mark">a·</span><p>{t('Opening your workspace…', 'Abriendo tu espacio…')}</p></div>
   if (!authenticated || !state) return <Suspense fallback={<div className="loading-screen" role="status">{t('Loading…', 'Cargando…')}</div>}><Login connected={refresh} /></Suspense>
+  const prLabel = pr ? `${pr.provider === 'GitLab' ? 'MR !' : 'PR #'}${pr.number}` : t('No active PR', 'Sin PR activo')
+  const prTitle = pr ? `${prLabel}: ${pr.title}` : prLabel
+  const toolRail = (conversation || project || canConnectPhone) && <aside className={mobile ? "mobile-action-section" : "workspace-right-sidebar"} aria-label={t('Workspace tools', 'Herramientas del espacio')}>
+        <div className={mobile ? undefined : "right-sidebar-tools"}>
+          {conversation && <Button variant="ghost" size={mobile ? "action-row" : "icon"} aria-label={t('Files', 'Archivos')} title={t('Files', 'Archivos')} aria-pressed={filesConversation === conversation.id} onClick={() => {
+            setOpenPr('')
+            const opening = filesConversation !== conversation.id
+            setFilesConversation(opening ? conversation.id : '')
+            if (opening) { showTool('browser', false); showTool('git', false) }
+          }}><Files size={18} />{mobile && t('Files', 'Archivos')}</Button>}
+          <Button variant="ghost" size={mobile ? "action-row" : "icon"} disabled={!pr} title={prTitle} aria-label={prTitle} aria-pressed={prShown} onClick={() => {
+            if (!pr) return
+            if (!prShown) { setFilesConversation(''); showTool('browser', false); showTool('git', false) }
+            setOpenPr(prShown ? '' : pr.url)
+          }}><GitPullRequest size={18} />{mobile && prLabel}</Button>
+          {toolButton('browser')}
+          {toolButton('git')}
+        </div>
+        {canConnectPhone && <div className={mobile ? undefined : "right-sidebar-phone"}><Button variant="ghost" size={mobile ? "action-row" : "icon"} onClick={() => setDialog('phone')} aria-label={phoneLabel} title={phoneLabel} aria-haspopup="dialog" data-connected={tunnel?.state === 'connected'}><Smartphone size={18} />{mobile && phoneLabel}</Button></div>}
+      </aside>
   return <NotificationPreferences><div className="app-shell" data-sidebar-collapsed={sidebarCollapsed}>
     <div id="workspace-sidebar" className="workspace-sidebar-container" data-preview-suppressed={sidebarPreviewSuppressed} onPointerEnter={() => setSidebarPreviewSuppressed(false)} onPointerLeave={() => setSidebarPreviewSuppressed(false)}>
       <Sidebar state={state} project={project} conversation={(floatingIds.length ? state.conversations.find((item) => item.id === focusedChatId && item.projectId === projectId && item.workspacePath === workspacePath) : undefined) || conversation} workspacePath={workspacePath} connected={connected} mobileOpen={mobileOpen}
@@ -366,11 +404,22 @@ export function App() {
           addWorktree={() => setDialog('worktree')} /></>}</div>
           {headerConversation && <div className="conversation-title" aria-busy={regeneratingTitle}><span title={headerConversation.title}>{headerConversation.title}</span><Button variant="ghost" size="icon" disabled={regeneratingTitle || !connected || !headerConversation.messages.length || !headerConversation.lastProvider || state.agents[headerConversation.id]?.status === 'running' || state.agents[headerConversation.id]?.status === 'waiting'} onClick={() => void regenerateTitle()} aria-label={regeneratingTitle ? t('Regenerating title…', 'Regenerando título…') : t('Regenerate title with recent context', 'Regenerar título con el contexto reciente')} title={t('Regenerate using the last provider used in this conversation (consumes tokens)', 'Regenerar con el último proveedor usado en esta conversación (consume tokens)')}><RefreshCw size={14} /></Button></div>}
         </div>
-        <div className="workspace-chat-actions" ref={setChatHeaderTarget} />
-        <div className="panel-tools">
-          <Button variant="ghost" size="icon" aria-label={t('Search workspace', 'Buscar en el espacio')} title={t('Search (⌘P / Ctrl+P)', 'Buscar (⌘P / Ctrl+P)')} onClick={() => { setSearchFilter('all'); setFileSearchConversation('workspace') }}><Search size={18} /></Button>
-          <ActivityCenter state={state} connected={connected} select={openConversation} />
+        {mobile && <Button variant="ghost" size="icon" aria-label={t('Workspace actions', 'Acciones del espacio')} popoverTarget="workspace-actions" onClick={event => {
+          const rect = event.currentTarget.getBoundingClientRect()
+          const style = document.getElementById('workspace-actions')?.style
+          style?.setProperty('--actions-top', `${rect.bottom + 4}px`)
+          style?.setProperty('--actions-right', `${Math.max(8, window.innerWidth - rect.right)}px`)
+        }}><Ellipsis size={20} /></Button>}
+        <div id="workspace-actions" popover={mobile ? 'auto' : undefined} className="workspace-action-tray mobile-actions-popup" onClick={event => {
+          if (mobile && event.target instanceof Element && event.target.closest('button:not([aria-haspopup="menu"])') && event.currentTarget.contains(event.target)) event.currentTarget.hidePopover()
+        }}>
+        <div className="workspace-chat-actions" role="group" aria-label={t('Chat actions', 'Acciones del chat')} ref={setChatHeaderTarget} />
+        <div className={mobile ? "mobile-action-section" : "panel-tools"}>
+          <Button variant="ghost" size={mobile ? "action-row" : "icon"} aria-label={t('Search workspace', 'Buscar en el espacio')} title={t('Search (⌘P / Ctrl+P)', 'Buscar (⌘P / Ctrl+P)')} onClick={() => { setSearchFilter('all'); setFileSearchConversation('workspace') }}><Search size={18} />{mobile && t('Search workspace', 'Buscar en el espacio')}</Button>
+          <ActivityCenter labeled={mobile} state={state} connected={connected} select={openConversation} />
           {toolButton('terminal')}
+        </div>
+          {mobile && toolRail}
         </div>
       </header>
       {(error || worktreeError) && <div className="app-error" role="alert"><span>{error || worktreeError}</span><Button variant="ghost" size="small" onClick={() => { setError(''); setWorktreeError('') }}>{t('Close', 'Cerrar')}</Button></div>}
@@ -388,18 +437,8 @@ export function App() {
         </div>}
       </div>
       {state.conversations.some(item => item.id === filesConversation) && <Suspense fallback={<p>{t('Loading…', 'Cargando…')}</p>}><FileViewer key={filesConversation} conversationId={filesConversation} openFile={fileRequest?.conversationId === filesConversation ? fileRequest : undefined} close={() => setFilesConversation('')} /></Suspense>}
-      {(conversation || canConnectPhone) && <aside className="workspace-right-sidebar" aria-label={t('Workspace tools', 'Herramientas del espacio')}>
-        <div className="right-sidebar-tools">
-          {conversation && <Button variant="ghost" size="icon" aria-label={t('Files', 'Archivos')} title={t('Files', 'Archivos')} aria-pressed={filesConversation === conversation.id} onClick={() => {
-            const opening = filesConversation !== conversation.id
-            setFilesConversation(opening ? conversation.id : '')
-            if (opening) { showTool('browser', false); showTool('git', false) }
-          }}><Files size={18} /></Button>}
-          {toolButton('browser')}
-          {toolButton('git')}
-        </div>
-        {canConnectPhone && <div className="right-sidebar-phone"><Button variant="ghost" size="icon" onClick={() => setDialog('phone')} aria-label={phoneLabel} title={phoneLabel} aria-haspopup="dialog" data-connected={tunnel?.state === 'connected'}><Smartphone size={18} /></Button></div>}
-      </aside>}
+      {pr && prShown && <PullRequestPanel key={`${projectId}:${workspacePath}:${pr.url}`} providers={state.providers} projectId={projectId} path={workspacePath} pr={pr} close={() => setOpenPr('')} />}
+      {!mobile && toolRail}
       </div>
     </main>
     {paletteCommands && <CommandPalette commands={paletteCommands} close={() => setPaletteCommands(undefined)} />}

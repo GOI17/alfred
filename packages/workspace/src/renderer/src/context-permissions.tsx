@@ -10,16 +10,16 @@ import { useConfirmation } from './components/ui/confirmation'
 import { useUI } from './ui-preferences'
 import './assets/context-permissions.css'
 
-function Control({ label, heading, icon, children }: { label: string; heading?: string; icon: ReactNode; children: ReactNode }) {
+function Control({ label, heading, icon, children, labeled }: { labeled?: boolean; label: string; heading?: string; icon: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   return <>
-    <Button variant="ghost" data-control="context-control" title={label} aria-label={label} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>{icon}<span className="context-control-label">{label}</span></Button>
+    <Button variant="ghost" size={labeled ? "action-row" : "default"} data-control={labeled ? undefined : "context-control"} title={label} aria-label={label} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>{icon}{labeled ? heading || label : <span className="context-control-label">{label}</span>}</Button>
     <Dialog open={open} onClose={() => setOpen(false)} title={heading || label} description="">
       <div className="context-dialog">{children}</div>
     </Dialog>
   </>
 }
-export function ContextPermissions({ conversation, state, provider, busy }: {
+export function ContextPermissions({ conversation, state, provider, busy, labeled }: { labeled?: boolean;
   conversation: Conversation; state: PublicState; provider: ProviderId; busy: boolean
 }) {
   const { t, language } = useUI()
@@ -83,7 +83,7 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
   }
   return <>
     {dialog}
-    <Control heading={t('Context', 'Contexto')} label={`${t('Context', 'Contexto')}: ${tokenLabel} tokens · ${percentage === undefined ? t('Capacity pending', 'Capacidad pendiente') : `${percentage}% ${t('used', 'usado')}`}`} icon={<div className="context-token-count" aria-hidden="true" data-unknown={percentage === undefined}>
+    <Control labeled={labeled} heading={t('Context', 'Contexto')} label={`${t('Context', 'Contexto')}: ${tokenLabel} tokens · ${percentage === undefined ? t('Capacity pending', 'Capacidad pendiente') : `${percentage}% ${t('used', 'usado')}`}`} icon={<div className="context-token-count" aria-hidden="true" data-unknown={percentage === undefined}>
       <svg viewBox="0 0 40 40" focusable="false">
         <circle className="context-ring-track" cx="20" cy="20" r="17" />
         {percentage !== undefined && <circle className="context-ring-value" cx="20" cy="20" r="17" pathLength="100" strokeDasharray="100" strokeDashoffset={100 - Math.min(100, Math.max(0, percentage))} transform="rotate(-90 20 20)" />}
@@ -119,7 +119,7 @@ export function ContextPermissions({ conversation, state, provider, busy }: {
         <p>{t('Recent messages remain intact. Higher reductions lose more detail; visible history and total consumption are preserved.', 'Los mensajes recientes permanecen intactos. Una mayor reducción pierde más detalle; el historial visible y el consumo total se conservan.')}</p>
       </details>
     </Control>
-    <Control heading={t('Permissions', 'Permisos')} label={permissionLabel(mode)} icon={<ShieldCheck size={15} />}>
+    <Control labeled={labeled} heading={t('Permissions', 'Permisos')} label={permissionLabel(mode)} icon={<ShieldCheck size={15} />}>
       <fieldset className="permission-options" disabled={saving}>
         <legend>{t('Agent permissions', 'Permisos del agente')}</legend>
         <label><input type="radio" name={`permission-${conversation.id}`} checked={mode === 'read-only'} onChange={() => void change('read-only')} />{permissionLabel('read-only')}<small>{t('No file writes, terminal, or MCP.', 'Sin escribir archivos, terminal ni MCP.')}</small></label>

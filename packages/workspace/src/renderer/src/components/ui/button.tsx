@@ -3,7 +3,7 @@ import { workspaceCommands } from '../../command-registry'
 import AtlassianButton from '@atlaskit/button/new'
 
 type Variant = 'default' | 'secondary' | 'ghost' | 'danger'
-type Size = 'default' | 'icon' | 'small'
+type Size = 'default' | 'icon' | 'small' | 'action-row'
 const appearances = { default: 'primary', secondary: 'default', ghost: 'subtle', danger: 'danger' } as const
 
 export function Button({

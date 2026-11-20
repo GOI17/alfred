@@ -5,12 +5,10 @@ import { Button } from './components/ui/button'
 import { Input } from './components/ui/input'
 
 export function BrowserPanel({
-  conversationId,
-  paneId,
+  endpoint,
   active = true,
 }: {
-  conversationId: string
-  paneId: string
+  endpoint: string
   active?: boolean
 }) {
   const socket = useRef<WebSocket>(null),
@@ -48,7 +46,7 @@ export function BrowserPanel({
     }
     function connect() {
       let firstLocation = true
-      const current = new WebSocket(socketUrl(`/conversations/${conversationId}/browser/${paneId}`))
+      const current = new WebSocket(socketUrl(endpoint))
       socket.current = current
       current.binaryType = 'blob'
       current.onopen = () => { if (!disposed) setOnline(true) }
@@ -96,7 +94,7 @@ export function BrowserPanel({
       setOnline(false)
       URL.revokeObjectURL(frame.current)
     }
-  }, [conversationId, paneId, active, pageVisible])
+  }, [endpoint, active, pageVisible])
   useEffect(() => {
     if (url && url !== 'about:blank') setAddress(url)
   }, [url])

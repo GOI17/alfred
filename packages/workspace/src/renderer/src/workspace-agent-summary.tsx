@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import type { Conversation, PublicState } from '../../shared/contracts'
 import { ProviderLogo } from './components/provider-logo'
 import { useUI } from './ui-preferences'
-import { hasUnseenCompletion } from './agent-completion'
+import { hasUnseenCompletion, markCompletionsSeen } from './agent-completion'
 
 const dockPreviewOpenEvent = 'workspace-agent-preview-open'
 
@@ -55,7 +55,8 @@ export function WorkspaceAgentSummary({ state, connected, projectId, workspacePa
   })
   const running = chats.filter((chat) => status(chat) === 'running').length
   const waiting = chats.filter((chat) => status(chat) === 'waiting').length
-  const finished = chats.filter((chat) => status(chat) === 'finished').length
+  const finishedChats = chats.filter((chat) => status(chat) === 'finished')
+  const finished = finishedChats.length
   const labels = { running: t('Working', 'Trabajando'), waiting: t('Waiting for action', 'Esperando acción'), finished: t('Finished', 'Finalizado'), error: t('Error', 'Error'), idle: t('Available', 'Disponible'), offline: t('Status unavailable', 'Estado no disponible') }
   const priority = { waiting: 0, running: 1, finished: 2, error: 3, idle: 4, offline: 5 }
   const sorted = [...chats].sort((a, b) => priority[status(a)] - priority[status(b)] || a.title.localeCompare(b.title))
@@ -97,6 +98,10 @@ export function WorkspaceAgentSummary({ state, connected, projectId, workspacePa
     </span>
     {dock && open && createPortal(<div id={id} ref={popup} className="workspace-agent-preview" role="region" aria-label={label} onMouseEnter={show} onMouseLeave={scheduleClose}>
       <strong>{label}</strong><p>{summary}</p>
+      {finished > 0 && <button type="button" className="workspace-agent-preview-row" onClick={(event) => {
+        event.stopPropagation()
+        markCompletionsSeen(finishedChats)
+      }}>{t('Mark all as seen', 'Marcar todas como vistas')}</button>}
       {connected && !sorted.length && <p>{t('No working, waiting for action or unread finished agents.', 'No hay agentes trabajando, esperando acción o finalizados sin ver.')}</p>}
       {sorted.map((chat) => <button type="button" className="workspace-agent-preview-row" key={chat.id} onClick={(event) => { event.stopPropagation(); dismiss(); selectConversation(chat.id) }}>
         <ProviderLogo provider={chat.lastProvider} />

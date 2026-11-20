@@ -160,7 +160,21 @@ export async function history(path: string, skip = 0): Promise<GitHistory> {
     hasMore: commits.length > 50,
   }
 }
-export async function diff(path: string, revision: string, filePath?: string) {
+// Count tracked text changes without transferring patches to the closed inspector.
+export async function changeTotals(path: string) {
+  const parts = await Promise.all([[], ['--cached']].map(flags => git(path,
+    ['diff', ...flags, '--no-ext-diff', '--no-textconv', '--numstat', '--no-renames', '-z', '--', '.'])))
+  let added = 0, removed = 0
+  for (const part of parts) {
+    if (part.truncated) throw new Error('Change summary exceeds preview limit.')
+    for (const entry of part.stdout.split('\0')) {
+      const match = /^(\d+)\t(\d+)\t/.exec(entry)
+      if (match) { added += Number(match[1]); removed += Number(match[2]) }
+    }
+  }
+  return { added, removed }
+}
+export async function diff(path: string, revision: string, filePath?: string, fullContext = false) {
   if (filePath !== undefined) {
     if (revision !== 'working' && revision !== 'staged')
       throw new Error('File previews require working or staged changes.')
@@ -190,7 +204,7 @@ export async function diff(path: string, revision: string, filePath?: string) {
       return { stdout: stdout.slice(0, 2_000_000), truncated: stdout.length > 2_000_000 }
     }
     return git(path, ['--literal-pathspecs', 'diff', ...(revision === 'staged' ? ['--cached'] : []),
-      '--no-ext-diff', '--no-textconv', '--no-color', '--', filePath])
+      ...(fullContext ? ['--unified=2147483647'] : []), '--no-ext-diff', '--no-textconv', '--no-color', '--', filePath])
   }
   if (revision === 'working')
     return git(path, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--', '.'])

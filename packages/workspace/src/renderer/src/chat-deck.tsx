@@ -3,7 +3,7 @@ import AtlassianButton from '@atlaskit/button/new'
 import { layoutKey, point, pointMap, stringList, usePersistentLayout } from './use-persistent-layout'
 import { createPortal } from 'react-dom'
 import { createContext, useContext, useEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react'
-import { Columns2, PanelTop, X, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
+import { Columns2, PanelTop, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Conversation } from '../../shared/contracts'
 import { Button } from './components/ui/button'
 import { useUI } from './ui-preferences'
@@ -41,7 +41,6 @@ export function ChatDeck({ conversation, conversations, render, floatingIds, set
   const { t } = useUI()
   const headerTarget = useContext(ChatHeaderTarget)
   const inHeader = (content: ReactNode) => headerTarget ? createPortal(content, headerTarget) : content
-  const [popupBlocked, setPopupBlocked] = useState<string | null>(null)
   const key = (part: string) => layoutKey(conversation.projectId, conversation.workspacePath, part)
   const [ids, setIds] = usePersistentLayout<string[]>(key('columns'), [], stringList)
   const [localFloating, setLocalFloating] = useState<string[]>([])
@@ -84,15 +83,6 @@ export function ChatDeck({ conversation, conversations, render, floatingIds, set
   const chats = [conversation, ...[...new Set([...ids, ...floating])].flatMap((id) => available.find((item) => item.id === id) || [])]
   const active = chats.some((item) => item.id === focused) ? focused : conversation.id
   useEffect(() => { onActiveChatChange?.(active) }, [active, onActiveChatChange])
-  function openWindow(id: string) {
-    const url = new URL(window.location.href)
-    url.search = ''
-    url.hash = ''
-    url.searchParams.set('chatWindow', id)
-    const popup = window.open(url.href, `alfred-chat-${id}`, 'popup=yes,width=720,height=900,resizable=yes,scrollbars=yes')
-    setPopupBlocked(popup ? null : id)
-    popup?.focus()
-  }
   function reveal(id: string) {
     if (floating.length) {
       if (!floating.includes(id)) setFloating((current) => [...current, id])
@@ -155,7 +145,6 @@ export function ChatDeck({ conversation, conversations, render, floatingIds, set
 
       {chats.map((chat) => <section key={chat.id} className="chat-column" tabIndex={-1} data-chat-column={chat.id} data-floating={floating.includes(chat.id)} data-focused={active === chat.id} aria-label={chat.title} style={floating.includes(chat.id) ? { width: sizes[chat.id]?.x, height: sizes[chat.id]?.y, left: positionFor(chat.id).x + camera.x, top: positionFor(chat.id).y + camera.y, zIndex: active === chat.id ? 6 + floating.length : 5 + floating.indexOf(chat.id) } : undefined} onPointerDownCapture={() => setFocused(chat.id)} onFocusCapture={() => setFocused(chat.id)}>
         {(!headerTarget || active === chat.id) && inHeader(<div className="chat-column-heading">
-          <Button variant="ghost" size="icon" aria-label={t('Open in separate window', 'Abrir en ventana independiente')} title={t('Open in separate window', 'Abrir en ventana independiente')} onClick={() => openWindow(chat.id)}><ExternalLink size={16} /></Button>
           <span className="chat-float-control"><Button variant="ghost" size="icon" aria-label={floating.includes(chat.id) ? t('Dock chat', 'Acoplar chat') : t('Float chat', 'Hacer flotante el chat')} title={floating.includes(chat.id) ? t('Dock chat', 'Acoplar chat') : t('Float chat', 'Hacer flotante el chat')} aria-pressed={floating.includes(chat.id)} onClick={() => { if (!floating.includes(chat.id)) move(chat.id, 24 - camera.x, 24 - camera.y); setFloating((current) => current.includes(chat.id) ? current.filter((id) => id !== chat.id) : [...current, chat.id]); setIds((current) => chat.id === conversation.id || current.includes(chat.id) ? current : [...current, chat.id]) }}><PanelTop size={15} /></Button></span>
           {chat.id !== conversation.id && <Button variant="ghost" size="icon" title={t('Close column', 'Cerrar columna')} aria-label={`${t('Close column', 'Cerrar columna')}: ${chat.title}`} onClick={() => {
             setIds((current) => current.filter((id) => id !== chat.id))
@@ -163,7 +152,6 @@ export function ChatDeck({ conversation, conversations, render, floatingIds, set
             reveal(conversation.id)
           }}><X size={15} /></Button>}
         </div>)}
-        {popupBlocked === chat.id && <p role="alert" className="chat-window-error">{t('Allow pop-ups for Alfred and try again.', 'Permite las ventanas emergentes de Alfred y vuelve a intentarlo.')}</p>}
         <div className="chat-column-body">{render(chat)}</div>
       </section>)}
     </div>

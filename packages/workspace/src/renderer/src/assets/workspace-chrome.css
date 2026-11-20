@@ -354,6 +354,16 @@
   border: 0;
   background: transparent;
 }
+.workspace-chat-actions {
+  padding: var(--ds-space-025, 2px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+.workspace-chat-actions > .chat-column-heading:not(:first-child) {
+  border-inline-start: 1px solid var(--border);
+  padding-inline-start: var(--ds-space-025, 2px);
+}
 .workspace-chat-actions:empty { display: none; }
 .workspace-chat-actions .chat-column-title:not([hidden]) {
   display: inline-flex;
@@ -477,3 +487,27 @@
 /* Keep the space dock flexible within the sidebar. */
 .space-dock-row { display: flex; align-items: center; gap: var(--ds-space-050, 4px); flex-shrink: 0; min-width: 0; margin: var(--ds-space-150, 12px) 0 var(--ds-space-100, 8px); }
 .space-dock-row > .space-dock { flex: 1; min-width: 0; margin: 0; }
+
+.workspace-action-tray { display: contents; }
+@media (max-width: 700px) {
+  .workspace-header.workspace-header-unified { flex-wrap: wrap; overflow: visible; row-gap: 0; }
+  .workspace-header-unified .workspace-heading-context { flex: 1; min-width: 0; max-width: none; padding: 0; }
+  .workspace-header-unified .conversation-title > button { width: 30px; height: 30px; }
+  .workspace-header-unified .workspace-action-tray { display: none; }
+  .mobile-actions-popup:popover-open {
+    position: fixed; display: grid; gap: var(--ds-space-050, 4px); margin: 0; padding: var(--ds-space-050, 4px);
+    left: var(--ds-space-100, 8px); right: auto;
+    width: min(260px, calc(100vw - 16px)); box-sizing: border-box;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    color: var(--foreground); background: var(--ds-surface-overlay, var(--surface)); box-shadow: var(--shadow-dialog);
+  }
+  .workspace-header-unified .workspace-action-tray:popover-open {
+    display: grid; top: var(--actions-top, 56px); bottom: auto;
+    left: auto; right: var(--actions-right, 8px);
+    max-height: calc(100dvh - var(--actions-top, 56px) - 8px); overflow-y: auto;
+  }
+  .mobile-action-section + .mobile-action-section {
+    border-block-start: 1px solid var(--border);
+    padding-block-start: var(--ds-space-050, 4px);
+  }
+}
