@@ -1,3 +1,4 @@
+import { workspaceAction } from './workspace-action.js'
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -34,7 +35,7 @@ test('external edits, diffs, commits and branch switches update without reloadin
   const root = (await state(page)).projects[0].path
   const original = await git(root, 'branch', '--show-current')
   const branch = `test/live-${randomUUID()}`, subject = `External commit ${randomUUID()}`
-  await page.locator('.workspace-right-sidebar').getByRole('button', { name: 'Git', exact: true }).click()
+  await workspaceAction(page, 'Git')
   const panel = page.locator('.git-workbench')
   await panel.getByLabel('Commit message').fill('Keep this draft')
   await writeFile(join(root, 'hello.txt'), `first edit ${subject}\n`)
@@ -101,7 +102,7 @@ test('Git dialogs cancel safely and confirm branch actions without native prompt
   const renamed = `${branch}-renamed`
   await git(root, 'branch', branch)
   page.on('dialog', async dialog => { await dialog.dismiss(); throw new Error('Unexpected native Git dialog') })
-  await page.locator('.workspace-right-sidebar').getByRole('button', { name: 'Git', exact: true }).click()
+  await workspaceAction(page, 'Git')
   const panel = page.locator('.git-workbench')
   await panel.getByRole('button', { name: 'Branches', exact: true }).click()
   const row = panel.locator('.git-section-heading').filter({ hasText: branch })
