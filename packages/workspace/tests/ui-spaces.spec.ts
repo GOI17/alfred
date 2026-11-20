@@ -101,10 +101,14 @@ test('message index has all messages, focus previews and a measured context ring
     )).toBeLessThan(2)
     await expect(rail.getByRole('button').nth(2)).toHaveAttribute('aria-current', 'location')
   }
+  const more = page.getByRole('button', { name: 'More message controls' })
+  if (await more.isVisible()) await more.click()
   await expect(page.getByRole('button', { name: /^Context: .* tokens · 38% used$/ })).toBeVisible()
   await expect(page.locator('.context-ring-value')).toHaveAttribute('stroke-dashoffset', '62')
+  if (await more.isVisible()) await page.keyboard.press('Escape')
   await sidebar(page)
   await page.getByRole('button', { name: 'Mobile UI', exact: true }).click()
+  if (await more.isVisible()) await more.click()
   await expect(page.getByRole('button', { name: /^Context: .*Capacity pending$/ })).toBeVisible()
   await expect(page.locator('.context-token-count')).toHaveAttribute('data-unknown', 'true')
   await expect(page.locator('.context-ring-value')).toHaveCount(0)
@@ -139,9 +143,10 @@ test('composer controls share geometry in both themes and narrow panes', async (
   const expectedSize = testInfo.project.name === 'phone' ? 44 : 36
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => document.documentElement.dataset.colorMode = value, theme)
-    const controls = page.locator('.composer-footer [data-control="context-control"], .composer-footer [data-control="model-picker-trigger"], .composer-footer .queue-send-actions > button')
+    const controls = page.locator('.composer-footer [data-control="context-control"], .composer-footer [data-control="model-picker-trigger"], .composer-footer .queue-send-actions > button, .composer-footer > button[popovertarget]').filter({ visible: true })
     const heights = await controls.evaluateAll((nodes) => nodes.map((node) => ({ height: node.getBoundingClientRect().height, ring: !!node.querySelector('.context-token-count') })))
-    expect(heights.length).toBeGreaterThanOrEqual(6)
+    // Mobile hides the Runtime badge and exposes the overflow trigger instead.
+    expect(heights.length).toBeGreaterThanOrEqual(testInfo.project.name === 'phone' ? 5 : 6)
     // Labels may wrap and narrow desktop panes also use touch-sized controls.
     for (const { height, ring } of heights) expect(height).toBeGreaterThanOrEqual(ring ? 44 : expectedSize)
     const overflow = await page.locator('.composer').evaluate((node) => node.scrollWidth > node.clientWidth)
