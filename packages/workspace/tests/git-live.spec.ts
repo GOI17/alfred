@@ -37,6 +37,7 @@ test('external edits, diffs, commits and branch switches update without reloadin
   const branch = `test/live-${randomUUID()}`, subject = `External commit ${randomUUID()}`
   await workspaceAction(page, 'Git')
   const panel = page.locator('.git-workbench')
+  await panel.getByRole('navigation', { name: 'Git views' }).getByRole('button', { name: /^Changes/ }).click()
   await panel.getByLabel('Commit message').fill('Keep this draft')
   await writeFile(join(root, 'hello.txt'), `first edit ${subject}\n`)
   await expect(panel.getByRole('button', { name: 'Stage: hello.txt', exact: true })).toBeVisible({ timeout: 8000 })
