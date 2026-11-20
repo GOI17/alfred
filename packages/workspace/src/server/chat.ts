@@ -216,7 +216,7 @@ export class Chat {
         return { text: await output.text, usage: await output.usage, finishReason: await output.finishReason }
       })()
       : await generateText(options)
-    return { ...result, modelId: typeof options.model === 'object' ? options.model.modelId : String(options.model) }
+    return { text: result.text, usage: result.usage, finishReason: result.finishReason, modelId: typeof options.model === 'object' ? options.model.modelId : String(options.model) }
   }
   async reviewPullRequest(provider: ProviderId, diff: string, language: 'en' | 'es') {
     if (!diff.trim()) throw new Error('There are no changes to review.')
