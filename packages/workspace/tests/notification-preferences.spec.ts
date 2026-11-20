@@ -1,3 +1,4 @@
+import { workspaceAction } from './workspace-action.js'
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 
 let sessionCookies: Awaited<ReturnType<BrowserContext['cookies']>> = []
@@ -92,7 +93,7 @@ test('accepts once, resyncs on reload, and enables or disables in Settings only'
   expect(requests).toEqual(['GET', 'POST'])
   await page.reload()
   await expect.poll(() => requests.filter((method) => method === 'POST').length).toBe(2)
-  await page.locator('.panel-tools').getByRole('button', { name: 'Activity', exact: true }).click()
+  await workspaceAction(page, 'Activity')
   await expect(page.getByRole('dialog').getByRole('button', { name: /notifications/i })).toHaveCount(0)
   await page.getByRole('button', { name: 'Close', exact: true }).click()
   await settings(page)

@@ -1,3 +1,4 @@
+import { workspaceAction } from './workspace-action.js'
 import { test, expect, type Page } from '@playwright/test'
 import { mkdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -96,14 +97,14 @@ test('project, native chat, panels, worktrees and mobile navigation', async ({
       await page.getByRole('button', { name: 'Terminal', exact: true }).click()
       await expect(page.getByText('Shared session')).toBeVisible()
     }
-    await page.getByRole('button', { name: 'Git', exact: true }).click()
+    await workspaceAction(page, 'Git')
     await page.getByRole('button', { name: 'History', exact: true }).click()
     await expect(page.getByRole('button', { name: /The first idea/ })).toBeVisible()
     await page.getByRole('button', { name: /The first idea/ }).click()
     await expect(page.getByText('+hello', { exact: true })).toBeVisible()
     if (mobile) await page.getByRole('button', { name: 'Hide Git', exact: true }).click()
     await expect(page.getByLabel('Message for Alfred')).toHaveValue('Explore this project')
-    if (mobile) await page.getByRole('button', { name: 'Git', exact: true }).click()
+    if (mobile) await workspaceAction(page, 'Git')
     await page.screenshot({ path: testInfo.outputPath('workspace.png') })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     observer = await page.context().newPage()
