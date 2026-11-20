@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.8.0](https://github.com/GOI17/alfred/compare/v1.7.1...v1.8.0) (2026-11-20)
+
+
+### Features
+
+* **workspace:** improve chat controls and add native pull request review ([3cdd106](https://github.com/GOI17/alfred/commit/3cdd106eb8b350949696c153bab05cd17c5c0e46))
+
+
+### Bug Fixes
+
+* **workspace:** preserve SDK text and finish reason in auxiliary responses ([c2e0359](https://github.com/GOI17/alfred/commit/c2e0359a60bee3662b80131217f6fda4d7a01d49))
+
 ## [1.7.1](https://github.com/GOI17/alfred/compare/v1.7.0...v1.7.1) (2026-11-18)
 
 
